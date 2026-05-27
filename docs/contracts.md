@@ -364,7 +364,7 @@ export async function handleSearch(
   ```ts
   export const log = {
     info: (...a: unknown[]) => process.stderr.write(format(a) + '\n'),
-    debug: (...a: unknown[]) => { if (process.env.SELECTA_DEBUG) process.stderr.write(format(a) + '\n'); },
+    debug: (...a: unknown[]) => { if (process.env.SELECTA_DEBUG === '1') process.stderr.write(format(a) + '\n'); },
     error: (...a: unknown[]) => process.stderr.write(format(a) + '\n'),
   };
   ```
