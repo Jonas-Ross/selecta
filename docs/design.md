@@ -1,0 +1,261 @@
+# Selecta — Design Spec
+
+> *A* selecta *is the soundsystem term for the one who picks the records. Claude is the selector, the library is the crate. If any part of this build starts acting like the brain instead of the crate-digger's hands, it's drifted from the name.*
+
+## Context
+
+Selecta is a local MCP server that exposes the Apple Music library to Claude so the user can say "make a playlist around *this* song" and get a coherent, personalized tracklist built **only from music they actually own**, written back as a real playlist in Music.app.
+
+**Core insight (load-bearing):** the MCP is NOT a taste/recommendation engine. The model is the brain. Selecta's only reason to exist is grounding — telling the model what's in the library, how the user engages with it, and turning a chosen tracklist into a real playlist. If any feature drifts toward "deciding what's similar" or "ranking candidates," it has lost the plot.
+
+**What Selecta owns:** reading the on-machine library catalog, caching it locally, answering "what do I own relevant to X," surfacing behavioral signal (plays/loved/rating/recency/skips/date-added), writing playlists back.
+
+**What Selecta does NOT own:** taste modeling, similarity scoring, ML, audio analysis, standalone UI, cloud components, auth, anyone else's library.
+
+## Decisions
+
+- **Clients:** Both Claude Desktop and Claude Code. Same stdio MCP server, two configs.
+- **Library size assumption:** 2–10k tracks. Hybrid design (lightweight summaries + targeted slices); no exotic indexing needed.
+- **Seed shape:** Owned-song seed OR pure-vibe seed (no track). Don't engineer for "reference an unowned track."
+- **Behavioral signal:** Surface it all by default (play count, last played, loved/disliked, rating, date added, skip count). Compact fields, cheap in tokens, all load-bearing.
+- **Track-context bundle:** seed + same-artist owned tracks + playlists containing the seed + co-occurring tracks from those playlists. Curatorial graph walk — leverages user's own playlists as the strongest "things that belong together" signal.
+- **Vibe-only flow:** Same search tool; model adapts. No special vibe-only API.
+- **Cache refresh:** Manual only via `refresh_library` tool. Write paths (create/preview playlist) patch the cache surgically so they don't desync.
+- **Draft flow:** Chat-side draft + optional `preview_playlist` that overwrites a single "Selecta Preview" playlist in Music.app for auditioning. `create_playlist` materializes the final.
+- **Naming:** Model picks playlist names. Names are half the point.
+- **Stack:** TypeScript + JXA-via-osascript + SQLite (better-sqlite3). MCP via `@modelcontextprotocol/sdk`.
+- **Search shape:** Faceted optional params (schema-defined), not free-text DSL.
+- **Testing lib:** Vitest.
+
+## Architecture
+
+Single Node.js process speaking MCP over stdio. Both clients spawn a fresh instance per session. No daemon, no socket, no port. Cold start <200ms — cache opens lazily on first tool call.
+
+Three internal layers:
+
+1. **Bridge** — wraps Music.app access. Builds JXA snippets, shells out via `osascript -l JavaScript`, parses JSON. Single responsibility. All Music.app coupling lives here.
+2. **Cache** — SQLite at `~/Library/Application Support/Selecta/library.db`. Tracks, playlists, playlist_tracks, refresh_log + FTS5 virtual table. All model-triggered reads hit this layer.
+3. **Tools** — six MCP handlers. Thin orchestrators: validate, query cache and/or bridge, shape response.
+
+**Boundaries.** Model never sees the bridge. Cache never knows about MCP. Tools layer is the only place "an MCP request" exists. Cache + bridge are usable as a plain Node library without MCP — keeps tests fast.
+
+## Tool surface (six tools)
+
+All inputs JSON Schema-defined. All responses include `cache_age_hours`. Tool descriptions written for the model — terse, contractual, with failure-mode hints.
+
+### `search`
+
+Faceted, all filters optional, combined as AND.
+
+```
+{
+  query?: string,                  // free-text over title/artist/album (FTS5 ranked)
+  artist?: string,
+  genre?: string,
+  year_min?, year_max?: number,
+  loved?, disliked?: boolean,
+  rating_min?: number,             // 1..5; converted to Music.app's 0-100 internally
+  min_plays?, max_plays?: number,
+  last_played_before?, last_played_after?: string,  // ISO date
+  added_after?, added_before?: string,
+  in_playlist?: string,            // playlist persistent ID
+  location_kind?: 'local' | 'cloud',
+  limit?: number                   // default 50, max 500
+}
+→ { tracks: [{ persistent_id, title, artist, album, year, genre, signal: {…} }], total_matches, cache_age_hours }
+```
+
+### `get_track_context`
+
+The curatorial graph walk.
+
+```
+{ track_id: string }
+→ {
+    seed: TrackWithSignal,
+    same_artist: TrackWithSignal[],            // cap ~30, sort by play_count desc
+    appearing_in_playlists: [{ id, name }],
+    co_occurring_tracks: [{
+      …TrackWithSignal,
+      shared_playlist_count: number,
+      shared_playlist_names: string[]          // up to 3 for context
+    }],                                        // cap ~50, ranked by shared_playlist_count
+    cache_age_hours
+  }
+```
+
+### `list_playlists`
+
+```
+{ kind?: 'user' | 'smart' | 'folder', name_query?: string }
+→ { playlists: [{ id, name, kind, track_count, parent_id? }], cache_age_hours }
+```
+
+### `create_playlist`
+
+Materializes the final playlist. Side effect: patches cache with new playlist + memberships.
+
+```
+{ name: string, track_ids: string[], description?: string }
+→ { playlist_id: string, name, track_count }
+```
+
+### `preview_playlist`
+
+Overwrites the single "Selecta Preview" playlist in Music.app. Same surgical cache patch.
+
+```
+{ track_ids: string[] }
+→ { playlist_id: string, track_count }
+```
+
+### `refresh_library`
+
+Full reread via JXA. Slow (minutes for 10k tracks). Tool description warns the model "only call when user asks or staleness is significant."
+
+```
+{}
+→ { duration_ms, track_count, playlist_count, refreshed_at }
+```
+
+## Cache schema
+
+```sql
+CREATE TABLE tracks (
+  persistent_id TEXT PRIMARY KEY,
+  title TEXT, artist TEXT, album_artist TEXT, album TEXT, genre TEXT,
+  year INTEGER, duration_seconds INTEGER, bpm INTEGER,
+  track_number INTEGER, disc_number INTEGER,
+  date_added TEXT, last_played TEXT,          -- ISO 8601
+  play_count INTEGER DEFAULT 0,
+  skip_count INTEGER DEFAULT 0,
+  rating INTEGER,                              -- 0..100 (Music.app's scale)
+  loved INTEGER DEFAULT 0, disliked INTEGER DEFAULT 0,
+  comments TEXT,
+  location_kind TEXT                           -- 'local' | 'cloud' | 'missing'
+);
+
+CREATE TABLE playlists (
+  persistent_id TEXT PRIMARY KEY,
+  name TEXT,
+  kind TEXT,                                   -- 'user' | 'smart' | 'folder' | 'special'
+  parent_persistent_id TEXT
+);
+
+CREATE TABLE playlist_tracks (
+  playlist_persistent_id TEXT,
+  track_persistent_id TEXT,
+  position INTEGER,
+  PRIMARY KEY (playlist_persistent_id, position)
+);
+
+CREATE TABLE refresh_log (
+  refreshed_at TEXT PRIMARY KEY,
+  duration_ms INTEGER,
+  track_count INTEGER,
+  playlist_count INTEGER,
+  notes TEXT
+);
+
+CREATE VIRTUAL TABLE tracks_fts USING fts5(
+  title, artist, album_artist, album,
+  content='tracks', content_rowid='rowid'
+);
+
+CREATE INDEX idx_tracks_artist ON tracks(artist);
+CREATE INDEX idx_tracks_genre ON tracks(genre);
+CREATE INDEX idx_tracks_play_count ON tracks(play_count);
+CREATE INDEX idx_tracks_loved ON tracks(loved);
+CREATE INDEX idx_pt_track ON playlist_tracks(track_persistent_id);
+```
+
+- **Smart playlists:** snapshot membership at refresh time; treated as read-only (we don't write into them).
+- **Cloud vs. local:** `location_kind` lets the model filter for offline use.
+- **Persistent IDs:** stable per-library; trust them. If user re-imports library (rare), re-run `refresh_library`.
+
+## Error handling
+
+Three failure shapes, returned as structured errors so the model can react:
+
+1. **Bridge failures** (Music.app not running, automation permission denied, JXA error). Return `{ error: "automation_permission_denied", hint: "..." }`. First-run wall — most common cause of "doesn't work." Surface clearly.
+2. **Cache misses / stale state** (track_id referenced but deleted from Music.app since last refresh). Return `{ error: "track_not_found", hint: "Cache may be stale — try refresh_library." }`.
+3. **Validation errors** (e.g., `year_min > year_max`). Caught at schema layer; return field-specific error.
+
+**No hidden retries, no fallbacks.** Bridge fails → tool fails. The model decides whether to refresh, retry, or give up.
+
+**Logging.** Stderr only (stdout is the MCP channel). Optional file at `~/Library/Logs/Selecta/selecta.log` when `SELECTA_DEBUG=1`.
+
+## Testing
+
+- **Unit (fast, no Music.app)** — Vitest. Cache layer against in-memory SQLite seeded with fixtures. Tool handlers with the bridge interface mocked. Bulk of the suite.
+- **Bridge integration (slow, your machine)** — Vitest tagged `integration`. JXA layer exercised against a real Music.app, but against a hand-set-up test folder, not the whole library. Run on demand.
+- **End-to-end smoke** — one scripted scenario (refresh → search → get_track_context → preview → create) against the real library. Manual review.
+- **No Music.app behavior simulation.** Bridge interface is small; mock the interface, not Music.app's quirks. Integration tests own behavioral correctness.
+
+## Repo layout
+
+```
+selecta/
+  package.json
+  tsconfig.json
+  vitest.config.ts
+  src/
+    bridge/
+      index.ts          # public typed API
+      jxa.ts            # osascript invocation, JSON parsing
+      scripts/          # JXA template strings (read_library, create_playlist, …)
+    cache/
+      index.ts          # public typed API
+      schema.ts         # CREATE TABLE statements
+      db.ts             # SQLite handle, migrations
+      queries.ts        # named query builders for tool handlers
+    tools/
+      search.ts
+      get_track_context.ts
+      list_playlists.ts
+      create_playlist.ts
+      preview_playlist.ts
+      refresh_library.ts
+    server.ts           # MCP server wiring
+    index.ts            # entrypoint (bin)
+  test/
+    cache.test.ts
+    tools.test.ts       # mocks bridge interface
+    integration/
+      bridge.test.ts    # tagged integration
+  README.md             # setup, MCP config snippets for Desktop + Claude Code
+```
+
+## Build sequence
+
+Five rough milestones, each independently demoable:
+
+1. **Bridge spike.** JXA read of a Music.app test playlist; print JSON to stdout. Confirms automation permission flow and the JXA-via-osascript shape end-to-end.
+2. **Cache + refresh.** Schema, full-library JXA read, write to SQLite, refresh_log. CLI command `selecta refresh` for testing pre-MCP.
+3. **Read-side tools over MCP.** server.ts, search + get_track_context + list_playlists + refresh_library wired through MCP. Both clients registered. First "make a playlist" prompt round-trips end-to-end as a chat-only draft.
+4. **Write-side tools.** create_playlist + preview_playlist via JXA, with surgical cache patching. Now full v1 loop works.
+5. **Polish & docs.** README, MCP config snippets, error message review, integration smoke test, the one end-to-end scenario script.
+
+## Verification
+
+End-to-end check that v1 is "done":
+
+1. Fresh clone, `npm install`, run `selecta refresh` once (allow Automation permission when prompted by macOS). Library appears in SQLite.
+2. Register Selecta in Claude Desktop's MCP config. Restart Desktop.
+3. In Desktop: "Make a playlist around *Teardrop* by Massive Attack, late-night vibe." Model resolves the seed via `search`, calls `get_track_context`, proposes a tracklist with rationale, in chat only.
+4. "Let me preview it first." Model calls `preview_playlist`. Switch to Music.app, "Selecta Preview" playlist exists with the proposed tracks. Audition.
+5. "Ship it as 'late night teardrop'." Model calls `create_playlist`. Switch to Music.app, the new playlist exists with the right name and tracks.
+6. Repeat in Claude Code with the same MCP config to confirm both clients work.
+7. Run `npm test` — unit suite green. Run `npm test -- --tag integration` — bridge tests green against your test playlist folder.
+
+If all six pass and the playlist *feels* like a Jonas playlist, ship it.
+
+## Out of scope (v1)
+
+- Spotify integration (their audio-features / recommendations endpoints were cut off for new apps 2024-11-27).
+- Last.fm / MusicBrainz enrichment.
+- Audio analysis / ML / embeddings / similarity scoring.
+- Scrobble logging for temporal taste evolution.
+- Multi-user, cloud, auth, account systems.
+- Standalone UI beyond chat.
+- Editing existing playlists (only create new + overwrite the dedicated preview slot).
