@@ -30,6 +30,7 @@ Project is in scaffolding stage; once `package.json` lands:
 - Keep commits as logical chunks — one concern per commit. Each commit should leave the build green where reasonable.
 - After committing and before opening a PR, run the `/simplify` skill over the diff; address what it surfaces.
 - Pushing feature branches and opening PRs is part of the normal flow — no per-action confirmation needed. Never push directly to `main`, never force-push, never merge without explicit ask.
+- **Exception during PR review cycles:** when addressing PR feedback (CodeRabbit, Codex, or human reviewers), commit your fixes but **do not auto-push**. Wait for the user to push (or explicitly ask you to). Reason: CodeRabbit runs on every push, and batching fixes into one push keeps its review cycle clean instead of triggering a re-review after each individual fix.
 - Do not amend committed work; create a new commit.
 
 ## Testing
