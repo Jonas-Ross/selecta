@@ -156,6 +156,8 @@ replacePlaylistMembership(
   playlistPersistentId: string,
   trackPersistentIds: string[],
 ): void;
+pruneTracksNotIn(presentPersistentIds: Set<string>): void;
+prunePlaylistsNotIn(presentPersistentIds: Set<string>): void;  // cascades to playlist_tracks
 appendRefreshLog(entry: {
   durationMs: number;
   trackCount: number;
@@ -164,7 +166,16 @@ appendRefreshLog(entry: {
 }): void;
 ```
 
-A full refresh is a single transaction calling these in order: tracks → playlists → memberships → log. FTS5 rebuild happens at the end of the transaction.
+A full refresh is a single transaction:
+
+1. Upsert all tracks in the snapshot.
+2. Upsert all playlists in the snapshot.
+3. Replace memberships for every playlist in the snapshot.
+4. **Prune**: delete tracks/playlists whose persistent IDs are absent from the snapshot. This is what makes the `track_not_found`/`playlist_not_found` hint ("Cache may be stale — try refresh_library") actually true after the user deletes things in Music.app. `playlist_tracks` rows for pruned playlists go with them via `ON DELETE CASCADE` (or an explicit delete in the prune helper).
+5. Rebuild `tracks_fts` from the surviving `tracks` rows.
+6. Append a `refresh_log` entry.
+
+Pruning runs **after** upsert so a single transaction always leaves the cache reflecting the snapshot exactly — no window where freshly-deleted-then-readded tracks vanish.
 
 ### Read-side
 
@@ -209,6 +220,9 @@ export type TrackRow = {
   genre: string | null;
   year: number | null;
   durationSeconds: number | null;
+  bpm: number | null;
+  trackNumber: number | null;
+  discNumber: number | null;
   dateAdded: string | null;
   lastPlayed: string | null;
   playCount: number;
@@ -216,6 +230,7 @@ export type TrackRow = {
   rating: number | null;             // 0..100
   loved: 0 | 1;
   disliked: 0 | 1;
+  comments: string | null;
   locationKind: 'local' | 'cloud' | 'missing' | null;
 };
 
