@@ -18,7 +18,7 @@ Project is in scaffolding stage; once `package.json` lands:
 | `npm install` | Install deps |
 | `npm run build` | TypeScript compile to `dist/` |
 | `npm test` | Run the unit suite (Vitest, no Music.app needed) |
-| `SELECTA_INTEGRATION=1 npm run test:integration` | Run bridge integration tests (Vitest `integration` tag) against your real Music.app (slow, opt-in) |
+| `npm run test:integration` | Run bridge integration tests (Vitest `integration` tag) against your real Music.app (slow, opt-in) |
 | `npm run dev` | Run the MCP server over stdio for local Claude Desktop / Claude Code use |
 | `npx selecta refresh` | CLI: full library reread into the local SQLite cache |
 
@@ -47,7 +47,7 @@ Project is in scaffolding stage; once `package.json` lands:
 **Two test tiers, cheapest first:**
 
 1. **Unit (Vitest, fast, no Music.app)** — cache layer against in-memory SQLite seeded with fixtures; tool handlers with the bridge interface mocked. Bulk of the suite. Sub-second.
-2. **Bridge integration (Vitest, tagged `integration`, slow)** — JXA layer exercised against a real Music.app, but against a hand-set-up *test playlist folder*, not the whole library. Run on demand with `SELECTA_INTEGRATION=1 npm run test:integration` (selects the `integration` tag via `--tagsFilter`; the suite also self-skips unless `SELECTA_INTEGRATION=1`).
+2. **Bridge integration (Vitest, tagged `integration`, slow)** — JXA layer exercised against a real Music.app, but against a hand-set-up *test playlist folder*, not the whole library. Run on demand with `npm run test:integration` (selects the `integration` tag via `--tagsFilter`; excluded from the default `npm test`).
 
 Plus the **end-to-end smoke**: one scripted scenario (refresh → search → get_track_context → preview → create) against the real library. Not in the suite — manual review.
 

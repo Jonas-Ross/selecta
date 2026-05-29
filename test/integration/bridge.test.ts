@@ -1,6 +1,6 @@
 // Bridge integration test — exercises the real osascript/JXA path against a
-// live Music.app. Opt-in: runs only with SELECTA_INTEGRATION=1, and only via
-// `npm run test:integration` (excluded from the default unit run).
+// live Music.app. Opt-in via the `integration` tag: excluded from the default
+// `npm test`, run only with `npm run test:integration` (--tagsFilter=integration).
 //
 // Setup: create a user playlist named exactly "Selecta Test" in Music.app with a
 // few tracks. The test resolves its persistent ID by name (no hardcoded ID),
@@ -9,9 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { bridge, findPlaylistByName } from '../../src/bridge/index.js';
 
-const enabled = process.env.SELECTA_INTEGRATION === '1';
-
-describe.runIf(enabled)('bridge readPlaylist against real Music.app', { tags: ['integration'] }, () => {
+describe('bridge readPlaylist against real Music.app', { tags: ['integration'] }, () => {
   it('round-trips the "Selecta Test" playlist and its track persistent IDs', async () => {
     const id = await findPlaylistByName('Selecta Test');
     expect(
