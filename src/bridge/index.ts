@@ -7,7 +7,8 @@
 import { runJxa } from './jxa.js';
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
 import { buildFindPlaylistByNameScript } from './scripts/find_playlist_by_name.js';
-import { BridgeError, type Bridge, type RawPlaylist } from './types.js';
+import { BridgeError } from '../errors.js';
+import { type Bridge, type RawPlaylist } from './types.js';
 
 function notImplemented(method: string): never {
   throw new BridgeError(

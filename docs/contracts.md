@@ -87,9 +87,12 @@ export type RawPlaylist = {
 
 ## 2. Error envelope
 
-Three failure shapes from `docs/design.md` §Error handling, formalized.
+Three failure shapes from `docs/design.md` §Error handling, formalized. Lives in
+`src/errors.ts` — top-level, not inside `bridge/`, because cache and tools consume
+it too and must not depend on the bridge package.
 
 ```ts
+// src/errors.ts
 export type ErrorCode =
   | 'not_implemented'                // bridge method not yet built in the current milestone
   | 'automation_permission_denied'   // macOS denied Music.app automation

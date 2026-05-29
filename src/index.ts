@@ -7,7 +7,8 @@
 // `selecta refresh` exists. stdout carries only the JSON payload; everything
 // else goes to stderr via the log shim.
 
-import { bridge, BridgeError, defaultHints } from './bridge/index.js';
+import { bridge } from './bridge/index.js';
+import { BridgeError, defaultHints } from './errors.js';
 import { log } from './log.js';
 
 const USAGE = `selecta — Apple Music library bridge for Claude
