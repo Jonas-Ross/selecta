@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Selecta CLI entrypoint. Cobra-style verb dispatch — designed to grow
-// (status, inspect, refresh) without restructuring.
+// Selecta CLI entrypoint. Minimal stop-gap dispatch for the M1 spike — replaced
+// by a commander-based surface in M2 (default action starts the MCP server;
+// verbs like `refresh` hang off subcommands). See CLAUDE.md.
 //
 // M1 ships one temporary debug verb, `bridge:read-playlist`, removed in M2 once
 // `selecta refresh` exists. stdout carries only the JSON payload; everything
