@@ -47,7 +47,18 @@ Project is in scaffolding stage; once `package.json` lands:
 **Two test tiers, cheapest first:**
 
 1. **Unit (Vitest, fast, no Music.app)** — cache layer against in-memory SQLite seeded with fixtures; tool handlers with the bridge interface mocked. Bulk of the suite. Sub-second.
-2. **Bridge integration (Vitest, tagged `integration`, slow)** — JXA layer exercised against a real Music.app, but against a hand-set-up *test playlist folder*, not the whole library. Run on demand with `npm run test:integration` (selects the `integration` tag via `--tagsFilter`; excluded from the default `npm test`).
+2. **Bridge integration (Vitest, tagged `integration`, slow)** — JXA layer exercised against a real Music.app, but against a hand-set-up *test playlist folder*, not the whole library. Run on demand.
+
+**How to run the suites — always via the npm scripts, never raw `vitest`:**
+
+| Command | Runs | Touches Music.app? |
+|---|---|---|
+| `npm test` | unit only (`vitest run --tags-filter='!integration'`) | no |
+| `npm run test:integration` | bridge integration only (`vitest run --tags-filter=integration`) | **yes** |
+
+- ⚠️ **Do not run bare `npx vitest run`** — it ignores the scripts' `--tags-filter` and runs *everything*, including the integration suite, which launches Music.app and fires the macOS Automation prompt. Use `npm test` / `npm run test:integration`.
+- The `integration` tag is the *only* gate (no env var). The tag keeps integration out of `npm test`; `npm run test:integration` opts in.
+- **Integration prerequisites:** a **user playlist named `Selecta Test`** with a few tracks in Music.app, plus Automation permission (granted on first run via the macOS prompt; re-enable under System Settings → Privacy & Security → Automation).
 
 Plus the **end-to-end smoke**: one scripted scenario (refresh → search → get_track_context → preview → create) against the real library. Not in the suite — manual review.
 
