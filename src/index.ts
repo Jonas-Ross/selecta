@@ -1,0 +1,61 @@
+#!/usr/bin/env node
+// Selecta CLI entrypoint. Cobra-style verb dispatch — designed to grow
+// (status, inspect, refresh) without restructuring.
+//
+// M1 ships one temporary debug verb, `bridge:read-playlist`, removed in M2 once
+// `selecta refresh` exists. stdout carries only the JSON payload; everything
+// else goes to stderr via the log shim.
+
+import { bridge, BridgeError } from './bridge/index.js';
+import { log } from './log.js';
+
+const USAGE = `selecta — Apple Music library bridge for Claude
+
+Usage:
+  selecta bridge:read-playlist <persistent_id>   Read one playlist as JSON (debug; removed in M2)
+`;
+
+async function readPlaylistVerb(persistentId: string | undefined): Promise<number> {
+  if (!persistentId) {
+    log.error('bridge:read-playlist requires a <persistent_id> argument.');
+    return 1;
+  }
+  try {
+    const playlist = await bridge.readPlaylist(persistentId);
+    process.stdout.write(JSON.stringify(playlist) + '\n');
+    return 0;
+  } catch (err) {
+    if (err instanceof BridgeError) {
+      log.error(`[${err.errorCode}] ${err.message}`);
+      if (err.hint) log.error(`hint: ${err.hint}`);
+    } else {
+      log.error('Unexpected error:', err instanceof Error ? err.message : String(err));
+    }
+    return 1;
+  }
+}
+
+async function main(): Promise<number> {
+  const [verb, ...rest] = process.argv.slice(2);
+  switch (verb) {
+    case 'bridge:read-playlist':
+      return readPlaylistVerb(rest[0]);
+    case undefined:
+    case '-h':
+    case '--help':
+      process.stderr.write(USAGE);
+      return verb === undefined ? 1 : 0;
+    default:
+      log.error(`Unknown verb: ${verb}`);
+      process.stderr.write(USAGE);
+      return 1;
+  }
+}
+
+main().then(
+  (code) => process.exit(code),
+  (err) => {
+    log.error('Fatal:', err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  },
+);
