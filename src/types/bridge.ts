@@ -1,7 +1,7 @@
 // Bridge contract — the data shapes JXA emits and the typed interface tools
 // depend on (docs/contracts.md §1). All Music.app coupling lives behind the
 // Bridge interface; tools depend on these types, never on the implementation.
-// The cross-cutting error envelope lives in src/errors.ts, not here.
+// The cross-cutting error envelope lives in src/types/errors.ts, not here.
 
 export type RawTrack = {
   persistentId: string; // required, everything else optional

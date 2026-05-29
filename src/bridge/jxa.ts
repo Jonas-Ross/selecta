@@ -4,7 +4,7 @@
 // Each call is a fresh process — no shared runtime state, no long-lived bridge.
 
 import { execFile } from 'node:child_process';
-import { BridgeError, type ErrorCode } from '../errors.js';
+import { BridgeError, type ErrorCode } from '../types/errors.js';
 
 // macOS Apple-event privilege denial. errAEPrivilegeError is -1743.
 const PERMISSION_SIGNATURE = /errAEPrivilegeError|-1743|not authorized/i;

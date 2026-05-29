@@ -11,7 +11,7 @@ Terse on purpose. Code blocks are the spec.
 All Music.app coupling lives behind this interface. Tools never call `osascript` directly; they call methods on `Bridge`. The interface is implemented in `src/bridge/index.ts`; tools depend on the type, not the implementation.
 
 ```ts
-// src/bridge/types.ts (or co-located in src/bridge/index.ts)
+// src/types/bridge.ts
 
 export interface Bridge {
   // Temporary debug capability (M1 spike). The CLI verb that exercises it
@@ -88,11 +88,11 @@ export type RawPlaylist = {
 ## 2. Error envelope
 
 Three failure shapes from `docs/design.md` §Error handling, formalized. Lives in
-`src/errors.ts` — top-level, not inside `bridge/`, because cache and tools consume
-it too and must not depend on the bridge package.
+`src/types/errors.ts` — not inside `bridge/`, because cache and tools consume it
+too and must not depend on the bridge package.
 
 ```ts
-// src/errors.ts
+// src/types/errors.ts
 export type ErrorCode =
   | 'not_implemented'                // bridge method not yet built in the current milestone
   | 'automation_permission_denied'   // macOS denied Music.app automation
@@ -218,9 +218,12 @@ upsertPlaylistAfterWrite(result: PlaylistWriteResult, name: string, trackIds: st
 
 ### Row shapes
 
+Defined in `src/types/cache.ts` (M2), alongside `src/types/bridge.ts` and `src/types/errors.ts` — all shared type modules live under `src/types/`.
+
 `TrackRow` mirrors the cache schema columns (Music.app's native rating scale, 0/1 booleans). Tools translate to API shape (`rating_min` 1–5 → `rating` 0–100) at their own boundary.
 
 ```ts
+// src/types/cache.ts
 export type TrackRow = {
   persistentId: string;
   title: string | null;

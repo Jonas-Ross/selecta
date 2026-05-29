@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFile } from 'node:child_process';
 import { runJxa } from '../src/bridge/jxa.js';
-import { BridgeError, type ErrorCode } from '../src/errors.js';
+import { BridgeError, type ErrorCode } from '../src/types/errors.js';
 
 vi.mock('node:child_process', () => ({
   execFile: vi.fn(),

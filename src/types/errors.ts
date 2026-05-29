@@ -1,6 +1,6 @@
 // Cross-cutting error envelope (docs/contracts.md §2). Shared by every layer:
 // the bridge THROWS BridgeError; tool handlers CATCH it and RETURN SelectaError
-// (the MCP wire shape). Lives at the top level — not inside bridge/ — because
+// (the MCP wire shape). Lives in src/types/ — not inside bridge/ — because
 // cache/ and tools/ consume these too and must not depend on the bridge package.
 
 export type ErrorCode =
