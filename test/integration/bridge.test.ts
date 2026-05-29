@@ -1,6 +1,6 @@
 // Bridge integration test — exercises the real osascript/JXA path against a
 // live Music.app. Opt-in via the `integration` tag: excluded from the default
-// `npm test`, run only with `npm run test:integration` (--tagsFilter=integration).
+// `npm test`, run only with `npm run test:integration` (--tags-filter=integration).
 //
 // Setup: create a user playlist named exactly "Selecta Test" in Music.app with a
 // few tracks. The test resolves its persistent ID by name (no hardcoded ID),

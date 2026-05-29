@@ -26,7 +26,8 @@ function isRawPlaylist(value: unknown): value is RawPlaylist {
     typeof v.persistentId === 'string' &&
     typeof v.name === 'string' &&
     typeof v.kind === 'string' &&
-    Array.isArray(v.trackPersistentIds)
+    Array.isArray(v.trackPersistentIds) &&
+    v.trackPersistentIds.every((id) => typeof id === 'string')
   );
 }
 
