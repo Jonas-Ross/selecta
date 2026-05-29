@@ -17,12 +17,10 @@ function mapJxaError(stderr: string): ErrorCode {
   return 'jxa_error';
 }
 
-const HINTS: Partial<Record<ErrorCode, string>> = {
-  automation_permission_denied:
-    'macOS has not granted Music.app automation access. Enable it in System Settings → Privacy & Security → Automation.',
-  music_app_not_running: 'Music.app is not running. Open it before retrying.',
-  jxa_error: 'osascript exited non-zero or returned an unparseable response.',
-};
+// The bridge knows only the error code; the model-facing hint is resolved by
+// consumers via defaultHints (docs/contracts.md §2), so no hint is attached here.
+const jxaError = (code: ErrorCode, message: string): BridgeError =>
+  new BridgeError(code, message);
 
 /**
  * Run a JXA script via osascript and parse its stdout as JSON.
@@ -36,13 +34,8 @@ export function runJxa(script: string): Promise<unknown> {
       ['-l', 'JavaScript', '-e', script],
       (error, stdout, stderr) => {
         if (error) {
-          const code = mapJxaError(stderr);
           reject(
-            new BridgeError(
-              code,
-              `osascript failed: ${stderr.trim() || error.message}`,
-              HINTS[code],
-            ),
+            jxaError(mapJxaError(stderr), `osascript failed: ${stderr.trim() || error.message}`),
           );
           return;
         }
@@ -50,11 +43,7 @@ export function runJxa(script: string): Promise<unknown> {
           resolve(JSON.parse(stdout));
         } catch {
           reject(
-            new BridgeError(
-              'jxa_error',
-              `osascript returned unparseable stdout: ${stdout.slice(0, 200)}`,
-              HINTS.jxa_error,
-            ),
+            jxaError('jxa_error', `osascript returned unparseable stdout: ${stdout.slice(0, 200)}`),
           );
         }
       },

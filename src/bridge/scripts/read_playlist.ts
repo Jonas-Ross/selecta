@@ -1,12 +1,12 @@
 // JXA snippet: read one Music.app playlist by persistent ID, emit RawPlaylist JSON.
-// Args are interpolated as JSON (valid JS), never via shell quoting — see
-// docs/contracts.md §4. osascript prints the value of the final expression.
+// The wrapper (wrap.ts) handles arg interpolation and the run handler.
+
+import { wrapJxaScript } from './wrap.js';
 
 export function buildReadPlaylistScript(args: { persistentId: string }): string {
-  return `
-    const args = ${JSON.stringify(args)};
-    function run() {
-      const Music = Application('Music');
+  return wrapJxaScript(
+    args,
+    `
       const matches = Music.playlists.whose({ persistentID: args.persistentId });
       if (matches.length === 0) {
         throw new Error('No playlist with persistent ID ' + args.persistentId);
@@ -35,7 +35,6 @@ export function buildReadPlaylistScript(args: { persistentId: string }): string 
         if (parent) result.parentPersistentId = parent.persistentID();
       } catch (e) {}
       return JSON.stringify(result);
-    }
-    run();
-  `;
+    `,
+  );
 }

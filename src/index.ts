@@ -6,7 +6,7 @@
 // `selecta refresh` exists. stdout carries only the JSON payload; everything
 // else goes to stderr via the log shim.
 
-import { bridge, BridgeError } from './bridge/index.js';
+import { bridge, BridgeError, defaultHints } from './bridge/index.js';
 import { log } from './log.js';
 
 const USAGE = `selecta — Apple Music library bridge for Claude
@@ -27,7 +27,7 @@ async function readPlaylistVerb(persistentId: string | undefined): Promise<numbe
   } catch (err) {
     if (err instanceof BridgeError) {
       log.error(`[${err.errorCode}] ${err.message}`);
-      if (err.hint) log.error(`hint: ${err.hint}`);
+      log.error(`hint: ${err.hint ?? defaultHints[err.errorCode]}`);
     } else {
       log.error('Unexpected error:', err instanceof Error ? err.message : String(err));
     }
@@ -40,11 +40,13 @@ async function main(): Promise<number> {
   switch (verb) {
     case 'bridge:read-playlist':
       return readPlaylistVerb(rest[0]);
-    case undefined:
     case '-h':
     case '--help':
       process.stderr.write(USAGE);
-      return verb === undefined ? 1 : 0;
+      return 0;
+    case undefined:
+      process.stderr.write(USAGE);
+      return 1;
     default:
       log.error(`Unknown verb: ${verb}`);
       process.stderr.write(USAGE);
