@@ -7,7 +7,9 @@ export function buildReadPlaylistScript(args: { persistentId: string }): string 
   return wrapJxaScript(
     args,
     `
-      const matches = Music.playlists.whose({ persistentID: args.persistentId });
+      // Invoke the whose() specifier to materialize a real array before
+      // indexing — a bare specifier's .length/[0] are not reliable in JXA.
+      const matches = Music.playlists.whose({ persistentID: args.persistentId })();
       if (matches.length === 0) {
         throw new Error('No playlist with persistent ID ' + args.persistentId);
       }

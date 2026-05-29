@@ -16,9 +16,26 @@ function notImplemented(method: string): never {
   );
 }
 
+// Validate the JXA payload at the bridge boundary so a shape mismatch surfaces
+// as a structured jxa_error rather than a silent bad cast downstream.
+function isRawPlaylist(value: unknown): value is RawPlaylist {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.persistentId === 'string' &&
+    typeof v.name === 'string' &&
+    typeof v.kind === 'string' &&
+    Array.isArray(v.trackPersistentIds)
+  );
+}
+
 export const bridge: Bridge = {
   async readPlaylist(persistentId: string): Promise<RawPlaylist> {
-    return (await runJxa(buildReadPlaylistScript({ persistentId }))) as RawPlaylist;
+    const result = await runJxa(buildReadPlaylistScript({ persistentId }));
+    if (!isRawPlaylist(result)) {
+      throw new BridgeError('jxa_error', 'JXA returned an unexpected RawPlaylist shape.');
+    }
+    return result;
   },
   async readLibrary() {
     return notImplemented('readLibrary');

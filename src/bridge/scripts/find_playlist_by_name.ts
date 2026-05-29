@@ -8,7 +8,8 @@ export function buildFindPlaylistByNameScript(args: { name: string }): string {
   return wrapJxaScript(
     args,
     `
-      const matches = Music.playlists.whose({ name: args.name });
+      // Invoke the whose() specifier to materialize a real array (see read_playlist).
+      const matches = Music.playlists.whose({ name: args.name })();
       if (matches.length === 0) return JSON.stringify(null);
       return JSON.stringify(matches[0].persistentID());
     `,
