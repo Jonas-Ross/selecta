@@ -11,9 +11,13 @@ Terse on purpose. Code blocks are the spec.
 All Music.app coupling lives behind this interface. Tools never call `osascript` directly; they call methods on `Bridge`. The interface is implemented in `src/bridge/index.ts`; tools depend on the type, not the implementation.
 
 ```ts
-// src/bridge/types.ts (or co-located in src/bridge/index.ts)
+// src/types/bridge.ts
 
 export interface Bridge {
+  // Temporary debug capability (M1 spike). The CLI verb that exercises it
+  // (`bridge:read-playlist`) is removed in M2; the method itself stays.
+  readPlaylist(persistentId: string): Promise<RawPlaylist>;
+
   readLibrary(): Promise<LibrarySnapshot>;
 
   createPlaylist(input: {
@@ -83,10 +87,14 @@ export type RawPlaylist = {
 
 ## 2. Error envelope
 
-Three failure shapes from `docs/design.md` §Error handling, formalized.
+Three failure shapes from `docs/design.md` §Error handling, formalized. Lives in
+`src/types/errors.ts` — not inside `bridge/`, because cache and tools consume it
+too and must not depend on the bridge package.
 
 ```ts
+// src/types/errors.ts
 export type ErrorCode =
+  | 'not_implemented'                // bridge method not yet built in the current milestone
   | 'automation_permission_denied'   // macOS denied Music.app automation
   | 'music_app_not_running'          // Music.app isn't open
   | 'jxa_error'                      // osascript non-zero or unparseable stdout
@@ -122,6 +130,8 @@ export class BridgeError extends Error {
 
 ```ts
 const defaultHints: Record<ErrorCode, string> = {
+  not_implemented:
+    'This bridge method is not implemented yet in the current milestone.',
   automation_permission_denied:
     'macOS has not granted Music.app automation access. Ask the user to enable it in System Settings → Privacy & Security → Automation.',
   music_app_not_running:
@@ -208,9 +218,12 @@ upsertPlaylistAfterWrite(result: PlaylistWriteResult, name: string, trackIds: st
 
 ### Row shapes
 
+Defined in `src/types/cache.ts` (M2), alongside `src/types/bridge.ts` and `src/types/errors.ts` — all shared type modules live under `src/types/`.
+
 `TrackRow` mirrors the cache schema columns (Music.app's native rating scale, 0/1 booleans). Tools translate to API shape (`rating_min` 1–5 → `rating` 0–100) at their own boundary.
 
 ```ts
+// src/types/cache.ts
 export type TrackRow = {
   persistentId: string;
   title: string | null;
@@ -294,6 +307,8 @@ export type CoOccurringTrack = TrackRow & {
     - stderr indicates the app isn't running / event not handled → `music_app_not_running`.
     - Anything else non-zero → `jxa_error`.
   - On JSON parse failure → `jxa_error`.
+
+- **Bulk property getters raise `-1728` (`errAENoSuchObject`) on empty collections.** `playlist.tracks.persistentID()` reads every track ID in one Apple event, but throws "Can't get object" when the collection is empty rather than returning `[]`. Guard with a `.length > 0` check (or fall back to `[]`). Applies to any `collection.property()` bulk read — relevant to `read_library` and the write paths, not just `read_playlist`.
 
 - **No shared runtime state between invocations.** Each JXA call is a fresh `osascript` process. No long-lived JXA bridge, no in-process event loop dependency.
 

@@ -18,7 +18,7 @@ Project is in scaffolding stage; once `package.json` lands:
 | `npm install` | Install deps |
 | `npm run build` | TypeScript compile to `dist/` |
 | `npm test` | Run the unit suite (Vitest, no Music.app needed) |
-| `npm test -- --tag integration` | Run bridge integration tests against your real Music.app (slow, opt-in) |
+| `npm run test:integration` | Run bridge integration tests (Vitest `integration` tag) against your real Music.app (slow, opt-in) |
 | `npm run dev` | Run the MCP server over stdio for local Claude Desktop / Claude Code use |
 | `npx selecta refresh` | CLI: full library reread into the local SQLite cache |
 
@@ -49,6 +49,17 @@ Project is in scaffolding stage; once `package.json` lands:
 1. **Unit (Vitest, fast, no Music.app)** — cache layer against in-memory SQLite seeded with fixtures; tool handlers with the bridge interface mocked. Bulk of the suite. Sub-second.
 2. **Bridge integration (Vitest, tagged `integration`, slow)** — JXA layer exercised against a real Music.app, but against a hand-set-up *test playlist folder*, not the whole library. Run on demand.
 
+**How to run the suites — always via the npm scripts, never raw `vitest`:**
+
+| Command | Runs | Touches Music.app? |
+|---|---|---|
+| `npm test` | unit only (`vitest run --tags-filter='!integration'`) | no |
+| `npm run test:integration` | bridge integration only (`vitest run --tags-filter=integration`) | **yes** |
+
+- ⚠️ **Do not run bare `npx vitest run`** — it ignores the scripts' `--tags-filter` and runs *everything*, including the integration suite, which launches Music.app and fires the macOS Automation prompt. Use `npm test` / `npm run test:integration`.
+- The `integration` tag is the *only* gate (no env var). The tag keeps integration out of `npm test`; `npm run test:integration` opts in.
+- **Integration prerequisites:** a **user playlist named `Selecta Test`** with a few tracks in Music.app, plus Automation permission (granted on first run via the macOS prompt; re-enable under System Settings → Privacy & Security → Automation).
+
 Plus the **end-to-end smoke**: one scripted scenario (refresh → search → get_track_context → preview → create) against the real library. Not in the suite — manual review.
 
 **Don't mock Music.app's behavior in unit tests.** Mock the bridge *interface* (small, typed). Integration tests own all "does Music.app actually behave that way" questions.
@@ -73,8 +84,8 @@ The cache and bridge are usable as a plain Node library without MCP — keeps te
 - **Persistent IDs are trusted.** They're stable per Music.app library. If the user re-imports their library, they re-run `refresh_library`. No migration logic.
 - **Tool descriptions are written for the model.** Terse, contractual, with failure-mode hints (e.g., "if no match, returns empty array — don't retry with the same query"). Tool docs are the cheapest way to shape good model behavior.
 - **macOS only.** Music.app is the dependency. No cross-platform pretense.
-- **No kitchen-sink dependencies.** Discuss before adding any library beyond `@modelcontextprotocol/sdk`, `better-sqlite3`, `vitest`, and the TS toolchain.
-- **Cobra-style CLI surface, but in TypeScript terms.** The `selecta` bin currently has one verb (`refresh`); design for adding more verbs (`status`, `inspect`) without restructuring.
+- **No kitchen-sink dependencies.** Discuss before adding any library beyond `@modelcontextprotocol/sdk`, `better-sqlite3`, `commander`, `vitest`, and the TS toolchain.
+- **CLI surface via `commander` (zero-dep).** The `selecta` bin is a verb dispatcher: the default/no-arg action starts the MCP server over stdio; verbs (`refresh`, later `status`/`inspect`) hang off subcommands. Two hard constraints: (1) no-arg must start the server, not print help — Claude Desktop/Code spawn the bin with stdio as the protocol channel; (2) route commander output to **stderr** (`configureOutput`) so stdout stays pure MCP. Adopted in M2 with the first real verb (`refresh`); M1's temporary `bridge:read-playlist` stays on a minimal hand-rolled switch since it's deleted in M2.
 - **Out of scope (v1):** Spotify, Last.fm / MusicBrainz enrichment, scrobble logging, multi-user, cloud, auth, standalone UI, editing existing playlists beyond the dedicated preview slot.
 
 ## How to work

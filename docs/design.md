@@ -200,8 +200,13 @@ selecta/
   tsconfig.json
   vitest.config.ts
   src/
+    types/              # shared type modules (mirror docs/contracts.md)
+      errors.ts         # cross-cutting error envelope (ErrorCode, BridgeError, …)
+      bridge.ts         # bridge data shapes + Bridge interface
+      cache.ts          # cache row shapes (M2)
+    log.ts              # stderr logging shim
     bridge/
-      index.ts          # public typed API
+      index.ts          # public typed API (impl)
       jxa.ts            # osascript invocation, JSON parsing
       scripts/          # JXA template strings (read_library, create_playlist, …)
     cache/

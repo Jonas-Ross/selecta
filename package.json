@@ -1,0 +1,29 @@
+{
+  "name": "selecta",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local MCP server exposing the Apple Music library to Claude.",
+  "type": "module",
+  "bin": {
+    "selecta": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run --tags-filter='!integration'",
+    "test:integration": "vitest run --tags-filter=integration",
+    "dev": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.10.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}
