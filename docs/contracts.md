@@ -14,6 +14,10 @@ All Music.app coupling lives behind this interface. Tools never call `osascript`
 // src/bridge/types.ts (or co-located in src/bridge/index.ts)
 
 export interface Bridge {
+  // Temporary debug capability (M1 spike). The CLI verb that exercises it
+  // (`bridge:read-playlist`) is removed in M2; the method itself stays.
+  readPlaylist(persistentId: string): Promise<RawPlaylist>;
+
   readLibrary(): Promise<LibrarySnapshot>;
 
   createPlaylist(input: {
@@ -87,6 +91,7 @@ Three failure shapes from `docs/design.md` §Error handling, formalized.
 
 ```ts
 export type ErrorCode =
+  | 'not_implemented'                // bridge method not yet built in the current milestone
   | 'automation_permission_denied'   // macOS denied Music.app automation
   | 'music_app_not_running'          // Music.app isn't open
   | 'jxa_error'                      // osascript non-zero or unparseable stdout
@@ -122,6 +127,8 @@ export class BridgeError extends Error {
 
 ```ts
 const defaultHints: Record<ErrorCode, string> = {
+  not_implemented:
+    'This bridge method is not implemented yet in the current milestone.',
   automation_permission_denied:
     'macOS has not granted Music.app automation access. Ask the user to enable it in System Settings → Privacy & Security → Automation.',
   music_app_not_running:
