@@ -302,6 +302,8 @@ export type CoOccurringTrack = TrackRow & {
     - Anything else non-zero → `jxa_error`.
   - On JSON parse failure → `jxa_error`.
 
+- **Bulk property getters raise `-1728` (`errAENoSuchObject`) on empty collections.** `playlist.tracks.persistentID()` reads every track ID in one Apple event, but throws "Can't get object" when the collection is empty rather than returning `[]`. Guard with a `.length > 0` check (or fall back to `[]`). Applies to any `collection.property()` bulk read — relevant to `read_library` and the write paths, not just `read_playlist`.
+
 - **No shared runtime state between invocations.** Each JXA call is a fresh `osascript` process. No long-lived JXA bridge, no in-process event loop dependency.
 
 - **No `osascript`/JXA outside `src/bridge/`.** Enforced by review; CLAUDE.md hard rule.

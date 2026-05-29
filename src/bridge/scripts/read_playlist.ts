@@ -7,8 +7,8 @@ export function buildReadPlaylistScript(args: { persistentId: string }): string 
   return wrapJxaScript(
     args,
     `
-      // Invoke the whose() specifier to materialize a real array before
-      // indexing — a bare specifier's .length/[0] are not reliable in JXA.
+      // Materialize the whose() result into a real array so .length/[0] are
+      // plain JS operations.
       const matches = Music.playlists.whose({ persistentID: args.persistentId })();
       if (matches.length === 0) {
         throw new Error('No playlist with persistent ID ' + args.persistentId);
@@ -25,12 +25,18 @@ export function buildReadPlaylistScript(args: { persistentId: string }): string 
         else if (cls === 'userPlaylist' || cls === 'libraryPlaylist') kind = 'user';
         else kind = 'special';
       }
+      // The bulk getter (one Apple event) returns IDs in playlist order, but it
+      // raises errAENoSuchObject (-1728) on an empty collection — so short-circuit
+      // empty (and folders, which have no own tracks) to [].
+      let trackPersistentIds = [];
+      if (kind !== 'folder' && pl.tracks.length > 0) {
+        trackPersistentIds = pl.tracks.persistentID();
+      }
       const result = {
         persistentId: pl.persistentID(),
         name: pl.name(),
         kind: kind,
-        // Bulk getter returns IDs in playlist order. Folders have no own tracks.
-        trackPersistentIds: kind === 'folder' ? [] : pl.tracks.persistentID(),
+        trackPersistentIds: trackPersistentIds,
       };
       try {
         const parent = pl.parent();
