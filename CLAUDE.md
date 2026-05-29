@@ -73,8 +73,8 @@ The cache and bridge are usable as a plain Node library without MCP — keeps te
 - **Persistent IDs are trusted.** They're stable per Music.app library. If the user re-imports their library, they re-run `refresh_library`. No migration logic.
 - **Tool descriptions are written for the model.** Terse, contractual, with failure-mode hints (e.g., "if no match, returns empty array — don't retry with the same query"). Tool docs are the cheapest way to shape good model behavior.
 - **macOS only.** Music.app is the dependency. No cross-platform pretense.
-- **No kitchen-sink dependencies.** Discuss before adding any library beyond `@modelcontextprotocol/sdk`, `better-sqlite3`, `vitest`, and the TS toolchain.
-- **Cobra-style CLI surface, but in TypeScript terms.** The `selecta` bin currently has one verb (`refresh`); design for adding more verbs (`status`, `inspect`) without restructuring.
+- **No kitchen-sink dependencies.** Discuss before adding any library beyond `@modelcontextprotocol/sdk`, `better-sqlite3`, `commander`, `vitest`, and the TS toolchain.
+- **CLI surface via `commander` (zero-dep).** The `selecta` bin is a verb dispatcher: the default/no-arg action starts the MCP server over stdio; verbs (`refresh`, later `status`/`inspect`) hang off subcommands. Two hard constraints: (1) no-arg must start the server, not print help — Claude Desktop/Code spawn the bin with stdio as the protocol channel; (2) route commander output to **stderr** (`configureOutput`) so stdout stays pure MCP. Adopted in M2 with the first real verb (`refresh`); M1's temporary `bridge:read-playlist` stays on a minimal hand-rolled switch since it's deleted in M2.
 - **Out of scope (v1):** Spotify, Last.fm / MusicBrainz enrichment, scrobble logging, multi-user, cloud, auth, standalone UI, editing existing playlists beyond the dedicated preview slot.
 
 ## How to work
