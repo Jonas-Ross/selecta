@@ -11,7 +11,7 @@ import { bridge, findPlaylistByName } from '../../src/bridge/index.js';
 
 const enabled = process.env.SELECTA_INTEGRATION === '1';
 
-describe.runIf(enabled)('bridge readPlaylist against real Music.app', () => {
+describe.runIf(enabled)('bridge readPlaylist against real Music.app', { tags: ['integration'] }, () => {
   it('round-trips the "Selecta Test" playlist and its track persistent IDs', async () => {
     const id = await findPlaylistByName('Selecta Test');
     expect(
@@ -23,8 +23,10 @@ describe.runIf(enabled)('bridge readPlaylist against real Music.app', () => {
 
     expect(playlist.persistentId).toBe(id);
     expect(playlist.name).toBe('Selecta Test');
-    expect(['user', 'smart', 'folder', 'special']).toContain(playlist.kind);
+    // The documented fixture is a user playlist with a few tracks.
+    expect(playlist.kind).toBe('user');
     expect(Array.isArray(playlist.trackPersistentIds)).toBe(true);
+    expect(playlist.trackPersistentIds.length).toBeGreaterThan(0);
     for (const trackId of playlist.trackPersistentIds) {
       expect(typeof trackId).toBe('string');
       expect(trackId.length).toBeGreaterThan(0);

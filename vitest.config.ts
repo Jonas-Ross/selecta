@@ -2,10 +2,17 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    // Default `npm test` is the fast unit suite — no Music.app required.
-    // Integration tests live in test/integration/ and run via `npm run test:integration`
-    // (and only with SELECTA_INTEGRATION=1 set; see test/integration/bridge.test.ts).
     include: ['test/**/*.test.ts'],
-    exclude: ['test/integration/**', 'node_modules/**', 'dist/**'],
+    // Declare the `integration` tag (strictTags is on by default, so a tag used
+    // in a test must be defined here). Integration tests are opt-in:
+    //   npm test               → unit only       (vitest --tagsFilter='!integration')
+    //   npm run test:integration → integration    (vitest --tagsFilter=integration)
+    // They additionally self-skip unless SELECTA_INTEGRATION=1 (see the suite).
+    tags: [
+      {
+        name: 'integration',
+        description: 'Bridge tests against a real Music.app (opt-in; needs SELECTA_INTEGRATION=1).',
+      },
+    ],
   },
 });
