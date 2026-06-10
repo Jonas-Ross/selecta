@@ -2,7 +2,7 @@
 // outside src/cache/ writes SQL. Usable as a plain Node library without MCP.
 
 import type { Database } from 'better-sqlite3';
-import type { LibrarySnapshot } from '../types/bridge.js';
+import type { LibrarySnapshot, PlaylistWriteResult } from '../types/bridge.js';
 import type {
   CoOccurringTrack,
   PlaylistRef,
@@ -95,6 +95,24 @@ export class SelectaCache {
 
   getCoOccurringTracks(trackPersistentId: string, limit?: number): CoOccurringTrack[] {
     return this.queries.getCoOccurringTracks(trackPersistentId, limit);
+  }
+
+  /**
+   * Surgical patch after a successful playlist write (docs/design.md §Decisions):
+   * upsert the playlist row and replace its membership so the cache doesn't
+   * desync — WITHOUT a full reread. Tracks are untouched, so no FTS work.
+   */
+  upsertPlaylistAfterWrite(result: PlaylistWriteResult, name: string, trackIds: string[]): void {
+    const run = this.db.transaction(() => {
+      this.queries.upsertPlaylist({
+        persistentId: result.persistentId,
+        name,
+        kind: 'user',
+        trackPersistentIds: trackIds,
+      });
+      this.queries.replacePlaylistMembership(result.persistentId, trackIds);
+    });
+    run();
   }
 
   close(): void {

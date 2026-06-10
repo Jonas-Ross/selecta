@@ -66,6 +66,23 @@ export function validationError(hint: string): SelectaError {
   return { error: 'validation_error', hint };
 }
 
+/**
+ * Pre-flight for write tools: every referenced track must exist in the cache.
+ * Returns a track_not_found envelope naming the offenders, or null when all
+ * resolve. The bridge re-checks against the live library; this catches model
+ * mistakes (hallucinated/typo'd IDs) before any Apple event fires.
+ */
+export function missingTrackIdsError(cache: SelectaCache, trackIds: string[]): SelectaError | null {
+  const missing = trackIds.filter((id) => cache.getTrack(id) === null);
+  if (missing.length === 0) return null;
+  const shown = missing.slice(0, 5).join(', ');
+  const more = missing.length > 5 ? ` (+${missing.length - 5} more)` : '';
+  return {
+    error: 'track_not_found',
+    hint: `Not in the cache: ${shown}${more}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library.`,
+  };
+}
+
 /** Convert a thrown BridgeError to the wire envelope; rethrow anything else. */
 export function toErrorEnvelope(err: unknown): SelectaError {
   if (err instanceof BridgeError) {

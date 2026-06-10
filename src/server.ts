@@ -22,6 +22,16 @@ import {
   refreshLibraryInputShape,
   REFRESH_LIBRARY_DESCRIPTION,
 } from './tools/refresh_library.js';
+import {
+  handleCreatePlaylist,
+  createPlaylistInputShape,
+  CREATE_PLAYLIST_DESCRIPTION,
+} from './tools/create_playlist.js';
+import {
+  handlePreviewPlaylist,
+  previewPlaylistInputShape,
+  PREVIEW_PLAYLIST_DESCRIPTION,
+} from './tools/preview_playlist.js';
 
 export const SERVER_INFO = { name: 'selecta', version: '0.1.0' };
 
@@ -57,6 +67,18 @@ export function createServer(deps: ToolDeps): McpServer {
     'refresh_library',
     { description: REFRESH_LIBRARY_DESCRIPTION, inputSchema: refreshLibraryInputShape },
     async (args) => toToolResult(await handleRefreshLibrary(args, deps)),
+  );
+
+  server.registerTool(
+    'create_playlist',
+    { description: CREATE_PLAYLIST_DESCRIPTION, inputSchema: createPlaylistInputShape },
+    async (args) => toToolResult(await handleCreatePlaylist(args, deps)),
+  );
+
+  server.registerTool(
+    'preview_playlist',
+    { description: PREVIEW_PLAYLIST_DESCRIPTION, inputSchema: previewPlaylistInputShape },
+    async (args) => toToolResult(await handlePreviewPlaylist(args, deps)),
   );
 
   return server;
