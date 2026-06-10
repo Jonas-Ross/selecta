@@ -3,6 +3,13 @@
 
 import type { Database } from 'better-sqlite3';
 import type { LibrarySnapshot } from '../types/bridge.js';
+import type {
+  CoOccurringTrack,
+  PlaylistRef,
+  PlaylistRow,
+  SearchFilters,
+  TrackRow,
+} from '../types/cache.js';
 import { openDatabase } from './db.js';
 import { createQueries, type Queries } from './queries.js';
 
@@ -64,6 +71,30 @@ export class SelectaCache {
 
   getCacheAgeHours(): number | null {
     return this.queries.getCacheAgeHours();
+  }
+
+  searchTracks(filters: SearchFilters): { rows: TrackRow[]; total: number } {
+    return this.queries.searchTracks(filters);
+  }
+
+  listPlaylists(filters: { kind?: PlaylistRow['kind']; nameQuery?: string }): PlaylistRow[] {
+    return this.queries.listPlaylists(filters);
+  }
+
+  getTrack(persistentId: string): TrackRow | null {
+    return this.queries.getTrack(persistentId);
+  }
+
+  getTracksByArtist(artist: string, limit?: number): TrackRow[] {
+    return this.queries.getTracksByArtist(artist, limit);
+  }
+
+  getPlaylistsContainingTrack(trackPersistentId: string): PlaylistRef[] {
+    return this.queries.getPlaylistsContainingTrack(trackPersistentId);
+  }
+
+  getCoOccurringTracks(trackPersistentId: string, limit?: number): CoOccurringTrack[] {
+    return this.queries.getCoOccurringTracks(trackPersistentId, limit);
   }
 
   close(): void {
