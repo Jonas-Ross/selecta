@@ -6,10 +6,20 @@
 // stays pure MCP.
 
 import { Command } from 'commander';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { bridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
+import { createServer } from './server.js';
 import { BridgeError, defaultHints } from './types/errors.js';
 import { log } from './log.js';
+
+// The cache opens lazily on first tool call: cold start stays fast and a
+// broken cache surfaces as a per-call cache_unavailable envelope, not a crash
+// that takes the whole MCP server down with it.
+function lazyCache(): () => SelectaCache {
+  let cache: SelectaCache | undefined;
+  return () => (cache ??= SelectaCache.open());
+}
 
 function reportError(err: unknown): void {
   if (err instanceof BridgeError) {
@@ -34,9 +44,9 @@ program
   .command('serve', { isDefault: true })
   .description('Start the MCP server over stdio (default when no verb is given)')
   .action(async () => {
-    // M3 wires the real server here.
-    log.error('The MCP server lands in M3 — for now only `selecta refresh` works.');
-    process.exitCode = 1;
+    const server = createServer({ cache: lazyCache(), bridge });
+    await server.connect(new StdioServerTransport());
+    log.info('selecta MCP server listening on stdio');
   });
 
 program
