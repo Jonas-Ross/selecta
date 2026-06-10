@@ -57,16 +57,15 @@ program
       const started = Date.now();
       log.info('Reading library from Music.app (this can take a while)…');
       const snapshot = await bridge.readLibrary();
+      const durationMs = Date.now() - started;
       const cache = SelectaCache.open();
-      const result = cache.refreshFromSnapshot(snapshot, {
-        durationMs: Date.now() - started,
-      });
+      const result = cache.refreshFromSnapshot(snapshot, { durationMs });
       cache.close();
       // CLI verbs print their final result to stdout — they are not the MCP server.
       process.stdout.write(
         JSON.stringify(
           {
-            duration_ms: Date.now() - started,
+            duration_ms: durationMs,
             track_count: result.trackCount,
             playlist_count: result.playlistCount,
             refreshed_at: result.refreshedAt,

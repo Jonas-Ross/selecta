@@ -3,6 +3,7 @@
 // plain async functions returning output-or-SelectaError — the only layer that
 // knows MCP exists is server.ts, and even it only wraps these.
 
+import type { z } from 'zod';
 import type { Bridge } from '../types/bridge.js';
 import type { TrackRow } from '../types/cache.js';
 import { BridgeError, defaultHints, type SelectaError } from '../types/errors.js';
@@ -64,6 +65,23 @@ export function toApiTrack(row: TrackRow): ApiTrack {
 
 export function validationError(hint: string): SelectaError {
   return { error: 'validation_error', hint };
+}
+
+/** Shared zod parse → validation_error envelope, one format for every tool. */
+export function parseInput<T>(
+  schema: z.ZodType<T>,
+  raw: unknown,
+): { ok: true; data: T } | { ok: false; error: SelectaError } {
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: validationError(
+        parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      ),
+    };
+  }
+  return { ok: true, data: parsed.data };
 }
 
 /**

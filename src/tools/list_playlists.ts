@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
-import { toErrorEnvelope, validationError, roundedCacheAge, type ToolDeps } from './common.js';
+import { parseInput, toErrorEnvelope, roundedCacheAge, type ToolDeps } from './common.js';
 
 export const listPlaylistsInputShape = {
   kind: z
@@ -31,10 +31,8 @@ export async function handleListPlaylists(
   raw: unknown,
   deps: ToolDeps,
 ): Promise<ListPlaylistsOutput | SelectaError> {
-  const parsed = ListPlaylistsInput.safeParse(raw);
-  if (!parsed.success) {
-    return validationError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
-  }
+  const parsed = parseInput(ListPlaylistsInput, raw);
+  if (!parsed.ok) return parsed.error;
 
   try {
     const rows = deps.cache().listPlaylists({

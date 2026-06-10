@@ -6,9 +6,9 @@ import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
 import type { PlaylistRef } from '../types/cache.js';
 import {
+  parseInput,
   toApiTrack,
   toErrorEnvelope,
-  validationError,
   roundedCacheAge,
   type ApiTrack,
   type ToolDeps,
@@ -40,10 +40,8 @@ export async function handleGetTrackContext(
   raw: unknown,
   deps: ToolDeps,
 ): Promise<TrackContextOutput | SelectaError> {
-  const parsed = GetTrackContextInput.safeParse(raw);
-  if (!parsed.success) {
-    return validationError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
-  }
+  const parsed = parseInput(GetTrackContextInput, raw);
+  if (!parsed.ok) return parsed.error;
 
   try {
     const cache = deps.cache();

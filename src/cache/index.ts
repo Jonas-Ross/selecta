@@ -47,8 +47,8 @@ export class SelectaCache {
     const q = this.queries;
     const run = this.db.transaction(() => {
       for (const track of snapshot.tracks) q.upsertTrack(track);
-      for (const playlist of snapshot.playlists) q.upsertPlaylist(playlist);
       for (const playlist of snapshot.playlists) {
+        q.upsertPlaylist(playlist);
         q.replacePlaylistMembership(playlist.persistentId, playlist.trackPersistentIds);
       }
       q.pruneTracksNotIn(new Set(snapshot.tracks.map((t) => t.persistentId)));

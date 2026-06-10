@@ -205,7 +205,7 @@ searchTracks(filters: SearchFilters): {
   total: number;                               // unbounded count, separate from limit
 };
 listPlaylists(filters: {
-  kind?: 'user' | 'smart' | 'folder';
+  kind?: 'user' | 'smart' | 'folder' | 'subscription';
   nameQuery?: string;
 }): PlaylistRow[];
 

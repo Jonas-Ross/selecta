@@ -4,8 +4,8 @@ import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
 import {
   missingTrackIdsError,
+  parseInput,
   toErrorEnvelope,
-  validationError,
   type ToolDeps,
 } from './common.js';
 
@@ -32,21 +32,20 @@ export async function handlePreviewPlaylist(
   raw: unknown,
   deps: ToolDeps,
 ): Promise<PreviewPlaylistOutput | SelectaError> {
-  const parsed = PreviewPlaylistInput.safeParse(raw);
-  if (!parsed.success) {
-    return validationError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
-  }
+  const parsed = parseInput(PreviewPlaylistInput, raw);
+  if (!parsed.ok) return parsed.error;
   const { track_ids } = parsed.data;
 
   try {
-    const cacheMiss = missingTrackIdsError(deps.cache(), track_ids);
+    const cache = deps.cache();
+    const cacheMiss = missingTrackIdsError(cache, track_ids);
     if (cacheMiss) return cacheMiss;
 
     const result = await deps.bridge.replacePlaylist({
       name: PREVIEW_PLAYLIST_NAME,
       trackIds: track_ids,
     });
-    deps.cache().upsertPlaylistAfterWrite(result, PREVIEW_PLAYLIST_NAME, track_ids);
+    cache.upsertPlaylistAfterWrite(result, PREVIEW_PLAYLIST_NAME, track_ids);
     return { playlist_id: result.persistentId, track_count: result.trackCount };
   } catch (err) {
     return toErrorEnvelope(err);

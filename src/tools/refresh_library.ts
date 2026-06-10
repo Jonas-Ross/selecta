@@ -3,7 +3,7 @@
 
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
-import { toErrorEnvelope, validationError, type ToolDeps } from './common.js';
+import { parseInput, toErrorEnvelope, type ToolDeps } from './common.js';
 
 export const refreshLibraryInputShape = {};
 
@@ -22,19 +22,16 @@ export async function handleRefreshLibrary(
   raw: unknown,
   deps: ToolDeps,
 ): Promise<RefreshLibraryOutput | SelectaError> {
-  const parsed = RefreshLibraryInput.safeParse(raw ?? {});
-  if (!parsed.success) {
-    return validationError('refresh_library takes no arguments');
-  }
+  const parsed = parseInput(RefreshLibraryInput, raw ?? {});
+  if (!parsed.ok) return parsed.error;
 
   try {
     const started = Date.now();
     const snapshot = await deps.bridge.readLibrary();
-    const result = deps.cache().refreshFromSnapshot(snapshot, {
-      durationMs: Date.now() - started,
-    });
+    const durationMs = Date.now() - started;
+    const result = deps.cache().refreshFromSnapshot(snapshot, { durationMs });
     return {
-      duration_ms: Date.now() - started,
+      duration_ms: durationMs,
       track_count: result.trackCount,
       playlist_count: result.playlistCount,
       refreshed_at: result.refreshedAt,

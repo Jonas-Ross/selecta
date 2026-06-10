@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
 import {
+  parseInput,
   toApiTrack,
   toErrorEnvelope,
   validationError,
@@ -55,10 +56,8 @@ export async function handleSearch(
   raw: unknown,
   deps: ToolDeps,
 ): Promise<SearchOutput | SelectaError> {
-  const parsed = SearchInput.safeParse(raw);
-  if (!parsed.success) {
-    return validationError(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
-  }
+  const parsed = parseInput(SearchInput, raw);
+  if (!parsed.ok) return parsed.error;
   const input = parsed.data;
   if (input.year_min != null && input.year_max != null && input.year_min > input.year_max) {
     return validationError('year_min must be ≤ year_max');
