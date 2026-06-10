@@ -85,6 +85,8 @@ export type RawPlaylist = {
 
 **`kind: 'subscription'` (added in M2):** real libraries contain class `subscriptionPlaylist` — Apple Music playlists the user added. Read-only like `smart`. `'special'` playlists (Library, Music, …) are *excluded* from the snapshot entirely: caching the whole library as a playlist would poison co-occurrence and waste rows.
 
+**Dangling memberships are tolerated (M4 finding):** playlists can reference tracks absent from the library track list (unavailable/greyed-out entries). The bridge reports membership as Music.app states it; the cache stores it as-is. Read queries JOIN `tracks`, so dangling members never surface to the model — except in `track_count`, which intentionally matches what Music.app displays.
+
 ---
 
 ## 2. Error envelope
