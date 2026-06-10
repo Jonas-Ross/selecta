@@ -44,6 +44,8 @@ export class SelectaCache {
     snapshot: LibrarySnapshot,
     opts: { durationMs: number; notes?: string },
   ): RefreshResult {
+    // One timestamp for both the refresh_log row and the return value.
+    const refreshedAt = new Date().toISOString();
     const q = this.queries;
     const run = this.db.transaction(() => {
       for (const track of snapshot.tracks) q.upsertTrack(track);
@@ -55,6 +57,7 @@ export class SelectaCache {
       q.prunePlaylistsNotIn(new Set(snapshot.playlists.map((p) => p.persistentId)));
       q.rebuildFts();
       q.appendRefreshLog({
+        refreshedAt,
         durationMs: opts.durationMs,
         trackCount: snapshot.tracks.length,
         playlistCount: snapshot.playlists.length,
@@ -65,7 +68,7 @@ export class SelectaCache {
     return {
       trackCount: snapshot.tracks.length,
       playlistCount: snapshot.playlists.length,
-      refreshedAt: new Date().toISOString(),
+      refreshedAt,
     };
   }
 

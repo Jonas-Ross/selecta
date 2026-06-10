@@ -153,13 +153,14 @@ export function createQueries(db: Database) {
     },
 
     appendRefreshLog(entry: {
+      refreshedAt: string;
       durationMs: number;
       trackCount: number;
       playlistCount: number;
       notes?: string;
     }): void {
       appendRefreshLogStmt.run({
-        refreshedAt: new Date().toISOString(),
+        refreshedAt: entry.refreshedAt,
         durationMs: entry.durationMs,
         trackCount: entry.trackCount,
         playlistCount: entry.playlistCount,

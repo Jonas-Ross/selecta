@@ -175,6 +175,7 @@ replacePlaylistMembership(
 pruneTracksNotIn(presentPersistentIds: Set<string>): void;
 prunePlaylistsNotIn(presentPersistentIds: Set<string>): void;  // cascades to playlist_tracks
 appendRefreshLog(entry: {
+  refreshedAt: string;        // caller supplies; one timestamp for log + result
   durationMs: number;
   trackCount: number;
   playlistCount: number;

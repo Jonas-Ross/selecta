@@ -138,6 +138,14 @@ describe('refreshFromSnapshot', () => {
     expect(fts).toEqual([]);
   });
 
+  it('returns the same refreshedAt it stores in refresh_log', () => {
+    const result = cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+    const row = cache.db
+      .prepare('SELECT refreshed_at AS at FROM refresh_log ORDER BY refreshed_at DESC LIMIT 1')
+      .get() as { at: string };
+    expect(row.at).toBe(result.refreshedAt);
+  });
+
   it('appends a refresh_log entry with counts and duration', () => {
     const row = cache.db
       .prepare(
