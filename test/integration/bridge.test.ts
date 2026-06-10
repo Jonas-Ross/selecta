@@ -7,7 +7,7 @@
 // then reads it back and asserts the RawPlaylist contract shape.
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { bridge, findPlaylistByName, deletePlaylistById } from '../../src/bridge/index.js';
+import { bridge, findPlaylistByName, deletePlaylistsByName } from '../../src/bridge/index.js';
 
 describe('bridge readLibrary against real Music.app', { tags: ['integration'] }, () => {
   it('returns a full snapshot whose user playlists reference library tracks', async () => {
@@ -40,11 +40,14 @@ describe('bridge readLibrary against real Music.app', { tags: ['integration'] },
 });
 
 describe('bridge write paths against real Music.app', { tags: ['integration'] }, () => {
-  // Scratch playlists created by a test are deleted afterwards, pass or fail.
-  const created: string[] = [];
+  // Scratch playlists are swept BY NAME after every test, pass or fail: iCloud
+  // sync reassigns a fresh playlist's persistent ID (and can resurrect a
+  // just-deleted one), so creation-time IDs are unreliable for cleanup. The
+  // sweep also collects resurrected copies left by earlier runs.
+  const SCRATCH_NAMES = ['Selecta Integration Scratch', 'Selecta Integration Preview Scratch'];
   afterEach(async () => {
-    for (const id of created.splice(0)) {
-      await deletePlaylistById(id);
+    for (const name of SCRATCH_NAMES) {
+      await deletePlaylistsByName(name);
     }
   });
 
@@ -64,35 +67,39 @@ describe('bridge write paths against real Music.app', { tags: ['integration'] },
   }
 
   it('createPlaylist materializes tracks in order and sets the description', async () => {
-    const trackIds = (await testTrackIds()).slice(0, 2);
+    const trackIds = await testTrackIds();
     const result = await bridge.createPlaylist({
       name: 'Selecta Integration Scratch',
       trackIds,
       description: 'created by integration test — safe to delete',
     });
-    created.push(result.persistentId);
 
     expect(result.trackCount).toBe(2);
+    // Immediate readback by the creation-time ID is fine; the iCloud ID
+    // reassignment lands later.
     const readBack = await bridge.readPlaylist(result.persistentId);
     expect(readBack.trackPersistentIds).toEqual(trackIds);
     expect(readBack.kind).toBe('user');
   }, 60_000);
 
-  it('replacePlaylist reuses the slot: same persistent ID, contents replaced', async () => {
+  it('replacePlaylist reuses the slot by name: one playlist, contents replaced', async () => {
     const trackIds = await testTrackIds();
     const name = 'Selecta Integration Preview Scratch';
 
-    const first = await bridge.replacePlaylist({ name, trackIds: trackIds.slice(0, 2) });
-    created.push(first.persistentId);
+    const first = await bridge.replacePlaylist({ name, trackIds });
     expect(first.trackCount).toBe(2);
 
     const second = await bridge.replacePlaylist({ name, trackIds: trackIds.slice(0, 1) });
-    expect(second.persistentId).toBe(first.persistentId);
     expect(second.trackCount).toBe(1);
 
     const readBack = await bridge.readPlaylist(second.persistentId);
     expect(readBack.trackPersistentIds).toEqual(trackIds.slice(0, 1));
-  }, 60_000);
+    // The real slot invariant: overwriting never creates a second playlist.
+    // (Persistent-ID equality across calls is NOT asserted — iCloud sync may
+    // reassign a fresh playlist's ID between calls.)
+    const dupCheck = await bridge.readLibrary();
+    expect(dupCheck.playlists.filter((p) => p.name === name)).toHaveLength(1);
+  }, 120_000);
 
   it('rejects unknown track IDs with track_not_found before writing', async () => {
     await expect(

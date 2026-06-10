@@ -12,7 +12,7 @@ import {
   buildCreatePlaylistScript,
   buildReplacePlaylistScript,
 } from './scripts/write_playlist.js';
-import { buildDeletePlaylistScript } from './scripts/delete_playlist.js';
+import { buildDeletePlaylistsByNameScript } from './scripts/delete_playlist.js';
 import { BridgeError } from '../types/errors.js';
 import {
   type Bridge,
@@ -104,11 +104,12 @@ export async function findPlaylistByName(name: string): Promise<string | null> {
   return (await runJxa(buildFindPlaylistByNameScript({ name }))) as string | null;
 }
 
-// Test-support: delete a playlist (integration-test cleanup only — v1 has no
-// playlist deletion in the Bridge interface).
-export async function deletePlaylistById(persistentId: string): Promise<boolean> {
-  const result = (await runJxa(buildDeletePlaylistScript({ persistentId }))) as {
-    deleted: boolean;
+// Test-support: delete every playlist with this name (integration-test/smoke
+// cleanup only — v1 has no playlist deletion in the Bridge interface). By name
+// because iCloud sync reassigns fresh playlist persistent IDs; see the script.
+export async function deletePlaylistsByName(name: string): Promise<number> {
+  const result = (await runJxa(buildDeletePlaylistsByNameScript({ name }))) as {
+    deleted: number;
   };
   return result.deleted;
 }

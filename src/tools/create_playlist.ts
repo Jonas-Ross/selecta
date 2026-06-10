@@ -28,7 +28,7 @@ export type CreatePlaylistOutput = {
   track_count: number;
 };
 
-export const CREATE_PLAYLIST_DESCRIPTION = `Create a real playlist in the user's Music.app from owned track persistent IDs, preserving order. This writes to the user's library — only call once the user has approved a final tracklist (use preview_playlist for auditioning). Fails with track_not_found (nothing is created) if any ID is unknown; re-resolve IDs via search, or refresh_library if the cache is stale. Duplicate names are allowed by Music.app, so reuse of an existing name creates a second playlist rather than editing the first.`;
+export const CREATE_PLAYLIST_DESCRIPTION = `Create a real playlist in the user's Music.app from owned track persistent IDs, preserving order. This writes to the user's library — only call once the user has approved a final tracklist (use preview_playlist for auditioning). Fails with track_not_found (nothing is created) if any ID is unknown; re-resolve IDs via search, or refresh_library if the cache is stale. Duplicate names are allowed by Music.app, so reuse of an existing name creates a second playlist rather than editing the first. The returned playlist_id may be reassigned by iCloud sync later — re-resolve via list_playlists if you need it in a much later turn.`;
 
 export async function handleCreatePlaylist(
   raw: unknown,
