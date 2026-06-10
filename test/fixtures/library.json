@@ -1,0 +1,114 @@
+{
+  "capturedAt": "2026-06-01T12:00:00.000Z",
+  "tracks": [
+    {
+      "persistentId": "T-TEARDROP",
+      "title": "Teardrop",
+      "artist": "Massive Attack",
+      "albumArtist": "Massive Attack",
+      "album": "Mezzanine",
+      "genre": "Trip-Hop",
+      "year": 1998,
+      "durationSeconds": 330.5,
+      "trackNumber": 3,
+      "discNumber": 1,
+      "dateAdded": "2024-01-10T08:00:00.000Z",
+      "lastPlayed": "2026-05-20T22:15:00.000Z",
+      "playCount": 42,
+      "skipCount": 1,
+      "rating": 100,
+      "loved": true,
+      "locationKind": "local"
+    },
+    {
+      "persistentId": "T-ANGEL",
+      "title": "Angel",
+      "artist": "Massive Attack",
+      "albumArtist": "Massive Attack",
+      "album": "Mezzanine",
+      "genre": "Trip-Hop",
+      "year": 1998,
+      "durationSeconds": 379,
+      "dateAdded": "2024-01-10T08:00:00.000Z",
+      "playCount": 13,
+      "skipCount": 0,
+      "locationKind": "local"
+    },
+    {
+      "persistentId": "T-GLORYBOX",
+      "title": "Glory Box",
+      "artist": "Portishead",
+      "albumArtist": "Portishead",
+      "album": "Dummy",
+      "genre": "Trip-Hop",
+      "year": 1994,
+      "durationSeconds": 305,
+      "dateAdded": "2024-03-02T08:00:00.000Z",
+      "lastPlayed": "2026-06-01T01:30:00.000Z",
+      "playCount": 30,
+      "skipCount": 0,
+      "loved": true,
+      "locationKind": "cloud"
+    },
+    {
+      "persistentId": "T-ROADS",
+      "title": "Roads",
+      "artist": "Portishead",
+      "albumArtist": "Portishead",
+      "album": "Dummy",
+      "genre": "Trip-Hop",
+      "year": 1994,
+      "durationSeconds": 304,
+      "dateAdded": "2024-03-02T08:00:00.000Z",
+      "playCount": 7,
+      "skipCount": 2,
+      "locationKind": "cloud"
+    },
+    {
+      "persistentId": "T-MIDNIGHT",
+      "title": "Midnight City",
+      "artist": "M83",
+      "albumArtist": "M83",
+      "album": "Hurry Up, We're Dreaming",
+      "genre": "Electronic",
+      "year": 2011,
+      "durationSeconds": 244,
+      "dateAdded": "2025-11-05T08:00:00.000Z",
+      "lastPlayed": "2026-06-08T19:00:00.000Z",
+      "playCount": 55,
+      "skipCount": 0,
+      "rating": 80,
+      "locationKind": "cloud"
+    },
+    {
+      "persistentId": "T-BARE"
+    }
+  ],
+  "playlists": [
+    {
+      "persistentId": "P-LATENIGHT",
+      "name": "Late Night",
+      "kind": "user",
+      "parentPersistentId": "P-MOODS",
+      "trackPersistentIds": ["T-TEARDROP", "T-GLORYBOX", "T-ROADS"]
+    },
+    {
+      "persistentId": "P-TRIPHOP",
+      "name": "Trip Hop Essentials",
+      "kind": "user",
+      "trackPersistentIds": ["T-TEARDROP", "T-ANGEL", "T-GLORYBOX"]
+    },
+    {
+      "persistentId": "P-RECENT",
+      "name": "Recently Added",
+      "kind": "smart",
+      "trackPersistentIds": ["T-MIDNIGHT", "T-BARE"]
+    },
+    {
+      "persistentId": "P-MOODS",
+      "name": "Moods",
+      "kind": "folder",
+      "trackPersistentIds": []
+    }
+  ]
+}

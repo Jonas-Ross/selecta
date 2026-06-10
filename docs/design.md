@@ -255,6 +255,21 @@ End-to-end check that v1 is "done":
 
 If all six pass and the playlist *feels* like a Jonas playlist, ship it.
 
+## Implementation notes (v1, as built)
+
+Where reality bent the spec during the build — details in `docs/contracts.md`:
+
+- **Playlist kinds gained `'subscription'`** (Apple Music playlists the user added; class `subscriptionPlaylist`). Read-only like smart. Real libraries are full of them.
+- **Special playlists (Library, Music, …) are excluded from the snapshot.** Caching the whole library as a playlist would poison co-occurrence and waste rows.
+- **Co-occurrence counts `kind = 'user'` playlists only.** Smart/subscription playlists are machine- or Apple-curated — the design's "user's own playlists" signal means hand-made ones.
+- **Dangling memberships are tolerated.** Playlists can reference tracks absent from the library (unavailable/greyed-out entries). Read queries JOIN `tracks`, so they never surface; `track_count` matches what Music.app displays.
+- **`loved` reads Music's `favorited` property** (the `loved` property is gone from modern Music.app). `location_kind` derives from the track class (`fileTrack` → local, else cloud) — the `location` property raises on cloud tracks.
+- **Refresh is seconds, not minutes:** bulk property getters (one Apple event per property, not per track) read a 3.6k-track library in ~12s.
+- **Write-path track resolution uses `whose({persistentID})` per unique ID.** Positional indexing against a bulk `persistentID()` read silently resolves the wrong track — the two orderings diverge on real libraries.
+- **Refreshes in the same millisecond collapse** (`INSERT OR REPLACE` on `refresh_log`'s timestamp key) — fine for a log.
+- **Freshly created playlists have transient persistent IDs.** iCloud Music Library reassigns the ID when sync settles (observed minutes after creation), and can resurrect a just-deleted fresh playlist. "Persistent IDs are trusted" holds for refresh-time reads; a `create_playlist` receipt ID is valid immediately but may rotate later — the cache self-heals on the next refresh, and the preview slot is immune because `replacePlaylist` finds it by name.
+- **Ratings cross the API boundary as 0–5 stars** (input `rating_min` and output `signal.rating` both), converted to Music's 0–100 internally — symmetric, unlike the spec sketch which only converted input.
+
 ## Out of scope (v1)
 
 - Spotify integration (their audio-features / recommendations endpoints were cut off for new apps 2024-11-27).

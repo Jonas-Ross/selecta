@@ -2,11 +2,13 @@
 // The wrapper (wrap.ts) handles arg interpolation and the run handler.
 
 import { wrapJxaScript } from './wrap.js';
+import { PLAYLIST_KIND_FN } from './playlist_kind.js';
 
 export function buildReadPlaylistScript(args: { persistentId: string }): string {
   return wrapJxaScript(
     args,
     `
+      ${PLAYLIST_KIND_FN}
       // Materialize the whose() result into a real array so .length/[0] are
       // plain JS operations.
       const matches = Music.playlists.whose({ persistentID: args.persistentId })();
@@ -14,17 +16,7 @@ export function buildReadPlaylistScript(args: { persistentId: string }): string 
         throw new Error('No playlist with persistent ID ' + args.persistentId);
       }
       const pl = matches[0];
-      const cls = String(pl.class());
-      let kind;
-      if (cls === 'folderPlaylist') {
-        kind = 'folder';
-      } else {
-        let smart = false;
-        try { smart = pl.smart(); } catch (e) {}
-        if (smart) kind = 'smart';
-        else if (cls === 'userPlaylist' || cls === 'libraryPlaylist') kind = 'user';
-        else kind = 'special';
-      }
+      const kind = playlistKind(pl);
       // The bulk getter (one Apple event) returns IDs in playlist order, but it
       // raises errAENoSuchObject (-1728) on an empty collection — so short-circuit
       // empty (and folders, which have no own tracks) to [].

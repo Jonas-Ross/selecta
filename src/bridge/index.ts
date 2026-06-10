@@ -6,16 +6,20 @@
 
 import { runJxa } from './jxa.js';
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
+import { buildReadLibraryScript } from './scripts/read_library.js';
 import { buildFindPlaylistByNameScript } from './scripts/find_playlist_by_name.js';
+import {
+  buildCreatePlaylistScript,
+  buildReplacePlaylistScript,
+} from './scripts/write_playlist.js';
+import { buildDeletePlaylistsByNameScript } from './scripts/delete_playlist.js';
 import { BridgeError } from '../types/errors.js';
-import { type Bridge, type RawPlaylist } from '../types/bridge.js';
-
-function notImplemented(method: string): never {
-  throw new BridgeError(
-    'not_implemented',
-    `Bridge.${method} is not implemented yet in the current milestone.`,
-  );
-}
+import {
+  type Bridge,
+  type LibrarySnapshot,
+  type PlaylistWriteResult,
+  type RawPlaylist,
+} from '../types/bridge.js';
 
 // Validate the JXA payload at the bridge boundary so a shape mismatch surfaces
 // as a structured jxa_error rather than a silent bad cast downstream.
@@ -31,6 +35,26 @@ function isRawPlaylist(value: unknown): value is RawPlaylist {
   );
 }
 
+// Same boundary-validation idea for the full snapshot: cheap structural checks
+// (every track has a string persistentId; playlists pass the RawPlaylist check)
+// so a JXA shape drift surfaces as jxa_error, not a corrupt cache.
+function isLibrarySnapshot(value: unknown): value is LibrarySnapshot {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.capturedAt === 'string' &&
+    Array.isArray(v.tracks) &&
+    v.tracks.every(
+      (t) =>
+        typeof t === 'object' &&
+        t !== null &&
+        typeof (t as Record<string, unknown>).persistentId === 'string',
+    ) &&
+    Array.isArray(v.playlists) &&
+    v.playlists.every(isRawPlaylist)
+  );
+}
+
 export const bridge: Bridge = {
   async readPlaylist(persistentId: string): Promise<RawPlaylist> {
     const result = await runJxa(buildReadPlaylistScript({ persistentId }));
@@ -39,19 +63,53 @@ export const bridge: Bridge = {
     }
     return result;
   },
-  async readLibrary() {
-    return notImplemented('readLibrary');
+  async readLibrary(): Promise<LibrarySnapshot> {
+    const result = await runJxa(buildReadLibraryScript());
+    if (!isLibrarySnapshot(result)) {
+      throw new BridgeError('jxa_error', 'JXA returned an unexpected LibrarySnapshot shape.');
+    }
+    return result;
   },
-  async createPlaylist() {
-    return notImplemented('createPlaylist');
+  async createPlaylist(input): Promise<PlaylistWriteResult> {
+    return parseWriteResult(await runJxa(buildCreatePlaylistScript(input)));
   },
-  async replacePlaylist() {
-    return notImplemented('replacePlaylist');
+  async replacePlaylist(input): Promise<PlaylistWriteResult> {
+    return parseWriteResult(await runJxa(buildReplacePlaylistScript(input)));
   },
 };
+
+// The write scripts return { missingTrackIds } without touching Music.app when
+// any requested ID is absent from the live library — i.e. the cache is stale.
+function parseWriteResult(result: unknown): PlaylistWriteResult {
+  if (typeof result === 'object' && result !== null) {
+    const v = result as Record<string, unknown>;
+    if (Array.isArray(v.missingTrackIds)) {
+      const missing = v.missingTrackIds as string[];
+      throw new BridgeError(
+        'track_not_found',
+        `Music.app has no tracks with persistent IDs: ${missing.join(', ')}`,
+        'These IDs are in the cache but not the live library — the cache is stale. Run refresh_library and re-resolve the tracks.',
+      );
+    }
+    if (typeof v.persistentId === 'string' && typeof v.trackCount === 'number') {
+      return { persistentId: v.persistentId, trackCount: v.trackCount };
+    }
+  }
+  throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistWriteResult shape.');
+}
 
 // Test-support: resolve a playlist's persistent ID by name. Used by the opt-in
 // integration test; kept in the bridge layer so no JXA leaks elsewhere.
 export async function findPlaylistByName(name: string): Promise<string | null> {
   return (await runJxa(buildFindPlaylistByNameScript({ name }))) as string | null;
+}
+
+// Test-support: delete every playlist with this name (integration-test/smoke
+// cleanup only — v1 has no playlist deletion in the Bridge interface). By name
+// because iCloud sync reassigns fresh playlist persistent IDs; see the script.
+export async function deletePlaylistsByName(name: string): Promise<number> {
+  const result = (await runJxa(buildDeletePlaylistsByNameScript({ name }))) as {
+    deleted: number;
+  };
+  return result.deleted;
 }

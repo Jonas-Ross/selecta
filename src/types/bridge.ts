@@ -29,7 +29,9 @@ export type RawTrack = {
 export type RawPlaylist = {
   persistentId: string;
   name: string;
-  kind: 'user' | 'smart' | 'folder' | 'special';
+  // 'subscription' = an Apple Music playlist the user added to their library
+  // (class subscriptionPlaylist). Real in the wild; read-only like 'smart'.
+  kind: 'user' | 'smart' | 'folder' | 'special' | 'subscription';
   parentPersistentId?: string;
   trackPersistentIds: string[]; // ordered; empty for folders
 };

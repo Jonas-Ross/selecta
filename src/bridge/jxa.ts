@@ -27,11 +27,16 @@ const jxaError = (code: ErrorCode, message: string): BridgeError =>
  * Throws BridgeError with the appropriate ErrorCode on every failure mode:
  * non-zero exit (mapped from stderr) or unparseable stdout.
  */
+// A full-library snapshot is megabytes of JSON on stdout; execFile's default
+// maxBuffer (1 MiB) would kill the read mid-stream.
+const MAX_STDOUT_BYTES = 64 * 1024 * 1024;
+
 export function runJxa(script: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     execFile(
       'osascript',
       ['-l', 'JavaScript', '-e', script],
+      { maxBuffer: MAX_STDOUT_BYTES },
       (error, stdout, stderr) => {
         if (error) {
           reject(

@@ -14,11 +14,14 @@
     "build": "tsc",
     "test": "vitest run --tags-filter='!integration'",
     "test:integration": "vitest run --tags-filter=integration",
+    "smoke": "npm run build && node scripts/smoke.mjs",
     "dev": "node dist/index.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "better-sqlite3": "^12.10.0"
+    "better-sqlite3": "^12.10.0",
+    "commander": "^15.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

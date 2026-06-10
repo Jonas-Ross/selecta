@@ -20,6 +20,7 @@ function stubExecFile(opts: {
   mockExecFile.mockImplementation(((
     _cmd: string,
     _args: readonly string[],
+    _options: object,
     cb: (e: Error | null, stdout: string, stderr: string) => void,
   ) => {
     cb(opts.error ?? null, opts.stdout ?? '', opts.stderr ?? '');
