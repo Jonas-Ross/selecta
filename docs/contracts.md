@@ -75,13 +75,15 @@ export type RawTrack = {
 export type RawPlaylist = {
   persistentId: string;
   name: string;
-  kind: 'user' | 'smart' | 'folder' | 'special';
+  kind: 'user' | 'smart' | 'folder' | 'special' | 'subscription';
   parentPersistentId?: string;
   trackPersistentIds: string[]; // ordered; empty for folders
 };
 ```
 
 **Why optional everywhere on `RawTrack`:** Music.app routinely omits fields (no genre, no rating, never played). The bridge does not invent defaults — the cache layer applies them on write.
+
+**`kind: 'subscription'` (added in M2):** real libraries contain class `subscriptionPlaylist` — Apple Music playlists the user added. Read-only like `smart`. `'special'` playlists (Library, Music, …) are *excluded* from the snapshot entirely: caching the whole library as a playlist would poison co-occurrence and waste rows.
 
 ---
 
