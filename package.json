@@ -14,6 +14,7 @@
     "build": "tsc",
     "test": "vitest run --tags-filter='!integration'",
     "test:integration": "vitest run --tags-filter=integration",
+    "smoke": "npm run build && node scripts/smoke.mjs",
     "dev": "node dist/index.js"
   },
   "dependencies": {
