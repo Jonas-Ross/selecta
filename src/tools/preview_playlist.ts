@@ -26,7 +26,7 @@ export type PreviewPlaylistOutput = {
   track_count: number;
 };
 
-export const PREVIEW_PLAYLIST_DESCRIPTION = `Overwrite the single "${PREVIEW_PLAYLIST_NAME}" playlist in Music.app with these tracks so the user can audition a draft before committing. The slot is reused on every call (stable playlist, contents replaced) — previous preview contents are discarded without warning. When the user approves, materialize with create_playlist. Same track ID rules as create_playlist: unknown IDs fail with track_not_found and nothing is written.`;
+export const PREVIEW_PLAYLIST_DESCRIPTION = `Overwrite the single "${PREVIEW_PLAYLIST_NAME}" playlist in Music.app with these tracks so the user can audition a draft before committing. The slot is reused on every call (stable playlist, contents replaced) — previous preview contents are discarded without warning. When the user approves, materialize with create_playlist. Same track ID rules as create_playlist: unknown IDs fail with track_not_found and nothing is written. iCloud sync occasionally twins the slot right after its first-ever creation — harmless and not a failed call; later previews keep overwriting one copy, and the user can delete the other.`;
 
 export async function handlePreviewPlaylist(
   raw: unknown,
