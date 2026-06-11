@@ -62,7 +62,12 @@ let echoSeen = false;
 const deadline = Date.now() + POLL_DURATION_MS;
 while (Date.now() < deadline) {
   await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-  const copies = await listPlaylistsByName(PROBE);
+  let copies;
+  try {
+    copies = await listPlaylistsByName(PROBE);
+  } catch (err) {
+    fail(`listPlaylistsByName failed during poll: ${err.message}`);
+  }
   const desc = copies.map((c) => `${c.persistentId}#${c.trackCount}`).join(', ') || 'none';
   console.log(`${now()} copies=${copies.length} [${desc}]`);
   if (copies.length > 1) echoSeen = true;
@@ -80,7 +85,12 @@ if (survivors.length !== 1) {
 }
 
 step('clean up probe playlist');
-await deletePlaylistsByName(PROBE);
+try {
+  await deletePlaylistsByName(PROBE);
+} catch (err) {
+  // The verdict is already decided — a teardown hiccup must not obscure it.
+  console.error(`Warning: cleanup failed (${err.message}); probe "${PROBE}" may remain in Music.app`);
+}
 console.log(
   echoSeen
     ? '\nVERIFY PASSED — echo observed and reconciled to a single copy.'

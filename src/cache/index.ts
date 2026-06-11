@@ -164,8 +164,20 @@ export class SelectaCache {
   planSyncReconciliation(opts: { windowMinutes: number; now?: Date }): ReconcileAction[] {
     const now = opts.now ?? new Date();
     const since = new Date(now.getTime() - opts.windowMinutes * 60_000).toISOString();
+    const creations = this.queries.getCreationsSince(since);
+    // Two in-window receipts with the same name + sequence are mutually
+    // indistinguishable from each other's echo — each would plan to delete the
+    // other's playlist (reciprocal data loss). Ambiguous groups get no
+    // destructive actions; rekey remapping below is unaffected.
+    const receiptKey = (name: string, trackIdsJson: string): string =>
+      JSON.stringify([name, trackIdsJson]);
+    const receiptsPerKey = new Map<string, number>();
+    for (const c of creations) {
+      const key = receiptKey(c.name, JSON.stringify(c.trackIds));
+      receiptsPerKey.set(key, (receiptsPerKey.get(key) ?? 0) + 1);
+    }
     const actions: ReconcileAction[] = [];
-    for (const creation of this.queries.getCreationsSince(since)) {
+    for (const creation of creations) {
       const wanted = JSON.stringify(creation.trackIds);
       const matchIds = this.queries
         .getUserPlaylistIdsByName(creation.name)
@@ -179,7 +191,10 @@ export class SelectaCache {
           fromId: currentId,
           toId: matchIds[0]!,
         });
-      } else if (matchIds.length >= 2) {
+      } else if (
+        matchIds.length >= 2 &&
+        receiptsPerKey.get(receiptKey(creation.name, wanted)) === 1
+      ) {
         // Keep the iCloud-keyed twin (observed canonical: rekeys survive under
         // the NEW id), i.e. prefer a copy whose ID is not the one we created.
         const keepId = matchIds.find((id) => id !== currentId) ?? matchIds[0]!;

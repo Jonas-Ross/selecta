@@ -226,6 +226,21 @@ describe('sync reconciliation', () => {
     ]);
   });
 
+  it('plans no deletes when two receipts share name and sequence (reciprocal-echo ambiguity)', () => {
+    // Two intentional same-name same-sequence creations in-window: each looks
+    // like the other's echo. A naive plan would delete BOTH (reciprocal data
+    // loss) — the planner must stand down on ambiguous groups.
+    const cache = refreshed();
+    for (const id of ['P-FIRST', 'P-SECOND']) {
+      cache.upsertPlaylistAfterWrite({ persistentId: id, trackCount: TRACKS.length }, NAME, TRACKS);
+      cache.recordPlaylistCreation(id, NAME, TRACKS);
+    }
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-FIRST' }, { id: 'P-SECOND' }), {
+      durationMs: 1,
+    });
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+  });
+
   it('never touches same-name twins with no creation receipt (legacy Relax/Workout dupes)', () => {
     const cache = refreshed();
     cache.refreshFromSnapshot(
