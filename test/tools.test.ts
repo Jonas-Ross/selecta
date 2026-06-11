@@ -29,6 +29,7 @@ function makeBridge(overrides: Partial<Bridge> = {}): Bridge {
     readLibrary: vi.fn().mockResolvedValue(snapshot),
     createPlaylist: vi.fn().mockRejectedValue(new Error('not used')),
     replacePlaylist: vi.fn().mockRejectedValue(new Error('not used')),
+    deletePlaylistById: vi.fn().mockResolvedValue(1),
     ...overrides,
   };
 }
@@ -222,5 +223,87 @@ describe('refresh_library', () => {
     expect(err.error).toBe('automation_permission_denied');
     expect(err.hint).toContain('System Settings');
     expect(readLibrary).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Refresh-time iCloud-echo reconciliation: a recently created playlist that
+// comes back twinned in the next snapshot gets its duplicate deleted via the
+// bridge, surgically removed from the cache, and reported — never silently.
+describe('refresh_library sync reconciliation', () => {
+  const TRACKS = ['T-TEARDROP', 'T-ROADS'];
+
+  function echoSnapshot(ids: string[]): LibrarySnapshot {
+    return {
+      ...snapshot,
+      playlists: [
+        ...snapshot.playlists,
+        ...ids.map((id) => ({
+          persistentId: id,
+          name: 'Rearview',
+          kind: 'user' as const,
+          trackPersistentIds: TRACKS,
+        })),
+      ],
+    };
+  }
+
+  function depsAfterCreate(overrides: Partial<Bridge> = {}): ToolDeps & {
+    cacheInstance: SelectaCache;
+  } {
+    const cache = SelectaCache.open(':memory:');
+    cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+    cache.upsertPlaylistAfterWrite({ persistentId: 'P-CREATED', trackCount: 2 }, 'Rearview', TRACKS);
+    cache.recordPlaylistCreation('P-CREATED', 'Rearview', TRACKS);
+    return { cache: () => cache, bridge: makeBridge(overrides), cacheInstance: cache };
+  }
+
+  it('deletes the echo twin, keeps the iCloud copy, and reports it', async () => {
+    const deps = depsAfterCreate({
+      readLibrary: vi.fn().mockResolvedValue(echoSnapshot(['P-CREATED', 'P-ECHO'])),
+    });
+
+    const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+    expect(deps.bridge.deletePlaylistById).toHaveBeenCalledWith('P-CREATED');
+    expect(out.sync_reconciliation!.duplicates_removed).toEqual([
+      { name: 'Rearview', deleted_id: 'P-CREATED', kept_id: 'P-ECHO' },
+    ]);
+    expect(out.playlist_count).toBe(5); // 4 fixture + 1 survivor
+    const rows = deps.cacheInstance.listPlaylists({ nameQuery: 'Rearview' });
+    expect(rows.map((p) => p.persistentId)).toEqual(['P-ECHO']);
+  });
+
+  it('reports a rekey without touching Music.app', async () => {
+    const deps = depsAfterCreate({
+      readLibrary: vi.fn().mockResolvedValue(echoSnapshot(['P-REKEYED'])),
+    });
+
+    const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+    expect(out.sync_reconciliation!.rekeys).toEqual([
+      { name: 'Rearview', from_id: 'P-CREATED', to_id: 'P-REKEYED' },
+    ]);
+    expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
+    // The ID create_playlist returned still resolves for searches.
+    const { rows } = deps.cacheInstance.searchTracks({ inPlaylist: 'P-CREATED' });
+    expect(rows).toHaveLength(2);
+  });
+
+  it('surfaces a failed delete as a reconciliation failure, refresh still succeeds', async () => {
+    const deps = depsAfterCreate({
+      readLibrary: vi.fn().mockResolvedValue(echoSnapshot(['P-CREATED', 'P-ECHO'])),
+      deletePlaylistById: vi.fn().mockRejectedValue(new BridgeError('jxa_error', 'boom')),
+    });
+
+    const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+    expect(out.sync_reconciliation!.failures).toEqual([
+      { name: 'Rearview', playlist_id: 'P-CREATED', error: expect.stringContaining('boom') },
+    ]);
+    // Cache untouched for the failed delete: both copies still visible.
+    expect(deps.cacheInstance.listPlaylists({ nameQuery: 'Rearview' })).toHaveLength(2);
+  });
+
+  it('omits sync_reconciliation when there is nothing to reconcile', async () => {
+    const deps = makeDeps();
+    const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+    expect(out.sync_reconciliation).toBeUndefined();
   });
 });

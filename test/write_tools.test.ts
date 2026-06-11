@@ -39,6 +39,7 @@ function makeDeps(bridgeOverrides: Partial<Bridge> = {}): ToolDeps & { cacheInst
         persistentId: 'P-PREVIEW',
         trackCount: input.trackIds.length,
       })),
+    deletePlaylistById: vi.fn().mockResolvedValue(1),
     ...bridgeOverrides,
   };
   return { cache: () => cache, bridge, cacheInstance: cache };
@@ -73,6 +74,12 @@ describe('create_playlist', () => {
     const cooc = ctx.co_occurring_tracks.find((t) => t.persistent_id === 'T-TEARDROP');
     expect(cooc!.shared_playlist_count).toBe(2); // Late Night + the new one
     expect(deps.bridge.readLibrary).not.toHaveBeenCalled();
+  });
+
+  it('records a creation receipt for refresh-time echo reconciliation', async () => {
+    const deps = makeDeps();
+    await handleCreatePlaylist({ name: 'Rearview', track_ids: ['T-TEARDROP'] }, deps);
+    expect(deps.cacheInstance.getRecentCreationNames(60)).toContain('Rearview');
   });
 
   it('rejects unknown track IDs before any bridge call', async () => {

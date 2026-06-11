@@ -87,6 +87,8 @@ export type RawPlaylist = {
 
 **Fresh playlist IDs are transient (M5 finding):** iCloud Music Library reassigns a newly created playlist's persistent ID when sync settles, and may resurrect a just-deleted fresh playlist. Consequences: `PlaylistWriteResult.persistentId` is valid immediately but can rotate later (cache self-heals on next refresh); `replacePlaylist` finds the preview slot **by name** so it is immune; test cleanup deletes scratch playlists **by name**, never by creation-time ID.
 
+**Sync reconciliation (post-v1 fix, 2026-06):** `create_playlist` records a creation receipt in `playlist_creations` (created ID, current ID, name, exact track sequence, timestamp). `refresh_library` reconciles receipts younger than 60 minutes against the fresh snapshot: a single same-name/same-sequence `user` playlist under a different ID is a **rekey** (receipt remapped, nothing deleted); two or more are an **echo duplicate** (the iCloud-keyed survivor is kept, the rest deleted via `Bridge.deletePlaylistById` — an ID just observed in the snapshot, so the transient-ID caveat doesn't apply). All actions surface in the response's `sync_reconciliation` field. `searchTracks(inPlaylist)` follows receipts, so a creation-time ID stays resolvable after a rekey or dedupe.
+
 **Dangling memberships are tolerated (M4 finding):** playlists can reference tracks absent from the library track list (unavailable/greyed-out entries). The bridge reports membership as Music.app states it; the cache stores it as-is. Read queries JOIN `tracks`, so dangling members never surface to the model — except in `track_count`, which intentionally matches what Music.app displays.
 
 ---

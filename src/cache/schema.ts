@@ -31,6 +31,18 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
   PRIMARY KEY (playlist_persistent_id, position)
 );
 
+-- Creation receipts for playlists Selecta itself created. Drives refresh-time
+-- iCloud-echo reconciliation (docs/design.md §Implementation notes) and keeps
+-- creation-time IDs resolvable after iCloud rekeys them: current_persistent_id
+-- tracks the canonical ID, created_persistent_id never changes.
+CREATE TABLE IF NOT EXISTS playlist_creations (
+  created_persistent_id TEXT PRIMARY KEY,
+  current_persistent_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  track_ids_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS refresh_log (
   refreshed_at TEXT PRIMARY KEY,
   duration_ms INTEGER,

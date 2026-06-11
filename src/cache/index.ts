@@ -7,6 +7,7 @@ import type {
   CoOccurringTrack,
   PlaylistRef,
   PlaylistRow,
+  ReconcileAction,
   SearchFilters,
   TrackRow,
 } from '../types/cache.js';
@@ -76,7 +77,21 @@ export class SelectaCache {
     return this.queries.getCacheAgeHours();
   }
 
+  /**
+   * Canonicalize an externally supplied playlist ID. A creation-time ID may
+   * have been rekeyed by iCloud sync or reconciled away as an echo duplicate;
+   * if the literal ID is gone, follow the creation receipt to the canonical
+   * ID. Any consumer of model-supplied playlist IDs should route through this.
+   */
+  resolvePlaylistId(persistentId: string): string {
+    if (this.queries.playlistExists(persistentId)) return persistentId;
+    return this.queries.resolveCreatedPlaylistId(persistentId) ?? persistentId;
+  }
+
   searchTracks(filters: SearchFilters): { rows: TrackRow[]; total: number } {
+    if (filters.inPlaylist != null) {
+      filters = { ...filters, inPlaylist: this.resolvePlaylistId(filters.inPlaylist) };
+    }
     return this.queries.searchTracks(filters);
   }
 
@@ -114,6 +129,100 @@ export class SelectaCache {
         trackPersistentIds: trackIds,
       });
       this.queries.replacePlaylistMembership(result.persistentId, trackIds);
+    });
+    run();
+  }
+
+  /**
+   * Record a creation receipt for a playlist Selecta just created. Drives
+   * refresh-time iCloud-echo reconciliation and ID-rekey aliasing.
+   */
+  recordPlaylistCreation(createdId: string, name: string, trackIds: string[]): void {
+    this.queries.recordPlaylistCreation({
+      createdId,
+      name,
+      trackIds,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  /** Names of playlists created within the window — the "watch list" for echo logging. */
+  getRecentCreationNames(windowMinutes: number, now = new Date()): string[] {
+    const since = new Date(now.getTime() - windowMinutes * 60_000).toISOString();
+    return [...new Set(this.queries.getCreationsSince(since).map((c) => c.name))];
+  }
+
+  /**
+   * Compare the just-refreshed cache against recent creation receipts and plan
+   * iCloud-sync reconciliation (docs/design.md §Implementation notes). Pure
+   * read — applying the plan is the caller's job (deletes go through the
+   * bridge first). Matching is deliberately conservative: same name, kind
+   * 'user', and the EXACT ordered track sequence we created — so intentional
+   * same-name playlists and user-edited copies are never touched. Only
+   * creations within `windowMinutes` are considered.
+   */
+  planSyncReconciliation(opts: { windowMinutes: number; now?: Date }): ReconcileAction[] {
+    const now = opts.now ?? new Date();
+    const since = new Date(now.getTime() - opts.windowMinutes * 60_000).toISOString();
+    const creations = this.queries.getCreationsSince(since);
+    // Two in-window receipts with the same name + sequence are mutually
+    // indistinguishable from each other's echo — each would plan to delete the
+    // other's playlist (reciprocal data loss). Ambiguous groups get no
+    // destructive actions; rekey remapping below is unaffected.
+    const receiptKey = (name: string, trackIdsJson: string): string =>
+      JSON.stringify([name, trackIdsJson]);
+    const receiptsPerKey = new Map<string, number>();
+    for (const c of creations) {
+      const key = receiptKey(c.name, JSON.stringify(c.trackIds));
+      receiptsPerKey.set(key, (receiptsPerKey.get(key) ?? 0) + 1);
+    }
+    const actions: ReconcileAction[] = [];
+    for (const creation of creations) {
+      const wanted = JSON.stringify(creation.trackIds);
+      const matchIds = this.queries
+        .getUserPlaylistIdsByName(creation.name)
+        .filter((id) => JSON.stringify(this.queries.getPlaylistTrackIds(id)) === wanted);
+      const currentId = creation.currentPersistentId;
+      if (matchIds.length === 1 && matchIds[0] !== currentId) {
+        actions.push({
+          kind: 'rekey',
+          createdId: creation.createdPersistentId,
+          name: creation.name,
+          fromId: currentId,
+          toId: matchIds[0]!,
+        });
+      } else if (
+        matchIds.length >= 2 &&
+        receiptsPerKey.get(receiptKey(creation.name, wanted)) === 1
+      ) {
+        // Keep the iCloud-keyed twin (observed canonical: rekeys survive under
+        // the NEW id), i.e. prefer a copy whose ID is not the one we created.
+        const keepId = matchIds.find((id) => id !== currentId) ?? matchIds[0]!;
+        actions.push({
+          kind: 'duplicate',
+          createdId: creation.createdPersistentId,
+          name: creation.name,
+          keepId,
+          deleteIds: matchIds.filter((id) => id !== keepId),
+        });
+      }
+    }
+    return actions;
+  }
+
+  /** Point a creation receipt at the playlist's current canonical ID. */
+  applyRekey(createdId: string, toId: string): void {
+    this.queries.setCreationCurrentId(createdId, toId);
+  }
+
+  /**
+   * Patch the cache after the bridge deleted an echo duplicate: drop the
+   * deleted playlist's rows and point the creation receipt at the survivor.
+   */
+  applyDuplicateRemoval(createdId: string, deletedId: string, keptId: string): void {
+    const run = this.db.transaction(() => {
+      this.queries.deletePlaylistRow(deletedId);
+      this.queries.setCreationCurrentId(createdId, keptId);
     });
     run();
   }

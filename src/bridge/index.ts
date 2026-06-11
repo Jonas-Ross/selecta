@@ -7,12 +7,18 @@
 import { runJxa } from './jxa.js';
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
 import { buildReadLibraryScript } from './scripts/read_library.js';
-import { buildFindPlaylistByNameScript } from './scripts/find_playlist_by_name.js';
+import {
+  buildFindPlaylistByNameScript,
+  buildListPlaylistsByNameScript,
+} from './scripts/find_playlist_by_name.js';
 import {
   buildCreatePlaylistScript,
   buildReplacePlaylistScript,
 } from './scripts/write_playlist.js';
-import { buildDeletePlaylistsByNameScript } from './scripts/delete_playlist.js';
+import {
+  buildDeletePlaylistByIdScript,
+  buildDeletePlaylistsByNameScript,
+} from './scripts/delete_playlist.js';
 import { BridgeError } from '../types/errors.js';
 import {
   type Bridge,
@@ -76,7 +82,18 @@ export const bridge: Bridge = {
   async replacePlaylist(input): Promise<PlaylistWriteResult> {
     return parseWriteResult(await runJxa(buildReplacePlaylistScript(input)));
   },
+  async deletePlaylistById(persistentId): Promise<number> {
+    return parseDeleteResult(await runJxa(buildDeletePlaylistByIdScript({ persistentId })));
+  },
 };
+
+function parseDeleteResult(result: unknown): number {
+  if (typeof result === 'object' && result !== null) {
+    const deleted = (result as Record<string, unknown>).deleted;
+    if (typeof deleted === 'number') return deleted;
+  }
+  throw new BridgeError('jxa_error', 'JXA returned an unexpected delete result shape.');
+}
 
 // The write scripts return { missingTrackIds } without touching Music.app when
 // any requested ID is absent from the live library — i.e. the cache is stale.
@@ -108,8 +125,16 @@ export async function findPlaylistByName(name: string): Promise<string | null> {
 // cleanup only — v1 has no playlist deletion in the Bridge interface). By name
 // because iCloud sync reassigns fresh playlist persistent IDs; see the script.
 export async function deletePlaylistsByName(name: string): Promise<number> {
-  const result = (await runJxa(buildDeletePlaylistsByNameScript({ name }))) as {
-    deleted: number;
-  };
-  return result.deleted;
+  return parseDeleteResult(await runJxa(buildDeletePlaylistsByNameScript({ name })));
+}
+
+// Test/diagnostic support: every playlist with this name (ID + track count).
+// The echo-verification script polls this to watch a sync echo arrive.
+export async function listPlaylistsByName(
+  name: string,
+): Promise<{ persistentId: string; trackCount: number }[]> {
+  return (await runJxa(buildListPlaylistsByNameScript({ name }))) as {
+    persistentId: string;
+    trackCount: number;
+  }[];
 }
