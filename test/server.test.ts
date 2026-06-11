@@ -17,6 +17,7 @@ const unusedBridge = {
   readLibrary: () => Promise.reject(new Error('not used')),
   createPlaylist: () => Promise.reject(new Error('not used')),
   replacePlaylist: () => Promise.reject(new Error('not used')),
+  deletePlaylistById: () => Promise.reject(new Error('not used')),
 } satisfies Bridge;
 
 async function connectedClient(): Promise<Client> {

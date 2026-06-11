@@ -168,3 +168,118 @@ describe('getCacheAgeHours', () => {
     expect(age!).toBeLessThan(0.01);
   });
 });
+
+// iCloud-echo reconciliation (docs/design.md §Implementation notes): creation
+// receipts + planSyncReconciliation + the apply helpers.
+describe('sync reconciliation', () => {
+  const CREATED_ID = 'P-CREATED';
+  const TRACKS = ['T-TEARDROP', 'T-ROADS'];
+  const NAME = 'Rearview';
+
+  // A snapshot as the next refresh would see it: the fixture library plus the
+  // given variants of the playlist Selecta created.
+  function snapshotWith(
+    ...copies: { id: string; name?: string; tracks?: string[] }[]
+  ): LibrarySnapshot {
+    return {
+      ...snapshot,
+      playlists: [
+        ...snapshot.playlists,
+        ...copies.map((c) => ({
+          persistentId: c.id,
+          name: c.name ?? NAME,
+          kind: 'user' as const,
+          trackPersistentIds: c.tracks ?? TRACKS,
+        })),
+      ],
+    };
+  }
+
+  function cacheAfterCreate(): SelectaCache {
+    const cache = refreshed();
+    cache.upsertPlaylistAfterWrite({ persistentId: CREATED_ID, trackCount: TRACKS.length }, NAME, TRACKS);
+    cache.recordPlaylistCreation(CREATED_ID, NAME, TRACKS);
+    return cache;
+  }
+
+  it('plans nothing when the created playlist survives cleanly (LOW BEAMS case)', () => {
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }), { durationMs: 1 });
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+  });
+
+  it('plans a rekey when iCloud reassigned the ID (DASH CAM case)', () => {
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
+      { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: CREATED_ID, toId: 'P-REKEYED' },
+    ]);
+  });
+
+  it('plans deleting the created copy, keeping the iCloud twin (REARVIEW case)', () => {
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-ECHO' }), {
+      durationMs: 1,
+    });
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
+      { kind: 'duplicate', createdId: CREATED_ID, name: NAME, keepId: 'P-ECHO', deleteIds: [CREATED_ID] },
+    ]);
+  });
+
+  it('never touches same-name twins with no creation receipt (legacy Relax/Workout dupes)', () => {
+    const cache = refreshed();
+    cache.refreshFromSnapshot(
+      snapshotWith({ id: 'P-RELAX-1', name: 'Relax' }, { id: 'P-RELAX-2', name: 'Relax' }),
+      { durationMs: 1 },
+    );
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+  });
+
+  it('ignores receipts older than the window', () => {
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-ECHO' }), {
+      durationMs: 1,
+    });
+    const later = new Date(Date.now() + 2 * 3_600_000);
+    expect(cache.planSyncReconciliation({ windowMinutes: 60, now: later })).toEqual([]);
+  });
+
+  it('ignores copies whose track sequence no longer matches the receipt', () => {
+    const cache = cacheAfterCreate();
+    // The "twin" was edited (extra track) — order/content mismatch, hands off.
+    cache.refreshFromSnapshot(
+      snapshotWith({ id: CREATED_ID }, { id: 'P-EDITED', tracks: [...TRACKS, 'T-ANGEL'] }),
+      { durationMs: 1 },
+    );
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+  });
+
+  it('applyDuplicateRemoval drops the deleted copy and remaps the receipt', () => {
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-ECHO' }), {
+      durationMs: 1,
+    });
+    cache.applyDuplicateRemoval(CREATED_ID, CREATED_ID, 'P-ECHO');
+
+    const rows = cache.listPlaylists({ nameQuery: NAME });
+    expect(rows.map((p) => p.persistentId)).toEqual(['P-ECHO']);
+    // The creation-time ID stays resolvable: searches against it hit the survivor.
+    const { rows: tracks } = cache.searchTracks({ inPlaylist: CREATED_ID });
+    expect(tracks.map((t) => t.persistentId).sort()).toEqual([...TRACKS].sort());
+  });
+
+  it('applyRekey keeps the creation-time ID resolvable after an iCloud rekey', () => {
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
+    cache.applyRekey(CREATED_ID, 'P-REKEYED');
+
+    const { rows } = cache.searchTracks({ inPlaylist: CREATED_ID });
+    expect(rows.map((t) => t.persistentId).sort()).toEqual([...TRACKS].sort());
+  });
+
+  it('getRecentCreationNames lists only in-window names', () => {
+    const cache = cacheAfterCreate();
+    expect(cache.getRecentCreationNames(60)).toEqual([NAME]);
+    expect(cache.getRecentCreationNames(60, new Date(Date.now() + 2 * 3_600_000))).toEqual([]);
+  });
+});

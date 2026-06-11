@@ -64,4 +64,10 @@ export interface Bridge {
     name: string; // find-or-create by name, clear, repopulate
     trackIds: string[];
   }): Promise<PlaylistWriteResult>;
+
+  // Delete one specific playlist. Used only by refresh-time iCloud-echo
+  // reconciliation, where the ID comes from the snapshot just read — never
+  // from a stale creation-time receipt. Resolves to the number deleted (0 if
+  // the ID is already gone, which reconciliation treats as benign).
+  deletePlaylistById(persistentId: string): Promise<number>;
 }

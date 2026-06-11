@@ -6,6 +6,7 @@ import type { Database, Statement } from 'better-sqlite3';
 import type { RawPlaylist, RawTrack } from '../types/bridge.js';
 import type {
   CoOccurringTrack,
+  PlaylistCreationRow,
   PlaylistRef,
   PlaylistRow,
   SearchFilters,
@@ -100,6 +101,32 @@ export function createQueries(db: Database) {
     'SELECT refreshed_at AS refreshedAt FROM refresh_log ORDER BY refreshed_at DESC LIMIT 1',
   );
 
+  const recordCreationStmt = db.prepare(`
+    INSERT OR REPLACE INTO playlist_creations
+      (created_persistent_id, current_persistent_id, name, track_ids_json, created_at)
+    VALUES (@createdId, @createdId, @name, @trackIdsJson, @createdAt)
+  `);
+  const creationsSinceStmt = db.prepare(`
+    SELECT created_persistent_id AS createdPersistentId,
+           current_persistent_id AS currentPersistentId,
+           name, track_ids_json AS trackIdsJson, created_at AS createdAt
+    FROM playlist_creations WHERE created_at >= ? ORDER BY created_at
+  `);
+  const setCreationCurrentIdStmt = db.prepare(
+    'UPDATE playlist_creations SET current_persistent_id = ? WHERE created_persistent_id = ?',
+  );
+  const resolveCreationStmt = db.prepare(
+    'SELECT current_persistent_id AS currentId FROM playlist_creations WHERE created_persistent_id = ?',
+  );
+  const playlistExistsStmt = db.prepare('SELECT 1 FROM playlists WHERE persistent_id = ?');
+  const userPlaylistIdsByNameStmt = db.prepare(
+    `SELECT persistent_id AS id FROM playlists WHERE name = ? AND kind = 'user' ORDER BY persistent_id`,
+  );
+  const playlistTrackIdsStmt = db.prepare(
+    'SELECT track_persistent_id AS id FROM playlist_tracks WHERE playlist_persistent_id = ? ORDER BY position',
+  );
+  const deletePlaylistRowStmt = db.prepare('DELETE FROM playlists WHERE persistent_id = ?');
+
   return {
     upsertTrack(track: RawTrack): void {
       upsertTrackStmt.run({
@@ -166,6 +193,56 @@ export function createQueries(db: Database) {
         playlistCount: entry.playlistCount,
         notes: entry.notes ?? null,
       });
+    },
+
+    recordPlaylistCreation(entry: {
+      createdId: string;
+      name: string;
+      trackIds: string[];
+      createdAt: string;
+    }): void {
+      recordCreationStmt.run({
+        createdId: entry.createdId,
+        name: entry.name,
+        trackIdsJson: JSON.stringify(entry.trackIds),
+        createdAt: entry.createdAt,
+      });
+    },
+
+    getCreationsSince(sinceIso: string): PlaylistCreationRow[] {
+      const rows = creationsSinceStmt.all(sinceIso) as (Omit<PlaylistCreationRow, 'trackIds'> & {
+        trackIdsJson: string;
+      })[];
+      return rows.map(({ trackIdsJson, ...row }) => ({
+        ...row,
+        trackIds: JSON.parse(trackIdsJson) as string[],
+      }));
+    },
+
+    setCreationCurrentId(createdId: string, currentId: string): void {
+      setCreationCurrentIdStmt.run(currentId, createdId);
+    },
+
+    resolveCreatedPlaylistId(createdId: string): string | null {
+      const row = resolveCreationStmt.get(createdId) as { currentId: string } | undefined;
+      return row?.currentId ?? null;
+    },
+
+    playlistExists(persistentId: string): boolean {
+      return playlistExistsStmt.get(persistentId) !== undefined;
+    },
+
+    getUserPlaylistIdsByName(name: string): string[] {
+      return (userPlaylistIdsByNameStmt.all(name) as { id: string }[]).map((r) => r.id);
+    },
+
+    getPlaylistTrackIds(playlistPersistentId: string): string[] {
+      return (playlistTrackIdsStmt.all(playlistPersistentId) as { id: string }[]).map((r) => r.id);
+    },
+
+    deletePlaylistRow(persistentId: string): void {
+      deletePlaylistRowStmt.run(persistentId);
+      deleteMembershipStmt.run(persistentId);
     },
 
     getCacheAgeHours(): number | null {
