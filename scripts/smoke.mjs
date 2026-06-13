@@ -34,7 +34,7 @@ await client.connect(
 step('tools/list');
 const { tools } = await client.listTools();
 console.log(tools.map((t) => t.name).join(', '));
-if (tools.length !== 6) fail(`expected 6 tools, got ${tools.length}`);
+if (tools.length !== 7) fail(`expected 7 tools, got ${tools.length}`);
 
 step('refresh_library (full reread — takes a moment)');
 const refresh = await call(client, 'refresh_library', {});
