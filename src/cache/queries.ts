@@ -134,6 +134,26 @@ function buildTrackFilter(filters: SearchFilters): {
   return { from, whereSql, params };
 }
 
+// Result ordering for searchTracks. A neutral lens the model picks — not a
+// ranking opinion baked into the cache. Omitted sort keeps the historical
+// default (FTS relevance with a query, else most-played); the explicit lenses
+// let the model dig past heavy rotation. Non-relevance lenses get a
+// persistent_id tiebreak so paging is stable; `random` is deliberately not.
+function orderClause(filters: SearchFilters): string {
+  switch (filters.sort) {
+    case 'most_played':
+      return 'ORDER BY t.play_count DESC';
+    case 'least_played':
+      return 'ORDER BY t.play_count ASC, t.persistent_id';
+    case 'recently_added':
+      return 'ORDER BY t.date_added DESC, t.persistent_id'; // NULL dates sort last
+    case 'random':
+      return 'ORDER BY RANDOM()';
+    default:
+      return filters.query ? 'ORDER BY f.rank' : 'ORDER BY t.play_count DESC';
+  }
+}
+
 export function createQueries(db: Database) {
   const upsertTrackStmt: Statement = db.prepare(`
     INSERT INTO tracks (
@@ -347,9 +367,7 @@ export function createQueries(db: Database) {
 
     searchTracks(filters: SearchFilters): { rows: TrackRow[]; total: number } {
       const { from, whereSql, params } = buildTrackFilter(filters);
-      // With a free-text query the FTS table supplies ranking; otherwise order
-      // by engagement.
-      const orderSql = filters.query ? 'ORDER BY f.rank' : 'ORDER BY t.play_count DESC';
+      const orderSql = orderClause(filters);
       const limit = Math.min(filters.limit ?? 50, 500);
 
       const total = (
