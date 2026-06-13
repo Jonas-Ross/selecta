@@ -285,6 +285,11 @@ describe('library_overview', () => {
     const err = asError(await handleLibraryOverview({ year_min: 2000, year_max: 1990 }, deps));
     expect(err.error).toBe('validation_error');
   });
+
+  it('rejects min_plays > max_plays as validation_error', async () => {
+    const err = asError(await handleLibraryOverview({ min_plays: 10, max_plays: 1 }, deps));
+    expect(err.error).toBe('validation_error');
+  });
 });
 
 // The cap/roll-up and formatting are pure (no DB), so they get unit-tested

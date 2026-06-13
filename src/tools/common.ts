@@ -125,7 +125,11 @@ export function roundedCacheAge(deps: ToolDeps): number | null {
 // can't drift — and so adding a facet (e.g. bpm_min/bpm_max) is a one-line
 // change both tools pick up.
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}/, 'expected an ISO date (YYYY-MM-DD…)');
+// Anchor the date portion: bare YYYY-MM-DD or a full ISO timestamp (…T…), but
+// not a date with a junk suffix like "2026-01-01nonsense".
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}(?:$|T)/, 'expected an ISO date (YYYY-MM-DD…)');
 
 export const libraryFilterShape = {
   query: z

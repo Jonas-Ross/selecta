@@ -35,7 +35,7 @@ Three internal layers:
 
 1. **Bridge** — wraps Music.app access. Builds JXA snippets, shells out via `osascript -l JavaScript`, parses JSON. Single responsibility. All Music.app coupling lives here.
 2. **Cache** — SQLite at `~/Library/Application Support/Selecta/library.db`. Tracks, playlists, playlist_tracks, refresh_log + FTS5 virtual table. All model-triggered reads hit this layer.
-3. **Tools** — six MCP handlers. Thin orchestrators: validate, query cache and/or bridge, shape response.
+3. **Tools** — seven MCP handlers (the six v1 tools + `library_overview`). Thin orchestrators: validate, query cache and/or bridge, shape response.
 
 **Boundaries.** Model never sees the bridge. Cache never knows about MCP. Tools layer is the only place "an MCP request" exists. Cache + bridge are usable as a plain Node library without MCP — keeps tests fast.
 

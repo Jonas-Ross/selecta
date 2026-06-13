@@ -369,6 +369,16 @@ describe('sync reconciliation', () => {
     expect(rows.map((t) => t.persistentId).sort()).toEqual([...TRACKS].sort());
   });
 
+  it('getOverview scopes by a creation-time ID after a rekey (resolve path)', () => {
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
+    cache.applyRekey(CREATED_ID, 'P-REKEYED');
+
+    // The canonical-ID overview test exercises the no-op resolve; this covers
+    // the receipt-follow branch getOverview shares with searchTracks.
+    expect(cache.getOverview({ inPlaylist: CREATED_ID }).totalTracks).toBe(TRACKS.length);
+  });
+
   it('getRecentCreationNames lists only in-window names', () => {
     const cache = cacheAfterCreate();
     expect(cache.getRecentCreationNames(60)).toEqual([NAME]);
