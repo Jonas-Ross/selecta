@@ -5,6 +5,7 @@ import type { Database } from 'better-sqlite3';
 import type { LibrarySnapshot, PlaylistWriteResult } from '../types/bridge.js';
 import type {
   CoOccurringTrack,
+  OverviewStats,
   PlaylistRef,
   PlaylistRow,
   ReconcileAction,
@@ -93,6 +94,14 @@ export class SelectaCache {
       filters = { ...filters, inPlaylist: this.resolvePlaylistId(filters.inPlaylist) };
     }
     return this.queries.searchTracks(filters);
+  }
+
+  /** Aggregate shape of the library, or of the slice the filters describe. */
+  getOverview(filters: SearchFilters): OverviewStats {
+    if (filters.inPlaylist != null) {
+      filters = { ...filters, inPlaylist: this.resolvePlaylistId(filters.inPlaylist) };
+    }
+    return this.queries.overviewStats(filters);
   }
 
   listPlaylists(filters: { kind?: PlaylistRow['kind']; nameQuery?: string }): PlaylistRow[] {

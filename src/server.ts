@@ -32,6 +32,11 @@ import {
   previewPlaylistInputShape,
   PREVIEW_PLAYLIST_DESCRIPTION,
 } from './tools/preview_playlist.js';
+import {
+  handleLibraryOverview,
+  libraryOverviewInputShape,
+  LIBRARY_OVERVIEW_DESCRIPTION,
+} from './tools/library_overview.js';
 
 export const SERVER_INFO = { name: 'selecta', version: '0.1.0' };
 
@@ -61,6 +66,12 @@ export function createServer(deps: ToolDeps): McpServer {
     'list_playlists',
     { description: LIST_PLAYLISTS_DESCRIPTION, inputSchema: listPlaylistsInputShape },
     async (args) => toToolResult(await handleListPlaylists(args, deps)),
+  );
+
+  server.registerTool(
+    'library_overview',
+    { description: LIBRARY_OVERVIEW_DESCRIPTION, inputSchema: libraryOverviewInputShape },
+    async (args) => toToolResult(await handleLibraryOverview(args, deps)),
   );
 
   server.registerTool(

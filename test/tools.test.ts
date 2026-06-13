@@ -13,6 +13,13 @@ import {
   type ListPlaylistsOutput,
 } from '../src/tools/list_playlists.js';
 import {
+  handleLibraryOverview,
+  shapeOverview,
+  GENRE_CAP,
+  type LibraryOverviewOutput,
+} from '../src/tools/library_overview.js';
+import type { OverviewStats } from '../src/types/cache.js';
+import {
   handleRefreshLibrary,
   type RefreshLibraryOutput,
 } from '../src/tools/refresh_library.js';
@@ -197,6 +204,164 @@ describe('list_playlists', () => {
 
     const byName = (await handleListPlaylists({ name_query: 'trip' }, deps)) as ListPlaylistsOutput;
     expect(byName.playlists.map((p) => p.name)).toEqual(['Trip Hop Essentials']);
+  });
+});
+
+describe('library_overview', () => {
+  let deps: ToolDeps;
+  beforeEach(() => {
+    deps = makeDeps();
+  });
+
+  it('summarizes the whole library', async () => {
+    const out = (await handleLibraryOverview({}, deps)) as LibraryOverviewOutput;
+    expect(out.filtered).toBe(false);
+    expect(out.total_tracks).toBe(6);
+    expect(out.total_runtime_seconds).toBe(1563);
+    expect(out.total_runtime_human).toBe('26m');
+    expect(out.genres).toEqual([
+      { name: 'Trip-Hop', count: 4 },
+      { name: 'Electronic', count: 1 },
+    ]);
+    expect(out.genres_other).toBeUndefined();
+    expect(out.decades).toEqual([
+      { decade: '1990s', count: 4 },
+      { decade: '2010s', count: 1 },
+    ]);
+    expect(out.top_artists).toEqual([
+      { name: 'Massive Attack', track_count: 2 },
+      { name: 'Portishead', track_count: 2 },
+      { name: 'M83', track_count: 1 },
+    ]);
+    expect(out.artists_total).toBe(3);
+    expect(out.signal).toEqual({
+      loved: 2,
+      disliked: 0,
+      rated: 2,
+      unrated: 4,
+      never_played: 1,
+      rating_histogram: { '5': 1, '4': 1 },
+    });
+    expect(out.location).toEqual({ local: 2, cloud: 3, unknown: 1 });
+    expect(out.date_added_range).toEqual({
+      earliest: '2024-01-10T08:00:00.000Z',
+      latest: '2025-11-05T08:00:00.000Z',
+    });
+    expect(out.cache_age_hours).not.toBeNull();
+  });
+
+  it('marks filtered slices and scopes the aggregates', async () => {
+    const out = (await handleLibraryOverview(
+      { artist: 'Portishead' },
+      deps,
+    )) as LibraryOverviewOutput;
+    expect(out.filtered).toBe(true);
+    expect(out.total_tracks).toBe(2);
+    expect(out.genres).toEqual([{ name: 'Trip-Hop', count: 2 }]);
+    expect(out.top_artists).toEqual([{ name: 'Portishead', track_count: 2 }]);
+    expect(out.signal.rating_histogram).toEqual({});
+  });
+
+  it('reports an empty overview on a never-populated cache', async () => {
+    const cache = SelectaCache.open(':memory:');
+    const out = (await handleLibraryOverview(
+      {},
+      { cache: () => cache, bridge: makeBridge() },
+    )) as LibraryOverviewOutput;
+    expect(out.total_tracks).toBe(0);
+    expect(out.total_runtime_human).toBe('0m');
+    expect(out.genres).toEqual([]);
+    expect(out.location).toEqual({ local: 0, cloud: 0 });
+    expect(out.date_added_range).toBeNull();
+    expect(out.cache_age_hours).toBeNull();
+  });
+
+  it('rejects unknown parameters as validation_error', async () => {
+    const err = asError(await handleLibraryOverview({ vibe: 'late night' }, deps));
+    expect(err.error).toBe('validation_error');
+  });
+
+  it('rejects year_min > year_max as validation_error', async () => {
+    const err = asError(await handleLibraryOverview({ year_min: 2000, year_max: 1990 }, deps));
+    expect(err.error).toBe('validation_error');
+  });
+
+  it('rejects min_plays > max_plays as validation_error', async () => {
+    const err = asError(await handleLibraryOverview({ min_plays: 10, max_plays: 1 }, deps));
+    expect(err.error).toBe('validation_error');
+  });
+});
+
+// The cap/roll-up and formatting are pure (no DB), so they get unit-tested
+// directly with synthetic stats rather than a fixture big enough to trip GENRE_CAP.
+describe('shapeOverview', () => {
+  function emptyStats(overrides: Partial<OverviewStats> = {}): OverviewStats {
+    return {
+      totalTracks: 0,
+      totalRuntimeSeconds: 0,
+      artistsTotal: 0,
+      loved: 0,
+      disliked: 0,
+      rated: 0,
+      unrated: 0,
+      neverPlayed: 0,
+      local: 0,
+      cloud: 0,
+      missing: 0,
+      unknownLocation: 0,
+      earliestAdded: null,
+      latestAdded: null,
+      genres: [],
+      decades: [],
+      topArtists: [],
+      ratingHistogram: [],
+      ...overrides,
+    };
+  }
+  const shape = (stats: OverviewStats) => shapeOverview(stats, { filtered: false, cacheAgeHours: 0 });
+
+  it('caps genres and rolls the tail into genres_other', () => {
+    const genres = Array.from({ length: GENRE_CAP + 5 }, (_, i) => ({
+      name: `g${i}`,
+      count: GENRE_CAP + 5 - i,
+    }));
+    const out = shape(emptyStats({ genres }));
+    expect(out.genres).toHaveLength(GENRE_CAP);
+    expect(out.genres_other).toEqual({
+      distinct: 5,
+      tracks: genres.slice(GENRE_CAP).reduce((sum, g) => sum + g.count, 0),
+    });
+  });
+
+  it('formats whole and half-star ratings', () => {
+    const out = shape(
+      emptyStats({
+        ratingHistogram: [
+          { rating: 100, count: 2 },
+          { rating: 90, count: 1 },
+          { rating: 30, count: 4 },
+        ],
+      }),
+    );
+    expect(out.signal.rating_histogram).toEqual({ '5': 2, '4.5': 1, '1.5': 4 });
+  });
+
+  it('humanizes runtime across day/hour/minute thresholds', () => {
+    const human = (s: number) => shape(emptyStats({ totalRuntimeSeconds: s })).total_runtime_human;
+    expect(human(0)).toBe('0m');
+    expect(human(1563)).toBe('26m');
+    expect(human(3 * 3600 + 25 * 60)).toBe('3h 25m');
+    expect(human(2 * 86400 + 5 * 3600)).toBe('2d 5h');
+  });
+
+  it('adds missing/unknown to location only when nonzero', () => {
+    expect(shape(emptyStats({ local: 1, cloud: 2 })).location).toEqual({ local: 1, cloud: 2 });
+    expect(shape(emptyStats({ local: 1, missing: 3, unknownLocation: 2 })).location).toEqual({
+      local: 1,
+      cloud: 0,
+      missing: 3,
+      unknown: 2,
+    });
   });
 });
 

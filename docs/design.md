@@ -35,13 +35,15 @@ Three internal layers:
 
 1. **Bridge** — wraps Music.app access. Builds JXA snippets, shells out via `osascript -l JavaScript`, parses JSON. Single responsibility. All Music.app coupling lives here.
 2. **Cache** — SQLite at `~/Library/Application Support/Selecta/library.db`. Tracks, playlists, playlist_tracks, refresh_log + FTS5 virtual table. All model-triggered reads hit this layer.
-3. **Tools** — six MCP handlers. Thin orchestrators: validate, query cache and/or bridge, shape response.
+3. **Tools** — seven MCP handlers (the six v1 tools + `library_overview`). Thin orchestrators: validate, query cache and/or bridge, shape response.
 
 **Boundaries.** Model never sees the bridge. Cache never knows about MCP. Tools layer is the only place "an MCP request" exists. Cache + bridge are usable as a plain Node library without MCP — keeps tests fast.
 
-## Tool surface (six tools)
+## Tool surface (seven tools)
 
 All inputs JSON Schema-defined. All responses include `cache_age_hours`. Tool descriptions written for the model — terse, contractual, with failure-mode hints.
+
+> Six tools shipped in v1; **`library_overview` (the seventh) was added post-v1** — the "lightweight summaries" half of the hybrid design that v1's targeted slices left unbuilt. Spec'd in `### library_overview` below, recorded in §Implementation notes.
 
 ### `search`
 
@@ -89,6 +91,29 @@ The curatorial graph walk.
 ```
 { kind?: 'user' | 'smart' | 'folder', name_query?: string }
 → { playlists: [{ id, name, kind, track_count, parent_id? }], cache_age_hours }
+```
+
+### `library_overview` (post-v1)
+
+The "shape of the crate" — aggregate counts and distributions so the model can orient before searching, especially for vibe-only seeds. Pure grounding: counts are **raw** (no genre normalization), `top_artists` is "most tracks owned" (a fact, not a taste ranking). Accepts the same faceted filters as `search` (minus `limit`), so it can describe a filtered slice; with no filters it describes the whole library.
+
+```
+{ …same optional facets as search, no limit }
+→ {
+    filtered: boolean,
+    total_tracks: number,
+    total_runtime_seconds: number, total_runtime_human: string,   // "9d 9h"
+    genres: [{ name, count }],                  // raw, top 50, ordered desc
+    genres_other?: { distinct, tracks },        // rollup beyond the cap
+    decades: [{ decade: "1990s", count }],
+    top_artists: [{ name, track_count }],        // top 25 by track count
+    artists_total: number,                       // distinct artists past the cap
+    signal: { loved, disliked, rated, unrated, never_played,
+              rating_histogram: { "5": n, "4.5": n, … } },
+    location: { local, cloud, missing?, unknown? },
+    date_added_range: { earliest, latest } | null,
+    cache_age_hours
+  }
 ```
 
 ### `create_playlist`
@@ -270,6 +295,7 @@ Where reality bent the spec during the build — details in `docs/contracts.md`:
 - **Freshly created playlists have transient persistent IDs.** iCloud Music Library reassigns the ID when sync settles (observed minutes after creation), and can resurrect a just-deleted fresh playlist. "Persistent IDs are trusted" holds for refresh-time reads; a `create_playlist` receipt ID is valid immediately but may rotate later — the cache self-heals on the next refresh, and the preview slot is immune because `replacePlaylist` finds it by name.
 - **iCloud Sync Library sometimes duplicates a freshly created playlist** — a second copy with identical tracks and a different persistent ID appears as sync settles. Non-deterministic and Apple-side: observed ~10s after one scripted create, absent for the identical call minutes later, twinning one of two same-night creates in live use, and the same library had pre-existing doubles of Apple's own playlists. The docs-only stance (descriptions + README, no code) didn't survive contact: the duplicates kept landing in real sessions. A post-v1 fix (2026-06) adds **refresh-time reconciliation**, scoped so it can't become a hidden fallback: `create_playlist` records a creation receipt (ID, name, exact track sequence, timestamp); the next `refresh_library` within 60 minutes matches receipts against the snapshot (name + kind `user` + identical ordered track IDs — intentional same-name dupes and user-edited copies never match), remaps iCloud **rekeys** in the receipt so the creation-time ID stays resolvable, deletes **echo twins** in Music.app (keeping the iCloud-keyed survivor — rekey observations show the new ID is canonical, and deleting the local copy minimizes resurrection risk), and reports every action in `sync_reconciliation` — visible in the response, never silent. Resurrection risk is bounded by the window: worst case the duplicate persists, same as before. Live verification showed the echo often self-collapses (Apple absorbs the provisional local copy into the cloud one within minutes — the by-ID delete then finds nothing, logged as `0 removed` and treated as benign), but not always: durable twins survive for hours, and `whose({persistentID})` was confirmed to match those, so the delete path covers them. Echoes of the preview slot remain out of scope (benign: `replacePlaylist` keeps overwriting the first name match). `npm run verify:echo` is the live verification harness.
 - **Ratings cross the API boundary as 0–5 stars** (input `rating_min` and output `signal.rating` both), converted to Music's 0–100 internally — symmetric, unlike the spec sketch which only converted input.
+- **`library_overview` (seventh tool, post-v1, 2026-06)** completes the hybrid design's "lightweight summaries" half. It reuses `search`'s faceted filter via a shared WHERE-builder (`buildTrackFilter`) and a shared input schema (`common.libraryFilterShape`), so search and overview never drift. Deliberate scope calls: genres are reported **raw** (no merging "Hip-Hop"/"Hip-Hop/Rap"/"Rap" — normalization is an opinion the model owns, not the MCP); `top_artists` is "most tracks owned", a fact, not a recommendation; years bucket into **decades** (shape over noise); genres cap at 50 (rest in `genres_other`), artists at 25 (`artists_total` carries breadth). Surfacing `bpm`/`comments` was scoped in then **dropped** when the live library showed them ~empty (bpm on 7/3609 tracks, comments on 29) — the shared filter shape is structured so adding `bpm_min/max` later is a one-line change. `location` reflects reality: an Apple Music / iCloud library reads as ~100% `cloud`.
 
 ## Out of scope (v1)
 

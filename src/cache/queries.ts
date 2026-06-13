@@ -6,6 +6,7 @@ import type { Database, Statement } from 'better-sqlite3';
 import type { RawPlaylist, RawTrack } from '../types/bridge.js';
 import type {
   CoOccurringTrack,
+  OverviewStats,
   PlaylistCreationRow,
   PlaylistRef,
   PlaylistRow,
@@ -39,6 +40,99 @@ function toFtsQuery(query: string): string {
 // group_concat(DISTINCT …) cannot take a separator in SQLite, so names use the
 // unit separator and are deduped/capped in JS.
 const NAME_SEPARATOR = '\u001f';
+
+// library_overview returns a fact, not a ranking, so the artist cap only exists
+// to bound tokens; artistsTotal carries the full breadth past it.
+const TOP_ARTISTS_LIMIT = 25;
+
+// The faceted WHERE clause shared by searchTracks and overviewStats: identical
+// predicates over the same rowset, so a search and an overview of that search
+// agree by construction. Returns the FROM (FTS-joined when a free-text query is
+// present) plus the WHERE fragment and its bound params; callers add their own
+// projection, grouping, ordering, and limits.
+function buildTrackFilter(filters: SearchFilters): {
+  from: string;
+  whereSql: string;
+  params: Record<string, unknown>;
+} {
+  const where: string[] = [];
+  const params: Record<string, unknown> = {};
+
+  const from = filters.query
+    ? 'FROM tracks_fts f JOIN tracks t ON t.rowid = f.rowid'
+    : 'FROM tracks t';
+  if (filters.query) {
+    where.push('tracks_fts MATCH @ftsQuery');
+    params.ftsQuery = toFtsQuery(filters.query);
+  }
+  if (filters.artist != null) {
+    where.push('t.artist = @artist COLLATE NOCASE');
+    params.artist = filters.artist;
+  }
+  if (filters.genre != null) {
+    where.push('t.genre = @genre COLLATE NOCASE');
+    params.genre = filters.genre;
+  }
+  if (filters.yearMin != null) {
+    where.push('t.year >= @yearMin');
+    params.yearMin = filters.yearMin;
+  }
+  if (filters.yearMax != null) {
+    where.push('t.year <= @yearMax');
+    params.yearMax = filters.yearMax;
+  }
+  if (filters.loved != null) {
+    where.push('t.loved = @loved');
+    params.loved = filters.loved ? 1 : 0;
+  }
+  if (filters.disliked != null) {
+    where.push('t.disliked = @disliked');
+    params.disliked = filters.disliked ? 1 : 0;
+  }
+  if (filters.ratingMin != null) {
+    where.push('t.rating >= @ratingMin');
+    params.ratingMin = filters.ratingMin;
+  }
+  if (filters.minPlays != null) {
+    where.push('t.play_count >= @minPlays');
+    params.minPlays = filters.minPlays;
+  }
+  if (filters.maxPlays != null) {
+    where.push('t.play_count <= @maxPlays');
+    params.maxPlays = filters.maxPlays;
+  }
+  if (filters.lastPlayedBefore != null) {
+    // Never-played tracks count as "not played since X" — that is the
+    // dig-up-forgotten-gems use case.
+    where.push('(t.last_played < @lastPlayedBefore OR t.last_played IS NULL)');
+    params.lastPlayedBefore = filters.lastPlayedBefore;
+  }
+  if (filters.lastPlayedAfter != null) {
+    where.push('t.last_played > @lastPlayedAfter');
+    params.lastPlayedAfter = filters.lastPlayedAfter;
+  }
+  if (filters.addedBefore != null) {
+    where.push('t.date_added < @addedBefore');
+    params.addedBefore = filters.addedBefore;
+  }
+  if (filters.addedAfter != null) {
+    where.push('t.date_added > @addedAfter');
+    params.addedAfter = filters.addedAfter;
+  }
+  if (filters.inPlaylist != null) {
+    where.push(
+      't.persistent_id IN (SELECT track_persistent_id FROM playlist_tracks WHERE playlist_persistent_id = @inPlaylist)',
+    );
+    params.inPlaylist = filters.inPlaylist;
+  }
+  if (filters.locationKind != null) {
+    where.push('t.location_kind = @locationKind');
+    params.locationKind = filters.locationKind;
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+  return { from, whereSql, params };
+}
 
 export function createQueries(db: Database) {
   const upsertTrackStmt: Statement = db.prepare(`
@@ -252,84 +346,9 @@ export function createQueries(db: Database) {
     },
 
     searchTracks(filters: SearchFilters): { rows: TrackRow[]; total: number } {
-      const where: string[] = [];
-      const params: Record<string, unknown> = {};
-
-      // With a free-text query the FTS table drives the scan and supplies
-      // ranking; otherwise plain tracks ordered by engagement.
-      const from = filters.query
-        ? 'FROM tracks_fts f JOIN tracks t ON t.rowid = f.rowid'
-        : 'FROM tracks t';
-      if (filters.query) {
-        where.push('tracks_fts MATCH @ftsQuery');
-        params.ftsQuery = toFtsQuery(filters.query);
-      }
-      if (filters.artist != null) {
-        where.push('t.artist = @artist COLLATE NOCASE');
-        params.artist = filters.artist;
-      }
-      if (filters.genre != null) {
-        where.push('t.genre = @genre COLLATE NOCASE');
-        params.genre = filters.genre;
-      }
-      if (filters.yearMin != null) {
-        where.push('t.year >= @yearMin');
-        params.yearMin = filters.yearMin;
-      }
-      if (filters.yearMax != null) {
-        where.push('t.year <= @yearMax');
-        params.yearMax = filters.yearMax;
-      }
-      if (filters.loved != null) {
-        where.push('t.loved = @loved');
-        params.loved = filters.loved ? 1 : 0;
-      }
-      if (filters.disliked != null) {
-        where.push('t.disliked = @disliked');
-        params.disliked = filters.disliked ? 1 : 0;
-      }
-      if (filters.ratingMin != null) {
-        where.push('t.rating >= @ratingMin');
-        params.ratingMin = filters.ratingMin;
-      }
-      if (filters.minPlays != null) {
-        where.push('t.play_count >= @minPlays');
-        params.minPlays = filters.minPlays;
-      }
-      if (filters.maxPlays != null) {
-        where.push('t.play_count <= @maxPlays');
-        params.maxPlays = filters.maxPlays;
-      }
-      if (filters.lastPlayedBefore != null) {
-        // Never-played tracks count as "not played since X" — that is the
-        // dig-up-forgotten-gems use case.
-        where.push('(t.last_played < @lastPlayedBefore OR t.last_played IS NULL)');
-        params.lastPlayedBefore = filters.lastPlayedBefore;
-      }
-      if (filters.lastPlayedAfter != null) {
-        where.push('t.last_played > @lastPlayedAfter');
-        params.lastPlayedAfter = filters.lastPlayedAfter;
-      }
-      if (filters.addedBefore != null) {
-        where.push('t.date_added < @addedBefore');
-        params.addedBefore = filters.addedBefore;
-      }
-      if (filters.addedAfter != null) {
-        where.push('t.date_added > @addedAfter');
-        params.addedAfter = filters.addedAfter;
-      }
-      if (filters.inPlaylist != null) {
-        where.push(
-          't.persistent_id IN (SELECT track_persistent_id FROM playlist_tracks WHERE playlist_persistent_id = @inPlaylist)',
-        );
-        params.inPlaylist = filters.inPlaylist;
-      }
-      if (filters.locationKind != null) {
-        where.push('t.location_kind = @locationKind');
-        params.locationKind = filters.locationKind;
-      }
-
-      const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+      const { from, whereSql, params } = buildTrackFilter(filters);
+      // With a free-text query the FTS table supplies ranking; otherwise order
+      // by engagement.
       const orderSql = filters.query ? 'ORDER BY f.rank' : 'ORDER BY t.play_count DESC';
       const limit = Math.min(filters.limit ?? 50, 500);
 
@@ -340,6 +359,79 @@ export function createQueries(db: Database) {
         .prepare(`SELECT ${TRACK_COLUMNS} ${from} ${whereSql} ${orderSql} LIMIT @limit`)
         .all({ ...params, limit }) as TrackRow[];
       return { rows, total };
+    },
+
+    // Aggregate "shape of the crate" over the same filtered rowset as
+    // searchTracks (docs/contracts.md §3). Pure GROUP BY work, cache-only. The
+    // grand totals come back in one scan; genre/decade/artist/rating
+    // breakdowns are separate grouped scans. Genres are returned in full
+    // (ordered) and capped by the tool; artists are capped here to bound the
+    // long tail, with artistsTotal carrying the breadth past the cap.
+    overviewStats(filters: SearchFilters): OverviewStats {
+      const { from, whereSql, params } = buildTrackFilter(filters);
+      const and = (cond: string): string => (whereSql ? `${whereSql} AND ${cond}` : `WHERE ${cond}`);
+
+      const totals = db
+        .prepare(
+          `SELECT
+             COUNT(*) AS totalTracks,
+             COALESCE(SUM(t.duration_seconds), 0) AS totalRuntimeSeconds,
+             COUNT(DISTINCT NULLIF(TRIM(t.artist), '')) AS artistsTotal,
+             COALESCE(SUM(t.loved), 0) AS loved,
+             COALESCE(SUM(t.disliked), 0) AS disliked,
+             COALESCE(SUM(CASE WHEN t.rating > 0 THEN 1 ELSE 0 END), 0) AS rated,
+             COALESCE(SUM(CASE WHEN t.rating IS NULL OR t.rating = 0 THEN 1 ELSE 0 END), 0) AS unrated,
+             COALESCE(SUM(CASE WHEN t.play_count = 0 THEN 1 ELSE 0 END), 0) AS neverPlayed,
+             COALESCE(SUM(CASE WHEN t.location_kind = 'local' THEN 1 ELSE 0 END), 0) AS local,
+             COALESCE(SUM(CASE WHEN t.location_kind = 'cloud' THEN 1 ELSE 0 END), 0) AS cloud,
+             COALESCE(SUM(CASE WHEN t.location_kind = 'missing' THEN 1 ELSE 0 END), 0) AS missing,
+             COALESCE(SUM(CASE WHEN t.location_kind IS NULL THEN 1 ELSE 0 END), 0) AS unknownLocation,
+             MIN(t.date_added) AS earliestAdded,
+             MAX(t.date_added) AS latestAdded
+           ${from} ${whereSql}`,
+        )
+        .get(params) as Omit<
+        OverviewStats,
+        'genres' | 'decades' | 'topArtists' | 'ratingHistogram'
+      >;
+
+      const genres = db
+        .prepare(
+          `SELECT t.genre AS name, COUNT(*) AS count
+           ${from} ${and("t.genre IS NOT NULL AND TRIM(t.genre) <> ''")}
+           GROUP BY t.genre ORDER BY count DESC, name COLLATE NOCASE`,
+        )
+        .all(params) as { name: string; count: number }[];
+
+      const decades = db
+        .prepare(
+          `SELECT (t.year / 10) * 10 AS decade, COUNT(*) AS count
+           ${from} ${and('t.year IS NOT NULL AND t.year > 0')}
+           GROUP BY decade ORDER BY decade`,
+        )
+        .all(params) as { decade: number; count: number }[];
+
+      const topArtists = db
+        .prepare(
+          `SELECT t.artist AS name, COUNT(*) AS trackCount
+           ${from} ${and("t.artist IS NOT NULL AND TRIM(t.artist) <> ''")}
+           GROUP BY t.artist ORDER BY trackCount DESC, name COLLATE NOCASE
+           LIMIT @artistLimit`,
+        )
+        .all({ ...params, artistLimit: TOP_ARTISTS_LIMIT }) as {
+        name: string;
+        trackCount: number;
+      }[];
+
+      const ratingHistogram = db
+        .prepare(
+          `SELECT t.rating AS rating, COUNT(*) AS count
+           ${from} ${and('t.rating > 0')}
+           GROUP BY t.rating ORDER BY t.rating DESC`,
+        )
+        .all(params) as { rating: number; count: number }[];
+
+      return { ...totals, genres, decades, topArtists, ratingHistogram };
     },
 
     listPlaylists(filters: { kind?: PlaylistRow['kind']; nameQuery?: string }): PlaylistRow[] {

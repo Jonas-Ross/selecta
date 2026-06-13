@@ -34,11 +34,30 @@ await client.connect(
 step('tools/list');
 const { tools } = await client.listTools();
 console.log(tools.map((t) => t.name).join(', '));
-if (tools.length !== 6) fail(`expected 6 tools, got ${tools.length}`);
+if (tools.length !== 7) fail(`expected 7 tools, got ${tools.length}`);
 
 step('refresh_library (full reread — takes a moment)');
 const refresh = await call(client, 'refresh_library', {});
 console.log(JSON.stringify(refresh));
+
+step('library_overview: whole library, then a loved slice');
+const overview = await call(client, 'library_overview', {});
+// The unfiltered aggregate scan must agree with the snapshot just written.
+if (overview.total_tracks !== refresh.track_count) {
+  fail(`overview total_tracks ${overview.total_tracks} != refresh track_count ${refresh.track_count}`);
+}
+console.log(
+  `${overview.total_tracks} tracks, ${overview.total_runtime_human}, ${overview.artists_total} artists; ` +
+    `top genres: ${overview.genres
+      .slice(0, 3)
+      .map((g) => `${g.name} (${g.count})`)
+      .join(', ')}`,
+);
+const lovedOverview = await call(client, 'library_overview', { loved: true });
+if (!lovedOverview.filtered || lovedOverview.total_tracks > overview.total_tracks) {
+  fail(`loved slice (${lovedOverview.total_tracks}, filtered=${lovedOverview.filtered}) inconsistent with whole library (${overview.total_tracks})`);
+}
+console.log(`loved slice: ${lovedOverview.total_tracks} tracks`);
 
 step('search: most-played favorited tracks');
 const search = await call(client, 'search', { loved: true, limit: 5 });
