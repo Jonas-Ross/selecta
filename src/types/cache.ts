@@ -60,8 +60,34 @@ export type CoOccurringTrack = TrackRow & {
   sharedPlaylistNames: string[]; // cap 3
 };
 
+// Aggregate "shape of the crate" for library_overview (post-v1). Computed over
+// the same filtered rowset SearchFilters describes — so an overview can scope to
+// a slice. Counts are RAW: genres are grouped verbatim (no normalization), the
+// tool layer caps/rolls-up and formats for the wire. rating here is 0..100.
+export type OverviewStats = {
+  totalTracks: number;
+  totalRuntimeSeconds: number;
+  artistsTotal: number; // distinct named artists in the slice
+  loved: number;
+  disliked: number;
+  rated: number; // rating > 0
+  unrated: number; // rating null or 0
+  neverPlayed: number; // play_count = 0
+  local: number;
+  cloud: number;
+  missing: number;
+  unknownLocation: number; // location_kind NULL
+  earliestAdded: string | null;
+  latestAdded: string | null;
+  genres: { name: string; count: number }[]; // full, ordered desc; tool caps
+  decades: { decade: number; count: number }[]; // decade start (1990), asc
+  topArtists: { name: string; trackCount: number }[]; // already capped in SQL
+  ratingHistogram: { rating: number; count: number }[]; // rating 0..100, desc
+};
+
 // Faceted search filters (docs/design.md §search). All optional, combined as AND.
 // rating here is Music.app's 0..100 scale — the tool layer converts from 1..5.
+// Shared by searchTracks and overviewStats (overview ignores `limit`).
 export type SearchFilters = {
   query?: string;
   artist?: string;

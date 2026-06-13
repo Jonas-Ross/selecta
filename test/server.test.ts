@@ -37,12 +37,13 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 }
 
 describe('MCP server over in-memory transport', () => {
-  it('exposes the six tools', async () => {
+  it('exposes the seven tools', async () => {
     const client = await connectedClient();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       'create_playlist',
       'get_track_context',
+      'library_overview',
       'list_playlists',
       'preview_playlist',
       'refresh_library',

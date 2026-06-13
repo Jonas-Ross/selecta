@@ -169,6 +169,83 @@ describe('getCacheAgeHours', () => {
   });
 });
 
+describe('overviewStats', () => {
+  it('aggregates the whole library', () => {
+    const stats = refreshed().getOverview({});
+    expect(stats.totalTracks).toBe(6);
+    expect(stats.totalRuntimeSeconds).toBe(1563); // 331+379+305+304+244, T-BARE null → 0
+    expect(stats.artistsTotal).toBe(3);
+    expect(stats.loved).toBe(2);
+    expect(stats.disliked).toBe(0);
+    expect(stats.rated).toBe(2);
+    expect(stats.unrated).toBe(4);
+    expect(stats.neverPlayed).toBe(1); // only T-BARE has play_count 0
+    expect(stats.local).toBe(2);
+    expect(stats.cloud).toBe(3);
+    expect(stats.unknownLocation).toBe(1); // T-BARE has no location_kind
+    expect(stats.earliestAdded).toBe('2024-01-10T08:00:00.000Z');
+    expect(stats.latestAdded).toBe('2025-11-05T08:00:00.000Z');
+  });
+
+  it('orders genres by count then name, skipping tracks with no genre', () => {
+    expect(refreshed().getOverview({}).genres).toEqual([
+      { name: 'Trip-Hop', count: 4 },
+      { name: 'Electronic', count: 1 },
+    ]);
+  });
+
+  it('buckets years into decades, ascending', () => {
+    expect(refreshed().getOverview({}).decades).toEqual([
+      { decade: 1990, count: 4 },
+      { decade: 2010, count: 1 },
+    ]);
+  });
+
+  it('ranks artists by track count, breaking ties by name', () => {
+    expect(refreshed().getOverview({}).topArtists).toEqual([
+      { name: 'Massive Attack', trackCount: 2 },
+      { name: 'Portishead', trackCount: 2 },
+      { name: 'M83', trackCount: 1 },
+    ]);
+  });
+
+  it('reports a rating histogram on the 0..100 scale, descending', () => {
+    expect(refreshed().getOverview({}).ratingHistogram).toEqual([
+      { rating: 100, count: 1 },
+      { rating: 80, count: 1 },
+    ]);
+  });
+
+  it('scopes every aggregate to a filtered slice', () => {
+    const stats = refreshed().getOverview({ artist: 'Portishead' });
+    expect(stats.totalTracks).toBe(2);
+    expect(stats.totalRuntimeSeconds).toBe(609);
+    expect(stats.artistsTotal).toBe(1);
+    expect(stats.genres).toEqual([{ name: 'Trip-Hop', count: 2 }]);
+    expect(stats.loved).toBe(1);
+    expect(stats.rated).toBe(0);
+    expect(stats.ratingHistogram).toEqual([]);
+  });
+
+  it('scopes by playlist membership (follows the resolve path)', () => {
+    expect(refreshed().getOverview({ inPlaylist: 'P-LATENIGHT' }).totalTracks).toBe(3);
+  });
+
+  it('returns zeros and empty groups on a never-refreshed cache', () => {
+    const stats = freshCache().getOverview({});
+    expect(stats.totalTracks).toBe(0);
+    expect(stats.totalRuntimeSeconds).toBe(0);
+    expect(stats.artistsTotal).toBe(0);
+    expect(stats.neverPlayed).toBe(0);
+    expect(stats.genres).toEqual([]);
+    expect(stats.decades).toEqual([]);
+    expect(stats.topArtists).toEqual([]);
+    expect(stats.ratingHistogram).toEqual([]);
+    expect(stats.earliestAdded).toBeNull();
+    expect(stats.latestAdded).toBeNull();
+  });
+});
+
 // iCloud-echo reconciliation (docs/design.md §Implementation notes): creation
 // receipts + planSyncReconciliation + the apply helpers.
 describe('sync reconciliation', () => {

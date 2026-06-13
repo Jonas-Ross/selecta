@@ -223,7 +223,12 @@ getCoOccurringTracks(
 
 // M5
 upsertPlaylistAfterWrite(result: PlaylistWriteResult, name: string, trackIds: string[]): void;
+
+// post-v1
+overviewStats(filters: SearchFilters): OverviewStats;   // aggregate shape of the (optionally filtered) library
 ```
+
+`overviewStats` reuses the exact WHERE-clause builder behind `searchTracks` (extracted to a shared `buildTrackFilter`), so a search and an overview of that same filter agree by construction. The facade exposes it as `getOverview` (resolving `inPlaylist` through creation receipts, like `searchTracks`). The tool layer's faceted input schema is also shared — `common.libraryFilterShape` — so `search` and `library_overview` accept identical facets (search adds `limit`).
 
 ### Row shapes
 
@@ -269,6 +274,24 @@ export type PlaylistRef = { id: string; name: string };
 export type CoOccurringTrack = TrackRow & {
   sharedPlaylistCount: number;
   sharedPlaylistNames: string[];     // cap 3
+};
+
+// post-v1 — library_overview aggregates. Counts are RAW (genres grouped
+// verbatim, no normalization); the tool layer caps genres/artists and formats
+// for the wire. rating here is 0..100.
+export type OverviewStats = {
+  totalTracks: number;
+  totalRuntimeSeconds: number;
+  artistsTotal: number;              // distinct named artists in the slice
+  loved: number; disliked: number;
+  rated: number; unrated: number;    // rating > 0 / (null or 0)
+  neverPlayed: number;               // play_count = 0
+  local: number; cloud: number; missing: number; unknownLocation: number;
+  earliestAdded: string | null; latestAdded: string | null;
+  genres: { name: string; count: number }[];       // full, ordered desc
+  decades: { decade: number; count: number }[];     // decade start (1990), asc
+  topArtists: { name: string; trackCount: number }[]; // capped in SQL
+  ratingHistogram: { rating: number; count: number }[]; // rating 0..100, desc
 };
 ```
 
