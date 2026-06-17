@@ -27,6 +27,7 @@ These are defaults, not gates — exercise judgment, optimize for shipping good 
 - **Small, readable, minimal-dependency code wins.** Core deps: `@modelcontextprotocol/sdk`, `better-sqlite3`, `commander`, `vitest`, TS toolchain. Add beyond that only when it clearly earns its keep, and say why in the commit message.
 - **Persistent IDs are trusted** — stable per Music.app library. Re-import → user re-runs `refresh_library`. No migration logic.
 - **Tool descriptions are first-class.** Written for the model: terse, contractual, with failure-mode hints ("if no match, returns empty array — don't retry with the same query"). They're the cheapest lever on model behavior.
+- **Canonical docs move together.** The spec lives in three places: `CLAUDE.md` (+ the `AGENTS.md` symlink), `docs/design.md` (decisions/scope/identity), and `docs/contracts.md` (Music.app realities). A change to identity, scope, or a contract must land in **all** the relevant ones in the same PR. A decision recorded in only one is one a future agent will miss — this bit us once: a v2 scope change landed in `CLAUDE.md` while `docs/design.md` still said the opposite, so the stale spec could still be cited to reject the new work.
 - **CLI via `commander`:** the `selecta` bin is a verb dispatcher. No-arg must start the MCP server over stdio (clients spawn it that way — never print help on no-arg), and commander output routes to **stderr** (`configureOutput`). M1's hand-rolled `bridge:read-playlist` switch is deleted when `refresh` lands in M2.
 
 ## Architecture
@@ -70,6 +71,7 @@ Plus one manual **end-to-end smoke** (refresh → search → get_track_context �
 - [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`, imperative, lowercase, no trailing period. One concern per commit; keep the build green where reasonable.
 - Pushing feature branches and opening PRs is normal flow — no per-action confirmation. Never push to `main`, never force-push, never merge without explicit ask. Don't amend committed work.
 - Before opening a PR, run `/simplify` over the diff and address what it surfaces.
+- **Every time a PR goes up, and every time review comments are addressed, check whether the change implies a doc update** — does it shift identity, scope, a tool contract, or a documented Music.app reality? If so, update `CLAUDE.md` / `docs/design.md` / `docs/contracts.md` in the same PR. Don't let the docs drift behind the code.
 - **During PR review cycles:** commit fixes for reviewer feedback (CodeRabbit, Codex, humans) but **do not auto-push** — the user pushes, so CodeRabbit re-reviews one batch instead of every fix.
 
 ## Status
