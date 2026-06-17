@@ -10,7 +10,7 @@ Selecta is a local MCP server that exposes the Apple Music library to Claude so 
 
 **What Selecta owns:** reading the on-machine library catalog, caching it locally, answering "what do I own relevant to X," surfacing behavioral signal (plays/loved/rating/recency/skips/date-added), writing playlists back.
 
-**What Selecta does NOT own:** taste modeling, similarity scoring, ML, audio analysis, standalone UI, cloud components, auth, anyone else's library.
+**What Selecta does NOT own:** taste modeling, similarity scoring, candidate ranking, recommendation, standalone UI, cloud components, auth, anyone else's library. (Audio *features* — BPM/key/energy — are facts Selecta may surface and enrich, including from an external source; what stays out is using them to *rank or recommend* inside the MCP. See the v2 scope note under [Out of scope](#out-of-scope-v1).)
 
 ## Decisions
 
@@ -302,10 +302,12 @@ Where reality bent the spec during the build — details in `docs/contracts.md`:
 
 ## Out of scope (v1)
 
+> **Scope change (v2, 2026-06).** After living with v1, audio-feature enrichment and editing existing playlists were deliberately graduated into scope (see CLAUDE.md Identity + issues #15–#20). The struck items below are kept for the historical v1 record. The line that still holds: Selecta surfaces *facts* (incl. audio features, incl. externally sourced); it never *ranks or recommends* candidates inside the MCP.
+
 - Spotify integration (their audio-features / recommendations endpoints were cut off for new apps 2024-11-27).
-- Last.fm / MusicBrainz enrichment.
-- Audio analysis / ML / embeddings / similarity scoring.
+- ~~Last.fm / MusicBrainz enrichment.~~ → MusicBrainz/AcousticBrainz is now a candidate data source for audio-feature enrichment (#19); Last.fm scrobbling stays out.
+- ~~Audio analysis / ML / embeddings / similarity scoring.~~ → audio *features* (BPM/key/energy) are now in scope as facts (#19); ML/embeddings/similarity *scoring used to rank candidates* stays out.
 - Scrobble logging for temporal taste evolution.
 - Multi-user, cloud, auth, account systems.
 - Standalone UI beyond chat.
-- Editing existing playlists (only create new + overwrite the dedicated preview slot).
+- ~~Editing existing playlists (only create new + overwrite the dedicated preview slot).~~ → add/remove/reorder/delete now in scope (#15).
