@@ -134,6 +134,54 @@ describe('search', () => {
     const err = asError(await handleSearch({ vibe: 'late night' }, deps));
     expect(err.error).toBe('validation_error');
   });
+
+  it('sort: least_played orders ascending by play count', async () => {
+    const out = (await handleSearch({ sort: 'least_played' }, deps)) as SearchOutput;
+    expect(out.tracks.map((t) => t.persistent_id)).toEqual([
+      'T-BARE', // 0 plays
+      'T-ROADS', // 7
+      'T-ANGEL', // 13
+      'T-GLORYBOX', // 30
+      'T-TEARDROP', // 42
+      'T-MIDNIGHT', // 55
+    ]);
+  });
+
+  it('sort: recently_added orders newest first, undated last', async () => {
+    const out = (await handleSearch({ sort: 'recently_added' }, deps)) as SearchOutput;
+    expect(out.tracks.map((t) => t.persistent_id)).toEqual([
+      'T-MIDNIGHT', // 2025-11-05
+      'T-GLORYBOX', // 2024-03-02 (id tiebreak)
+      'T-ROADS', // 2024-03-02
+      'T-ANGEL', // 2024-01-10 (id tiebreak)
+      'T-TEARDROP', // 2024-01-10
+      'T-BARE', // no date_added → last
+    ]);
+  });
+
+  it('sort: random returns the full match set (order unconstrained)', async () => {
+    const out = (await handleSearch({ sort: 'random' }, deps)) as SearchOutput;
+    expect(out.total_matches).toBe(6);
+    expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual([
+      'T-ANGEL',
+      'T-BARE',
+      'T-GLORYBOX',
+      'T-MIDNIGHT',
+      'T-ROADS',
+      'T-TEARDROP',
+    ]);
+  });
+
+  it('sort overrides relevance ordering even with a free-text query', async () => {
+    // Both Dummy tracks match; least_played puts ROADS (7) ahead of GLORYBOX (30).
+    const out = (await handleSearch({ query: 'dummy', sort: 'least_played' }, deps)) as SearchOutput;
+    expect(out.tracks.map((t) => t.persistent_id)).toEqual(['T-ROADS', 'T-GLORYBOX']);
+  });
+
+  it('rejects an unknown sort value as validation_error', async () => {
+    const err = asError(await handleSearch({ sort: 'alphabetical' }, deps));
+    expect(err.error).toBe('validation_error');
+  });
 });
 
 describe('get_track_context', () => {
