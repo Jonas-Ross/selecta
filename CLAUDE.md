@@ -8,16 +8,16 @@ A local MCP server that exposes the user's Apple Music library to Claude so play
 
 **Claude owns this build end-to-end.** `docs/design.md` is the spec; build it through, milestone by milestone, without waiting for per-step sign-off. Design, implement, test, commit, push feature branches, and open PRs autonomously. When the spec and implementation reality disagree, use judgment, deviate, and record the deviation in `docs/design.md` so the spec stays true. Ask the user only when something genuinely needs their input: a real scope change, a destructive/irreversible action, or a fork in the road the spec doesn't decide and that's expensive to redo.
 
-The spec is a map, not a cage — tool shapes, schema details, and internals may be adjusted where building reveals better answers. The one thing that is **not** adjustable is the identity below.
+The spec is a map, not a cage — tool shapes, schema details, and internals may be adjusted where building reveals better answers. The identity below is the firm spine: change it only as a deliberate, recorded scope decision made with the user (as the v2 audio-feature and playlist-editing expansion was) — never casually drift it.
 
 ## Identity (non-negotiable)
 
-- **The model is the brain. Selecta is the eyes and hands.** No taste modeling, no similarity scoring, no ML, no audio analysis, no candidate ranking inside the MCP. If a feature drifts that way, it's the wrong feature — stop and flag it.
+- **The model is the brain. Selecta is the eyes and hands.** Selecta surfaces *facts* for the model to reason over — inventory, behavioral signal, and audio features (BPM/key/energy) — and the model does the sequencing and ranking. Computing or fetching objective audio features (including from an external source) is enrichment-of-facts and is in scope. What stays out is the model's job: no taste modeling, no similarity scoring, no candidate ranking or recommendation inside the MCP. If a feature drifts toward ranking/recommending candidates, it's the wrong feature — stop and flag it.
 - **All Music.app coupling stays in `src/bridge/`.** No `osascript`/JXA in `tools/` or `cache/`.
 - **`stdout` is the MCP protocol channel.** All logging to `stderr`; optional file log at `~/Library/Logs/Selecta/selecta.log` only when `SELECTA_DEBUG=1`.
 - **No hidden retries, no fallbacks, no auto-refresh.** Bridge fails → structured error; the model decides what to do. Write paths patch the cache surgically but never trigger a full reread.
 - **macOS only.** Music.app is the dependency; no cross-platform pretense.
-- **Out of scope (v1):** Spotify, Last.fm/MusicBrainz enrichment, scrobbling, multi-user, cloud, auth, standalone UI, editing existing playlists beyond the dedicated preview slot.
+- **Out of scope:** Spotify integration, Last.fm scrobbling, multi-user, cloud, auth, standalone UI. (Two former v1 exclusions graduated into v2: editing existing playlists — add/remove/reorder/delete (#15) — and external *audio-feature* enrichment (#19). MusicBrainz/AcousticBrainz is now a candidate data source for that enrichment, not an excluded dependency.)
 
 ## Engineering defaults
 
@@ -27,6 +27,7 @@ These are defaults, not gates — exercise judgment, optimize for shipping good 
 - **Small, readable, minimal-dependency code wins.** Core deps: `@modelcontextprotocol/sdk`, `better-sqlite3`, `commander`, `vitest`, TS toolchain. Add beyond that only when it clearly earns its keep, and say why in the commit message.
 - **Persistent IDs are trusted** — stable per Music.app library. Re-import → user re-runs `refresh_library`. No migration logic.
 - **Tool descriptions are first-class.** Written for the model: terse, contractual, with failure-mode hints ("if no match, returns empty array — don't retry with the same query"). They're the cheapest lever on model behavior.
+- **Canonical docs move together.** The spec lives in three places: `CLAUDE.md` (+ the `AGENTS.md` symlink), `docs/design.md` (decisions/scope/identity), and `docs/contracts.md` (Music.app realities). A change to identity, scope, or a contract must land in **all** the relevant ones in the same PR. A decision recorded in only one is one a future agent will miss — this bit us once: a v2 scope change landed in `CLAUDE.md` while `docs/design.md` still said the opposite, so the stale spec could still be cited to reject the new work.
 - **CLI via `commander`:** the `selecta` bin is a verb dispatcher. No-arg must start the MCP server over stdio (clients spawn it that way — never print help on no-arg), and commander output routes to **stderr** (`configureOutput`). M1's hand-rolled `bridge:read-playlist` switch is deleted when `refresh` lands in M2.
 
 ## Architecture
@@ -70,11 +71,14 @@ Plus one manual **end-to-end smoke** (refresh → search → get_track_context �
 - [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`, imperative, lowercase, no trailing period. One concern per commit; keep the build green where reasonable.
 - Pushing feature branches and opening PRs is normal flow — no per-action confirmation. Never push to `main`, never force-push, never merge without explicit ask. Don't amend committed work.
 - Before opening a PR, run `/simplify` over the diff and address what it surfaces.
+- **Every time a PR goes up, and every time review comments are addressed, check whether the change implies a doc update** — does it shift identity, scope, a tool contract, or a documented Music.app reality? If so, update `CLAUDE.md` / `docs/design.md` / `docs/contracts.md` in the same PR. Don't let the docs drift behind the code.
 - **During PR review cycles:** commit fixes for reviewer feedback (CodeRabbit, Codex, humans) but **do not auto-push** — the user pushes, so CodeRabbit re-reviews one batch instead of every fix.
 
 ## Status
 
-**v1 complete — all five milestones built.** Seven tools live over MCP stdio (six v1 + `library_overview`, added post-v1), cache + bridge fully implemented, unit + integration suites green, end-to-end smoke scripted (`npm run smoke`). Spec deviations discovered during the build are recorded in `docs/design.md` §Implementation notes and `docs/contracts.md`. What remains is post-v1: living with it, tuning tool descriptions against real model behavior, and whatever the out-of-scope list graduates next.
+**v1 complete — all five milestones built.** Seven tools live over MCP stdio (six v1 + `library_overview`, added post-v1), cache + bridge fully implemented, unit + integration suites green, end-to-end smoke scripted (`npm run smoke`). Spec deviations discovered during the build are recorded in `docs/design.md` §Implementation notes and `docs/contracts.md`.
+
+**v2 in planning (issues #15–#20).** After living with v1, scope was deliberately widened (see Identity): mutate existing playlists (#15), search dedup (#16), exclusion filters (#17), `set_loved`/`set_rating` write-back (#18), audio-feature enrichment populated incrementally on refresh (#19), and multi-seed co-occurrence (#20). Audio features and external audio-feature enrichment graduated into scope. None built yet.
 
 ## Code search
 
