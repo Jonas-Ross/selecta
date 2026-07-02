@@ -30,11 +30,35 @@ export interface Bridge {
     name: string;              // find-or-create by name, clear, repopulate
     trackIds: string[];
   }): Promise<PlaylistWriteResult>;
+
+  // Refresh-time iCloud-echo reconciliation only (post-v1).
+  deletePlaylistById(persistentId: string): Promise<number>;
+
+  // v2 (#15 slice 1): in-place mutation of a user playlist.
+  addPlaylistTracks(input: {
+    playlistId: string;
+    trackIds: string[];
+    position?: number;         // 0-based; omitted/past-end = append
+  }): Promise<PlaylistEditResult>;
+
+  removePlaylistTracks(input: {
+    playlistId: string;
+    trackIds?: string[];       // every occurrence of each
+    positions?: number[];      // 0-based, pre-removal order
+  }): Promise<PlaylistEditResult>;
 }
 
 export type PlaylistWriteResult = {
   persistentId: string;
   trackCount: number;
+};
+
+export type PlaylistEditResult = {
+  persistentId: string;
+  trackCount: number;
+  trackPersistentIds: string[];        // FULL post-edit order — cache-patch ground truth
+  preEditTrackPersistentIds: string[]; // order the SAME script execution saw pre-edit
+  removedCount?: number;               // remove path only
 };
 ```
 
@@ -91,6 +115,16 @@ export type RawPlaylist = {
 
 **Dangling memberships are tolerated (M4 finding):** playlists can reference tracks absent from the library track list (unavailable/greyed-out entries). The bridge reports membership as Music.app states it; the cache stores it as-is. Read queries JOIN `tracks`, so dangling members never surface to the model — except in `track_count`, which intentionally matches what Music.app displays.
 
+**Scripted playlist-entry edits race iCloud sync (v2/#15 finding, 2026-07 — probed extensively live):** on an iCloud-synced library, in-place entry mutations have **no read-your-writes guarantee** while sync is actively churning:
+
+- `duplicate()` nondeterministically materializes **one or two** real entries for a single call (distinct playlist indexes; not tied to track class, playlist age, or how the playlist was fetched; clear-then-refill doesn't avoid it). The double can land immediately or a beat later.
+- Edits can be **wiped** by a settling sync — the playlist reverts to the cloud's snapshot, silently discarding recent scripted adds/removes. Freshly created playlists are worst (post-create edits reliably wiped during the initial settle; phantom entries from recently deleted similar playlists drift in and out), but a storm of consecutive scripted writes triggers it on established playlists too.
+- During churn, even **reads oscillate** between conflicting snapshots call-to-call. Everything converges when the library quiesces.
+
+Consequences baked into the design: the add script does a best-effort **verify-and-trim** (settle ~0.5s, count each added id's occurrences against pre-read + requested, delete surplus trailing occurrences — catches doubles that land in-window; late ones heal at the next refresh); both edit scripts return `preEditTrackPersistentIds` read **in the same script execution**, because that atomic baseline is the only thing an edit can be exactly checked against; the cache is patched from the post-edit read, so cache == Music.app *at that instant*, and later sync drift is the standing refresh-heals-it model. Practical guidance encoded in tool descriptions: prefer creating playlists with their full tracklist over create-then-edit.
+
+**JXA insertion locations don't work in Music (v2/#15 finding):** every insertion-location form (`tracks.beginning`, `tracks[i].before`, …) raises ("Can't get object" / "descriptor type mismatch"). The ONLY working move is `Music.move(track, { to: playlist })` — to the END. Positional insert therefore appends and rotates the displaced originals to the end (`originalCount − position` moves, each sliding the next original into the same source index). Removal deletes by index in descending order so positions stay valid mid-loop.
+
 ---
 
 ## 2. Error envelope
@@ -108,6 +142,7 @@ export type ErrorCode =
   | 'jxa_error'                      // osascript non-zero or unparseable stdout
   | 'track_not_found'                // cache miss on a referenced persistent ID
   | 'playlist_not_found'             // same, for playlists
+  | 'playlist_not_editable'          // edit target is smart/subscription/folder (v2, #15)
   | 'validation_error'               // input failed schema check
   | 'cache_unavailable';             // DB open failed (perms, disk full)
 
@@ -150,6 +185,8 @@ const defaultHints: Record<ErrorCode, string> = {
     'Track is not in the cache. Cache may be stale — try refresh_library.',
   playlist_not_found:
     'Playlist is not in the cache. Cache may be stale — try refresh_library.',
+  playlist_not_editable:
+    'Only plain user playlists can be edited — smart, subscription, and folder playlists are read-only.',
   validation_error:
     'Input failed validation; see message for the offending field.',
   cache_unavailable:
@@ -226,6 +263,11 @@ upsertPlaylistAfterWrite(result: PlaylistWriteResult, name: string, trackIds: st
 
 // post-v1
 overviewStats(filters: SearchFilters): OverviewStats;   // aggregate shape of the (optionally filtered) library
+
+// v2 (#15 slice 1) — facade additions for the edit tools
+getPlaylist(persistentId: string): PlaylistRow | null;
+getPlaylistTrackIds(persistentId: string): string[];    // playlist order, duplicates preserved
+patchPlaylistMembership(persistentId: string, trackIds: string[]): void;  // surgical, from post-edit ground truth
 ```
 
 `overviewStats` reuses the exact WHERE-clause builder behind `searchTracks` (extracted to a shared `buildTrackFilter`), so a search and an overview of that same filter agree by construction. The facade exposes it as `getOverview` (resolving `inPlaylist` through creation receipts, like `searchTracks`). The tool layer's faceted input schema is also shared — `common.libraryFilterShape` — so `search` and `library_overview` accept identical facets (search adds `limit`).

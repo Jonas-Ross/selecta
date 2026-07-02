@@ -7,18 +7,13 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer } from '../src/server.js';
 import { SelectaCache } from '../src/cache/index.js';
-import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
+import type { LibrarySnapshot } from '../src/types/bridge.js';
+import { makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
 
-const unusedBridge = {
-  readPlaylist: () => Promise.reject(new Error('not used')),
-  readLibrary: () => Promise.reject(new Error('not used')),
-  createPlaylist: () => Promise.reject(new Error('not used')),
-  replacePlaylist: () => Promise.reject(new Error('not used')),
-  deletePlaylistById: () => Promise.reject(new Error('not used')),
-} satisfies Bridge;
+const unusedBridge = makeBridge();
 
 async function connectedClient(): Promise<Client> {
   const cache = SelectaCache.open(':memory:');
@@ -37,16 +32,18 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 }
 
 describe('MCP server over in-memory transport', () => {
-  it('exposes the seven tools', async () => {
+  it('exposes the nine tools', async () => {
     const client = await connectedClient();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
+      'add_tracks',
       'create_playlist',
       'get_track_context',
       'library_overview',
       'list_playlists',
       'preview_playlist',
       'refresh_library',
+      'remove_tracks',
       'search',
     ]);
     // Tool descriptions are first-class — they must survive the wire.

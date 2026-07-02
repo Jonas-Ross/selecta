@@ -10,6 +10,7 @@ export type ErrorCode =
   | 'jxa_error' // osascript non-zero or unparseable stdout
   | 'track_not_found' // cache miss on a referenced persistent ID
   | 'playlist_not_found' // same, for playlists
+  | 'playlist_not_editable' // edit target is smart/subscription/folder, not a user playlist
   | 'validation_error' // input failed schema check
   | 'cache_unavailable'; // DB open failed (perms, disk full)
 
@@ -46,6 +47,8 @@ export const defaultHints: Record<ErrorCode, string> = {
     'Track is not in the cache. Cache may be stale — try refresh_library.',
   playlist_not_found:
     'Playlist is not in the cache. Cache may be stale — try refresh_library.',
+  playlist_not_editable:
+    'Only plain user playlists can be edited — smart, subscription, and folder playlists are read-only.',
   validation_error:
     'Input failed validation; see message for the offending field.',
   cache_unavailable:

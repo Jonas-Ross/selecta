@@ -32,6 +32,12 @@ import {
   previewPlaylistInputShape,
   PREVIEW_PLAYLIST_DESCRIPTION,
 } from './tools/preview_playlist.js';
+import { handleAddTracks, addTracksInputShape, ADD_TRACKS_DESCRIPTION } from './tools/add_tracks.js';
+import {
+  handleRemoveTracks,
+  removeTracksInputShape,
+  REMOVE_TRACKS_DESCRIPTION,
+} from './tools/remove_tracks.js';
 import {
   handleLibraryOverview,
   libraryOverviewInputShape,
@@ -90,6 +96,18 @@ export function createServer(deps: ToolDeps): McpServer {
     'preview_playlist',
     { description: PREVIEW_PLAYLIST_DESCRIPTION, inputSchema: previewPlaylistInputShape },
     async (args) => toToolResult(await handlePreviewPlaylist(args, deps)),
+  );
+
+  server.registerTool(
+    'add_tracks',
+    { description: ADD_TRACKS_DESCRIPTION, inputSchema: addTracksInputShape },
+    async (args) => toToolResult(await handleAddTracks(args, deps)),
+  );
+
+  server.registerTool(
+    'remove_tracks',
+    { description: REMOVE_TRACKS_DESCRIPTION, inputSchema: removeTracksInputShape },
+    async (args) => toToolResult(await handleRemoveTracks(args, deps)),
   );
 
   return server;

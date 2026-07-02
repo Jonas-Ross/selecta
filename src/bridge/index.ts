@@ -6,7 +6,10 @@
 
 import { runJxa } from './jxa.js';
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
-import { buildReadLibraryScript } from './scripts/read_library.js';
+import {
+  buildListLibraryTrackIdsScript,
+  buildReadLibraryScript,
+} from './scripts/read_library.js';
 import {
   buildFindPlaylistByNameScript,
   buildListPlaylistsByNameScript,
@@ -19,10 +22,12 @@ import {
   buildDeletePlaylistByIdScript,
   buildDeletePlaylistsByNameScript,
 } from './scripts/delete_playlist.js';
+import { buildAddTracksScript, buildRemoveTracksScript } from './scripts/edit_playlist.js';
 import { BridgeError } from '../types/errors.js';
 import {
   type Bridge,
   type LibrarySnapshot,
+  type PlaylistEditResult,
   type PlaylistWriteResult,
   type RawPlaylist,
 } from '../types/bridge.js';
@@ -85,7 +90,65 @@ export const bridge: Bridge = {
   async deletePlaylistById(persistentId): Promise<number> {
     return parseDeleteResult(await runJxa(buildDeletePlaylistByIdScript({ persistentId })));
   },
+  async addPlaylistTracks(input): Promise<PlaylistEditResult> {
+    return parseEditResult(await runJxa(buildAddTracksScript(input)), 'add');
+  },
+  async removePlaylistTracks(input): Promise<PlaylistEditResult> {
+    return parseEditResult(await runJxa(buildRemoveTracksScript(input)), 'remove');
+  },
 };
+
+// The edit scripts return a guard sentinel — without touching Music.app — when
+// the target playlist or a referenced track/position doesn't hold live. Each
+// maps to a structured error; the model decides what to do next.
+function parseEditResult(result: unknown, op: 'add' | 'remove'): PlaylistEditResult {
+  if (typeof result === 'object' && result !== null) {
+    const v = result as Record<string, unknown>;
+    if (v.playlistNotFound === true) {
+      throw new BridgeError(
+        'playlist_not_found',
+        'Music.app has no playlist with that persistent ID.',
+        'The playlist is in the cache but not the live library — the cache is stale. Run refresh_library and re-resolve the playlist.',
+      );
+    }
+    if (v.notEditable === true) {
+      throw new BridgeError('playlist_not_editable', 'Target is not a plain user playlist.');
+    }
+    if (Array.isArray(v.missingTrackIds)) {
+      const missing = v.missingTrackIds as string[];
+      throw new BridgeError(
+        'track_not_found',
+        `Music.app: ${missing.join(', ')} — ${op === 'add' ? 'not in the live library' : 'no occurrence in the live playlist'}.`,
+        op === 'add'
+          ? 'These IDs are in the cache but not the live library — the cache is stale. Run refresh_library and re-resolve the tracks.'
+          : 'These tracks are not in the playlist in Music.app — the cache is stale. Run refresh_library and re-check the playlist contents.',
+      );
+    }
+    if (Array.isArray(v.invalidPositions)) {
+      throw new BridgeError(
+        'validation_error',
+        `Positions out of range live: ${(v.invalidPositions as number[]).join(', ')}.`,
+        `The playlist has ${String(v.liveTrackCount)} tracks in Music.app — the cache is stale. Run refresh_library and re-check positions.`,
+      );
+    }
+    if (isPlaylistEditResult(v)) return v;
+  }
+  throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistEditResult shape.');
+}
+
+function isIdArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((id) => typeof id === 'string');
+}
+
+function isPlaylistEditResult(v: Record<string, unknown>): v is PlaylistEditResult & Record<string, unknown> {
+  return (
+    typeof v.persistentId === 'string' &&
+    typeof v.trackCount === 'number' &&
+    isIdArray(v.trackPersistentIds) &&
+    isIdArray(v.preEditTrackPersistentIds) &&
+    (v.removedCount === undefined || typeof v.removedCount === 'number')
+  );
+}
 
 function parseDeleteResult(result: unknown): number {
   if (typeof result === 'object' && result !== null) {
@@ -113,6 +176,17 @@ function parseWriteResult(result: unknown): PlaylistWriteResult {
     }
   }
   throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistWriteResult shape.');
+}
+
+// Test-support: the library's track persistent IDs in one bulk Apple event —
+// the integration suite uses this to pick seed tracks without paying for a
+// full readLibrary snapshot.
+export async function listLibraryTrackIds(): Promise<string[]> {
+  const result = await runJxa(buildListLibraryTrackIdsScript());
+  if (!Array.isArray(result) || !result.every((id) => typeof id === 'string')) {
+    throw new BridgeError('jxa_error', 'JXA returned an unexpected track-id list shape.');
+  }
+  return result;
 }
 
 // Test-support: resolve a playlist's persistent ID by name. Used by the opt-in

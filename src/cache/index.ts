@@ -108,6 +108,15 @@ export class SelectaCache {
     return this.queries.listPlaylists(filters);
   }
 
+  getPlaylist(persistentId: string): PlaylistRow | null {
+    return this.queries.getPlaylist(persistentId);
+  }
+
+  /** The playlist's cached track IDs in playlist order (duplicates preserved). */
+  getPlaylistTrackIds(persistentId: string): string[] {
+    return this.queries.getPlaylistTrackIds(persistentId);
+  }
+
   getTrack(persistentId: string): TrackRow | null {
     return this.queries.getTrack(persistentId);
   }
@@ -138,6 +147,18 @@ export class SelectaCache {
         trackPersistentIds: trackIds,
       });
       this.queries.replacePlaylistMembership(result.persistentId, trackIds);
+    });
+    run();
+  }
+
+  /**
+   * Surgical patch after an in-place playlist edit: replace the membership
+   * with the post-edit order the bridge read back from Music.app. The playlist
+   * row itself (name/kind) is unchanged by an edit, so only membership moves.
+   */
+  patchPlaylistMembership(persistentId: string, trackIds: string[]): void {
+    const run = this.db.transaction(() => {
+      this.queries.replacePlaylistMembership(persistentId, trackIds);
     });
     run();
   }

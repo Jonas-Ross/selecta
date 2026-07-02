@@ -73,3 +73,60 @@ describe('runJxa', () => {
     await expectErrorCode(runJxa('noop'), 'jxa_error');
   });
 });
+
+// The edit scripts return guard sentinels instead of mutating when the live
+// library disagrees with the request; the bridge maps each to a BridgeError.
+describe('bridge edit-result sentinel mapping', () => {
+  beforeEach(() => {
+    mockExecFile.mockReset();
+  });
+
+  async function editBridge() {
+    return (await import('../src/bridge/index.js')).bridge;
+  }
+  const input = { playlistId: 'P1', trackIds: ['T1'] };
+
+  it('maps playlistNotFound to playlist_not_found', async () => {
+    stubExecFile({ stdout: '{"playlistNotFound":true}' });
+    await expectErrorCode((await editBridge()).addPlaylistTracks(input), 'playlist_not_found');
+  });
+
+  it('maps notEditable to playlist_not_editable', async () => {
+    stubExecFile({ stdout: '{"notEditable":true}' });
+    await expectErrorCode((await editBridge()).addPlaylistTracks(input), 'playlist_not_editable');
+  });
+
+  it('maps missingTrackIds to track_not_found, naming the IDs', async () => {
+    stubExecFile({ stdout: '{"missingTrackIds":["T1"]}' });
+    const p = (await editBridge()).removePlaylistTracks(input);
+    await expectErrorCode(p, 'track_not_found');
+  });
+
+  it('maps invalidPositions to validation_error with the live count in the hint', async () => {
+    stubExecFile({ stdout: '{"invalidPositions":[9],"liveTrackCount":3}' });
+    const p = (await editBridge()).removePlaylistTracks({ playlistId: 'P1', positions: [9] });
+    await expect(p).rejects.toMatchObject({
+      errorCode: 'validation_error',
+      hint: expect.stringContaining('3 tracks'),
+    });
+  });
+
+  it('returns the parsed result on the success shape', async () => {
+    stubExecFile({
+      stdout:
+        '{"persistentId":"P1","trackCount":2,"trackPersistentIds":["T1","T2"],"preEditTrackPersistentIds":["T1","T2","T3"],"removedCount":1}',
+    });
+    await expect((await editBridge()).removePlaylistTracks(input)).resolves.toEqual({
+      persistentId: 'P1',
+      trackCount: 2,
+      trackPersistentIds: ['T1', 'T2'],
+      preEditTrackPersistentIds: ['T1', 'T2', 'T3'],
+      removedCount: 1,
+    });
+  });
+
+  it('rejects an unexpected shape as jxa_error', async () => {
+    stubExecFile({ stdout: '{"persistentId":"P1","trackCount":1,"trackPersistentIds":["T1"]}' });
+    await expectErrorCode((await editBridge()).addPlaylistTracks(input), 'jxa_error');
+  });
+});

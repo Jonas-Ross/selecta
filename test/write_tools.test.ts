@@ -16,7 +16,8 @@ import {
 import { handleGetTrackContext, type TrackContextOutput } from '../src/tools/get_track_context.js';
 import type { ToolDeps } from '../src/tools/common.js';
 import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
-import { BridgeError, type SelectaError } from '../src/types/errors.js';
+import { BridgeError } from '../src/types/errors.js';
+import { asError, makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
@@ -24,9 +25,7 @@ const snapshot = fixture as LibrarySnapshot;
 function makeDeps(bridgeOverrides: Partial<Bridge> = {}): ToolDeps & { cacheInstance: SelectaCache } {
   const cache = SelectaCache.open(':memory:');
   cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
-  const bridge: Bridge = {
-    readPlaylist: vi.fn().mockRejectedValue(new Error('not used')),
-    readLibrary: vi.fn().mockRejectedValue(new Error('not used')),
+  const bridge = makeBridge({
     createPlaylist: vi
       .fn()
       .mockImplementation(async (input: { trackIds: string[] }) => ({
@@ -41,13 +40,8 @@ function makeDeps(bridgeOverrides: Partial<Bridge> = {}): ToolDeps & { cacheInst
       })),
     deletePlaylistById: vi.fn().mockResolvedValue(1),
     ...bridgeOverrides,
-  };
+  });
   return { cache: () => cache, bridge, cacheInstance: cache };
-}
-
-function asError(result: object): SelectaError {
-  expect(result).toHaveProperty('error');
-  return result as SelectaError;
 }
 
 describe('create_playlist', () => {

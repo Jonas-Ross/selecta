@@ -39,11 +39,11 @@ Three internal layers:
 
 **Boundaries.** Model never sees the bridge. Cache never knows about MCP. Tools layer is the only place "an MCP request" exists. Cache + bridge are usable as a plain Node library without MCP — keeps tests fast.
 
-## Tool surface (seven tools)
+## Tool surface (nine tools)
 
-All inputs JSON Schema-defined. All responses include `cache_age_hours`. Tool descriptions written for the model — terse, contractual, with failure-mode hints.
+All inputs JSON Schema-defined. All responses include `cache_age_hours` (write tools return their write receipt instead). Tool descriptions written for the model — terse, contractual, with failure-mode hints.
 
-> Six tools shipped in v1; **`library_overview` (the seventh) was added post-v1** — the "lightweight summaries" half of the hybrid design that v1's targeted slices left unbuilt. Spec'd in `### library_overview` below, recorded in §Implementation notes.
+> Six tools shipped in v1; **`library_overview` (the seventh) was added post-v1** — the "lightweight summaries" half of the hybrid design that v1's targeted slices left unbuilt. Spec'd in `### library_overview` below, recorded in §Implementation notes. **`add_tracks` and `remove_tracks` (v2, issue #15 slice 1)** are the first in-place playlist mutations.
 
 ### `search`
 
@@ -137,6 +137,26 @@ Overwrites the single "Selecta Preview" playlist in Music.app. Same surgical cac
 { track_ids: string[] }
 → { playlist_id: string, track_count }
 ```
+
+### `add_tracks` (v2, #15)
+
+Append or insert tracks into an existing **user** playlist. `position` is 0-based; omitted or past the end appends. Duplicate entries are allowed (Music.app semantics). Surgical cache patch from the post-edit order the bridge reads back.
+
+```
+{ playlist_id: string, track_ids: string[], position?: number }
+→ { playlist_id, name, track_count }
+```
+
+### `remove_tracks` (v2, #15)
+
+Remove entries from a user playlist: by track id (**every** occurrence) and/or by 0-based position (that occurrence only) — positions refer to the pre-removal order. First irreversible tool; description instructs the model to confirm with the user. Errors (`playlist_not_found` / `playlist_not_editable` / `track_not_found` / `validation_error`) fire before anything is deleted.
+
+```
+{ playlist_id: string, track_ids?: string[], positions?: number[] }
+→ { playlist_id, name, track_count, removed_count }
+```
+
+Both edit tools pre-flight against the cache (playlist exists, kind `user`, tracks/positions valid) before any Apple event, and the bridge re-checks against the live library. `search` gained a `playlist_order` sort lens (requires `in_playlist`) so the model can see a playlist's running order before positional edits — nothing else exposed it.
 
 ### `refresh_library`
 
@@ -300,6 +320,7 @@ Where reality bent the spec during the build — details in `docs/contracts.md`:
 - **iCloud Sync Library sometimes duplicates a freshly created playlist** — a second copy with identical tracks and a different persistent ID appears as sync settles. Non-deterministic and Apple-side: observed ~10s after one scripted create, absent for the identical call minutes later, twinning one of two same-night creates in live use, and the same library had pre-existing doubles of Apple's own playlists. The docs-only stance (descriptions + README, no code) didn't survive contact: the duplicates kept landing in real sessions. A post-v1 fix (2026-06) adds **refresh-time reconciliation**, scoped so it can't become a hidden fallback: `create_playlist` records a creation receipt (ID, name, exact track sequence, timestamp); the next `refresh_library` within 60 minutes matches receipts against the snapshot (name + kind `user` + identical ordered track IDs — intentional same-name dupes and user-edited copies never match), remaps iCloud **rekeys** in the receipt so the creation-time ID stays resolvable, deletes **echo twins** in Music.app (keeping the iCloud-keyed survivor — rekey observations show the new ID is canonical, and deleting the local copy minimizes resurrection risk), and reports every action in `sync_reconciliation` — visible in the response, never silent. Resurrection risk is bounded by the window: worst case the duplicate persists, same as before. Live verification showed the echo often self-collapses (Apple absorbs the provisional local copy into the cloud one within minutes — the by-ID delete then finds nothing, logged as `0 removed` and treated as benign), but not always: durable twins survive for hours, and `whose({persistentID})` was confirmed to match those, so the delete path covers them. Echoes of the preview slot remain out of scope (benign: `replacePlaylist` keeps overwriting the first name match). `npm run verify:echo` is the live verification harness.
 - **Ratings cross the API boundary as 0–5 stars** (input `rating_min` and output `signal.rating` both), converted to Music's 0–100 internally — symmetric, unlike the spec sketch which only converted input.
 - **`search` gained a `sort` lens (post-v1, 2026-06).** Playlists were skewing onto the same heavy-rotation tracks because no-query `search` could only order by `play_count DESC` — the model had no way to see past the top of the library. `sort` (`most_played` | `least_played` | `recently_added` | `random`) lets it deliberately pull deep cuts or a fresh sample. This stays on the identity's right side: it's *how to order a query* (neutral), not a weighting the MCP applies — the decision to vary lives in the model, nudged by the tool description, never in Selecta's SQL. A `favorite_weight`/bias knob the MCP blends was explicitly rejected as taste-in-the-MCP. Omitted `sort` preserves the historical default; non-relevance lenses carry a `persistent_id` tiebreak for stable paging (`random` intentionally doesn't).
+- **`add_tracks` / `remove_tracks` (v2, #15 slice 1, 2026-07).** In-place playlist mutation, first slice of the #15 epic (reorder and delete_playlist follow). Decisions: removal addresses tracks **by id (every occurrence) and/or by 0-based position (one occurrence)** — both, answering the issue's open question, because ids are the model's natural handle while positions are the only way to target one occurrence of a duplicated track; a `playlist_order` sort lens on `search` (valid only with `in_playlist`) makes positions usable — nothing else exposed playlist order; a new `playlist_not_editable` error code covers smart/subscription/folder targets; the bridge returns the playlist's **pre- and post-edit order read in the same script execution**, and the cache is patched from the post-edit read (ground truth, never local arithmetic). The build surfaced a deep Music.app reality — **scripted playlist-entry edits race iCloud sync** (nondeterministic entry doubles, edits wiped by settling syncs, reads oscillating between conflicting snapshots during churn; everything converges when the library quiesces) — recorded in full in `docs/contracts.md` §1. Mitigations: a best-effort verify-and-trim of the doubled append inside the add script, per-call atomicity via the pre-edit read, and the standing refresh-heals-drift model. The integration test asserts each edit as a transform of its own atomic baseline and tolerates sync weather explicitly.
 - **`library_overview` (seventh tool, post-v1, 2026-06)** completes the hybrid design's "lightweight summaries" half. It reuses `search`'s faceted filter via a shared WHERE-builder (`buildTrackFilter`) and a shared input schema (`common.libraryFilterShape`), so search and overview never drift. Deliberate scope calls: genres are reported **raw** (no merging "Hip-Hop"/"Hip-Hop/Rap"/"Rap" — normalization is an opinion the model owns, not the MCP); `top_artists` is "most tracks owned", a fact, not a recommendation; years bucket into **decades** (shape over noise); genres cap at 50 (rest in `genres_other`), artists at 25 (`artists_total` carries breadth). Surfacing `bpm`/`comments` was scoped in then **dropped** when the live library showed them ~empty (bpm on 7/3609 tracks, comments on 29) — the shared filter shape is structured so adding `bpm_min/max` later is a one-line change. `location` reflects reality: an Apple Music / iCloud library reads as ~100% `cloud`.
 
 ## Out of scope (v1)

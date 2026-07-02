@@ -11,6 +11,18 @@
 import { wrapJxaScript } from './wrap.js';
 import { PLAYLIST_KIND_FN } from './playlist_kind.js';
 
+// Test-support: just the library's track persistent IDs — one bulk Apple
+// event instead of the full ~19-property snapshot read.
+export function buildListLibraryTrackIdsScript(): string {
+  return wrapJxaScript(
+    {},
+    `
+      const lib = Music.libraryPlaylists[0];
+      return JSON.stringify(lib.tracks.length > 0 ? lib.tracks.persistentID() : []);
+    `,
+  );
+}
+
 export function buildReadLibraryScript(): string {
   return wrapJxaScript(
     {},

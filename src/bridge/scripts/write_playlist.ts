@@ -1,32 +1,15 @@
 // JXA snippets for the two write paths (docs/design.md §create_playlist /
-// §preview_playlist). Tracks are resolved with whose({persistentID}) — one
-// filtered Apple event per unique ID. Slower than an index map, but positional
-// indexing (lib.tracks[i]) does NOT follow the bulk persistentID() read order
-// (observed diverging on a real library, silently adding the wrong track), so
-// whose() is the only correct resolver. duplicate() then adds each track —
-// it works for cloud tracks where add() (file paths) would not, and the call
-// order preserves the requested track order.
-//
-// If any requested ID is missing from the live library the script returns
-// { missingTrackIds } BEFORE touching anything; the bridge maps that to
-// track_not_found ("cache is stale").
+// §preview_playlist). Track resolution is the shared RESOLVE_TRACKS snippet
+// (see resolve_tracks.ts for the whose()-only rationale and the
+// { missingTrackIds } guard). duplicate() then adds each track — it works for
+// cloud tracks where add() (file paths) would not, and the call order
+// preserves the requested track order.
 
 import { wrapJxaScript } from './wrap.js';
+import { RESOLVE_TRACKS } from './resolve_tracks.js';
 
 const RESOLVE_AND_ADD_HELPERS = `
-  const lib = Music.libraryPlaylists[0];
-  const trackById = {};
-  const missing = [];
-  for (let i = 0; i < args.trackIds.length; i++) {
-    const id = args.trackIds[i];
-    if (id in trackById) continue;
-    const matches = lib.tracks.whose({ persistentID: id })();
-    if (matches.length === 0) missing.push(id);
-    else trackById[id] = matches[0];
-  }
-  if (missing.length > 0) {
-    return JSON.stringify({ missingTrackIds: missing });
-  }
+  ${RESOLVE_TRACKS}
   function addTracksInOrder(pl) {
     for (let i = 0; i < args.trackIds.length; i++) {
       trackById[args.trackIds[i]].duplicate({ to: pl });

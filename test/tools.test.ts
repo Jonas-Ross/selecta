@@ -25,31 +25,21 @@ import {
 } from '../src/tools/refresh_library.js';
 import type { ToolDeps } from '../src/tools/common.js';
 import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
-import { BridgeError, type SelectaError } from '../src/types/errors.js';
+import { BridgeError } from '../src/types/errors.js';
+import { asError, makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
 
-function makeBridge(overrides: Partial<Bridge> = {}): Bridge {
-  return {
-    readPlaylist: vi.fn().mockRejectedValue(new Error('not used')),
-    readLibrary: vi.fn().mockResolvedValue(snapshot),
-    createPlaylist: vi.fn().mockRejectedValue(new Error('not used')),
-    replacePlaylist: vi.fn().mockRejectedValue(new Error('not used')),
-    deletePlaylistById: vi.fn().mockResolvedValue(1),
-    ...overrides,
-  };
-}
-
 function makeDeps(overrides: Partial<Bridge> = {}): ToolDeps {
   const cache = SelectaCache.open(':memory:');
   cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
-  return { cache: () => cache, bridge: makeBridge(overrides) };
-}
-
-function asError(result: object): SelectaError {
-  expect(result).toHaveProperty('error');
-  return result as SelectaError;
+  const bridge = makeBridge({
+    readLibrary: vi.fn().mockResolvedValue(snapshot),
+    deletePlaylistById: vi.fn().mockResolvedValue(1),
+    ...overrides,
+  });
+  return { cache: () => cache, bridge };
 }
 
 describe('search', () => {
@@ -170,6 +160,26 @@ describe('search', () => {
       'T-ROADS',
       'T-TEARDROP',
     ]);
+  });
+
+  it('sort: playlist_order returns the playlist running order, not play-count order', async () => {
+    // P-TRIPHOP order is TEARDROP, ANGEL, GLORYBOX; play counts (42, 13, 30)
+    // would give TEARDROP, GLORYBOX, ANGEL — the lens must win.
+    const out = (await handleSearch(
+      { in_playlist: 'P-TRIPHOP', sort: 'playlist_order' },
+      deps,
+    )) as SearchOutput;
+    expect(out.tracks.map((t) => t.persistent_id)).toEqual([
+      'T-TEARDROP',
+      'T-ANGEL',
+      'T-GLORYBOX',
+    ]);
+  });
+
+  it('sort: playlist_order without in_playlist is a validation_error', async () => {
+    const err = asError(await handleSearch({ sort: 'playlist_order' }, deps));
+    expect(err.error).toBe('validation_error');
+    expect(err.hint).toContain('in_playlist');
   });
 
   it('sort overrides relevance ordering even with a free-text query', async () => {
@@ -477,7 +487,10 @@ describe('shapeOverview', () => {
 describe('refresh_library', () => {
   it('rereads via the bridge and reports counts', async () => {
     const cache = SelectaCache.open(':memory:');
-    const deps: ToolDeps = { cache: () => cache, bridge: makeBridge() };
+    const deps: ToolDeps = {
+      cache: () => cache,
+      bridge: makeBridge({ readLibrary: vi.fn().mockResolvedValue(snapshot) }),
+    };
     expect(cache.getCacheAgeHours()).toBeNull();
 
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
@@ -528,7 +541,8 @@ describe('refresh_library sync reconciliation', () => {
     cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
     cache.upsertPlaylistAfterWrite({ persistentId: 'P-CREATED', trackCount: 2 }, 'Rearview', TRACKS);
     cache.recordPlaylistCreation('P-CREATED', 'Rearview', TRACKS);
-    return { cache: () => cache, bridge: makeBridge(overrides), cacheInstance: cache };
+    const bridge = makeBridge({ deletePlaylistById: vi.fn().mockResolvedValue(1), ...overrides });
+    return { cache: () => cache, bridge, cacheInstance: cache };
   }
 
   it('deletes the echo twin, keeps the iCloud copy, and reports it', async () => {

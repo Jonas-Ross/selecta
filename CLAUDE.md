@@ -34,7 +34,7 @@ These are defaults, not gates — exercise judgment, optimize for shipping good 
 
 Three layers, top-down dependency. Cache + bridge are usable as a plain Node library without MCP — keeps tests fast and boundaries crisp.
 
-- **`src/tools/`** — seven MCP handlers (`search`, `library_overview`, `get_track_context`, `list_playlists`, `create_playlist`, `preview_playlist`, `refresh_library`). Thin orchestrators: validate input, query cache and/or bridge, shape response. Only layer that knows MCP exists. (`library_overview` is the post-v1 seventh; `search` and it share `common.libraryFilterShape`.)
+- **`src/tools/`** — nine MCP handlers (`search`, `library_overview`, `get_track_context`, `list_playlists`, `create_playlist`, `preview_playlist`, `add_tracks`, `remove_tracks`, `refresh_library`). Thin orchestrators: validate input, query cache and/or bridge, shape response. Only layer that knows MCP exists. (`library_overview` is the post-v1 seventh; `search` and it share `common.libraryFilterShape`. `add_tracks`/`remove_tracks` are v2 #15 slice 1.)
 - **`src/cache/`** — SQLite at `~/Library/Application Support/Selecta/library.db`. Tracks, playlists, playlist_tracks, refresh_log + FTS5. All model-triggered reads hit this layer.
 - **`src/bridge/`** — wraps Music.app. Builds JXA snippets, shells out via `osascript -l JavaScript`, parses JSON.
 
@@ -76,9 +76,9 @@ Plus one manual **end-to-end smoke** (refresh → search → get_track_context �
 
 ## Status
 
-**v1 complete — all five milestones built.** Seven tools live over MCP stdio (six v1 + `library_overview`, added post-v1), cache + bridge fully implemented, unit + integration suites green, end-to-end smoke scripted (`npm run smoke`). Spec deviations discovered during the build are recorded in `docs/design.md` §Implementation notes and `docs/contracts.md`.
+**v1 complete — all five milestones built.** Nine tools live over MCP stdio (six v1 + `library_overview` post-v1 + `add_tracks`/`remove_tracks` in v2), cache + bridge fully implemented, unit + integration suites green, end-to-end smoke scripted (`npm run smoke`). Spec deviations discovered during the build are recorded in `docs/design.md` §Implementation notes and `docs/contracts.md`.
 
-**v2 underway (issues #15–#20).** After living with v1, scope was deliberately widened (see Identity): mutate existing playlists (#15), search dedup (#16), exclusion filters (#17), `set_loved`/`set_rating` write-back (#18), audio-feature enrichment populated incrementally on refresh (#19), and multi-seed co-occurrence (#20). Audio features and external audio-feature enrichment graduated into scope. Built so far: exclusion filters (#17) — `exclude_artists`/`exclude_tracks` on the shared filter shape. The rest not yet started.
+**v2 underway (issues #15–#20).** After living with v1, scope was deliberately widened (see Identity): mutate existing playlists (#15), search dedup (#16), exclusion filters (#17), `set_loved`/`set_rating` write-back (#18), audio-feature enrichment populated incrementally on refresh (#19), and multi-seed co-occurrence (#20). Audio features and external audio-feature enrichment graduated into scope. Built so far: exclusion filters (#17); #15 slice 1 — `add_tracks`/`remove_tracks` plus a `playlist_order` search sort lens (reorder and `delete_playlist` remain). ⚠️ #15 surfaced a major Music.app reality — scripted playlist-entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn) — read `docs/contracts.md` §1 before touching the edit paths. The rest not yet started.
 
 ## Code search
 
