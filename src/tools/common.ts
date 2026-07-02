@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import type { Bridge } from '../types/bridge.js';
-import type { SearchFilters, TrackRow } from '../types/cache.js';
+import type { PlaylistRow, SearchFilters, TrackRow } from '../types/cache.js';
 import { BridgeError, defaultHints, type SelectaError } from '../types/errors.js';
 import type { SelectaCache } from '../cache/index.js';
 
@@ -99,6 +99,39 @@ export function missingTrackIdsError(cache: SelectaCache, trackIds: string[]): S
     error: 'track_not_found',
     hint: `Not in the cache: ${shown}${more}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library.`,
   };
+}
+
+/**
+ * Pre-flight for the playlist-edit tools: resolve the model-supplied playlist
+ * ID (following creation receipts across iCloud rekeys) to a cached plain user
+ * playlist. Smart/subscription/folder playlists are read-only in Music.app's
+ * scripting interface. The bridge re-checks against the live library; this
+ * catches stale/typo'd IDs before any Apple event fires.
+ */
+export function resolveEditablePlaylist(
+  cache: SelectaCache,
+  playlistId: string,
+): { ok: true; playlist: PlaylistRow } | { ok: false; error: SelectaError } {
+  const playlist = cache.getPlaylist(cache.resolvePlaylistId(playlistId));
+  if (playlist === null) {
+    return {
+      ok: false,
+      error: {
+        error: 'playlist_not_found',
+        hint: `No playlist ${playlistId} in the cache. Use IDs exactly as returned by list_playlists; if the library changed, run refresh_library.`,
+      },
+    };
+  }
+  if (playlist.kind !== 'user') {
+    return {
+      ok: false,
+      error: {
+        error: 'playlist_not_editable',
+        hint: `"${playlist.name}" is a ${playlist.kind} playlist — only plain user playlists can be edited.`,
+      },
+    };
+  }
+  return { ok: true, playlist };
 }
 
 /** Convert a thrown BridgeError to the wire envelope; rethrow anything else. */

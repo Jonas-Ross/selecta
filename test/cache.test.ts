@@ -169,6 +169,14 @@ describe('getCacheAgeHours', () => {
   });
 });
 
+describe('searchTracks guards', () => {
+  it('rejects sort playlist_order without inPlaylist (plain-library consumers)', () => {
+    // The tool layer returns a structured validation_error first; this guards
+    // cache-as-library callers against a cryptic unbound-parameter sqlite error.
+    expect(() => refreshed().searchTracks({ sort: 'playlist_order' })).toThrow(/inPlaylist/);
+  });
+});
+
 describe('overviewStats', () => {
   it('aggregates the whole library', () => {
     const stats = refreshed().getOverview({});

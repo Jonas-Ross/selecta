@@ -27,6 +27,15 @@ const TRACK_COLUMNS = `
   t.loved, t.disliked, t.comments, t.location_kind AS locationKind
 `;
 
+// SELECT fragment for PlaylistRow, shared by getPlaylist and listPlaylists so
+// the two projections can't drift.
+const PLAYLIST_COLUMNS = `
+  p.persistent_id AS persistentId, p.name, p.kind,
+  p.parent_persistent_id AS parentPersistentId,
+  (SELECT COUNT(*) FROM playlist_tracks pt
+   WHERE pt.playlist_persistent_id = p.persistent_id) AS trackCount
+`;
+
 // FTS5 treats quotes/operators as syntax; quote each whitespace-separated term
 // so free text can never produce a MATCH syntax error. Terms AND together.
 function toFtsQuery(query: string): string {
@@ -161,6 +170,18 @@ function orderClause(filters: SearchFilters): string {
       return 'ORDER BY t.date_added DESC, t.persistent_id'; // NULL dates sort last
     case 'random':
       return 'ORDER BY RANDOM()';
+    case 'playlist_order':
+      // The tool layer returns a structured validation_error first; this
+      // defends the SQL for plain-library consumers of the cache, where an
+      // unbound @inPlaylist would surface as a cryptic sqlite error.
+      if (filters.inPlaylist == null) {
+        throw new Error('sort playlist_order requires the inPlaylist filter');
+      }
+      // MIN(position): a track duplicated in the playlist is one search row —
+      // it sorts at its first occurrence.
+      return `ORDER BY (SELECT MIN(position) FROM playlist_tracks
+                WHERE playlist_persistent_id = @inPlaylist
+                  AND track_persistent_id = t.persistent_id)`;
     default:
       return filters.query ? 'ORDER BY f.rank' : 'ORDER BY t.play_count DESC';
   }
@@ -245,6 +266,9 @@ export function createQueries(db: Database) {
     'SELECT current_persistent_id AS currentId FROM playlist_creations WHERE created_persistent_id = ?',
   );
   const playlistExistsStmt = db.prepare('SELECT 1 FROM playlists WHERE persistent_id = ?');
+  const getPlaylistStmt = db.prepare(
+    `SELECT ${PLAYLIST_COLUMNS} FROM playlists p WHERE p.persistent_id = ?`,
+  );
   const userPlaylistIdsByNameStmt = db.prepare(
     `SELECT persistent_id AS id FROM playlists WHERE name = ? AND kind = 'user' ORDER BY persistent_id`,
   );
@@ -356,6 +380,10 @@ export function createQueries(db: Database) {
 
     playlistExists(persistentId: string): boolean {
       return playlistExistsStmt.get(persistentId) !== undefined;
+    },
+
+    getPlaylist(persistentId: string): PlaylistRow | null {
+      return (getPlaylistStmt.get(persistentId) as PlaylistRow | undefined) ?? null;
     },
 
     getUserPlaylistIdsByName(name: string): string[] {
@@ -478,11 +506,7 @@ export function createQueries(db: Database) {
       const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
       return db
         .prepare(
-          `SELECT p.persistent_id AS persistentId, p.name, p.kind,
-                  p.parent_persistent_id AS parentPersistentId,
-                  (SELECT COUNT(*) FROM playlist_tracks pt
-                   WHERE pt.playlist_persistent_id = p.persistent_id) AS trackCount
-           FROM playlists p ${whereSql} ORDER BY p.name COLLATE NOCASE`,
+          `SELECT ${PLAYLIST_COLUMNS} FROM playlists p ${whereSql} ORDER BY p.name COLLATE NOCASE`,
         )
         .all(params) as PlaylistRow[];
     },

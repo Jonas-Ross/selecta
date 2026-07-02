@@ -47,6 +47,21 @@ export type PlaylistWriteResult = {
   trackCount: number;
 };
 
+// Result of an in-place playlist mutation. trackPersistentIds is the playlist's
+// FULL post-edit order read back from Music.app — the cache patch uses it as
+// ground truth instead of recomputing the edit locally. preEditTrackPersistentIds
+// is the order the SAME script execution saw before mutating: on iCloud
+// libraries a fresh playlist can gain phantom entries asynchronously
+// (docs/contracts.md §1), so only a baseline captured atomically with the edit
+// makes the edit exactly checkable.
+export type PlaylistEditResult = {
+  persistentId: string;
+  trackCount: number;
+  trackPersistentIds: string[];
+  preEditTrackPersistentIds: string[];
+  removedCount?: number; // remove path only: playlist entries actually deleted
+};
+
 export interface Bridge {
   // Temporary debug capability (M1 spike). The CLI verb that exercises it
   // (`bridge:read-playlist`) is removed in M2; the method itself stays.
@@ -70,4 +85,24 @@ export interface Bridge {
   // from a stale creation-time receipt. Resolves to the number deleted (0 if
   // the ID is already gone, which reconciliation treats as benign).
   deletePlaylistById(persistentId: string): Promise<number>;
+
+  // Append tracks to a user playlist, or insert at a 0-based position
+  // (position omitted or ≥ current length = append). Throws
+  // playlist_not_found / playlist_not_editable / track_not_found without
+  // writing anything.
+  addPlaylistTracks(input: {
+    playlistId: string;
+    trackIds: string[];
+    position?: number;
+  }): Promise<PlaylistEditResult>;
+
+  // Remove playlist entries by track persistent ID (EVERY occurrence of each)
+  // and/or by 0-based position in the current order. Irreversible. Throws
+  // playlist_not_found / playlist_not_editable / track_not_found /
+  // validation_error (position out of range live) without deleting anything.
+  removePlaylistTracks(input: {
+    playlistId: string;
+    trackIds?: string[];
+    positions?: number[];
+  }): Promise<PlaylistEditResult>;
 }

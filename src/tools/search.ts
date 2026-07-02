@@ -9,6 +9,7 @@ import {
   toErrorEnvelope,
   toSearchFilters,
   validateFilterRanges,
+  validationError,
   roundedCacheAge,
   type ApiTrack,
   type ToolDeps,
@@ -20,10 +21,10 @@ export const searchInputShape = {
   ...libraryFilterShape,
   limit: z.number().int().min(1).max(500).optional().describe('Default 50, max 500.'),
   sort: z
-    .enum(['most_played', 'least_played', 'recently_added', 'random'])
+    .enum(['most_played', 'least_played', 'recently_added', 'random', 'playlist_order'])
     .optional()
     .describe(
-      'Result order. Omit for relevance (with query) or most-played. Use random / least_played / recently_added to dig past the top tracks when building a varied playlist.',
+      "Result order. Omit for relevance (with query) or most-played. Use random / least_played / recently_added to dig past the top tracks when building a varied playlist. playlist_order (requires in_playlist) returns the playlist's own running order — use before positional add_tracks/remove_tracks.",
     ),
 };
 
@@ -46,6 +47,9 @@ export async function handleSearch(
   const input = parsed.data;
   const rangeError = validateFilterRanges(input);
   if (rangeError) return rangeError;
+  if (input.sort === 'playlist_order' && input.in_playlist == null) {
+    return validationError('sort playlist_order requires in_playlist.');
+  }
 
   try {
     const { rows, total } = deps.cache().searchTracks({
