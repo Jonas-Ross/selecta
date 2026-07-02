@@ -78,7 +78,7 @@ Plus one manual **end-to-end smoke** (refresh → search → get_track_context �
 
 **v1 complete — all five milestones built.** Seven tools live over MCP stdio (six v1 + `library_overview`, added post-v1), cache + bridge fully implemented, unit + integration suites green, end-to-end smoke scripted (`npm run smoke`). Spec deviations discovered during the build are recorded in `docs/design.md` §Implementation notes and `docs/contracts.md`.
 
-**v2 in planning (issues #15–#20).** After living with v1, scope was deliberately widened (see Identity): mutate existing playlists (#15), search dedup (#16), exclusion filters (#17), `set_loved`/`set_rating` write-back (#18), audio-feature enrichment populated incrementally on refresh (#19), and multi-seed co-occurrence (#20). Audio features and external audio-feature enrichment graduated into scope. None built yet.
+**v2 underway (issues #15–#20).** After living with v1, scope was deliberately widened (see Identity): mutate existing playlists (#15), search dedup (#16), exclusion filters (#17), `set_loved`/`set_rating` write-back (#18), audio-feature enrichment populated incrementally on refresh (#19), and multi-seed co-occurrence (#20). Audio features and external audio-feature enrichment graduated into scope. Built so far: exclusion filters (#17) — `exclude_artists`/`exclude_tracks` on the shared filter shape. The rest not yet started.
 
 ## Code search
 

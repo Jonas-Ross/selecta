@@ -129,6 +129,18 @@ function buildTrackFilter(filters: SearchFilters): {
     where.push('t.location_kind = @locationKind');
     params.locationKind = filters.locationKind;
   }
+  if (filters.excludeArtists?.length) {
+    // NOT EXISTS instead of NOT IN: a NULL artist must survive the exclusion
+    // (excluding "Kygo" shouldn't drop unknown-artist tracks).
+    where.push(
+      'NOT EXISTS (SELECT 1 FROM json_each(@excludeArtists) WHERE t.artist = value COLLATE NOCASE)',
+    );
+    params.excludeArtists = JSON.stringify(filters.excludeArtists);
+  }
+  if (filters.excludeTracks?.length) {
+    where.push('t.persistent_id NOT IN (SELECT value FROM json_each(@excludeTracks))');
+    params.excludeTracks = JSON.stringify(filters.excludeTracks);
+  }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
   return { from, whereSql, params };

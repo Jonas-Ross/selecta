@@ -62,6 +62,8 @@ Faceted, all filters optional, combined as AND.
   added_after?, added_before?: string,
   in_playlist?: string,            // playlist persistent ID
   location_kind?: 'local' | 'cloud',
+  exclude_artists?: string[],      // exact names, case-insensitive; artistless tracks kept
+  exclude_tracks?: string[],       // persistent IDs
   limit?: number,                  // default 50, max 500
   sort?: 'most_played' | 'least_played' | 'recently_added' | 'random'
                                    // omitted → relevance (with query) else most-played
