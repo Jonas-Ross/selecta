@@ -154,6 +154,16 @@ export const libraryFilterShape = {
   added_after: isoDate.optional(),
   in_playlist: z.string().optional().describe('Playlist persistent ID (from list_playlists).'),
   location_kind: z.enum(['local', 'cloud']).optional().describe('local = playable offline.'),
+  exclude_artists: z
+    .array(z.string().min(1))
+    .optional()
+    .describe(
+      'Artist names to drop from results, exact case-insensitive match. Tracks with no artist are kept.',
+    ),
+  exclude_tracks: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('Track persistent IDs to drop from results.'),
 };
 
 /** The bare filter object (no limit) — library_overview's full input schema. */
@@ -184,6 +194,8 @@ export function toSearchFilters(input: LibraryFilterInput): SearchFilters {
     addedAfter: input.added_after,
     inPlaylist: input.in_playlist,
     locationKind: input.location_kind,
+    excludeArtists: input.exclude_artists,
+    excludeTracks: input.exclude_tracks,
   };
 }
 

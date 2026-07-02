@@ -182,6 +182,56 @@ describe('search', () => {
     const err = asError(await handleSearch({ sort: 'alphabetical' }, deps));
     expect(err.error).toBe('validation_error');
   });
+
+  it('exclude_artists drops matches case-insensitively but keeps artistless tracks', async () => {
+    const out = (await handleSearch(
+      { exclude_artists: ['massive attack', 'M83'] },
+      deps,
+    )) as SearchOutput;
+    // T-BARE has no artist and must survive an artist exclusion.
+    expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual([
+      'T-BARE',
+      'T-GLORYBOX',
+      'T-ROADS',
+    ]);
+    expect(out.total_matches).toBe(3);
+  });
+
+  it('exclude_tracks drops by persistent ID', async () => {
+    const out = (await handleSearch(
+      { exclude_tracks: ['T-TEARDROP', 'T-BARE'] },
+      deps,
+    )) as SearchOutput;
+    expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual([
+      'T-ANGEL',
+      'T-GLORYBOX',
+      'T-MIDNIGHT',
+      'T-ROADS',
+    ]);
+  });
+
+  it('exclusions AND with positive facets', async () => {
+    const out = (await handleSearch(
+      { in_playlist: 'P-LATENIGHT', exclude_artists: ['Portishead'] },
+      deps,
+    )) as SearchOutput;
+    const artists = out.tracks.map((t) => t.artist);
+    expect(out.tracks.length).toBeGreaterThan(0);
+    expect(artists).not.toContain('Portishead');
+  });
+
+  it('empty exclusion arrays are a no-op', async () => {
+    const out = (await handleSearch(
+      { exclude_artists: [], exclude_tracks: [] },
+      deps,
+    )) as SearchOutput;
+    expect(out.total_matches).toBe(6);
+  });
+
+  it('rejects an empty string inside exclude_artists as validation_error', async () => {
+    const err = asError(await handleSearch({ exclude_artists: [''] }, deps));
+    expect(err.error).toBe('validation_error');
+  });
 });
 
 describe('get_track_context', () => {
@@ -337,6 +387,17 @@ describe('library_overview', () => {
   it('rejects min_plays > max_plays as validation_error', async () => {
     const err = asError(await handleLibraryOverview({ min_plays: 10, max_plays: 1 }, deps));
     expect(err.error).toBe('validation_error');
+  });
+
+  it('honors exclusion filters in the aggregates', async () => {
+    const out = (await handleLibraryOverview(
+      { exclude_artists: ['portishead'], exclude_tracks: ['T-MIDNIGHT'] },
+      deps,
+    )) as LibraryOverviewOutput;
+    expect(out.filtered).toBe(true);
+    // 6 tracks minus Portishead's 2 minus T-MIDNIGHT; artistless T-BARE survives.
+    expect(out.total_tracks).toBe(3);
+    expect(out.top_artists).toEqual([{ name: 'Massive Attack', track_count: 2 }]);
   });
 });
 
