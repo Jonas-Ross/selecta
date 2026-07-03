@@ -37,3 +37,12 @@ describe('JXA script builders interpolate args as JSON, never via shell quoting'
     expect(script).not.toContain('playlistId: a"b\\c');
   });
 });
+
+describe('JXA wrapper', () => {
+  it('never defines a run() handler — osascript would invoke it implicitly and execute the body twice', () => {
+    // docs/music-app.md, JXA: `function run() {...} run();` runs the body
+    // TWICE per osascript process (top-level call + implicit run handler).
+    const script = buildReadPlaylistScript({ persistentId: 'ABC123' });
+    expect(script).not.toMatch(/function\s+run\s*\(/);
+  });
+});
