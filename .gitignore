@@ -8,3 +8,4 @@ coverage/
 *.sqlite3
 .env
 .env.local
+.idea/
