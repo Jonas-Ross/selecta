@@ -186,7 +186,13 @@ describe('bridge reorderPlaylistTracks against real Music.app', { tags: ['integr
       const live = (await bridge.readPlaylist(plId)).trackPersistentIds;
       const back = permutationTo(live, original);
       if (back) {
-        await bridge.reorderPlaylistTracks({ playlistId: plId, order: back, expectedTrackIds: live });
+        try {
+          await bridge.reorderPlaylistTracks({ playlistId: plId, order: back, expectedTrackIds: live });
+        } catch (restoreErr) {
+          // A drift trip here is the same weather; don't let it mask the
+          // try block's real failure.
+          console.warn('[integration] reorder restore failed:', restoreErr);
+        }
       } else if (live.join() !== original.join()) {
         console.warn(
           '[integration] reorder restore skipped: live membership diverged from the baseline (iCloud weather)',
