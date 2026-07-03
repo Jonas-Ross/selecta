@@ -1,6 +1,6 @@
 # Selecta — Cross-cutting contracts
 
-`CLAUDE.md` says *what* Selecta is and how to work on it. This doc is *how* the layers talk to each other, plus the Music.app realities the contracts encode.
+How the layers talk to each other, plus the Music.app behavior we learned the hard way. `CLAUDE.md` covers what Selecta is and how to work on it.
 
 Terse on purpose. Code blocks are the spec.
 
@@ -14,8 +14,7 @@ All Music.app coupling lives behind this interface. Tools never call `osascript`
 // src/types/bridge.ts
 
 export interface Bridge {
-  // Temporary debug capability (M1 spike). The CLI verb that exercises it
-  // (`bridge:read-playlist`) is removed in M2; the method itself stays.
+  // Single-playlist read; used by integration tests and debugging.
   readPlaylist(persistentId: string): Promise<RawPlaylist>;
 
   readLibrary(): Promise<LibrarySnapshot>;
@@ -31,10 +30,10 @@ export interface Bridge {
     trackIds: string[];
   }): Promise<PlaylistWriteResult>;
 
-  // Refresh-time iCloud-echo reconciliation only (post-v1).
+  // Refresh-time iCloud-echo reconciliation only.
   deletePlaylistById(persistentId: string): Promise<number>;
 
-  // v2 (#15 slice 1): in-place mutation of a user playlist.
+  // In-place mutation of a user playlist (#15).
   addPlaylistTracks(input: {
     playlistId: string;
     trackIds: string[];
@@ -64,7 +63,7 @@ export type PlaylistEditResult = {
 
 ### `LibrarySnapshot` — what JXA emits
 
-The JSON the bridge produces. **Not** the cache row shape — the cache layer normalizes (e.g., booleans → 0/1, undefined → NULL).
+The JSON the bridge produces. Not the cache row shape — the cache layer normalizes on write (booleans → 0/1, undefined → NULL).
 
 ```ts
 export type LibrarySnapshot = {
@@ -105,44 +104,44 @@ export type RawPlaylist = {
 };
 ```
 
-**Why optional everywhere on `RawTrack`:** Music.app routinely omits fields (no genre, no rating, never played). The bridge does not invent defaults — the cache layer applies them on write.
+### Music.app realities
 
-**`kind: 'subscription'` (added in M2):** real libraries contain class `subscriptionPlaylist` — Apple Music playlists the user added. Read-only like `smart`. `'special'` playlists (Library, Music, …) are *excluded* from the snapshot entirely: caching the whole library as a playlist would poison co-occurrence and waste rows.
+Everything on `RawTrack` except the ID is optional because Music.app routinely omits fields: no genre, no rating, never played. The bridge doesn't invent defaults; the cache fills them in on write.
 
-**Fresh playlist IDs are transient (M5 finding):** iCloud Music Library reassigns a newly created playlist's persistent ID when sync settles, and may resurrect a just-deleted fresh playlist. Consequences: `PlaylistWriteResult.persistentId` is valid immediately but can rotate later (cache self-heals on next refresh); `replacePlaylist` finds the preview slot **by name** so it is immune; test cleanup deletes scratch playlists **by name**, never by creation-time ID.
+`subscription` playlists are Apple Music playlists the user added. Real libraries are full of them. They're read-only, like smart playlists. The special playlists (Library, Music, …) are excluded from the snapshot entirely — caching the whole library as one giant playlist would poison co-occurrence and waste rows.
 
-**Sync reconciliation (post-v1 fix, 2026-06):** `create_playlist` records a creation receipt in `playlist_creations` (created ID, current ID, name, exact track sequence, timestamp). `refresh_library` reconciles receipts younger than 60 minutes against the fresh snapshot: a single same-name/same-sequence `user` playlist under a different ID is a **rekey** (receipt remapped, nothing deleted); two or more are an **echo duplicate** (the iCloud-keyed survivor is kept, the rest deleted via `Bridge.deletePlaylistById` — an ID just observed in the snapshot, so the transient-ID caveat doesn't apply). All actions surface in the response's `sync_reconciliation` field. `searchTracks(inPlaylist)` follows receipts, so a creation-time ID stays resolvable after a rekey or dedupe.
+**Fresh playlist IDs are transient.** iCloud reassigns a new playlist's persistent ID once sync settles, and can even resurrect a just-deleted fresh playlist. So: the ID in a write receipt works immediately but may rotate later (the cache heals on the next refresh), `replacePlaylist` finds the preview slot by name and is immune, and test cleanup deletes scratch playlists by name too — never by creation-time ID.
 
-**Dangling memberships are tolerated (M4 finding):** playlists can reference tracks absent from the library track list (unavailable/greyed-out entries). The bridge reports membership as Music.app states it; the cache stores it as-is. Read queries JOIN `tracks`, so dangling members never surface to the model — except in `track_count`, which intentionally matches what Music.app displays.
+**Sync reconciliation.** iCloud sometimes duplicates a freshly created playlist as sync settles. To catch this, `create_playlist` records a receipt in `playlist_creations`: created ID, current ID, name, exact track sequence, timestamp. On the next `refresh_library`, receipts younger than 60 minutes are matched against the fresh snapshot. One same-name, same-sequence user playlist under a different ID is a rekey — the receipt is remapped and nothing is deleted. Two or more is an echo duplicate — the iCloud-keyed survivor is kept and the rest are deleted via `Bridge.deletePlaylistById` (safe here: the ID was just observed in the snapshot). Everything the reconciler does shows up in the response's `sync_reconciliation` field, never silently. `searchTracks(inPlaylist)` follows receipts, so a creation-time ID stays resolvable after a rekey or dedupe.
 
-**Scripted playlist-entry edits race iCloud sync (v2/#15 finding, 2026-07 — probed extensively live):** on an iCloud-synced library, in-place entry mutations have **no read-your-writes guarantee** while sync is actively churning:
+**Dangling memberships are tolerated.** Playlists can reference tracks that aren't in the library track list (unavailable or greyed-out entries). The bridge reports membership exactly as Music.app states it and the cache stores it as-is. Read queries JOIN `tracks`, so dangling members never reach the model — except in `track_count`, which deliberately matches what Music.app displays.
 
-- `duplicate()` nondeterministically materializes **one or two** real entries for a single call (distinct playlist indexes; not tied to track class, playlist age, or how the playlist was fetched; clear-then-refill doesn't avoid it). The double can land immediately or a beat later.
-- Edits can be **wiped** by a settling sync — the playlist reverts to the cloud's snapshot, silently discarding recent scripted adds/removes. Freshly created playlists are worst (post-create edits reliably wiped during the initial settle; phantom entries from recently deleted similar playlists drift in and out), but a storm of consecutive scripted writes triggers it on established playlists too.
-- During churn, even **reads oscillate** between conflicting snapshots call-to-call. Everything converges when the library quiesces.
+**Scripted playlist-entry edits race iCloud sync.** On an iCloud-synced library there is no read-your-writes guarantee while sync is churning. Probed extensively live (#15):
 
-Consequences baked into the design: the add script does a best-effort **verify-and-trim** (settle ~0.5s, count each added id's occurrences against pre-read + requested, delete surplus trailing occurrences — catches doubles that land in-window; late ones heal at the next refresh); both edit scripts return `preEditTrackPersistentIds` read **in the same script execution**, because that atomic baseline is the only thing an edit can be exactly checked against; the cache is patched from the post-edit read, so cache == Music.app *at that instant*, and later sync drift is the standing refresh-heals-it model. Practical guidance encoded in tool descriptions: prefer creating playlists with their full tracklist over create-then-edit.
+- A single `duplicate()` call sometimes materializes two real entries. Not tied to track class, playlist age, or how the playlist was fetched; clear-then-refill doesn't avoid it. The double can land immediately or a beat later.
+- A settling sync can wipe recent scripted edits — the playlist silently reverts to the cloud's snapshot. Freshly created playlists are worst (post-create edits reliably get wiped during the initial settle, and phantom entries from recently deleted similar playlists drift in and out), but a burst of consecutive writes triggers it on established playlists too.
+- During churn, even reads oscillate between conflicting snapshots call-to-call. Everything converges once the library quiesces.
 
-**JXA insertion locations don't work in Music (v2/#15 finding):** every insertion-location form (`tracks.beginning`, `tracks[i].before`, …) raises ("Can't get object" / "descriptor type mismatch"). The ONLY working move is `Music.move(track, { to: playlist })` — to the END. Positional insert therefore appends and rotates the displaced originals to the end (`originalCount − position` moves, each sliding the next original into the same source index). Removal deletes by index in descending order so positions stay valid mid-loop.
+What the design does about it: the add script does a best-effort verify-and-trim (settle ~0.5s, count each added ID's occurrences against pre-read + requested, delete surplus trailing occurrences — catches doubles that land in-window; late ones heal at the next refresh). Both edit scripts return `preEditTrackPersistentIds` read in the same script execution, because that atomic baseline is the only thing an edit can be checked against exactly. The cache is patched from the post-edit read, so cache == Music.app at that instant; later sync drift heals at the next refresh, as always. The tool descriptions steer the model toward creating playlists with their full tracklist rather than create-then-edit.
+
+**JXA insertion locations don't work in Music.** Every insertion-location form (`tracks.beginning`, `tracks[i].before`, …) raises ("Can't get object" / "descriptor type mismatch"). The only move that works is `Music.move(track, { to: playlist })`, which goes to the end. Positional insert therefore appends and rotates the displaced originals to the end (`originalCount − position` moves, each sliding the next original into the same source index). Removal deletes by index in descending order so positions stay valid mid-loop.
 
 ---
 
 ## 2. Error envelope
 
-Three failure shapes — bridge failures, cache misses/stale state, validation errors — formalized. Lives in
-`src/types/errors.ts` — not inside `bridge/`, because cache and tools consume it
-too and must not depend on the bridge package.
+Three failure shapes — bridge failures, cache misses/stale state, validation errors. Lives in `src/types/errors.ts`, not inside `bridge/`, because cache and tools consume it too and must not depend on the bridge package.
 
 ```ts
 // src/types/errors.ts
 export type ErrorCode =
-  | 'not_implemented'                // bridge method not yet built in the current milestone
+  | 'not_implemented'                // bridge method not built yet
   | 'automation_permission_denied'   // macOS denied Music.app automation
   | 'music_app_not_running'          // Music.app isn't open
   | 'jxa_error'                      // osascript non-zero or unparseable stdout
   | 'track_not_found'                // cache miss on a referenced persistent ID
   | 'playlist_not_found'             // same, for playlists
-  | 'playlist_not_editable'          // edit target is smart/subscription/folder (v2, #15)
+  | 'playlist_not_editable'          // edit target is smart/subscription/folder
   | 'validation_error'               // input failed schema check
   | 'cache_unavailable';             // DB open failed (perms, disk full)
 
@@ -162,12 +161,12 @@ export class BridgeError extends Error {
 }
 ```
 
-**Conventions:**
+Conventions:
 
-- Bridge layer **throws** `BridgeError`. Tool handlers **return** `SelectaError` (the MCP wire shape).
-- Tool handlers wrap their body in try/catch and convert `BridgeError` → envelope using `errorCode` and either the thrown `hint` or a default for that code.
-- Validation errors are produced by the input schema layer (zod) and converted to `{ error: 'validation_error', hint: <message from zod> }`.
-- **No hidden retries, no fallbacks.** A failure surfaces — the model decides what to do.
+- The bridge layer throws `BridgeError`. Tool handlers return `SelectaError` (the MCP wire shape).
+- Tool handlers wrap their body in try/catch and convert `BridgeError` → envelope using `errorCode` and either the thrown `hint` or the default for that code.
+- Validation errors come from the input schema layer (zod) and convert to `{ error: 'validation_error', hint: <zod message> }`.
+- No hidden retries, no fallbacks. A failure surfaces; the model decides what to do.
 
 ### Canonical hints
 
@@ -194,15 +193,15 @@ const defaultHints: Record<ErrorCode, string> = {
 };
 ```
 
-Tool authors may override per-call via the `hint` argument to `BridgeError` when more context is available.
+Tool authors can override per-call via the `hint` argument to `BridgeError` when they have more context.
 
 ---
 
 ## 3. Cache query API
 
-All read paths go through named functions in `src/cache/queries.ts`. Tools never write SQL inline. Implementations land across M2/M3/M4 — the **contract** is fixed up front so later milestones don't have to rename.
+All read paths go through named functions in `src/cache/queries.ts`. Tools never write SQL inline.
 
-### Write-side (M2)
+### Write-side
 
 ```ts
 upsertTrack(track: RawTrack): void;
@@ -227,19 +226,17 @@ A full refresh is a single transaction:
 1. Upsert all tracks in the snapshot.
 2. Upsert all playlists in the snapshot.
 3. Replace memberships for every playlist in the snapshot.
-4. **Prune**: delete tracks/playlists whose persistent IDs are absent from the snapshot. This is what makes the `track_not_found`/`playlist_not_found` hint ("Cache may be stale — try refresh_library") actually true after the user deletes things in Music.app. `playlist_tracks` rows for pruned playlists go with them via `ON DELETE CASCADE` (or an explicit delete in the prune helper).
+4. Prune: delete tracks and playlists whose persistent IDs are absent from the snapshot. This is what makes the "cache may be stale — try refresh_library" hint actually true after the user deletes things in Music.app.
 5. Rebuild `tracks_fts` from the surviving `tracks` rows.
 6. Append a `refresh_log` entry.
 
-Pruning runs **after** upsert so a single transaction always leaves the cache reflecting the snapshot exactly — no window where freshly-deleted-then-readded tracks vanish.
+Pruning runs after upsert so the transaction always leaves the cache reflecting the snapshot exactly — no window where a freshly-deleted-then-readded track vanishes.
 
 ### Read-side
 
 ```ts
-// M2
 getCacheAgeHours(): number | null;             // null if never refreshed
 
-// M3
 searchTracks(filters: SearchFilters): {
   rows: TrackRow[];
   total: number;                               // unbounded count, separate from limit
@@ -249,7 +246,7 @@ listPlaylists(filters: {
   nameQuery?: string;
 }): PlaylistRow[];
 
-// M4
+// get_track_context
 getTrack(persistentId: string): TrackRow | null;
 getTracksByArtist(artist: string, limit?: number): TrackRow[];
 getPlaylistsContainingTrack(trackPersistentId: string): PlaylistRef[];
@@ -258,25 +255,25 @@ getCoOccurringTracks(
   limit?: number,
 ): CoOccurringTrack[];
 
-// M5
+// write-path cache patching
 upsertPlaylistAfterWrite(result: PlaylistWriteResult, name: string, trackIds: string[]): void;
 
-// post-v1
+// library_overview
 overviewStats(filters: SearchFilters): OverviewStats;   // aggregate shape of the (optionally filtered) library
 
-// v2 (#15 slice 1) — facade additions for the edit tools
+// playlist edit tools (#15)
 getPlaylist(persistentId: string): PlaylistRow | null;
 getPlaylistTrackIds(persistentId: string): string[];    // playlist order, duplicates preserved
 patchPlaylistMembership(persistentId: string, trackIds: string[]): void;  // surgical, from post-edit ground truth
 ```
 
-`overviewStats` reuses the exact WHERE-clause builder behind `searchTracks` (extracted to a shared `buildTrackFilter`), so a search and an overview of that same filter agree by construction. The facade exposes it as `getOverview` (resolving `inPlaylist` through creation receipts, like `searchTracks`). The tool layer's faceted input schema is also shared — `common.libraryFilterShape` — so `search` and `library_overview` accept identical facets (search adds `limit`).
+`overviewStats` reuses the exact WHERE-clause builder behind `searchTracks` (the shared `buildTrackFilter`), so a search and an overview of the same filter agree by construction. The facade exposes it as `getOverview`, resolving `inPlaylist` through creation receipts like `searchTracks` does. The tool layer shares the faceted input schema too (`common.libraryFilterShape`), so `search` and `library_overview` accept identical facets; search adds `limit`.
 
 ### Row shapes
 
-Defined in `src/types/cache.ts` (M2), alongside `src/types/bridge.ts` and `src/types/errors.ts` — all shared type modules live under `src/types/`.
+Defined in `src/types/cache.ts`, alongside `src/types/bridge.ts` and `src/types/errors.ts` — all shared type modules live under `src/types/`.
 
-`TrackRow` mirrors the cache schema columns (Music.app's native rating scale, 0/1 booleans). Tools translate to API shape (`rating_min` 1–5 → `rating` 0–100) at their own boundary.
+`TrackRow` mirrors the cache schema columns (Music.app's native rating scale, 0/1 booleans). Tools translate to the API shape (`rating_min` 1–5 → `rating` 0–100) at their own boundary.
 
 ```ts
 // src/types/cache.ts
@@ -318,9 +315,9 @@ export type CoOccurringTrack = TrackRow & {
   sharedPlaylistNames: string[];     // cap 3
 };
 
-// post-v1 — library_overview aggregates. Counts are RAW (genres grouped
-// verbatim, no normalization); the tool layer caps genres/artists and formats
-// for the wire. rating here is 0..100.
+// library_overview aggregates. Counts are RAW (genres grouped verbatim, no
+// normalization); the tool layer caps genres/artists and formats for the wire.
+// rating here is 0..100.
 export type OverviewStats = {
   totalTracks: number;
   totalRuntimeSeconds: number;
@@ -341,61 +338,57 @@ export type OverviewStats = {
 
 ## 4. JXA script strategy
 
-- **One file per operation** in `src/bridge/scripts/`. Exports a builder function:
+One file per operation in `src/bridge/scripts/`, each exporting a builder function:
 
-  ```ts
-  // src/bridge/scripts/read_library.ts
-  export function buildReadLibraryScript(): string {
-    return `
-      function run() {
-        const Music = Application('Music');
-        // ...
-        return JSON.stringify({ capturedAt, tracks, playlists });
-      }
-    `;
-  }
-  ```
+```ts
+// src/bridge/scripts/read_library.ts
+export function buildReadLibraryScript(): string {
+  return `
+    function run() {
+      const Music = Application('Music');
+      // ...
+      return JSON.stringify({ capturedAt, tracks, playlists });
+    }
+  `;
+}
+```
 
-- **Args are JSON-stringified and interpolated into the snippet**, never passed via shell quoting:
+Args are JSON-stringified and interpolated into the snippet, never passed via shell quoting. JSON is valid JS, so this sidesteps escaping bugs entirely:
 
-  ```ts
-  export function buildCreatePlaylistScript(args: {
-    name: string;
-    trackIds: string[];
-    description?: string;
-  }): string {
-    return `
-      const args = ${JSON.stringify(args)};
-      function run() { /* uses args.name, args.trackIds */ }
-    `;
-  }
-  ```
+```ts
+export function buildCreatePlaylistScript(args: {
+  name: string;
+  trackIds: string[];
+  description?: string;
+}): string {
+  return `
+    const args = ${JSON.stringify(args)};
+    function run() { /* uses args.name, args.trackIds */ }
+  `;
+}
+```
 
-  This avoids escaping bugs entirely. JSON is valid JS.
+`runJxa(script: string): Promise<unknown>` in `src/bridge/jxa.ts` does the actual invocation:
 
-- **`runJxa(script: string): Promise<unknown>`** in `src/bridge/jxa.ts`:
-  - `child_process.execFile('osascript', ['-l', 'JavaScript', '-e', script])`.
-  - Parses stdout as JSON; returns the parsed value.
-  - On non-zero exit: inspect stderr, map to `BridgeError` with the right `ErrorCode`. Patterns:
-    - stderr contains `errAEPrivilegeError` / `-1743` / `Not authorized` → `automation_permission_denied`.
-    - stderr indicates the app isn't running / event not handled → `music_app_not_running`.
-    - Anything else non-zero → `jxa_error`.
-  - On JSON parse failure → `jxa_error`.
+- `child_process.execFile('osascript', ['-l', 'JavaScript', '-e', script])`.
+- Parses stdout as JSON; returns the parsed value.
+- On non-zero exit, inspects stderr and maps to a `BridgeError`: `errAEPrivilegeError` / `-1743` / `Not authorized` → `automation_permission_denied`; app-not-running / event-not-handled → `music_app_not_running`; anything else → `jxa_error`. JSON parse failure is also `jxa_error`.
 
-- **Bulk property getters raise `-1728` (`errAENoSuchObject`) on empty collections.** `playlist.tracks.persistentID()` reads every track ID in one Apple event, but throws "Can't get object" when the collection is empty rather than returning `[]`. Guard with a `.length > 0` check (or fall back to `[]`). Applies to any `collection.property()` bulk read — relevant to `read_library` and the write paths, not just `read_playlist`.
+Two things worth knowing:
 
-- **No shared runtime state between invocations.** Each JXA call is a fresh `osascript` process. No long-lived JXA bridge, no in-process event loop dependency.
+- **Bulk property getters raise `-1728` (`errAENoSuchObject`) on empty collections.** `playlist.tracks.persistentID()` reads every track ID in one Apple event, but throws "Can't get object" on an empty collection instead of returning `[]`. Guard with a length check. Applies to any `collection.property()` bulk read.
+- **No shared runtime state between invocations.** Each JXA call is a fresh `osascript` process. No long-lived bridge, no in-process event loop dependency.
 
-- **No `osascript`/JXA outside `src/bridge/`.** Enforced by review; CLAUDE.md hard rule.
+No `osascript`/JXA outside `src/bridge/` — CLAUDE.md hard rule.
 
 ---
 
 ## 5. Test fixture format
 
-- **`test/fixtures/library.json`** — matches `LibrarySnapshot` byte-for-byte. Hand-authored, small (~5 tracks, 2–3 playlists), deterministic. Includes overlapping playlist membership so co-occurrence tests have signal.
-- **Cache tests** seed an in-memory SQLite via the **same write path used in production** (`refreshFromSnapshot`). No bespoke seeding code — if the production path is broken, the fixture surfaces it.
-- **Tool tests** mock the `Bridge` interface (small, typed) — not Music.app's behavioral quirks. Behavioral correctness is owned by tagged integration tests against a real Music.app.
-- Additional small fixtures (e.g., one with a stale-cache scenario) are siblings: `test/fixtures/<name>.json`.
+- `test/fixtures/library.json` matches `LibrarySnapshot` byte-for-byte. Hand-authored, small (~5 tracks, 2–3 playlists), deterministic, with overlapping playlist membership so co-occurrence tests have signal.
+- Cache tests seed an in-memory SQLite via the same write path used in production (`refreshFromSnapshot`). No bespoke seeding code — if the production path breaks, the fixture surfaces it.
+- Tool tests mock the `Bridge` interface, not Music.app's behavioral quirks. Behavioral correctness is owned by the tagged integration tests against a real Music.app.
+- Additional fixtures (e.g., a stale-cache scenario) are siblings: `test/fixtures/<name>.json`.
 
 ---
 
@@ -439,34 +432,30 @@ export async function handleSearch(
 }
 ```
 
-- Input parsing **always** via zod (or equivalent). No ad-hoc type checks.
-- Handlers receive `deps` (cache, bridge) — no module-level singletons. Makes testing trivial.
-- Every read-tool response includes `cache_age_hours` (write tools return their write receipt instead).
+- Input parsing always via zod. No ad-hoc type checks.
+- Handlers receive `deps` (cache, bridge) — no module-level singletons, which keeps testing trivial.
+- Every read-tool response includes `cache_age_hours`; write tools return their write receipt instead.
 
 ---
 
 ## 7. Logging
 
-- **Stderr only.** `stdout` is the MCP protocol channel — non-MCP bytes corrupt the wire.
-- `src/log.ts` exposes a tiny shim:
+Stderr only. `stdout` is the MCP protocol channel; non-MCP bytes corrupt the wire. `src/log.ts` is a tiny shim:
 
-  ```ts
-  export const log = {
-    info: (...a: unknown[]) => process.stderr.write(format(a) + '\n'),
-    debug: (...a: unknown[]) => { if (process.env.SELECTA_DEBUG === '1') process.stderr.write(format(a) + '\n'); },
-    error: (...a: unknown[]) => process.stderr.write(format(a) + '\n'),
-  };
-  ```
+```ts
+export const log = {
+  info: (...a: unknown[]) => process.stderr.write(format(a) + '\n'),
+  debug: (...a: unknown[]) => { if (process.env.SELECTA_DEBUG === '1') process.stderr.write(format(a) + '\n'); },
+  error: (...a: unknown[]) => process.stderr.write(format(a) + '\n'),
+};
+```
 
-- **Optional file sink at `~/Library/Logs/Selecta/selecta.log`** opens lazily on first write **only when `SELECTA_DEBUG=1`**. Default off — no surprise files.
-- The CLI verbs (`refresh`, etc.) print their final result summary to stdout because they're not the MCP server — but they go through the log shim for everything else.
+An optional file sink at `~/Library/Logs/Selecta/selecta.log` opens lazily on first write, and only when `SELECTA_DEBUG=1`. Default off — no surprise files.
+
+The CLI verbs (`refresh`, etc.) print their final result summary to stdout because they're not the MCP server; everything else goes through the shim.
 
 ---
 
 ## Change protocol
 
-This doc is load-bearing. Modifying it ripples across milestones. Changes during implementation:
-
-1. If a milestone discovers a contract needs to change, the change lands as a follow-up PR to this doc **before** the dependent code change is merged.
-2. Renames are cheap; semantic changes (e.g., adding a new `ErrorCode`) are reviewed for downstream impact.
-3. The out-of-scope items in `CLAUDE.md` §Hard rules remain out of scope here — no new contract surface for things Selecta doesn't do.
+This doc is load-bearing. If a code change moves a contract — a type, an error code, a query signature, a documented Music.app reality — update this doc in the same PR. Renames are cheap; semantic changes (like a new `ErrorCode`) get reviewed for downstream impact. The out-of-scope items in `CLAUDE.md` §Hard rules stay out of scope here: no new contract surface for things Selecta doesn't do.

@@ -63,8 +63,7 @@ export type PlaylistEditResult = {
 };
 
 export interface Bridge {
-  // Temporary debug capability (M1 spike). The CLI verb that exercises it
-  // (`bridge:read-playlist`) is removed in M2; the method itself stays.
+  // Single-playlist read; used by integration tests and debugging.
   readPlaylist(persistentId: string): Promise<RawPlaylist>;
 
   readLibrary(): Promise<LibrarySnapshot>;

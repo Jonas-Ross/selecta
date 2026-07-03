@@ -2,14 +2,14 @@
 
 > A *selecta* is the soundsystem term for the one who picks the records. Claude is the selector; your library is the crate.
 
-A local MCP server that exposes your Apple Music library to Claude so it can build playlists **from music you actually own** and write them back to Music.app as real playlists.
+A local MCP server that gives Claude access to your Apple Music library, so it can build playlists from music you actually own and write them back to Music.app.
 
-The model is the brain; Selecta is the eyes and hands. There is no recommendation engine, no similarity scoring, no ML in here — Selecta tells Claude what you own and how you engage with it (plays, favorites, ratings, skips, your own playlists), and turns Claude's tracklist into a playlist in Music.app.
+There's no recommendation engine in here, no similarity scoring, no ML. Claude does the picking. Selecta tells it what you own and how you listen (plays, favorites, ratings, skips, your own playlists), and turns the tracklist Claude comes up with into a real playlist.
 
 ## Requirements
 
-- macOS with **Music.app** (this is a Music.app automation tool — no cross-platform pretense)
-- **Node.js 22+**
+- macOS with Music.app
+- Node.js 22+
 
 ## Setup
 
@@ -20,17 +20,17 @@ npm install
 npm run build
 ```
 
-Populate the cache once (macOS will prompt for Music.app automation permission on first run — allow it):
+Then populate the cache. macOS will ask for Music.app automation permission the first time; allow it.
 
 ```bash
 node dist/index.js refresh
 ```
 
-This rereads your whole library into a local SQLite cache at `~/Library/Application Support/Selecta/library.db` (a few thousand tracks take ~10–15s). The cache **never refreshes itself** — rerun `refresh`, or ask Claude to call the `refresh_library` tool, when your library has changed.
+This reads your whole library into a SQLite cache at `~/Library/Application Support/Selecta/library.db`. A few thousand tracks take 10–15 seconds. The cache never refreshes itself, so rerun `refresh` (or ask Claude to call `refresh_library`) after your library changes.
 
 ## Register with Claude
 
-**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json` (create the `mcpServers` key if absent), then restart Desktop:
+For Claude Desktop, add this to `~/Library/Application Support/Claude/claude_desktop_config.json` (create the `mcpServers` key if it isn't there) and restart the app:
 
 ```json
 {
@@ -43,7 +43,7 @@ This rereads your whole library into a local SQLite cache at `~/Library/Applicat
 }
 ```
 
-**Claude Code** — from any directory:
+For Claude Code, from any directory:
 
 ```bash
 claude mcp add --scope user selecta -- node /ABSOLUTE/PATH/TO/selecta/dist/index.js
@@ -51,36 +51,38 @@ claude mcp add --scope user selecta -- node /ABSOLUTE/PATH/TO/selecta/dist/index
 
 Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vibe. Preview it first."*
 
-## Tool surface
+## Tools
 
 | Tool | What it does |
 |---|---|
-| `search` | Faceted search over the cache: free text (FTS), artist, genre, year range, favorited, rating, play counts, played/added date ranges, playlist membership, local/cloud. Returns tracks with behavioral signal. |
-| `get_track_context` | The curatorial graph walk around one track: same-artist tracks, playlists containing it, and tracks co-occurring with it in your own playlists. |
-| `list_playlists` | Playlists with kind (`user`/`smart`/`subscription`/`folder`) and track counts. |
-| `preview_playlist` | Overwrites the single **"Selecta Preview"** playlist for auditioning a draft. |
-| `create_playlist` | Materializes the final playlist (name, ordered tracks, optional description). |
-| `refresh_library` | Full library reread into the cache. Manual by design. |
+| `search` | Faceted search over the cache: free text, artist, genre, year, rating, play counts, date ranges, playlist membership, local/cloud. Results include play and rating stats. |
+| `library_overview` | The shape of the library (or a filtered slice of it): genres, decades, top artists, ratings, runtime. |
+| `get_track_context` | Everything around one track: other tracks by the same artist, the playlists it's in, and the tracks that sit next to it in your own playlists. |
+| `list_playlists` | Your playlists, with kind (`user`/`smart`/`subscription`/`folder`) and track counts. |
+| `preview_playlist` | Overwrites the single "Selecta Preview" playlist so you can audition a draft. |
+| `create_playlist` | Creates the real playlist: name, ordered tracks, optional description. |
+| `add_tracks` / `remove_tracks` | Edit an existing user playlist. Smart and subscription playlists are read-only. |
+| `refresh_library` | Full reread of the library into the cache. Manual by design. |
 
-Writes never edit your existing playlists — Selecta only creates new playlists and overwrites its own preview slot.
+Selecta only writes where you point it: it creates playlists, overwrites its own preview slot, and edits the user playlists you ask it to.
 
 ## Development
 
 | Command | Use |
 |---|---|
 | `npm test` | Unit suite (fast, no Music.app) |
-| `npm run test:integration` | Bridge tests against your real Music.app — needs a user playlist named `Selecta Test` with at least one track |
-| `npm run smoke` | Scripted end-to-end scenario over real MCP stdio: refresh → search → context → preview → create (then cleans up the created playlist) |
+| `npm run test:integration` | Bridge tests against your real Music.app. Needs a user playlist named `Selecta Test` with at least one track. |
+| `npm run smoke` | End-to-end scenario over real MCP stdio: refresh → search → context → preview → create, then cleans up after itself. |
 | `npm run build` | TypeScript → `dist/` |
 
-⚠️ Always use the npm scripts, never bare `vitest` — the bare runner ignores the tag filter and will launch Music.app from the unit suite.
+⚠️ Always use the npm scripts, never bare `vitest`. The bare runner ignores the tag filter and will launch Music.app from the unit suite.
 
-Architecture and working conventions live in [`CLAUDE.md`](CLAUDE.md); layer contracts and Music.app realities in [`docs/contracts.md`](docs/contracts.md).
+Architecture and working conventions are in [`CLAUDE.md`](CLAUDE.md); layer contracts and Music.app quirks in [`docs/contracts.md`](docs/contracts.md).
 
 ## Troubleshooting
 
-- **`automation_permission_denied`** — System Settings → Privacy & Security → Automation → enable Music for your terminal (CLI use) and for Claude Desktop.
-- **`music_app_not_running`** — open Music.app and retry.
-- **Tools return `cache_age_hours: null`** — the cache was never populated; run `refresh` (or let Claude call `refresh_library`).
-- **`track_not_found` on writes** — the cache is stale relative to Music.app; refresh and re-resolve track IDs.
-- **A created playlist appears twice in Music.app** — iCloud Sync Library occasionally duplicates a freshly created playlist (same tracks, different persistent ID) as sync settles; it sometimes doubles Apple's own playlists too. Not a Selecta bug, and the create ran once. Run `refresh` within an hour of the create and Selecta removes the echo copy automatically (it only ever touches exact twins of playlists it just created — intentional same-name playlists are safe). Older duplicates: delete either copy in Music.app, then `refresh`.
+- `automation_permission_denied`: System Settings → Privacy & Security → Automation → enable Music for your terminal (CLI use) and for Claude Desktop.
+- `music_app_not_running`: open Music.app and retry.
+- Tools return `cache_age_hours: null`: the cache was never populated. Run `refresh`.
+- `track_not_found` on writes: the cache is stale. Refresh and re-resolve track IDs.
+- A created playlist appears twice in Music.app: iCloud Sync Library sometimes duplicates a fresh playlist as sync settles (it does this to Apple's own playlists too — not a Selecta bug, and the create only ran once). Run `refresh` within an hour of creating it and Selecta removes the echo copy automatically. It only touches exact twins of playlists it just created, so same-name playlists you made on purpose are safe. For older duplicates, delete either copy in Music.app and refresh.
