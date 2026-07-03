@@ -1,5 +1,5 @@
-// JXA snippets for the two write paths (docs/design.md §create_playlist /
-// §preview_playlist). Track resolution is the shared RESOLVE_TRACKS snippet
+// JXA snippets for the two write paths (create_playlist / preview_playlist).
+// Track resolution is the shared RESOLVE_TRACKS snippet
 // (see resolve_tracks.ts for the whose()-only rationale and the
 // { missingTrackIds } guard). duplicate() then adds each track — it works for
 // cloud tracks where add() (file paths) would not, and the call order

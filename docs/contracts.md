@@ -1,6 +1,6 @@
 # Selecta — Cross-cutting contracts
 
-The types and conventions that all five build milestones consume. `docs/design.md` is the conceptual spec — *what* Selecta does. This doc is *how* the layers talk to each other so the milestones don't fight.
+`CLAUDE.md` says *what* Selecta is and how to work on it. This doc is *how* the layers talk to each other, plus the Music.app realities the contracts encode.
 
 Terse on purpose. Code blocks are the spec.
 
@@ -129,7 +129,7 @@ Consequences baked into the design: the add script does a best-effort **verify-a
 
 ## 2. Error envelope
 
-Three failure shapes from `docs/design.md` §Error handling, formalized. Lives in
+Three failure shapes — bridge failures, cache misses/stale state, validation errors — formalized. Lives in
 `src/types/errors.ts` — not inside `bridge/`, because cache and tools consume it
 too and must not depend on the bridge package.
 
@@ -408,7 +408,7 @@ import { z } from 'zod';
 
 const SearchInput = z.object({
   query: z.string().optional(),
-  // …rest of faceted schema from design.md §search
+  // …rest of the faceted schema (authoritative version: src/tools/common.ts)
 }).refine(/* year_min <= year_max etc. */);
 
 export async function handleSearch(
@@ -441,7 +441,7 @@ export async function handleSearch(
 
 - Input parsing **always** via zod (or equivalent). No ad-hoc type checks.
 - Handlers receive `deps` (cache, bridge) — no module-level singletons. Makes testing trivial.
-- The response always includes `cache_age_hours` per design.md §Tool surface.
+- Every read-tool response includes `cache_age_hours` (write tools return their write receipt instead).
 
 ---
 
@@ -469,4 +469,4 @@ This doc is load-bearing. Modifying it ripples across milestones. Changes during
 
 1. If a milestone discovers a contract needs to change, the change lands as a follow-up PR to this doc **before** the dependent code change is merged.
 2. Renames are cheap; semantic changes (e.g., adding a new `ErrorCode`) are reviewed for downstream impact.
-3. The `Out of scope` items in `docs/design.md` remain out of scope here — no new contract surface for things v1 doesn't do.
+3. The out-of-scope items in `CLAUDE.md` §Hard rules remain out of scope here — no new contract surface for things Selecta doesn't do.

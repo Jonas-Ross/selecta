@@ -75,7 +75,7 @@ Writes never edit your existing playlists — Selecta only creates new playlists
 
 ⚠️ Always use the npm scripts, never bare `vitest` — the bare runner ignores the tag filter and will launch Music.app from the unit suite.
 
-Architecture, contracts, and design rationale live in [`docs/design.md`](docs/design.md) and [`docs/contracts.md`](docs/contracts.md).
+Architecture and working conventions live in [`CLAUDE.md`](CLAUDE.md); layer contracts and Music.app realities in [`docs/contracts.md`](docs/contracts.md).
 
 ## Troubleshooting
 

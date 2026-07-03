@@ -1,40 +1,14 @@
 # Selecta
 
-A local MCP server that exposes the user's Apple Music library to Claude so playlists can be built from owned tracks and written back to Music.app. The model is the brain; this server is the eyes and hands.
+A local MCP server that exposes the user's Apple Music library to Claude so playlists can be built from owned tracks and written back to Music.app. The model is the brain — it does all sequencing, ranking, and taste; Selecta surfaces facts (inventory, behavioral signal, audio features) and executes reads and writes.
 
-`AGENTS.md` is a symlink to this file — agents that look for either will find the same content.
-
-## Mandate
-
-**Claude owns this build end-to-end.** `docs/design.md` is the spec; build it through, milestone by milestone, without waiting for per-step sign-off. Design, implement, test, commit, push feature branches, and open PRs autonomously. When the spec and implementation reality disagree, use judgment, deviate, and record the deviation in `docs/design.md` so the spec stays true. Ask the user only when something genuinely needs their input: a real scope change, a destructive/irreversible action, or a fork in the road the spec doesn't decide and that's expensive to redo.
-
-The spec is a map, not a cage — tool shapes, schema details, and internals may be adjusted where building reveals better answers. The identity below is the firm spine: change it only as a deliberate, recorded scope decision made with the user (as the v2 audio-feature and playlist-editing expansion was) — never casually drift it.
-
-## Identity (non-negotiable)
-
-- **The model is the brain. Selecta is the eyes and hands.** Selecta surfaces *facts* for the model to reason over — inventory, behavioral signal, and audio features (BPM/key/energy) — and the model does the sequencing and ranking. Computing or fetching objective audio features (including from an external source) is enrichment-of-facts and is in scope. What stays out is the model's job: no taste modeling, no similarity scoring, no candidate ranking or recommendation inside the MCP. If a feature drifts toward ranking/recommending candidates, it's the wrong feature — stop and flag it.
-- **All Music.app coupling stays in `src/bridge/`.** No `osascript`/JXA in `tools/` or `cache/`.
-- **`stdout` is the MCP protocol channel.** All logging to `stderr`; optional file log at `~/Library/Logs/Selecta/selecta.log` only when `SELECTA_DEBUG=1`.
-- **No hidden retries, no fallbacks, no auto-refresh.** Bridge fails → structured error; the model decides what to do. Write paths patch the cache surgically but never trigger a full reread.
-- **macOS only.** Music.app is the dependency; no cross-platform pretense.
-- **Out of scope:** Spotify integration, Last.fm scrobbling, multi-user, cloud, auth, standalone UI. (Two former v1 exclusions graduated into v2: editing existing playlists — add/remove/reorder/delete (#15) — and external *audio-feature* enrichment (#19). MusicBrainz/AcousticBrainz is now a candidate data source for that enrichment, not an excluded dependency.)
-
-## Engineering defaults
-
-These are defaults, not gates — exercise judgment, optimize for shipping good software.
-
-- **Tests land with the code.** Every feature and bugfix ships with unit coverage in the same commit(s); bugfixes get a test that reproduces the bug. Test-first is encouraged where it's cheap; it isn't ceremony to be policed.
-- **Small, readable, minimal-dependency code wins.** Core deps: `@modelcontextprotocol/sdk`, `better-sqlite3`, `commander`, `vitest`, TS toolchain. Add beyond that only when it clearly earns its keep, and say why in the commit message.
-- **Persistent IDs are trusted** — stable per Music.app library. Re-import → user re-runs `refresh_library`. No migration logic.
-- **Tool descriptions are first-class.** Written for the model: terse, contractual, with failure-mode hints ("if no match, returns empty array — don't retry with the same query"). They're the cheapest lever on model behavior.
-- **Canonical docs move together.** The spec lives in three places: `CLAUDE.md` (+ the `AGENTS.md` symlink), `docs/design.md` (decisions/scope/identity), and `docs/contracts.md` (Music.app realities). A change to identity, scope, or a contract must land in **all** the relevant ones in the same PR. A decision recorded in only one is one a future agent will miss — this bit us once: a v2 scope change landed in `CLAUDE.md` while `docs/design.md` still said the opposite, so the stale spec could still be cited to reject the new work.
-- **CLI via `commander`:** the `selecta` bin is a verb dispatcher. No-arg must start the MCP server over stdio (clients spawn it that way — never print help on no-arg), and commander output routes to **stderr** (`configureOutput`). M1's hand-rolled `bridge:read-playlist` switch is deleted when `refresh` lands in M2.
+`AGENTS.md` is a symlink to this file. `docs/contracts.md` is the one companion doc: layer contracts plus hard-won Music.app realities.
 
 ## Architecture
 
 Three layers, top-down dependency. Cache + bridge are usable as a plain Node library without MCP — keeps tests fast and boundaries crisp.
 
-- **`src/tools/`** — nine MCP handlers (`search`, `library_overview`, `get_track_context`, `list_playlists`, `create_playlist`, `preview_playlist`, `add_tracks`, `remove_tracks`, `refresh_library`). Thin orchestrators: validate input, query cache and/or bridge, shape response. Only layer that knows MCP exists. (`library_overview` is the post-v1 seventh; `search` and it share `common.libraryFilterShape`. `add_tracks`/`remove_tracks` are v2 #15 slice 1.)
+- **`src/tools/`** — nine MCP handlers (`search`, `library_overview`, `get_track_context`, `list_playlists`, `create_playlist`, `preview_playlist`, `add_tracks`, `remove_tracks`, `refresh_library`). Thin orchestrators: validate input, query cache and/or bridge, shape response. Only layer that knows MCP exists. `search` and `library_overview` share `common.libraryFilterShape`.
 - **`src/cache/`** — SQLite at `~/Library/Application Support/Selecta/library.db`. Tracks, playlists, playlist_tracks, refresh_log + FTS5. All model-triggered reads hit this layer.
 - **`src/bridge/`** — wraps Music.app. Builds JXA snippets, shells out via `osascript -l JavaScript`, parses JSON.
 
@@ -48,7 +22,10 @@ Shared types live in `src/types/`; the cross-cutting error envelope in `src/type
 | `npm run build` | TypeScript compile to `dist/` |
 | `npm test` | Unit suite (fast, no Music.app) |
 | `npm run test:integration` | Bridge integration suite against real Music.app (slow, opt-in) |
+| `npm run smoke` | End-to-end smoke against the real library (builds first) |
+| `npm run verify:echo` | Live iCloud-echo reconciliation harness |
 | `npm run dev` | Run the MCP server over stdio |
+| `node dist/index.js refresh` | Refresh the library cache from the CLI, no MCP client needed |
 
 ## Testing
 
@@ -63,7 +40,34 @@ Two tiers, cheapest first:
 - The `integration` tag is the only gate (no env var).
 - **Integration prerequisites:** a user playlist named **`Selecta Test`** with a few tracks in Music.app, plus Automation permission (macOS prompt on first run; re-enable under System Settings → Privacy & Security → Automation).
 
-Plus one manual **end-to-end smoke** (refresh → search → get_track_context → preview → create) against the real library before calling v1 done.
+## Hard rules
+
+- **No taste in the MCP.** No similarity scoring, candidate ranking, or recommendation inside Selecta — sequencing and taste are the model's job. Surfacing and enriching objective facts (BPM/key/energy, including from external sources like MusicBrainz/AcousticBrainz) is in scope. A feature drifting toward ranking is the wrong feature — stop and flag it.
+- **All Music.app coupling stays in `src/bridge/`.** No `osascript`/JXA in `tools/` or `cache/`.
+- **`stdout` is the MCP protocol channel.** All logging to `stderr`; optional file log at `~/Library/Logs/Selecta/selecta.log` only when `SELECTA_DEBUG=1`.
+- **No hidden retries, no fallbacks, no auto-refresh.** Bridge fails → structured error; the model decides what to do. Write paths patch the cache surgically but never trigger a full reread.
+- **CLI no-arg must start the MCP server over stdio** — clients spawn it that way; never print help on no-arg. Commander output routes to stderr (`configureOutput`).
+- **macOS only.** Out of scope: Spotify integration, Last.fm scrobbling, multi-user, cloud, auth, standalone UI.
+
+## Standing decisions
+
+Settled calls — don't re-litigate without the user:
+
+- No bias/weighting knobs (a `favorite_weight` blend was explicitly rejected). `search`'s sort lenses are neutral orderings the model picks, never weightings Selecta applies.
+- Genres surface raw; normalization is an opinion the model owns.
+- Co-occurrence counts hand-made (`kind = 'user'`) playlists only. Smart/subscription playlists are read-only snapshots.
+- Cache refresh is manual-only (`refresh_library`). Persistent IDs are trusted per library — re-import means the user re-runs refresh; no migration logic.
+- The model names playlists. Names are half the point.
+- Tool descriptions are first-class model interface: terse, contractual, with failure-mode hints ("if no match, returns empty array — don't retry with the same query").
+
+## Engineering defaults
+
+- **Tests land with the code.** Unit coverage ships in the same commit(s); bugfixes get a test that reproduces the bug.
+- **Small, readable, minimal-dependency code wins.** Core deps: `@modelcontextprotocol/sdk`, `better-sqlite3`, `commander`, `zod`, `vitest`, TS toolchain. Add beyond that only when it clearly earns its keep, and say why in the commit message.
+
+## Working style
+
+Build autonomously: design, implement, test, branch, and open PRs without per-step sign-off. Current scope lives in GitHub issues (#15–#20 for v2). Ask the user only for real scope changes, destructive/irreversible actions, or expensive forks nothing decides. Changes to scope or the hard rules are deliberate user decisions, never drift. Any change that touches a tool contract or a documented Music.app reality updates `docs/contracts.md` (and this file, if it shifts scope or workflow) in the same PR — docs never trail the code.
 
 ## Git workflow
 
@@ -71,14 +75,13 @@ Plus one manual **end-to-end smoke** (refresh → search → get_track_context �
 - [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`, imperative, lowercase, no trailing period. One concern per commit; keep the build green where reasonable.
 - Pushing feature branches and opening PRs is normal flow — no per-action confirmation. Never push to `main`, never force-push, never merge without explicit ask. Don't amend committed work.
 - Before opening a PR, run `/simplify` over the diff and address what it surfaces.
-- **Every time a PR goes up, and every time review comments are addressed, check whether the change implies a doc update** — does it shift identity, scope, a tool contract, or a documented Music.app reality? If so, update `CLAUDE.md` / `docs/design.md` / `docs/contracts.md` in the same PR. Don't let the docs drift behind the code.
 - **During PR review cycles:** commit fixes for reviewer feedback (CodeRabbit, Codex, humans) but **do not auto-push** — the user pushes, so CodeRabbit re-reviews one batch instead of every fix.
 
 ## Status
 
-**v1 complete — all five milestones built.** Nine tools live over MCP stdio (six v1 + `library_overview` post-v1 + `add_tracks`/`remove_tracks` in v2), cache + bridge fully implemented, unit + integration suites green, end-to-end smoke scripted (`npm run smoke`). Spec deviations discovered during the build are recorded in `docs/design.md` §Implementation notes and `docs/contracts.md`.
+v1 complete — nine tools live over MCP stdio, unit + integration suites green. v2 underway, tracked in issues #15–#20. Shipped: exclusion filters (#17); `add_tracks`/`remove_tracks` plus a `playlist_order` search sort (#15 slice 1). Remaining: reorder + `delete_playlist` (#15), search dedup (#16), `set_loved`/`set_rating` (#18), audio-feature enrichment (#19), multi-seed co-occurrence (#20).
 
-**v2 underway (issues #15–#20).** After living with v1, scope was deliberately widened (see Identity): mutate existing playlists (#15), search dedup (#16), exclusion filters (#17), `set_loved`/`set_rating` write-back (#18), audio-feature enrichment populated incrementally on refresh (#19), and multi-seed co-occurrence (#20). Audio features and external audio-feature enrichment graduated into scope. Built so far: exclusion filters (#17); #15 slice 1 — `add_tracks`/`remove_tracks` plus a `playlist_order` search sort lens (reorder and `delete_playlist` remain). ⚠️ #15 surfaced a major Music.app reality — scripted playlist-entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn) — read `docs/contracts.md` §1 before touching the edit paths. The rest not yet started.
+⚠️ **Before touching the playlist edit paths, read `docs/contracts.md` §1** — scripted playlist-entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn).
 
 ## Code search
 

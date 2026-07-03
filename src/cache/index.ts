@@ -134,7 +134,7 @@ export class SelectaCache {
   }
 
   /**
-   * Surgical patch after a successful playlist write (docs/design.md §Decisions):
+   * Surgical patch after a successful playlist write:
    * upsert the playlist row and replace its membership so the cache doesn't
    * desync — WITHOUT a full reread. Tracks are untouched, so no FTS work.
    */
@@ -184,7 +184,7 @@ export class SelectaCache {
 
   /**
    * Compare the just-refreshed cache against recent creation receipts and plan
-   * iCloud-sync reconciliation (docs/design.md §Implementation notes). Pure
+   * iCloud-sync reconciliation (docs/contracts.md §1 Sync reconciliation). Pure
    * read — applying the plan is the caller's job (deletes go through the
    * bridge first). Matching is deliberately conservative: same name, kind
    * 'user', and the EXACT ordered track sequence we created — so intentional

@@ -1,4 +1,4 @@
-// search — faceted query over the cached library (docs/design.md §search).
+// search — faceted query over the cached library.
 
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';

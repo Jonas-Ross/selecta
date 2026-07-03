@@ -1,4 +1,4 @@
-// get_track_context — the curatorial graph walk (docs/design.md): seed +
+// get_track_context — the curatorial graph walk: seed +
 // same-artist tracks + containing playlists + co-occurring tracks from the
 // user's own playlists.
 

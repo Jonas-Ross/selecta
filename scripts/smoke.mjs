@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// End-to-end smoke (docs/design.md §Testing): one scripted scenario against the
+// End-to-end smoke: one scripted scenario against the
 // REAL library over real MCP stdio — refresh → search → get_track_context →
 // preview_playlist → create_playlist — then deletes the created playlist so the
 // only trace left is the (by-design) "Selecta Preview" slot. Not part of the

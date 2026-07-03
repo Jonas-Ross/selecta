@@ -254,7 +254,7 @@ describe('overviewStats', () => {
   });
 });
 
-// iCloud-echo reconciliation (docs/design.md §Implementation notes): creation
+// iCloud-echo reconciliation (docs/contracts.md §1 Sync reconciliation): creation
 // receipts + planSyncReconciliation + the apply helpers.
 describe('sync reconciliation', () => {
   const CREATED_ID = 'P-CREATED';
