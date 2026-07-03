@@ -139,8 +139,8 @@ describe('bridge edit paths against real Music.app', { tags: ['integration'] }, 
   // Edits run against the ESTABLISHED fixture playlist, not a fresh scratch:
   // probed live, a just-created playlist is unreliable to edit while its
   // initial iCloud sync settles — post-create edits get wiped back to the
-  // created state, and phantom entries drift in and out (docs/contracts.md
-  // §1). Established playlists hold edits. Each edit is asserted as a
+  // created state, and phantom entries drift in and out (docs/music-app.md,
+  // iCloud sync). Established playlists hold edits. Each edit is asserted as a
   // transform of preEditTrackPersistentIds — the baseline the same script
   // execution saw — so background drift between calls can't misfire. The
   // sequence is self-restoring (adds x/y, removes every occurrence), with a
@@ -158,7 +158,7 @@ describe('bridge edit paths against real Music.app', { tags: ['integration'] }, 
     const [x, y] = candidates as [string, string];
 
     // Rapid consecutive scripted edits race iCloud sync — a settling download
-    // can revert earlier local edits mid-sequence (docs/contracts.md §1). The
+    // can revert earlier local edits mid-sequence (docs/music-app.md). The
     // pauses keep the settle out of the edit calls; the transform assertions
     // absorb any drift that still lands between steps.
     const settle = () => new Promise((r) => setTimeout(r, 3_000));
@@ -191,7 +191,7 @@ describe('bridge edit paths against real Music.app', { tags: ['integration'] }, 
       // Remove by id: EVERY occurrence of each goes — this also restores.
       // iCloud sync can wipe the x/y entries between steps (observed live:
       // scripted entry edits are unreliable while sync churns and only
-      // converge when the library quiesces — docs/contracts.md §1). Retry
+      // converge when the library quiesces — docs/music-app.md). Retry
       // with re-established preconditions; if the weather still wins, verify
       // the end state is clean and warn instead of failing the suite — the
       // by-id semantics stay covered by unit tests either way.

@@ -1,4 +1,4 @@
-// Shared scaffold for every JXA snippet (docs/contracts.md §4). Interpolates
+// Shared scaffold for every JXA snippet. Interpolates
 // args as JSON (valid JS, never via shell quoting), exposes `args` and the
 // `Music` application handle to the body, and invokes the run handler so
 // osascript prints the body's returned value. Each per-operation builder

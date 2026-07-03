@@ -1,7 +1,7 @@
 // MCP server wiring — the only file that knows MCP exists. Handlers stay plain
 // functions (unit-testable without a transport); this file registers them and
 // serializes their output-or-error-envelope as a JSON text block. Envelopes set
-// isError so the model treats them as actionable failures, per docs/design.md.
+// isError so the model treats them as actionable failures.
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolDeps } from './tools/common.js';

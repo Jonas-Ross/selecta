@@ -1,4 +1,4 @@
-// Cross-cutting error envelope (docs/contracts.md §2). Shared by every layer:
+// Cross-cutting error envelope. Shared by every layer:
 // the bridge THROWS BridgeError; tool handlers CATCH it and RETURN SelectaError
 // (the MCP wire shape). Lives in src/types/ — not inside bridge/ — because
 // cache/ and tools/ consume these too and must not depend on the bridge package.
@@ -30,8 +30,8 @@ export class BridgeError extends Error {
   }
 }
 
-// Canonical model-facing hints, one per ErrorCode. The single source of truth
-// (docs/contracts.md §2). The bridge throws with only an error code; consumers
+// Canonical model-facing hints, one per ErrorCode — the single source of
+// truth. The bridge throws with only an error code; consumers
 // resolve the hint as `err.hint ?? defaultHints[err.errorCode]`, so a per-call
 // `hint` is reserved for overrides "when more context is available."
 export const defaultHints: Record<ErrorCode, string> = {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// iCloud-echo reconciliation verification (docs/design.md §Implementation
-// notes): create a throwaway playlist, poll Music.app every 15s for 5 minutes
+// iCloud-echo reconciliation verification (docs/music-app.md, iCloud sync):
+// create a throwaway playlist, poll Music.app every 15s for 5 minutes
 // to watch for a sync echo twin, then run refresh_library and assert exactly
 // one copy survives. The echo is non-deterministic — a run with no echo still
 // PASSES but says so. Cleans up the probe playlist at the end.

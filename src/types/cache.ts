@@ -1,4 +1,4 @@
-// Cache row shapes (docs/contracts.md §3). Mirror the SQLite schema: Music.app's
+// Cache row shapes. Mirror the SQLite schema: Music.app's
 // native 0..100 rating scale, 0/1 booleans, NULL for absent. Tools translate to
 // API shape (e.g. rating_min 1–5 → 0..100) at their own boundary.
 
@@ -47,8 +47,8 @@ export type PlaylistCreationRow = {
   createdAt: string;
 };
 
-// Reconciliation plan entries computed after a refresh (docs/design.md
-// §Implementation notes). 'rekey' = iCloud reassigned the ID, single copy
+// Reconciliation plan entries computed after a refresh (docs/music-app.md,
+// iCloud sync). 'rekey' = iCloud reassigned the ID, single copy
 // survives; 'duplicate' = an echo twin appeared — keep the iCloud-keyed copy,
 // delete the rest.
 export type ReconcileAction =
@@ -85,7 +85,7 @@ export type OverviewStats = {
   ratingHistogram: { rating: number; count: number }[]; // rating 0..100, desc
 };
 
-// Faceted search filters (docs/design.md §search). All optional, combined as AND.
+// Faceted search filters. All optional, combined as AND.
 // rating here is Music.app's 0..100 scale — the tool layer converts from 1..5.
 // Shared by searchTracks and overviewStats (overview ignores `limit`).
 export type SearchFilters = {

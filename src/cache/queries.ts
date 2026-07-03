@@ -1,4 +1,4 @@
-// Named query builders (docs/contracts.md §3). All SQL lives here — tools and
+// Named query builders. All SQL lives here — tools and
 // the cache facade never write SQL inline. createQueries prepares statements
 // once per connection; the facade in index.ts owns transactions.
 
@@ -420,7 +420,7 @@ export function createQueries(db: Database) {
     },
 
     // Aggregate "shape of the crate" over the same filtered rowset as
-    // searchTracks (docs/contracts.md §3). Pure GROUP BY work, cache-only. The
+    // searchTracks. Pure GROUP BY work, cache-only. The
     // grand totals come back in one scan; genre/decade/artist/rating
     // breakdowns are separate grouped scans. Genres are returned in full
     // (ordered) and capped by the tool; artists are capped here to bound the

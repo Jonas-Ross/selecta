@@ -46,7 +46,7 @@ export async function handleCreatePlaylist(
     const result = await deps.bridge.createPlaylist({ name, trackIds: track_ids, description });
     cache.upsertPlaylistAfterWrite(result, name, track_ids);
     // Creation receipt: lets the next refresh recognize iCloud rekeys and echo
-    // duplicates of this exact playlist (docs/design.md §Implementation notes).
+    // duplicates of this exact playlist (docs/music-app.md, iCloud sync).
     cache.recordPlaylistCreation(result.persistentId, name, track_ids);
     return { playlist_id: result.persistentId, name, track_count: result.trackCount };
   } catch (err) {

@@ -1,5 +1,5 @@
 // Cache layer against in-memory SQLite, seeded through the production write
-// path (refreshFromSnapshot) — no bespoke seeding (docs/contracts.md §5).
+// path (refreshFromSnapshot) — no bespoke seeding.
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
@@ -254,7 +254,7 @@ describe('overviewStats', () => {
   });
 });
 
-// iCloud-echo reconciliation (docs/design.md §Implementation notes): creation
+// iCloud-echo reconciliation (docs/music-app.md, iCloud sync): creation
 // receipts + planSyncReconciliation + the apply helpers.
 describe('sync reconciliation', () => {
   const CREATED_ID = 'P-CREATED';
