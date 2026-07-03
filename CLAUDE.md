@@ -8,7 +8,7 @@ A local MCP server that exposes the user's Apple Music library to Claude so play
 
 Three layers, top-down dependency. Cache + bridge are usable as a plain Node library without MCP — keeps tests fast and boundaries crisp.
 
-- **`src/tools/`** — nine MCP handlers (`search`, `library_overview`, `get_track_context`, `list_playlists`, `create_playlist`, `preview_playlist`, `add_tracks`, `remove_tracks`, `refresh_library`). Thin orchestrators: validate input, query cache and/or bridge, shape response. Only layer that knows MCP exists. `search` and `library_overview` share `common.libraryFilterShape`.
+- **`src/tools/`** — ten MCP handlers (`search`, `library_overview`, `get_track_context`, `list_playlists`, `create_playlist`, `preview_playlist`, `add_tracks`, `remove_tracks`, `reorder_tracks`, `refresh_library`). Thin orchestrators: validate input, query cache and/or bridge, shape response. Only layer that knows MCP exists. `search` and `library_overview` share `common.libraryFilterShape`.
 - **`src/cache/`** — SQLite at `~/Library/Application Support/Selecta/library.db`. Tracks, playlists, playlist_tracks, refresh_log + FTS5. All model-triggered reads hit this layer.
 - **`src/bridge/`** — wraps Music.app. Builds JXA snippets, shells out via `osascript -l JavaScript`, parses JSON.
 
@@ -38,7 +38,7 @@ Two tiers, cheapest first:
 
 - ⚠️ `npx vitest run` ignores the scripts' `--tags-filter` and runs *everything*, launching Music.app and firing the macOS Automation prompt. Use `npm test` / `npm run test:integration`.
 - The `integration` tag is the only gate (no env var).
-- **Integration prerequisites:** a user playlist named **`Selecta Test`** with a few tracks in Music.app, plus Automation permission (macOS prompt on first run; re-enable under System Settings → Privacy & Security → Automation).
+- **Integration prerequisites:** a user playlist named **`Selecta Test`** with a few tracks (at least two — reorder coverage needs a permutable order) in Music.app, plus Automation permission (macOS prompt on first run; re-enable under System Settings → Privacy & Security → Automation).
 
 ## Hard rules
 
@@ -79,7 +79,7 @@ Build autonomously: design, implement, test, branch, and open PRs without per-st
 
 ## Status
 
-v1 complete — nine tools live over MCP stdio, unit + integration suites green. v2 underway, tracked in issues #15–#20. Shipped: exclusion filters (#17); `add_tracks`/`remove_tracks` plus a `playlist_order` search sort (#15 slice 1). Remaining: reorder + `delete_playlist` (#15), search dedup (#16), `set_loved`/`set_rating` (#18), audio-feature enrichment (#19), multi-seed co-occurrence (#20).
+v1 complete — nine tools live over MCP stdio, unit + integration suites green. v2 underway, tracked in issues #15–#20. Shipped: exclusion filters (#17); `add_tracks`/`remove_tracks` plus a `playlist_order` search sort (#15 slice 1); `reorder_tracks` (#15 slice 2). Remaining from #15: `delete_playlist`. Also remaining: search dedup (#16), `set_loved`/`set_rating` (#18), audio-feature enrichment (#19), multi-seed co-occurrence (#20).
 
 ⚠️ **Before touching the playlist edit paths, read `docs/music-app.md`** — scripted playlist-entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn).
 
