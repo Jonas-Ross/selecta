@@ -60,6 +60,7 @@ export type PlaylistEditResult = {
   trackPersistentIds: string[];
   preEditTrackPersistentIds: string[];
   removedCount?: number; // remove path only: playlist entries actually deleted
+  movedCount?: number; // reorder path only: entries the script actually moved
 };
 
 export interface Bridge {
@@ -103,5 +104,18 @@ export interface Bridge {
     playlistId: string;
     trackIds?: string[];
     positions?: number[];
+  }): Promise<PlaylistEditResult>;
+
+  // Reorder a user playlist to `order`, a complete permutation of its current
+  // 0-based positions: post-edit position i holds the entry that was at
+  // order[i]. expectedTrackIds is the caller's belief of the current order
+  // (the cache's); the script verifies it against the live playlist before
+  // moving anything — a permutation computed against a drifted order would
+  // scramble the playlist. Throws playlist_not_found / playlist_not_editable /
+  // validation_error (drift or non-permutation live) without moving anything.
+  reorderPlaylistTracks(input: {
+    playlistId: string;
+    order: number[];
+    expectedTrackIds: string[];
   }): Promise<PlaylistEditResult>;
 }
