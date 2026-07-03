@@ -37,7 +37,24 @@ export type ReorderTracksOutput = {
   moved_count: number;
 };
 
-export const REORDER_TRACKS_DESCRIPTION = `Rearrange the entries of a user playlist in Music.app to a new order. \`order\` must be a complete permutation of the playlist's current 0-based positions — position i of the result gets the entry currently at order[i]. Get the current order first via search with in_playlist + sort playlist_order. Only plain user playlists are editable (playlist_not_editable otherwise). Selecta verifies the expected order against Music.app before moving anything and fails with validation_error if the playlist changed live — don't retry with the same input; refresh_library, re-read the order via search, and recompute the permutation. Moving entries toward the START of a large playlist is slow (one Music.app event per displaced entry) — reordering toward the tail is cheap. Max 1000 entries per call.`;
+export const REORDER_TRACKS_DESCRIPTION = `Rearrange the entries of a user playlist in Music.app to a new order. \`order\` must be a complete permutation of the playlist's current 0-based positions — position i of the result gets the entry currently at order[i]. Get the current order first via search with in_playlist + sort playlist_order. CAVEAT: search returns one row per distinct track, so a playlist holding the same track more than once has more entries than search shows — its full entry order isn't discoverable and reordering it fails with validation_error naming the entry and distinct counts. Only plain user playlists are editable (playlist_not_editable otherwise). Selecta verifies the expected order against Music.app before moving anything and fails with validation_error if the playlist changed live — don't retry with the same input; refresh_library, re-read the order via search, and recompute the permutation. Moving entries toward the START of a large playlist is slow (one Music.app event per displaced entry) — reordering toward the tail is cheap. Max 1000 entries per call.`;
+
+// Every index 0..n-1 exactly once. Catches model mistakes (duplicates,
+// out-of-range values) before any Apple event.
+function permutationDefects(order: number[]): { duplicated: number[]; outOfRange: number[] } {
+  const seen = new Set<number>();
+  const duplicated = new Set<number>();
+  const outOfRange: number[] = [];
+  for (const value of order) {
+    if (value >= order.length) {
+      outOfRange.push(value);
+      continue;
+    }
+    if (seen.has(value)) duplicated.add(value);
+    seen.add(value);
+  }
+  return { duplicated: [...duplicated], outOfRange };
+}
 
 export async function handleReorderTracks(
   raw: unknown,
@@ -54,27 +71,24 @@ export async function handleReorderTracks(
 
     const cachedIds = cache.getPlaylistTrackIds(target.playlist.persistentId);
     if (order.length !== cachedIds.length) {
+      // A count mismatch on a duplicated playlist isn't the model's fault:
+      // search shows one row per distinct track, so the true entry order is
+      // undiscoverable. Name that instead of sending it to refresh_library.
+      const distinct = new Set(cachedIds).size;
+      if (distinct !== cachedIds.length) {
+        return validationError(
+          `"${target.playlist.name}" holds the same track more than once (${cachedIds.length} entries, ${distinct} distinct tracks), and search shows only distinct tracks — its full entry order isn't discoverable, so it can't be reordered. Remove the duplicate entries first (remove_tracks by position) if a reorder is needed.`,
+        );
+      }
       return validationError(
         `order has ${order.length} entries but "${target.playlist.name}" has ${cachedIds.length} tracks in the cache. Get the current order via search with in_playlist + sort playlist_order; if the count is stale, run refresh_library. A playlist over 1000 tracks can't be reordered in one call.`,
       );
     }
 
-    // Permutation check: every index 0..n-1 exactly once. Catches model
-    // mistakes (duplicates, out-of-range values) before any Apple event.
-    const seen = new Set<number>();
-    const duplicated = new Set<number>();
-    const outOfRange: number[] = [];
-    for (const value of order) {
-      if (value >= order.length) {
-        outOfRange.push(value);
-        continue;
-      }
-      if (seen.has(value)) duplicated.add(value);
-      seen.add(value);
-    }
-    if (duplicated.size > 0 || outOfRange.length > 0) {
+    const { duplicated, outOfRange } = permutationDefects(order);
+    if (duplicated.length > 0 || outOfRange.length > 0) {
       const parts: string[] = [];
-      if (duplicated.size > 0) parts.push(`duplicated: ${[...duplicated].join(', ')}`);
+      if (duplicated.length > 0) parts.push(`duplicated: ${duplicated.join(', ')}`);
       if (outOfRange.length > 0) parts.push(`out of range: ${outOfRange.join(', ')}`);
       return validationError(
         `order must be a permutation of 0..${order.length - 1}, each value exactly once (${parts.join('; ')}).`,

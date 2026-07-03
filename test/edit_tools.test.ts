@@ -279,7 +279,26 @@ describe('reorder_tracks', () => {
       await handleReorderTracks({ playlist_id: 'P-TRIPHOP', order: [0, 0, 1] }, deps),
     );
     expect(err.error).toBe('validation_error');
-    expect(err.hint).toContain('0');
+    expect(err.hint).toContain('duplicated: 0');
+    expect(deps.bridge.reorderPlaylistTracks).not.toHaveBeenCalled();
+  });
+
+  it('names duplicate playlist entries on a count mismatch instead of blaming the cache', async () => {
+    // search shows one row per distinct track, so a model following the
+    // advertised workflow sends a 2-entry order for this 3-entry playlist —
+    // the hint must name the real problem, not send it to refresh_library.
+    const deps = makeDeps();
+    deps.cacheInstance.patchPlaylistMembership('P-TRIPHOP', [
+      'T-TEARDROP',
+      'T-ANGEL',
+      'T-TEARDROP',
+    ]);
+    const err = asError(
+      await handleReorderTracks({ playlist_id: 'P-TRIPHOP', order: [0, 1] }, deps),
+    );
+    expect(err.error).toBe('validation_error');
+    expect(err.hint).toContain('3 entries, 2 distinct tracks');
+    expect(err.hint).not.toContain('refresh_library');
     expect(deps.bridge.reorderPlaylistTracks).not.toHaveBeenCalled();
   });
 
