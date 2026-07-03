@@ -39,6 +39,11 @@ import {
   REMOVE_TRACKS_DESCRIPTION,
 } from './tools/remove_tracks.js';
 import {
+  handleReorderTracks,
+  reorderTracksInputShape,
+  REORDER_TRACKS_DESCRIPTION,
+} from './tools/reorder_tracks.js';
+import {
   handleLibraryOverview,
   libraryOverviewInputShape,
   LIBRARY_OVERVIEW_DESCRIPTION,
@@ -108,6 +113,12 @@ export function createServer(deps: ToolDeps): McpServer {
     'remove_tracks',
     { description: REMOVE_TRACKS_DESCRIPTION, inputSchema: removeTracksInputShape },
     async (args) => toToolResult(await handleRemoveTracks(args, deps)),
+  );
+
+  server.registerTool(
+    'reorder_tracks',
+    { description: REORDER_TRACKS_DESCRIPTION, inputSchema: reorderTracksInputShape },
+    async (args) => toToolResult(await handleReorderTracks(args, deps)),
   );
 
   return server;

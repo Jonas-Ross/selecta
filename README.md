@@ -62,6 +62,7 @@ Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vib
 | `preview_playlist` | Overwrites the single "Selecta Preview" playlist so you can audition a draft. |
 | `create_playlist` | Creates the real playlist: name, ordered tracks, optional description. |
 | `add_tracks` / `remove_tracks` | Edit an existing user playlist. Smart and subscription playlists are read-only. |
+| `reorder_tracks` | Rearrange a user playlist's entries to a new order (a full permutation of its current positions). |
 | `refresh_library` | Full reread of the library into the cache. Manual by design. |
 
 Selecta only writes where you point it: it creates playlists, overwrites its own preview slot, and edits the user playlists you ask it to.

@@ -121,6 +121,106 @@ describe('bridge write paths against real Music.app', { tags: ['integration'] },
   }, 60_000);
 });
 
+// Runs BEFORE the edit-paths barrage below: the reorder drift guard is
+// churn-sensitive, and the edit sequence leaves iCloud sync settling in its
+// wake (observed live: three straight drift trips right after it).
+describe('bridge reorderPlaylistTracks against real Music.app', { tags: ['integration'] }, () => {
+  // Reorders run against the ESTABLISHED fixture playlist, like the edit
+  // paths above — a fresh scratch playlist's live order drifts while its
+  // initial iCloud sync settles (probed live: the drift guard tripped on a
+  // seconds-old scratch), so its baseline is never trustworthy. Reorder is
+  // self-restoring: the inverse permutation puts the playlist back.
+
+  // The permutation that maps `live` onto `target`: order[i] = the position
+  // in live holding target[i]. Multiset-aware so duplicate entries resolve to
+  // distinct positions; null when the memberships differ.
+  function permutationTo(live: string[], target: string[]): number[] | null {
+    if (live.length !== target.length) return null;
+    const used = new Array<boolean>(live.length).fill(false);
+    const order: number[] = [];
+    for (const id of target) {
+      const j = live.findIndex((liveId, idx) => !used[idx] && liveId === id);
+      if (j === -1) return null;
+      used[j] = true;
+      order.push(j);
+    }
+    return order;
+  }
+
+  const rotateLeft = (ids: string[]) => [...ids.slice(1), ids[0]!];
+
+  it('applies a rotate-left permutation and restores', async () => {
+    const plId = await requireFixturePlaylistId();
+    const original = (await bridge.readPlaylist(plId)).trackPersistentIds;
+    expect(original.length, '"Selecta Test" needs at least 2 tracks').toBeGreaterThanOrEqual(2);
+
+    try {
+      // The drift guard compares our read to the script's own read, so a sync
+      // settling between the two trips it (that's its job). Re-baseline and
+      // retry; transform assertions below hold whatever baseline won.
+      let result: Awaited<ReturnType<typeof bridge.reorderPlaylistTracks>> | undefined;
+      let baseline = original;
+      for (let attempt = 0; attempt < 3 && !result; attempt++) {
+        try {
+          result = await bridge.reorderPlaylistTracks({
+            playlistId: plId,
+            // Rotate left by one: positions 1..n-1 are a strictly-increasing
+            // prefix of the target order, so exactly one entry moves.
+            order: baseline.map((_, i) => (i + 1) % baseline.length),
+            expectedTrackIds: baseline,
+          });
+        } catch (err) {
+          if (!(err instanceof BridgeError) || err.errorCode !== 'validation_error') throw err;
+          await new Promise((r) => setTimeout(r, 3_000));
+          baseline = (await bridge.readPlaylist(plId)).trackPersistentIds;
+        }
+      }
+      expect(result, 'live order kept drifting across 3 attempts').toBeDefined();
+      expect(result!.preEditTrackPersistentIds).toEqual(baseline);
+      expect(result!.trackPersistentIds).toEqual(rotateLeft(baseline));
+      expect(result!.movedCount).toBe(1);
+    } finally {
+      // Backstop: map whatever order is live back onto the original. If sync
+      // weather changed the membership itself, restoring would lie — warn
+      // like the edit-paths test does.
+      const live = (await bridge.readPlaylist(plId)).trackPersistentIds;
+      const back = permutationTo(live, original);
+      if (back) {
+        try {
+          await bridge.reorderPlaylistTracks({ playlistId: plId, order: back, expectedTrackIds: live });
+        } catch (restoreErr) {
+          // A drift trip here is the same weather; don't let it mask the
+          // try block's real failure.
+          console.warn('[integration] reorder restore failed:', restoreErr);
+        }
+      } else if (live.join() !== original.join()) {
+        console.warn(
+          '[integration] reorder restore skipped: live membership diverged from the baseline (iCloud weather)',
+        );
+      }
+    }
+  }, 180_000);
+
+  it('drift guard: wrong expectedTrackIds throws validation_error without moving anything', async () => {
+    const plId = await requireFixturePlaylistId();
+    const original = (await bridge.readPlaylist(plId)).trackPersistentIds;
+    expect(original.length).toBeGreaterThanOrEqual(2);
+
+    // A rotated baseline can't match the live order unless every entry is the
+    // same track, which the fixture playlist never is.
+    await expect(
+      bridge.reorderPlaylistTracks({
+        playlistId: plId,
+        order: original.map((_, i) => i),
+        expectedTrackIds: rotateLeft(original),
+      }),
+    ).rejects.toMatchObject({ errorCode: 'validation_error' });
+
+    const readBack = await bridge.readPlaylist(plId);
+    expect(readBack.trackPersistentIds).toEqual(original);
+  }, 120_000);
+});
+
 describe('bridge edit paths against real Music.app', { tags: ['integration'] }, () => {
   // Unique per run: iCloud sync resurrects recently deleted playlists and can
   // merge their entries into a new same-named playlist (observed live) —

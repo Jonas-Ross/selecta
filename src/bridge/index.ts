@@ -22,7 +22,11 @@ import {
   buildDeletePlaylistByIdScript,
   buildDeletePlaylistsByNameScript,
 } from './scripts/delete_playlist.js';
-import { buildAddTracksScript, buildRemoveTracksScript } from './scripts/edit_playlist.js';
+import {
+  buildAddTracksScript,
+  buildRemoveTracksScript,
+  buildReorderTracksScript,
+} from './scripts/edit_playlist.js';
 import { BridgeError } from '../types/errors.js';
 import {
   type Bridge,
@@ -96,12 +100,15 @@ export const bridge: Bridge = {
   async removePlaylistTracks(input): Promise<PlaylistEditResult> {
     return parseEditResult(await runJxa(buildRemoveTracksScript(input)), 'remove');
   },
+  async reorderPlaylistTracks(input): Promise<PlaylistEditResult> {
+    return parseEditResult(await runJxa(buildReorderTracksScript(input)), 'reorder');
+  },
 };
 
 // The edit scripts return a guard sentinel — without touching Music.app — when
 // the target playlist or a referenced track/position doesn't hold live. Each
 // maps to a structured error; the model decides what to do next.
-function parseEditResult(result: unknown, op: 'add' | 'remove'): PlaylistEditResult {
+function parseEditResult(result: unknown, op: 'add' | 'remove' | 'reorder'): PlaylistEditResult {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
     if (v.playlistNotFound === true) {
@@ -131,6 +138,20 @@ function parseEditResult(result: unknown, op: 'add' | 'remove'): PlaylistEditRes
         `The playlist has ${String(v.liveTrackCount)} tracks in Music.app — the cache is stale. Run refresh_library and re-check positions.`,
       );
     }
+    if (v.orderDrifted === true) {
+      throw new BridgeError(
+        'validation_error',
+        'Playlist order in Music.app differs from the expected order.',
+        `The live playlist has changed since the cache was built (has ${String(v.liveTrackCount)} tracks) — run refresh_library, re-read the order via search with in_playlist + sort playlist_order, and recompute the permutation.`,
+      );
+    }
+    if (v.invalidOrder === true) {
+      throw new BridgeError(
+        'validation_error',
+        'order must be a complete permutation of 0..liveTrackCount-1.',
+        `The playlist has ${String(v.liveTrackCount)} tracks in Music.app — recompute a permutation covering every index exactly once.`,
+      );
+    }
     if (isPlaylistEditResult(v)) return v;
   }
   throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistEditResult shape.');
@@ -146,7 +167,8 @@ function isPlaylistEditResult(v: Record<string, unknown>): v is PlaylistEditResu
     typeof v.trackCount === 'number' &&
     isIdArray(v.trackPersistentIds) &&
     isIdArray(v.preEditTrackPersistentIds) &&
-    (v.removedCount === undefined || typeof v.removedCount === 'number')
+    (v.removedCount === undefined || typeof v.removedCount === 'number') &&
+    (v.movedCount === undefined || typeof v.movedCount === 'number')
   );
 }
 

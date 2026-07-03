@@ -1,11 +1,13 @@
-// JXA snippets for in-place playlist mutation (issue #15: add/remove tracks).
+// JXA snippets for in-place playlist mutation (issue #15: add/remove/reorder
+// tracks).
 //
-// Both scripts guard before touching anything: unknown playlist ID returns
-// { playlistNotFound }, a non-user playlist (smart/subscription/folder/special)
-// returns { notEditable }, and unresolvable tracks/positions return
-// { missingTrackIds } / { invalidPositions } — the bridge maps each to a
-// structured error. On success they return the playlist's FULL post-edit track
-// order so the cache patch works from ground truth.
+// All three scripts guard before touching anything: unknown playlist ID
+// returns { playlistNotFound }, a non-user playlist (smart/subscription/
+// folder/special) returns { notEditable }, and unresolvable tracks/positions/
+// orders return { missingTrackIds } / { invalidPositions } / { orderDrifted }
+// / { invalidOrder } — the bridge maps each to a structured error. On success
+// they return the playlist's FULL post-edit track order so the cache patch
+// works from ground truth.
 //
 // Write strategy (probed against a real Music.app, 2026-07):
 //
@@ -27,12 +29,27 @@
 // REMOVAL never showed the doubling; it deletes by index in DESCENDING order
 // so positions stay valid while deleting.
 //
-// Both scripts return the playlist's PRE-edit order alongside the post-edit
-// order, read within the same script execution. A freshly created playlist
-// is additionally unreliable while its initial sync settles — phantom
-// entries drift in, and post-create edits can be wiped back to the created
-// state (docs/music-app.md, iCloud sync) — so edits are only exactly assertable
-// against a baseline captured atomically with them.
+// REORDER (slice 2) is a full-playlist permutation, not a positional insert,
+// so it reuses the same single working primitive — `Music.move(track, { to:
+// playlist })`, end-of-playlist only (docs/music-app.md, JXA) — but plans
+// differently: keep the longest strictly-increasing prefix of the target
+// order in place (those entries are already in correct relative order once
+// everything after them leaves) and move every remaining entry to the end,
+// one at a time, in target order. That single pass reconstructs any
+// permutation. The doubling that duplicate() causes has no analogue here —
+// move() relocates an existing entry rather than materializing a new one —
+// so there's no delay()/verify-and-trim step.
+//
+// All three scripts return the playlist's PRE-edit order alongside the
+// post-edit order, read within the same script execution. A freshly created
+// playlist is additionally unreliable while its initial sync settles —
+// phantom entries drift in, and post-create edits can be wiped back to the
+// created state (docs/music-app.md, iCloud sync) — so edits are only exactly
+// assertable against a baseline captured atomically with them. Reorder goes
+// one step further and refuses to run at all if the live order doesn't match
+// the caller's expected baseline (see buildReorderTracksScript) — a
+// permutation applied to a drifted order would scramble the playlist instead
+// of just misreporting it.
 
 import { wrapJxaScript } from './wrap.js';
 import { PLAYLIST_KIND_FN } from './playlist_kind.js';
@@ -167,6 +184,69 @@ export function buildRemoveTracksScript(args: {
       const indexes = Object.keys(doomed).map(Number).sort((a, b) => b - a);
       for (let i = 0; i < indexes.length; i++) Music.delete(pl.tracks[indexes[i]]);
       return editResult(liveIds, { removedCount: indexes.length });
+    `,
+  );
+}
+
+export function buildReorderTracksScript(args: {
+  playlistId: string;
+  order: number[];
+  expectedTrackIds: string[];
+}): string {
+  return wrapJxaScript(
+    args,
+    `
+      ${FIND_EDITABLE_PLAYLIST}
+      ${EDIT_RESULT}
+      const liveIds = readTrackIds();
+
+      // Drift guard: the permutation in args.order is only meaningful against
+      // the exact live order the caller (the cache) believed it was reordering.
+      // Refuse before moving anything if they disagree — see header comment.
+      let drifted = args.expectedTrackIds.length !== liveIds.length;
+      if (!drifted) {
+        for (let i = 0; i < liveIds.length; i++) {
+          if (liveIds[i] !== args.expectedTrackIds[i]) { drifted = true; break; }
+        }
+      }
+      if (drifted) {
+        return JSON.stringify({ orderDrifted: true, liveTrackCount: liveIds.length });
+      }
+
+      // Permutation guard: cheap belt-and-braces even though the tool
+      // pre-flights this — args.order must contain each of 0..n-1 exactly once.
+      const seen = {};
+      let validOrder = args.order.length === liveIds.length;
+      if (validOrder) {
+        for (let i = 0; i < args.order.length; i++) {
+          const v = args.order[i];
+          if (v < 0 || v >= liveIds.length || seen[v]) { validOrder = false; break; }
+          seen[v] = true;
+        }
+      }
+      if (!validOrder) {
+        return JSON.stringify({ invalidOrder: true, liveTrackCount: liveIds.length });
+      }
+
+      // Minimal-move plan: keep the longest strictly-increasing prefix of
+      // args.order in place (those entries are already in correct relative
+      // order at the front once everything else leaves), and move the rest to
+      // the end in target order — see header comment for why move() is the
+      // only working primitive and why no delay()/verify-and-trim is needed
+      // here (unlike the add script's duplicate() doubling).
+      let k = liveIds.length > 0 ? 1 : 0;
+      while (k < args.order.length && args.order[k] > args.order[k - 1]) k++;
+      const cur = [];
+      for (let i = 0; i < liveIds.length; i++) cur.push(i);
+      let moved = 0;
+      for (let i = k; i < args.order.length; i++) {
+        const idx = cur.indexOf(args.order[i]);
+        Music.move(pl.tracks[idx], { to: pl });
+        cur.splice(idx, 1);
+        cur.push(args.order[i]);
+        moved++;
+      }
+      return editResult(liveIds, { movedCount: moved });
     `,
   );
 }

@@ -32,7 +32,7 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 }
 
 describe('MCP server over in-memory transport', () => {
-  it('exposes the nine tools', async () => {
+  it('exposes the ten tools', async () => {
     const client = await connectedClient();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
@@ -44,6 +44,7 @@ describe('MCP server over in-memory transport', () => {
       'preview_playlist',
       'refresh_library',
       'remove_tracks',
+      'reorder_tracks',
       'search',
     ]);
     // Tool descriptions are first-class — they must survive the wire.
