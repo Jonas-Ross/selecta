@@ -31,7 +31,7 @@
 // order, read within the same script execution. A freshly created playlist
 // is additionally unreliable while its initial sync settles — phantom
 // entries drift in, and post-create edits can be wiped back to the created
-// state (docs/contracts.md §1) — so edits are only exactly assertable
+// state (docs/music-app.md, iCloud sync) — so edits are only exactly assertable
 // against a baseline captured atomically with them.
 
 import { wrapJxaScript } from './wrap.js';
@@ -53,7 +53,7 @@ const FIND_EDITABLE_PLAYLIST = `
   }
 `;
 
-// Bulk persistentID() raises -1728 on an empty collection (docs/contracts.md §4).
+// Bulk persistentID() raises -1728 on an empty collection (docs/music-app.md, JXA).
 const EDIT_RESULT = `
   function readTrackIds() {
     return pl.tracks.length > 0 ? pl.tracks.persistentID() : [];

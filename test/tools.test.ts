@@ -1,5 +1,5 @@
 // Tool handlers against in-memory SQLite seeded via the production refresh
-// path, with the Bridge interface mocked (docs/contracts.md §5). No Music.app.
+// path, with the Bridge interface mocked. No Music.app.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';

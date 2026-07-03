@@ -1,7 +1,7 @@
 // refresh_library — full Music.app reread into the cache. The only tool that
 // repopulates the cache; write tools patch it surgically instead. After the
 // reread it reconciles iCloud sync echoes of recently created playlists
-// (docs/contracts.md §1 Sync reconciliation): rekeys are remapped in the creation
+// (docs/music-app.md, iCloud sync): rekeys are remapped in the creation
 // receipt, echo duplicates are deleted in Music.app (keeping the iCloud-keyed
 // survivor) and reported in the response — never silently.
 

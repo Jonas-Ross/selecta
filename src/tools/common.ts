@@ -1,4 +1,4 @@
-// Shared tool-handler plumbing (docs/contracts.md §6): the deps bundle, the
+// Shared tool-handler plumbing: the deps bundle, the
 // cache-row → API-track mapping, and error envelope conversion. Handlers are
 // plain async functions returning output-or-SelectaError — the only layer that
 // knows MCP exists is server.ts, and even it only wraps these.

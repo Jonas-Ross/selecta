@@ -1,5 +1,5 @@
 // Bridge contract — the data shapes JXA emits and the typed interface tools
-// depend on (docs/contracts.md §1). All Music.app coupling lives behind the
+// depend on. All Music.app coupling lives behind the
 // Bridge interface; tools depend on these types, never on the implementation.
 // The cross-cutting error envelope lives in src/types/errors.ts, not here.
 
@@ -52,8 +52,8 @@ export type PlaylistWriteResult = {
 // ground truth instead of recomputing the edit locally. preEditTrackPersistentIds
 // is the order the SAME script execution saw before mutating: on iCloud
 // libraries a fresh playlist can gain phantom entries asynchronously
-// (docs/contracts.md §1), so only a baseline captured atomically with the edit
-// makes the edit exactly checkable.
+// (docs/music-app.md, iCloud sync), so only a baseline captured atomically
+// with the edit makes the edit exactly checkable.
 export type PlaylistEditResult = {
   persistentId: string;
   trackCount: number;

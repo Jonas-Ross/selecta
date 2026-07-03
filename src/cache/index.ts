@@ -40,7 +40,7 @@ export class SelectaCache {
    * Replace the cache contents with a library snapshot, atomically:
    * upsert all tracks and playlists, replace memberships, prune rows absent
    * from the snapshot, rebuild FTS, append a refresh_log entry. After commit
-   * the cache reflects the snapshot exactly (docs/contracts.md §3).
+   * the cache reflects the snapshot exactly.
    */
   refreshFromSnapshot(
     snapshot: LibrarySnapshot,
@@ -184,7 +184,7 @@ export class SelectaCache {
 
   /**
    * Compare the just-refreshed cache against recent creation receipts and plan
-   * iCloud-sync reconciliation (docs/contracts.md §1 Sync reconciliation). Pure
+   * iCloud-sync reconciliation (docs/music-app.md, iCloud sync). Pure
    * read — applying the plan is the caller's job (deletes go through the
    * bridge first). Matching is deliberately conservative: same name, kind
    * 'user', and the EXACT ordered track sequence we created — so intentional

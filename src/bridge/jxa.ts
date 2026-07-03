@@ -1,5 +1,5 @@
 // osascript invocation + JSON parsing. The single place that shells out to
-// `osascript -l JavaScript`. See docs/contracts.md §4.
+// `osascript -l JavaScript`.
 //
 // Each call is a fresh process — no shared runtime state, no long-lived bridge.
 
@@ -18,7 +18,7 @@ function mapJxaError(stderr: string): ErrorCode {
 }
 
 // The bridge knows only the error code; the model-facing hint is resolved by
-// consumers via defaultHints (docs/contracts.md §2), so no hint is attached here.
+// consumers via defaultHints, so no hint is attached here.
 const jxaError = (code: ErrorCode, message: string): BridgeError =>
   new BridgeError(code, message);
 

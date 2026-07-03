@@ -1,4 +1,4 @@
-// Cache row shapes (docs/contracts.md §3). Mirror the SQLite schema: Music.app's
+// Cache row shapes. Mirror the SQLite schema: Music.app's
 // native 0..100 rating scale, 0/1 booleans, NULL for absent. Tools translate to
 // API shape (e.g. rating_min 1–5 → 0..100) at their own boundary.
 
@@ -47,8 +47,8 @@ export type PlaylistCreationRow = {
   createdAt: string;
 };
 
-// Reconciliation plan entries computed after a refresh (docs/contracts.md §1
-// Sync reconciliation). 'rekey' = iCloud reassigned the ID, single copy
+// Reconciliation plan entries computed after a refresh (docs/music-app.md,
+// iCloud sync). 'rekey' = iCloud reassigned the ID, single copy
 // survives; 'duplicate' = an echo twin appeared — keep the iCloud-keyed copy,
 // delete the rest.
 export type ReconcileAction =

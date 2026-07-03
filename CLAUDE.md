@@ -2,7 +2,7 @@
 
 A local MCP server that exposes the user's Apple Music library to Claude so playlists can be built from owned tracks and written back to Music.app. The model is the brain — it does all sequencing, ranking, and taste; Selecta surfaces facts (inventory, behavioral signal, audio features) and executes reads and writes.
 
-`AGENTS.md` is a symlink to this file. `docs/contracts.md` is the one companion doc: layer contracts plus hard-won Music.app realities.
+`AGENTS.md` is a symlink to this file. `docs/music-app.md` is the one companion doc: field notes on what Music.app actually does when scripted.
 
 ## Architecture
 
@@ -67,7 +67,7 @@ Settled calls — don't re-litigate without the user:
 
 ## Working style
 
-Build autonomously: design, implement, test, branch, and open PRs without per-step sign-off. Current scope lives in GitHub issues (#15–#20 for v2). Ask the user only for real scope changes, destructive/irreversible actions, or expensive forks nothing decides. Changes to scope or the hard rules are deliberate user decisions, never drift. Any change that touches a tool contract or a documented Music.app reality updates `docs/contracts.md` (and this file, if it shifts scope or workflow) in the same PR — docs never trail the code.
+Build autonomously: design, implement, test, branch, and open PRs without per-step sign-off. Current scope lives in GitHub issues (#15–#20 for v2). Ask the user only for real scope changes, destructive/irreversible actions, or expensive forks nothing decides. Changes to scope or the hard rules are deliberate user decisions, never drift. A change that contradicts or extends a documented Music.app reality updates `docs/music-app.md` (and this file, if it shifts scope or workflow) in the same PR — docs never trail the code.
 
 ## Git workflow
 
@@ -81,7 +81,7 @@ Build autonomously: design, implement, test, branch, and open PRs without per-st
 
 v1 complete — nine tools live over MCP stdio, unit + integration suites green. v2 underway, tracked in issues #15–#20. Shipped: exclusion filters (#17); `add_tracks`/`remove_tracks` plus a `playlist_order` search sort (#15 slice 1). Remaining: reorder + `delete_playlist` (#15), search dedup (#16), `set_loved`/`set_rating` (#18), audio-feature enrichment (#19), multi-seed co-occurrence (#20).
 
-⚠️ **Before touching the playlist edit paths, read `docs/contracts.md` §1** — scripted playlist-entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn).
+⚠️ **Before touching the playlist edit paths, read `docs/music-app.md`** — scripted playlist-entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn).
 
 ## Code search
 

@@ -77,7 +77,7 @@ Selecta only writes where you point it: it creates playlists, overwrites its own
 
 ⚠️ Always use the npm scripts, never bare `vitest`. The bare runner ignores the tag filter and will launch Music.app from the unit suite.
 
-Architecture and working conventions are in [`CLAUDE.md`](CLAUDE.md); layer contracts and Music.app quirks in [`docs/contracts.md`](docs/contracts.md).
+Architecture and working conventions are in [`CLAUDE.md`](CLAUDE.md); Music.app quirks in [`docs/music-app.md`](docs/music-app.md).
 
 ## Troubleshooting
 
