@@ -75,7 +75,7 @@ Build autonomously: design, implement, test, branch, and open PRs without per-st
 - [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`, imperative, lowercase, no trailing period. One concern per commit; keep the build green where reasonable.
 - Pushing feature branches and opening PRs is normal flow — no per-action confirmation. Never push to `main`, never force-push, never merge without explicit ask. Don't amend committed work.
 - Before opening a PR, run `/simplify` over the diff and address what it surfaces.
-- **During PR review cycles:** commit fixes for reviewer feedback (CodeRabbit, Codex, humans) but **do not auto-push** — the user pushes, so CodeRabbit re-reviews one batch instead of every fix.
+- **During PR review cycles:** commit fixes for reviewer feedback (CodeRabbit, Codex, humans) and push only once **every** comment in the review batch is addressed (fixed or skipped with a reply saying why) — one push per batch, so CodeRabbit re-reviews once instead of per fix. Never push with review comments still unaddressed.
 
 ## Status
 
