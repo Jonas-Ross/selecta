@@ -37,7 +37,7 @@ export async function handleSetLoved(
     if (cacheMiss) return cacheMiss;
 
     const result = await deps.bridge.setTrackLoved({ trackIds: track_ids, loved });
-    cache.patchTrackSignal(result.tracks);
+    cache.patchTrackLoved(result.tracks);
     return { updated: result.tracks.length, loved };
   } catch (err) {
     return toErrorEnvelope(err);

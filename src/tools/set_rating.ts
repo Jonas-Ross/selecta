@@ -44,7 +44,7 @@ export async function handleSetRating(
 
     // Stars (0–5) → Music.app's 0–100 scale at the boundary.
     const result = await deps.bridge.setTrackRating({ trackIds: track_ids, rating: rating * 20 });
-    cache.patchTrackSignal(result.tracks);
+    cache.patchTrackRating(result.tracks);
     return { updated: result.tracks.length, rating };
   } catch (err) {
     return toErrorEnvelope(err);

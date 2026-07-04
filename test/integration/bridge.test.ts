@@ -25,6 +25,13 @@ async function requireFixturePlaylistId(): Promise<string> {
   return id!;
 }
 
+// The fixture playlist's first track — the standard live test subject.
+async function seedTrackId(): Promise<string> {
+  const playlist = await bridge.readPlaylist(await requireFixturePlaylistId());
+  expect(playlist.trackPersistentIds.length).toBeGreaterThan(0);
+  return playlist.trackPersistentIds[0]!;
+}
+
 describe('bridge readLibrary against real Music.app', { tags: ['integration'] }, () => {
   it('returns a full snapshot whose user playlists reference library tracks', async () => {
     const snapshot = await bridge.readLibrary();
@@ -230,12 +237,6 @@ describe('bridge edit paths against real Music.app', { tags: ['integration'] }, 
     await deletePlaylistsByName(SCRATCH);
   });
 
-  async function seedTrackId(): Promise<string> {
-    const playlist = await bridge.readPlaylist(await requireFixturePlaylistId());
-    expect(playlist.trackPersistentIds.length).toBeGreaterThan(0);
-    return playlist.trackPersistentIds[0]!;
-  }
-
   // Edits run against the ESTABLISHED fixture playlist, not a fresh scratch:
   // probed live, a just-created playlist is unreliable to edit while its
   // initial iCloud sync settles — post-create edits get wiped back to the
@@ -381,14 +382,8 @@ describe('bridge readPlaylist against real Music.app', { tags: ['integration'] }
 // same-execution baseline) so the fixture library keeps the user's real
 // signal.
 describe('bridge track-signal writes against real Music.app', { tags: ['integration'] }, () => {
-  async function fixtureTrackId(): Promise<string> {
-    const playlist = await bridge.readPlaylist(await requireFixturePlaylistId());
-    expect(playlist.trackPersistentIds.length).toBeGreaterThan(0);
-    return playlist.trackPersistentIds[0]!;
-  }
-
   it('setTrackLoved writes favorited both ways and restores the original', async () => {
-    const t = await fixtureTrackId();
+    const t = await seedTrackId();
     const flipped = await bridge.setTrackLoved({ trackIds: [t], loved: true });
     try {
       expect(flipped.tracks).toHaveLength(1);
@@ -404,18 +399,21 @@ describe('bridge track-signal writes against real Music.app', { tags: ['integrat
   }, 120_000);
 
   it('setTrackRating sets a user rating and restores the original', async () => {
-    const t = await fixtureTrackId();
+    const t = await seedTrackId();
     const set = await bridge.setTrackRating({ trackIds: [t], rating: 80 });
     try {
       expect(set.tracks[0]).toMatchObject({ persistentId: t, rating: 80 });
 
       const cleared = await bridge.setTrackRating({ trackIds: [t], rating: 0 });
       expect(cleared.preWriteTracks[0]!.rating).toBe(80);
-      // No strict assert on the cleared value: with the user rating gone,
-      // Music.app may report a computed (album-derived) rating instead of 0.
-      expect(typeof cleared.tracks[0]!.rating).toBe('number');
+      // No strict assert on the cleared value: unrated reads back null, but
+      // with the user rating gone Music.app may report a computed
+      // (album-derived) rating instead.
+      const clearedRating = cleared.tracks[0]!.rating;
+      expect(clearedRating === null || typeof clearedRating === 'number').toBe(true);
     } finally {
-      await bridge.setTrackRating({ trackIds: [t], rating: set.preWriteTracks[0]!.rating });
+      // preWrite null = the track was unrated — restore by clearing (0).
+      await bridge.setTrackRating({ trackIds: [t], rating: set.preWriteTracks[0]!.rating ?? 0 });
     }
   }, 120_000);
 

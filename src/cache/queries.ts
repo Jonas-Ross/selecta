@@ -3,7 +3,12 @@
 // once per connection; the facade in index.ts owns transactions.
 
 import type { Database, Statement } from 'better-sqlite3';
-import type { RawPlaylist, RawTrack, TrackSignalState } from '../types/bridge.js';
+import type {
+  RawPlaylist,
+  RawTrack,
+  TrackLovedState,
+  TrackRatingState,
+} from '../types/bridge.js';
 import type {
   CoOccurringTrack,
   OverviewStats,
@@ -247,8 +252,11 @@ export function createQueries(db: Database) {
       parent_persistent_id=excluded.parent_persistent_id
   `);
 
-  const updateTrackSignalStmt = db.prepare(
-    'UPDATE tracks SET loved = @loved, rating = @rating WHERE persistent_id = @persistentId',
+  const updateTrackLovedStmt = db.prepare(
+    'UPDATE tracks SET loved = @loved WHERE persistent_id = @persistentId',
+  );
+  const updateTrackRatingStmt = db.prepare(
+    'UPDATE tracks SET rating = @rating WHERE persistent_id = @persistentId',
   );
 
   const deleteMembershipStmt = db.prepare(
@@ -347,15 +355,18 @@ export function createQueries(db: Database) {
       });
     },
 
-    // Signal patch for set_loved / set_rating: only the two signal columns
-    // move, from values read back from Music.app. rating 0 is stored as NULL
-    // to match what a refresh would write (read_library omits 0 as unset).
-    updateTrackSignal(state: TrackSignalState): void {
-      updateTrackSignalStmt.run({
+    // Signal patches for set_loved / set_rating: exactly the written column
+    // moves, from values read back from Music.app (rating null = unrated,
+    // already normalized by the bridge).
+    updateTrackLoved(state: TrackLovedState): void {
+      updateTrackLovedStmt.run({
         persistentId: state.persistentId,
         loved: state.loved ? 1 : 0,
-        rating: state.rating > 0 ? state.rating : null,
       });
+    },
+
+    updateTrackRating(state: TrackRatingState): void {
+      updateTrackRatingStmt.run({ persistentId: state.persistentId, rating: state.rating });
     },
 
     replacePlaylistMembership(playlistPersistentId: string, trackPersistentIds: string[]): void {

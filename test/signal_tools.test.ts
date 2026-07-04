@@ -8,7 +8,7 @@ import { SelectaCache } from '../src/cache/index.js';
 import { handleSetLoved, type SetLovedOutput } from '../src/tools/set_loved.js';
 import { handleSetRating, type SetRatingOutput } from '../src/tools/set_rating.js';
 import type { ToolDeps } from '../src/tools/common.js';
-import type { Bridge, LibrarySnapshot, TrackSignalState } from '../src/types/bridge.js';
+import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
 import { asError, makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
@@ -25,7 +25,7 @@ function makeDeps(
   return { cache: () => cache, bridge: makeBridge(bridgeOverrides), cacheInstance: cache };
 }
 
-function signalResult(tracks: TrackSignalState[], preWriteTracks: TrackSignalState[] = tracks) {
+function signalResult<State>(tracks: State[], preWriteTracks: State[] = tracks) {
   return { tracks, preWriteTracks };
 }
 
@@ -41,12 +41,12 @@ describe('set_loved', () => {
       setTrackLoved: vi.fn().mockResolvedValue(
         signalResult(
           [
-            { persistentId: 'T-ANGEL', loved: true, rating: 0 },
-            { persistentId: 'T-ROADS', loved: true, rating: 0 },
+            { persistentId: 'T-ANGEL', loved: true },
+            { persistentId: 'T-ROADS', loved: true },
           ],
           [
-            { persistentId: 'T-ANGEL', loved: false, rating: 0 },
-            { persistentId: 'T-ROADS', loved: false, rating: 0 },
+            { persistentId: 'T-ANGEL', loved: false },
+            { persistentId: 'T-ROADS', loved: false },
           ],
         ),
       ),
@@ -66,13 +66,11 @@ describe('set_loved', () => {
     expect(deps.bridge.readLibrary).not.toHaveBeenCalled();
   });
 
-  it('unloves and clears the cached flag', async () => {
+  it('unloves without touching the rating column', async () => {
     const deps = makeDeps({
       setTrackLoved: vi
         .fn()
-        .mockResolvedValue(
-          signalResult([{ persistentId: 'T-TEARDROP', loved: false, rating: 100 }]),
-        ),
+        .mockResolvedValue(signalResult([{ persistentId: 'T-TEARDROP', loved: false }])),
     });
     const out = (await handleSetLoved(
       { track_ids: ['T-TEARDROP'], loved: false },
@@ -80,20 +78,20 @@ describe('set_loved', () => {
     )) as SetLovedOutput;
 
     expect(out).toEqual({ updated: 1, loved: false });
-    // The rating carried in the readback is preserved, not clobbered.
+    // Only the written column moves — T-TEARDROP's rating (100) survives.
     expect(signalRow(deps.cacheInstance, 'T-TEARDROP')).toEqual({ loved: 0, rating: 100 });
   });
 
   it('stores the readback as ground truth even when it disagrees with the request', async () => {
-    // A settling sync could report different values than we wrote; the cache
+    // A settling sync could report a different value than we wrote; the cache
     // must reflect what Music.app SAYS, not what we asked for.
     const deps = makeDeps({
       setTrackLoved: vi
         .fn()
-        .mockResolvedValue(signalResult([{ persistentId: 'T-ANGEL', loved: false, rating: 60 }])),
+        .mockResolvedValue(signalResult([{ persistentId: 'T-ANGEL', loved: false }])),
     });
     await handleSetLoved({ track_ids: ['T-ANGEL'], loved: true }, deps);
-    expect(signalRow(deps.cacheInstance, 'T-ANGEL')).toEqual({ loved: 0, rating: 60 });
+    expect(signalRow(deps.cacheInstance, 'T-ANGEL').loved).toBe(0);
   });
 
   it('rejects unknown track IDs before any bridge call', async () => {
@@ -128,7 +126,7 @@ describe('set_rating', () => {
     const deps = makeDeps({
       setTrackRating: vi
         .fn()
-        .mockResolvedValue(signalResult([{ persistentId: 'T-ANGEL', loved: false, rating: 90 }])),
+        .mockResolvedValue(signalResult([{ persistentId: 'T-ANGEL', rating: 90 }])),
     });
     const out = (await handleSetRating(
       { track_ids: ['T-ANGEL'], rating: 4.5 },
@@ -143,11 +141,11 @@ describe('set_rating', () => {
     expect(signalRow(deps.cacheInstance, 'T-ANGEL')).toEqual({ loved: 0, rating: 90 });
   });
 
-  it('rating 0 clears: the cache stores NULL, matching what a refresh writes', async () => {
+  it('rating 0 clears: the bridge reads back null and the cache stores it', async () => {
     const deps = makeDeps({
       setTrackRating: vi
         .fn()
-        .mockResolvedValue(signalResult([{ persistentId: 'T-TEARDROP', loved: true, rating: 0 }])),
+        .mockResolvedValue(signalResult([{ persistentId: 'T-TEARDROP', rating: null }])),
     });
     const out = (await handleSetRating(
       { track_ids: ['T-TEARDROP'], rating: 0 },
