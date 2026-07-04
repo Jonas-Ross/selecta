@@ -36,8 +36,16 @@ export const searchInputShape = {
 
 const SearchInput = z.strictObject(searchInputShape);
 
+// search's track shape: the shared ApiTrack plus the dedupe-only alternates
+// field — owned here because only a dedupe search can populate it.
+export type SearchTrack = ApiTrack & {
+  // Persistent IDs of the duplicate copies this row collapsed (same song,
+  // other albums). Only present on a dedupe search, on rows that collapsed.
+  alternate_ids?: string[];
+};
+
 export type SearchOutput = {
-  tracks: ApiTrack[];
+  tracks: SearchTrack[];
   total_matches: number;
   cache_age_hours: number | null;
 };
@@ -65,7 +73,7 @@ export async function handleSearch(
       dedupe: input.dedupe,
     });
     return {
-      tracks: rows.map(toApiTrack),
+      tracks: rows.map((row) => ({ ...toApiTrack(row), alternate_ids: row.alternateIds })),
       total_matches: total,
       cache_age_hours: roundedCacheAge(deps),
     };

@@ -48,8 +48,9 @@ function toFtsQuery(query: string): string {
 }
 
 // group_concat(DISTINCT …) cannot take a separator in SQLite, so names use the
-// unit separator and are deduped/capped in JS.
-const NAME_SEPARATOR = '\u001f';
+// unit separator and are deduped/capped in JS. Also the field separator inside
+// the dedupe key (DEDUPE_KEY below).
+const UNIT_SEPARATOR = '\u001f';
 
 // library_overview returns a fact, not a ranking, so the artist cap only exists
 // to bound tokens; artistsTotal carries the full breadth past it.
@@ -161,13 +162,13 @@ function buildTrackFilter(filters: SearchFilters): {
 // qualifiers stay in the title on purpose — "Levels (Radio Edit)" is a
 // different version of "Levels", not a duplicate. Rows missing a title or
 // artist can't establish identity, so each keys to itself (a real key always
-// contains char(31), which a persistent ID never does, so the two namespaces
-// can't collide). lower() is ASCII-only in SQLite — non-ASCII case variants
-// don't fold, which is acceptable for this collapse.
+// contains the unit separator, which a persistent ID never does, so the two
+// namespaces can't collide). lower() is ASCII-only in SQLite — non-ASCII case
+// variants don't fold, which is acceptable for this collapse.
 const DEDUPE_KEY = `
   CASE WHEN t.title IS NULL OR TRIM(t.title) = '' OR t.artist IS NULL OR TRIM(t.artist) = ''
-       THEN 'id:' || t.persistent_id
-       ELSE lower(TRIM(t.title)) || char(31) || lower(TRIM(t.artist)) END
+       THEN t.persistent_id
+       ELSE lower(TRIM(t.title)) || '${UNIT_SEPARATOR}' || lower(TRIM(t.artist)) END
 `;
 
 // Which copy wins: a DETERMINISTIC tiebreak, not quality ranking (the identity
@@ -457,6 +458,12 @@ export function createQueries(db: Database) {
       // winner (rn = 1), then join back to tracks so the projection, sort
       // lenses, and limit apply to representatives exactly as they would to
       // plain rows. groupIds carries the whole group for alternate reporting.
+      // The total is just the number of canonical groups — a flat aggregate.
+      const total = (
+        db
+          .prepare(`SELECT COUNT(DISTINCT ${DEDUPE_KEY}) AS n ${from} ${whereSql}`)
+          .get(params) as { n: number }
+      ).n;
       const winners = `
         SELECT t.persistent_id AS pid,
                ${filters.query ? 'f.rank AS ftsRank,' : ''}
@@ -464,11 +471,6 @@ export function createQueries(db: Database) {
                group_concat(t.persistent_id) OVER (PARTITION BY ${DEDUPE_KEY}) AS groupIds
         ${from} ${whereSql}
       `;
-      const total = (
-        db.prepare(`SELECT COUNT(*) AS n FROM (${winners}) WHERE rn = 1`).get(params) as {
-          n: number;
-        }
-      ).n;
       const rows = db
         .prepare(
           `SELECT ${TRACK_COLUMNS}, w.groupIds
@@ -483,7 +485,7 @@ export function createQueries(db: Database) {
             .split(',')
             .filter((id) => id !== row.persistentId)
             .sort();
-          return alternates.length > 0 ? { ...row, alternateIds: alternates } : row;
+          return { ...row, alternateIds: alternates.length > 0 ? alternates : undefined };
         }),
         total,
       };
@@ -619,7 +621,7 @@ export function createQueries(db: Database) {
            FROM (
              SELECT pt2.track_persistent_id AS tid,
                     COUNT(DISTINCT pt1.playlist_persistent_id) AS cnt,
-                    group_concat(p.name, '${NAME_SEPARATOR}') AS names
+                    group_concat(p.name, '${UNIT_SEPARATOR}') AS names
              FROM playlist_tracks pt1
              JOIN playlists p ON p.persistent_id = pt1.playlist_persistent_id AND p.kind = 'user'
              JOIN playlist_tracks pt2 ON pt2.playlist_persistent_id = pt1.playlist_persistent_id
@@ -637,7 +639,7 @@ export function createQueries(db: Database) {
       })[];
       return rows.map(({ namesRaw, ...row }) => ({
         ...row,
-        sharedPlaylistNames: [...new Set(namesRaw.split(NAME_SEPARATOR))].slice(0, 3),
+        sharedPlaylistNames: [...new Set(namesRaw.split(UNIT_SEPARATOR))].slice(0, 3),
       }));
     },
 

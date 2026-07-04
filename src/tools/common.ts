@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import type { Bridge } from '../types/bridge.js';
-import type { PlaylistRow, SearchFilters, SearchResultRow } from '../types/cache.js';
+import type { PlaylistRow, SearchFilters, TrackRow } from '../types/cache.js';
 import { BridgeError, defaultHints, type SelectaError } from '../types/errors.js';
 import type { SelectaCache } from '../cache/index.js';
 
@@ -30,9 +30,6 @@ export type ApiTrack = {
   genre?: string;
   duration_seconds?: number;
   location_kind?: string;
-  // Dedupe search only: persistent IDs of the duplicate copies this row
-  // collapsed (same song, other albums). Absent everywhere else.
-  alternate_ids?: string[];
   signal: {
     play_count: number;
     skip_count: number;
@@ -44,7 +41,7 @@ export type ApiTrack = {
   };
 };
 
-export function toApiTrack(row: SearchResultRow): ApiTrack {
+export function toApiTrack(row: TrackRow): ApiTrack {
   return {
     persistent_id: row.persistentId,
     title: row.title ?? undefined,
@@ -54,7 +51,6 @@ export function toApiTrack(row: SearchResultRow): ApiTrack {
     genre: row.genre ?? undefined,
     duration_seconds: row.durationSeconds ?? undefined,
     location_kind: row.locationKind ?? undefined,
-    alternate_ids: row.alternateIds,
     signal: {
       play_count: row.playCount,
       skip_count: row.skipCount,

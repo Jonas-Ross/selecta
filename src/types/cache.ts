@@ -115,9 +115,8 @@ export type SearchFilters = {
   excludeTracks?: string[]; // persistent IDs
   // Collapse rows that are the same song (same normalized title + artist) to
   // one canonical representative. Presentation, not ranking: the winner is a
-  // deterministic tiebreak (loved → non-compilation → earliest year → stable
-  // ID), never a quality score. Distinct titles (remix/live/edit) don't
-  // collapse. search-only, like `sort`.
+  // deterministic tiebreak (DEDUPE_TIEBREAK in cache/queries.ts), never a
+  // quality score. search-only, like `sort`.
   dedupe?: boolean;
   limit?: number; // default 50, max 500
   // How to order results. Omitted → relevance (with query) else most-played.
