@@ -376,6 +376,59 @@ describe('bridge readPlaylist against real Music.app', { tags: ['integration'] }
   });
 });
 
+// Track-property writes, not playlist-entry edits — none of the entry-edit
+// sync hazards apply, but every write is restored from preWriteTracks (the
+// same-execution baseline) so the fixture library keeps the user's real
+// signal.
+describe('bridge track-signal writes against real Music.app', { tags: ['integration'] }, () => {
+  async function fixtureTrackId(): Promise<string> {
+    const playlist = await bridge.readPlaylist(await requireFixturePlaylistId());
+    expect(playlist.trackPersistentIds.length).toBeGreaterThan(0);
+    return playlist.trackPersistentIds[0]!;
+  }
+
+  it('setTrackLoved writes favorited both ways and restores the original', async () => {
+    const t = await fixtureTrackId();
+    const flipped = await bridge.setTrackLoved({ trackIds: [t], loved: true });
+    try {
+      expect(flipped.tracks).toHaveLength(1);
+      expect(flipped.tracks[0]).toMatchObject({ persistentId: t, loved: true });
+      expect(flipped.preWriteTracks[0]!.persistentId).toBe(t);
+
+      const unflipped = await bridge.setTrackLoved({ trackIds: [t], loved: false });
+      expect(unflipped.tracks[0]).toMatchObject({ persistentId: t, loved: false });
+      expect(unflipped.preWriteTracks[0]).toMatchObject({ persistentId: t, loved: true });
+    } finally {
+      await bridge.setTrackLoved({ trackIds: [t], loved: flipped.preWriteTracks[0]!.loved });
+    }
+  }, 120_000);
+
+  it('setTrackRating sets a user rating and restores the original', async () => {
+    const t = await fixtureTrackId();
+    const set = await bridge.setTrackRating({ trackIds: [t], rating: 80 });
+    try {
+      expect(set.tracks[0]).toMatchObject({ persistentId: t, rating: 80 });
+
+      const cleared = await bridge.setTrackRating({ trackIds: [t], rating: 0 });
+      expect(cleared.preWriteTracks[0]!.rating).toBe(80);
+      // No strict assert on the cleared value: with the user rating gone,
+      // Music.app may report a computed (album-derived) rating instead of 0.
+      expect(typeof cleared.tracks[0]!.rating).toBe('number');
+    } finally {
+      await bridge.setTrackRating({ trackIds: [t], rating: set.preWriteTracks[0]!.rating });
+    }
+  }, 120_000);
+
+  it('rejects unknown track IDs with track_not_found before writing', async () => {
+    await expect(
+      bridge.setTrackLoved({ trackIds: ['NOT-A-REAL-ID'], loved: true }),
+    ).rejects.toMatchObject({ errorCode: 'track_not_found' });
+    await expect(
+      bridge.setTrackRating({ trackIds: ['NOT-A-REAL-ID'], rating: 100 }),
+    ).rejects.toMatchObject({ errorCode: 'track_not_found' });
+  }, 60_000);
+});
+
 // Last on purpose: create/delete churn kicks off an iCloud settle, and the
 // reorder drift guard above is churn-sensitive.
 describe('bridge deletePlaylistById against real Music.app', { tags: ['integration'] }, () => {

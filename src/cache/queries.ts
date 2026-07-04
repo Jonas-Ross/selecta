@@ -3,7 +3,7 @@
 // once per connection; the facade in index.ts owns transactions.
 
 import type { Database, Statement } from 'better-sqlite3';
-import type { RawPlaylist, RawTrack } from '../types/bridge.js';
+import type { RawPlaylist, RawTrack, TrackSignalState } from '../types/bridge.js';
 import type {
   CoOccurringTrack,
   OverviewStats,
@@ -247,6 +247,10 @@ export function createQueries(db: Database) {
       parent_persistent_id=excluded.parent_persistent_id
   `);
 
+  const updateTrackSignalStmt = db.prepare(
+    'UPDATE tracks SET loved = @loved, rating = @rating WHERE persistent_id = @persistentId',
+  );
+
   const deleteMembershipStmt = db.prepare(
     'DELETE FROM playlist_tracks WHERE playlist_persistent_id = ?',
   );
@@ -340,6 +344,17 @@ export function createQueries(db: Database) {
         name: playlist.name,
         kind: playlist.kind,
         parentPersistentId: playlist.parentPersistentId ?? null,
+      });
+    },
+
+    // Signal patch for set_loved / set_rating: only the two signal columns
+    // move, from values read back from Music.app. rating 0 is stored as NULL
+    // to match what a refresh would write (read_library omits 0 as unset).
+    updateTrackSignal(state: TrackSignalState): void {
+      updateTrackSignalStmt.run({
+        persistentId: state.persistentId,
+        loved: state.loved ? 1 : 0,
+        rating: state.rating > 0 ? state.rating : null,
       });
     },
 

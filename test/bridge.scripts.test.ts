@@ -3,6 +3,7 @@ import { buildReadPlaylistScript } from '../src/bridge/scripts/read_playlist.js'
 import { buildFindPlaylistByNameScript } from '../src/bridge/scripts/find_playlist_by_name.js';
 import { buildReorderTracksScript } from '../src/bridge/scripts/edit_playlist.js';
 import { buildDeletePlaylistByIdScript } from '../src/bridge/scripts/delete_playlist.js';
+import { buildSetLovedScript, buildSetRatingScript } from '../src/bridge/scripts/track_signal.js';
 
 describe('JXA script builders interpolate args as JSON, never via shell quoting', () => {
   it('buildReadPlaylistScript embeds the JSON-stringified args', () => {
@@ -36,6 +37,28 @@ describe('JXA script builders interpolate args as JSON, never via shell quoting'
     const script = buildReorderTracksScript(args);
     expect(script).toContain(JSON.stringify(args));
     expect(script).not.toContain('playlistId: a"b\\c');
+  });
+
+  it('buildSetLovedScript writes the modern favorited property, resolving tracks first', () => {
+    const args = { trackIds: ['T1', 'T2'], loved: true };
+    const script = buildSetLovedScript(args);
+    expect(script).toContain(JSON.stringify(args));
+    // Modern Music.app has no 'loved' — writes must target 'favorited'
+    // (docs/music-app.md, library contents).
+    expect(script).toContain('.favorited = args.loved');
+    // Resolution (and its missingTrackIds bail-out) must precede the write.
+    expect(script.indexOf('missingTrackIds')).toBeLessThan(
+      script.indexOf('.favorited = args.loved'),
+    );
+  });
+
+  it('buildSetRatingScript embeds the args and resolves tracks before writing', () => {
+    const args = { trackIds: ['T1'], rating: 80 };
+    const script = buildSetRatingScript(args);
+    expect(script).toContain(JSON.stringify(args));
+    expect(script.indexOf('missingTrackIds')).toBeLessThan(
+      script.indexOf('.rating = args.rating'),
+    );
   });
 
   it('buildDeletePlaylistByIdScript embeds the args and guards editability before deleting', () => {

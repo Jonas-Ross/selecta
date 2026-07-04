@@ -63,6 +63,24 @@ export type PlaylistEditResult = {
   movedCount?: number; // reorder path only: entries the script actually moved
 };
 
+// One track's signal values as Music.app reports them.
+export type TrackSignalState = {
+  persistentId: string;
+  loved: boolean; // Music.app's 'favorited'
+  rating: number; // 0..100 native scale; 0 = unrated
+};
+
+// Result of a track-signal write (set_loved / set_rating). `tracks` is the
+// post-write state read back in the same script execution — ground truth for
+// the surgical cache patch. `preWriteTracks` is the state the SAME execution
+// saw before writing (the atomic-baseline idea from PlaylistEditResult):
+// the exact restore point for tests and callers. One entry per UNIQUE
+// requested ID, in first-seen order.
+export type TrackSignalResult = {
+  tracks: TrackSignalState[];
+  preWriteTracks: TrackSignalState[];
+};
+
 export interface Bridge {
   // Single-playlist read; used by integration tests and debugging.
   readPlaylist(persistentId: string): Promise<RawPlaylist>;
@@ -118,4 +136,14 @@ export interface Bridge {
     order: number[];
     expectedTrackIds: string[];
   }): Promise<PlaylistEditResult>;
+
+  // Set the favorited ("loved") flag on library tracks — one value for all.
+  // Reversible. Throws track_not_found without writing when any ID is
+  // missing from the live library.
+  setTrackLoved(input: { trackIds: string[]; loved: boolean }): Promise<TrackSignalResult>;
+
+  // Set the user rating on library tracks — 0..100 native scale, 0 clears.
+  // Reversible. Throws track_not_found without writing when any ID is
+  // missing from the live library.
+  setTrackRating(input: { trackIds: string[]; rating: number }): Promise<TrackSignalResult>;
 }

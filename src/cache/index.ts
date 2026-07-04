@@ -2,7 +2,7 @@
 // outside src/cache/ writes SQL. Usable as a plain Node library without MCP.
 
 import type { Database } from 'better-sqlite3';
-import type { LibrarySnapshot, PlaylistWriteResult } from '../types/bridge.js';
+import type { LibrarySnapshot, PlaylistWriteResult, TrackSignalState } from '../types/bridge.js';
 import type {
   CoOccurringTrack,
   OverviewStats,
@@ -160,6 +160,19 @@ export class SelectaCache {
   patchPlaylistMembership(persistentId: string, trackIds: string[]): void {
     const run = this.db.transaction(() => {
       this.queries.replacePlaylistMembership(persistentId, trackIds);
+    });
+    run();
+  }
+
+  /**
+   * Surgical patch after a track-signal write (set_loved / set_rating):
+   * update loved + rating on the affected rows from the post-write values the
+   * bridge read back from Music.app. Neither column is FTS-indexed, so no
+   * FTS work; nothing else on the row moves.
+   */
+  patchTrackSignal(states: TrackSignalState[]): void {
+    const run = this.db.transaction(() => {
+      for (const state of states) this.queries.updateTrackSignal(state);
     });
     run();
   }

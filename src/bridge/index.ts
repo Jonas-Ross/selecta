@@ -27,6 +27,7 @@ import {
   buildRemoveTracksScript,
   buildReorderTracksScript,
 } from './scripts/edit_playlist.js';
+import { buildSetLovedScript, buildSetRatingScript } from './scripts/track_signal.js';
 import { BridgeError } from '../types/errors.js';
 import {
   type Bridge,
@@ -34,6 +35,8 @@ import {
   type PlaylistEditResult,
   type PlaylistWriteResult,
   type RawPlaylist,
+  type TrackSignalResult,
+  type TrackSignalState,
 } from '../types/bridge.js';
 
 // Validate the JXA payload at the bridge boundary so a shape mismatch surfaces
@@ -103,6 +106,12 @@ export const bridge: Bridge = {
   async reorderPlaylistTracks(input): Promise<PlaylistEditResult> {
     return parseEditResult(await runJxa(buildReorderTracksScript(input)), 'reorder');
   },
+  async setTrackLoved(input): Promise<TrackSignalResult> {
+    return parseSignalResult(await runJxa(buildSetLovedScript(input)));
+  },
+  async setTrackRating(input): Promise<TrackSignalResult> {
+    return parseSignalResult(await runJxa(buildSetRatingScript(input)));
+  },
 };
 
 // The edit scripts return a guard sentinel — without touching Music.app — when
@@ -169,6 +178,41 @@ function isPlaylistEditResult(v: Record<string, unknown>): v is PlaylistEditResu
     isIdArray(v.preEditTrackPersistentIds) &&
     (v.removedCount === undefined || typeof v.removedCount === 'number') &&
     (v.movedCount === undefined || typeof v.movedCount === 'number')
+  );
+}
+
+// The signal scripts return { missingTrackIds } — without writing anything —
+// when any requested ID is absent from the live library (stale cache).
+function parseSignalResult(result: unknown): TrackSignalResult {
+  if (typeof result === 'object' && result !== null) {
+    const v = result as Record<string, unknown>;
+    if (Array.isArray(v.missingTrackIds)) {
+      const missing = v.missingTrackIds as string[];
+      throw new BridgeError(
+        'track_not_found',
+        `Music.app has no tracks with persistent IDs: ${missing.join(', ')}`,
+        'These IDs are in the cache but not the live library — the cache is stale. Run refresh_library and re-resolve the tracks.',
+      );
+    }
+    if (isSignalStateArray(v.tracks) && isSignalStateArray(v.preWriteTracks)) {
+      return { tracks: v.tracks, preWriteTracks: v.preWriteTracks };
+    }
+  }
+  throw new BridgeError('jxa_error', 'JXA returned an unexpected TrackSignalResult shape.');
+}
+
+function isSignalStateArray(value: unknown): value is TrackSignalState[] {
+  return (
+    Array.isArray(value) &&
+    value.every((t) => {
+      if (typeof t !== 'object' || t === null) return false;
+      const s = t as Record<string, unknown>;
+      return (
+        typeof s.persistentId === 'string' &&
+        typeof s.loved === 'boolean' &&
+        typeof s.rating === 'number'
+      );
+    })
   );
 }
 
