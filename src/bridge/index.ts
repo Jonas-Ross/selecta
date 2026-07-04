@@ -174,8 +174,11 @@ function isPlaylistEditResult(v: Record<string, unknown>): v is PlaylistEditResu
 
 function parseDeleteResult(result: unknown): number {
   if (typeof result === 'object' && result !== null) {
-    const deleted = (result as Record<string, unknown>).deleted;
-    if (typeof deleted === 'number') return deleted;
+    const v = result as Record<string, unknown>;
+    if (v.notEditable === true) {
+      throw new BridgeError('playlist_not_editable', 'Target is not a plain user playlist.');
+    }
+    if (typeof v.deleted === 'number') return v.deleted;
   }
   throw new BridgeError('jxa_error', 'JXA returned an unexpected delete result shape.');
 }
@@ -218,7 +221,7 @@ export async function findPlaylistByName(name: string): Promise<string | null> {
 }
 
 // Test-support: delete every playlist with this name (integration-test/smoke
-// cleanup only — v1 has no playlist deletion in the Bridge interface). By name
+// cleanup only — production deletion goes through deletePlaylistById). By name
 // because iCloud sync reassigns fresh playlist persistent IDs; see the script.
 export async function deletePlaylistsByName(name: string): Promise<number> {
   return parseDeleteResult(await runJxa(buildDeletePlaylistsByNameScript({ name })));

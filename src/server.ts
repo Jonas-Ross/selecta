@@ -44,6 +44,11 @@ import {
   REORDER_TRACKS_DESCRIPTION,
 } from './tools/reorder_tracks.js';
 import {
+  handleDeletePlaylist,
+  deletePlaylistInputShape,
+  DELETE_PLAYLIST_DESCRIPTION,
+} from './tools/delete_playlist.js';
+import {
   handleLibraryOverview,
   libraryOverviewInputShape,
   LIBRARY_OVERVIEW_DESCRIPTION,
@@ -119,6 +124,12 @@ export function createServer(deps: ToolDeps): McpServer {
     'reorder_tracks',
     { description: REORDER_TRACKS_DESCRIPTION, inputSchema: reorderTracksInputShape },
     async (args) => toToolResult(await handleReorderTracks(args, deps)),
+  );
+
+  server.registerTool(
+    'delete_playlist',
+    { description: DELETE_PLAYLIST_DESCRIPTION, inputSchema: deletePlaylistInputShape },
+    async (args) => toToolResult(await handleDeletePlaylist(args, deps)),
   );
 
   return server;

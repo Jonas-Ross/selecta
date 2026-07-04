@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildReadPlaylistScript } from '../src/bridge/scripts/read_playlist.js';
 import { buildFindPlaylistByNameScript } from '../src/bridge/scripts/find_playlist_by_name.js';
 import { buildReorderTracksScript } from '../src/bridge/scripts/edit_playlist.js';
+import { buildDeletePlaylistByIdScript } from '../src/bridge/scripts/delete_playlist.js';
 
 describe('JXA script builders interpolate args as JSON, never via shell quoting', () => {
   it('buildReadPlaylistScript embeds the JSON-stringified args', () => {
@@ -35,6 +36,16 @@ describe('JXA script builders interpolate args as JSON, never via shell quoting'
     const script = buildReorderTracksScript(args);
     expect(script).toContain(JSON.stringify(args));
     expect(script).not.toContain('playlistId: a"b\\c');
+  });
+
+  it('buildDeletePlaylistByIdScript embeds the args and guards editability before deleting', () => {
+    const args = { persistentId: 'P1' };
+    const script = buildDeletePlaylistByIdScript(args);
+    expect(script).toContain(JSON.stringify(args));
+    // The kind guard must sit between lookup and delete — delete_playlist is
+    // irreversible, and only plain user playlists are fair game.
+    expect(script.indexOf("!== 'user'")).toBeGreaterThan(-1);
+    expect(script.indexOf("!== 'user'")).toBeLessThan(script.indexOf('Music.delete'));
   });
 });
 
