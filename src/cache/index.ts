@@ -164,12 +164,17 @@ export class SelectaCache {
   }
 
   /**
-   * Surgical patch after the bridge deleted a playlist: drop its row and
-   * membership. Track rows are untouched — only the playlist goes.
+   * Surgical patch after the bridge deleted a playlist on the user's behalf:
+   * drop its row and membership, and retire any creation receipt pointing at
+   * it — otherwise the next refresh's sync reconciliation could rekey the dead
+   * receipt onto an iCloud-resurrected copy and undo the deliberate delete.
+   * (Echo dedupe keeps its receipts — it remaps them via applyDuplicateRemoval
+   * instead.) Track rows are untouched — only the playlist goes.
    */
   deletePlaylistRow(persistentId: string): void {
     const run = this.db.transaction(() => {
       this.queries.deletePlaylistRow(persistentId);
+      this.queries.deleteCreationsByCurrentId(persistentId);
     });
     run();
   }

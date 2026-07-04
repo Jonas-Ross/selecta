@@ -391,6 +391,23 @@ describe('delete_playlist', () => {
     expect(deps.cacheInstance.getPlaylist('P-LATENIGHT')).not.toBeNull();
   });
 
+  it('retires the creation receipt so a later refresh cannot rekey it onto a resurrected copy', async () => {
+    const deps = makeDeps({ deletePlaylistById: vi.fn().mockResolvedValue(1) });
+    deps.cacheInstance.recordPlaylistCreation('P-TRIPHOP', 'Trip Hop Essentials', [
+      'T-TEARDROP',
+      'T-ANGEL',
+      'T-GLORYBOX',
+    ]);
+    // The receipt makes the creation-time ID resolvable — a deliberate delete
+    // must end that, or sync reconciliation would follow the dead receipt.
+    expect(deps.cacheInstance.getRecentCreationNames(60)).toEqual(['Trip Hop Essentials']);
+
+    await handleDeletePlaylist({ playlist_id: 'P-TRIPHOP' }, deps);
+
+    expect(deps.cacheInstance.getRecentCreationNames(60)).toEqual([]);
+    expect(deps.cacheInstance.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+  });
+
   it('rejects an unknown playlist before any bridge call', async () => {
     const deps = makeDeps();
     const err = asError(await handleDeletePlaylist({ playlist_id: 'P-NOPE' }, deps));

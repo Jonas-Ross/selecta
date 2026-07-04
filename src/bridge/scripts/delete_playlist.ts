@@ -38,7 +38,9 @@ export function buildDeletePlaylistsByNameScript(args: { name: string }): string
     `
       let deleted = 0;
       let matches = Music.playlists.whose({ name: args.name })();
-      while (matches.length > 0) {
+      // Bounded: if iCloud resurrects copies as fast as the loop deletes them,
+      // bail with the count so far instead of blocking the osascript forever.
+      while (matches.length > 0 && deleted < 100) {
         Music.delete(matches[0]);
         deleted++;
         matches = Music.playlists.whose({ name: args.name })();

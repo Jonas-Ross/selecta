@@ -262,6 +262,9 @@ export function createQueries(db: Database) {
   const setCreationCurrentIdStmt = db.prepare(
     'UPDATE playlist_creations SET current_persistent_id = ? WHERE created_persistent_id = ?',
   );
+  const deleteCreationsByCurrentIdStmt = db.prepare(
+    'DELETE FROM playlist_creations WHERE current_persistent_id = ?',
+  );
   const resolveCreationStmt = db.prepare(
     'SELECT current_persistent_id AS currentId FROM playlist_creations WHERE created_persistent_id = ?',
   );
@@ -371,6 +374,10 @@ export function createQueries(db: Database) {
 
     setCreationCurrentId(createdId: string, currentId: string): void {
       setCreationCurrentIdStmt.run(currentId, createdId);
+    },
+
+    deleteCreationsByCurrentId(persistentId: string): void {
+      deleteCreationsByCurrentIdStmt.run(persistentId);
     },
 
     resolveCreatedPlaylistId(createdId: string): string | null {
