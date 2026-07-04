@@ -11,6 +11,7 @@ import type {
   PlaylistRef,
   PlaylistRow,
   SearchFilters,
+  SearchResultRow,
   TrackRow,
 } from '../types/cache.js';
 
@@ -155,12 +156,38 @@ function buildTrackFilter(filters: SearchFilters): {
   return { from, whereSql, params };
 }
 
+// ── Dedupe (issue #16) ───────────────────────────────────────────────────────
+// Canonical identity for "same song": normalized title + artist. Parenthetical
+// qualifiers stay in the title on purpose — "Levels (Radio Edit)" is a
+// different version of "Levels", not a duplicate. Rows missing a title or
+// artist can't establish identity, so each keys to itself (a real key always
+// contains char(31), which a persistent ID never does, so the two namespaces
+// can't collide). lower() is ASCII-only in SQLite — non-ASCII case variants
+// don't fold, which is acceptable for this collapse.
+const DEDUPE_KEY = `
+  CASE WHEN t.title IS NULL OR TRIM(t.title) = '' OR t.artist IS NULL OR TRIM(t.artist) = ''
+       THEN 'id:' || t.persistent_id
+       ELSE lower(TRIM(t.title)) || char(31) || lower(TRIM(t.artist)) END
+`;
+
+// Which copy wins: a DETERMINISTIC tiebreak, not quality ranking (the identity
+// guardrail on #16). Prefer loved → studio album over a Various Artists
+// compilation → earliest release year (NULL last) → stable ID.
+const DEDUPE_TIEBREAK = `
+  t.loved DESC,
+  CASE WHEN t.album_artist = 'Various Artists' COLLATE NOCASE THEN 1 ELSE 0 END,
+  (t.year IS NULL), t.year,
+  t.persistent_id
+`;
+
 // Result ordering for searchTracks. A neutral lens the model picks — not a
 // ranking opinion baked into the cache. Omitted sort keeps the historical
 // default (FTS relevance with a query, else most-played); the explicit lenses
 // let the model dig past heavy rotation. Non-relevance lenses get a
 // persistent_id tiebreak so paging is stable; `random` is deliberately not.
-function orderClause(filters: SearchFilters): string {
+// `rankRef` names the FTS rank column for the relevance default — the dedupe
+// path reads it from its windowed subquery instead of the FTS join directly.
+function orderClause(filters: SearchFilters, rankRef = 'f.rank'): string {
   switch (filters.sort) {
     case 'most_played':
       return 'ORDER BY t.play_count DESC';
@@ -183,7 +210,7 @@ function orderClause(filters: SearchFilters): string {
                 WHERE playlist_persistent_id = @inPlaylist
                   AND track_persistent_id = t.persistent_id)`;
     default:
-      return filters.query ? 'ORDER BY f.rank' : 'ORDER BY t.play_count DESC';
+      return filters.query ? `ORDER BY ${rankRef}` : 'ORDER BY t.play_count DESC';
   }
 }
 
@@ -412,18 +439,54 @@ export function createQueries(db: Database) {
       return (Date.now() - Date.parse(row.refreshedAt)) / 3_600_000;
     },
 
-    searchTracks(filters: SearchFilters): { rows: TrackRow[]; total: number } {
+    searchTracks(filters: SearchFilters): { rows: SearchResultRow[]; total: number } {
       const { from, whereSql, params } = buildTrackFilter(filters);
-      const orderSql = orderClause(filters);
       const limit = Math.min(filters.limit ?? 50, 500);
 
+      if (!filters.dedupe) {
+        const total = (
+          db.prepare(`SELECT COUNT(*) AS n ${from} ${whereSql}`).get(params) as { n: number }
+        ).n;
+        const rows = db
+          .prepare(`SELECT ${TRACK_COLUMNS} ${from} ${whereSql} ${orderClause(filters)} LIMIT @limit`)
+          .all({ ...params, limit }) as TrackRow[];
+        return { rows, total };
+      }
+
+      // Dedupe: rank each canonical group in a windowed subquery, keep the
+      // winner (rn = 1), then join back to tracks so the projection, sort
+      // lenses, and limit apply to representatives exactly as they would to
+      // plain rows. groupIds carries the whole group for alternate reporting.
+      const winners = `
+        SELECT t.persistent_id AS pid,
+               ${filters.query ? 'f.rank AS ftsRank,' : ''}
+               ROW_NUMBER() OVER (PARTITION BY ${DEDUPE_KEY} ORDER BY ${DEDUPE_TIEBREAK}) AS rn,
+               group_concat(t.persistent_id) OVER (PARTITION BY ${DEDUPE_KEY}) AS groupIds
+        ${from} ${whereSql}
+      `;
       const total = (
-        db.prepare(`SELECT COUNT(*) AS n ${from} ${whereSql}`).get(params) as { n: number }
+        db.prepare(`SELECT COUNT(*) AS n FROM (${winners}) WHERE rn = 1`).get(params) as {
+          n: number;
+        }
       ).n;
       const rows = db
-        .prepare(`SELECT ${TRACK_COLUMNS} ${from} ${whereSql} ${orderSql} LIMIT @limit`)
-        .all({ ...params, limit }) as TrackRow[];
-      return { rows, total };
+        .prepare(
+          `SELECT ${TRACK_COLUMNS}, w.groupIds
+           FROM (${winners}) w JOIN tracks t ON t.persistent_id = w.pid
+           WHERE w.rn = 1
+           ${orderClause(filters, 'w.ftsRank')} LIMIT @limit`,
+        )
+        .all({ ...params, limit }) as (TrackRow & { groupIds: string })[];
+      return {
+        rows: rows.map(({ groupIds, ...row }) => {
+          const alternates = groupIds
+            .split(',')
+            .filter((id) => id !== row.persistentId)
+            .sort();
+          return alternates.length > 0 ? { ...row, alternateIds: alternates } : row;
+        }),
+        total,
+      };
     },
 
     // Aggregate "shape of the crate" over the same filtered rowset as
