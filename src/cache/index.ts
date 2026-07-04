@@ -164,6 +164,17 @@ export class SelectaCache {
   }
 
   /**
+   * Surgical patch after the bridge deleted a playlist: drop its row and
+   * membership. Track rows are untouched — only the playlist goes.
+   */
+  deletePlaylistRow(persistentId: string): void {
+    const run = this.db.transaction(() => {
+      this.queries.deletePlaylistRow(persistentId);
+    });
+    run();
+  }
+
+  /**
    * Record a creation receipt for a playlist Selecta just created. Drives
    * refresh-time iCloud-echo reconciliation and ID-rekey aliasing.
    */

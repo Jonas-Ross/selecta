@@ -1,13 +1,14 @@
-// Playlist-edit tool handlers (add_tracks / remove_tracks / reorder_tracks):
-// bridge mocked, cache real (in-memory, production write path). Asserts the
-// surgical membership patch from the bridge's post-edit order and the
-// no-write-on-bad-input guarantees.
+// Playlist-mutation tool handlers (add_tracks / remove_tracks /
+// reorder_tracks / delete_playlist): bridge mocked, cache real (in-memory,
+// production write path). Asserts the surgical cache patch from the bridge's
+// result and the no-write-on-bad-input guarantees.
 
 import { describe, it, expect, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
 import { handleAddTracks, type AddTracksOutput } from '../src/tools/add_tracks.js';
 import { handleRemoveTracks, type RemoveTracksOutput } from '../src/tools/remove_tracks.js';
 import { handleReorderTracks, type ReorderTracksOutput } from '../src/tools/reorder_tracks.js';
+import { handleDeletePlaylist, type DeletePlaylistOutput } from '../src/tools/delete_playlist.js';
 import type { ToolDeps } from '../src/tools/common.js';
 import type { Bridge, LibrarySnapshot, PlaylistEditResult } from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
@@ -364,5 +365,62 @@ describe('reorder_tracks', () => {
       'T-ANGEL',
       'T-GLORYBOX',
     ]);
+  });
+});
+
+describe('delete_playlist', () => {
+  it('deletes via the bridge and drops the playlist cache rows, keeping the tracks', async () => {
+    const deps = makeDeps({ deletePlaylistById: vi.fn().mockResolvedValue(1) });
+
+    const out = (await handleDeletePlaylist(
+      { playlist_id: 'P-TRIPHOP' },
+      deps,
+    )) as DeletePlaylistOutput;
+
+    expect(deps.bridge.deletePlaylistById).toHaveBeenCalledWith('P-TRIPHOP');
+    expect(out).toEqual({
+      playlist_id: 'P-TRIPHOP',
+      name: 'Trip Hop Essentials',
+      deleted: true,
+      track_count: 3,
+    });
+    expect(deps.cacheInstance.getPlaylist('P-TRIPHOP')).toBeNull();
+    expect(deps.cacheInstance.getPlaylistTrackIds('P-TRIPHOP')).toEqual([]);
+    // The tracks and the other playlists survive — deletion is playlist-only.
+    expect(deps.cacheInstance.getTrack('T-TEARDROP')).not.toBeNull();
+    expect(deps.cacheInstance.getPlaylist('P-LATENIGHT')).not.toBeNull();
+  });
+
+  it('rejects an unknown playlist before any bridge call', async () => {
+    const deps = makeDeps();
+    const err = asError(await handleDeletePlaylist({ playlist_id: 'P-NOPE' }, deps));
+    expect(err.error).toBe('playlist_not_found');
+    expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
+  });
+
+  it('rejects a smart playlist as playlist_not_editable before any bridge call', async () => {
+    const deps = makeDeps();
+    const err = asError(await handleDeletePlaylist({ playlist_id: 'P-RECENT' }, deps));
+    expect(err.error).toBe('playlist_not_editable');
+    expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
+  });
+
+  it('maps a live miss (deleted: 0) to playlist_not_found and keeps the cache row', async () => {
+    const deps = makeDeps({ deletePlaylistById: vi.fn().mockResolvedValue(0) });
+    const err = asError(await handleDeletePlaylist({ playlist_id: 'P-TRIPHOP' }, deps));
+    expect(err.error).toBe('playlist_not_found');
+    expect(err.hint).toContain('refresh_library');
+    expect(deps.cacheInstance.getPlaylist('P-TRIPHOP')).not.toBeNull();
+  });
+
+  it('propagates a bridge failure without touching the cache', async () => {
+    const deps = makeDeps({
+      deletePlaylistById: vi
+        .fn()
+        .mockRejectedValue(new BridgeError('playlist_not_editable', 'not a user playlist')),
+    });
+    const err = asError(await handleDeletePlaylist({ playlist_id: 'P-TRIPHOP' }, deps));
+    expect(err.error).toBe('playlist_not_editable');
+    expect(deps.cacheInstance.getPlaylist('P-TRIPHOP')).not.toBeNull();
   });
 });

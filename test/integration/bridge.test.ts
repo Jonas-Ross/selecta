@@ -375,3 +375,30 @@ describe('bridge readPlaylist against real Music.app', { tags: ['integration'] }
     }
   });
 });
+
+// Last on purpose: create/delete churn kicks off an iCloud settle, and the
+// reorder drift guard above is churn-sensitive.
+describe('bridge deletePlaylistById against real Music.app', { tags: ['integration'] }, () => {
+  const SCRATCH = 'Selecta Delete Scratch';
+  // Sweep by name even though the test deletes by ID — iCloud sync can
+  // resurrect a just-deleted fresh playlist after the test has moved on.
+  afterEach(async () => {
+    await deletePlaylistsByName(SCRATCH);
+  });
+
+  it('deletes a user playlist by ID and reports a live miss as 0', async () => {
+    const fixture = await bridge.readPlaylist(await requireFixturePlaylistId());
+    const created = await bridge.createPlaylist({
+      name: SCRATCH,
+      trackIds: [fixture.trackPersistentIds[0]!],
+    });
+
+    expect(await bridge.deletePlaylistById(created.persistentId)).toBe(1);
+    // Immediately after the delete the playlist is gone; a later iCloud
+    // resurrection (docs/music-app.md) is the afterEach sweep's problem.
+    expect(await findPlaylistByName(SCRATCH)).toBeNull();
+    // Deleting again — or any ID Music.app doesn't know — is a live miss,
+    // reported as 0 rather than thrown, so callers decide what it means.
+    expect(await bridge.deletePlaylistById(created.persistentId)).toBe(0);
+  }, 120_000);
+});
