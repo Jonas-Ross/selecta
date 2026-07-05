@@ -30,6 +30,11 @@ export type ApiTrack = {
   genre?: string;
   duration_seconds?: number;
   location_kind?: string;
+  // Enriched audio features (#19). Absent = not enriched yet, or no source had
+  // data. bpm prefers the enriched value, falling back to the native tag.
+  bpm?: number;
+  musical_key?: string; // e.g. "F# minor"
+  danceability?: number; // 0..1
   signal: {
     play_count: number;
     skip_count: number;
@@ -51,6 +56,11 @@ export function toApiTrack(row: TrackRow): ApiTrack {
     genre: row.genre ?? undefined,
     duration_seconds: row.durationSeconds ?? undefined,
     location_kind: row.locationKind ?? undefined,
+    // Analyzer output carries noise decimals; one decimal of tempo (two of
+    // danceability) is all the precision that survives the wire.
+    bpm: row.bpm != null ? Math.round(row.bpm * 10) / 10 : undefined,
+    musical_key: row.musicalKey ?? undefined,
+    danceability: row.danceability != null ? Math.round(row.danceability * 100) / 100 : undefined,
     signal: {
       play_count: row.playCount,
       skip_count: row.skipCount,
@@ -174,6 +184,12 @@ export const libraryFilterShape = {
   genre: z.string().optional().describe('Exact genre name, case-insensitive.'),
   year_min: z.number().int().optional(),
   year_max: z.number().int().optional(),
+  bpm_min: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Minimum tempo (BPM). Only tracks with a known tempo can match.'),
+  bpm_max: z.number().positive().optional(),
   loved: z.boolean().optional().describe('true → only favorited tracks; false → only non-favorited.'),
   disliked: z.boolean().optional(),
   rating_min: z.number().min(1).max(5).optional().describe('Minimum star rating, 1–5.'),
@@ -215,6 +231,8 @@ export function toSearchFilters(input: LibraryFilterInput): SearchFilters {
     genre: input.genre,
     yearMin: input.year_min,
     yearMax: input.year_max,
+    bpmMin: input.bpm_min,
+    bpmMax: input.bpm_max,
     loved: input.loved,
     disliked: input.disliked,
     // Stars (1–5) → Music.app's 0–100 scale at the boundary.
@@ -250,6 +268,7 @@ function checkRange(
 export function validateFilterRanges(input: LibraryFilterInput): SelectaError | null {
   return (
     checkRange(input.year_min, input.year_max, 'year_min', 'year_max') ??
+    checkRange(input.bpm_min, input.bpm_max, 'bpm_min', 'bpm_max') ??
     checkRange(input.min_plays, input.max_plays, 'min_plays', 'max_plays')
   );
 }

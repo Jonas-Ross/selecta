@@ -43,6 +43,25 @@ CREATE TABLE IF NOT EXISTS playlist_creations (
   created_at TEXT NOT NULL
 );
 
+-- Enriched audio features (issue #19), keyed by track persistent ID and
+-- deliberately outside the tracks refresh cycle: refresh upserts/prunes tracks,
+-- enrichment writes here — so a library reread never wipes accumulated
+-- features (enrichment is expensive). Rows for tracks gone from the library
+-- are pruned on refresh. status is terminal: 'ok' (has data), 'no_data'
+-- (matched, sources had nothing), 'no_match' (unmatchable) — enrichment never
+-- retries a track that has a row.
+CREATE TABLE IF NOT EXISTS audio_features (
+  track_persistent_id TEXT PRIMARY KEY,
+  bpm REAL,
+  musical_key TEXT,
+  danceability REAL,
+  sources TEXT,
+  mb_recording_mbid TEXT,
+  deezer_track_id INTEGER,
+  status TEXT NOT NULL,
+  fetched_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS refresh_log (
   refreshed_at TEXT PRIMARY KEY,
   duration_ms INTEGER,

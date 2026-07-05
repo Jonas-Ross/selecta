@@ -26,7 +26,7 @@ import {
 import type { ToolDeps } from '../src/tools/common.js';
 import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
-import { asError, makeBridge } from './helpers.js';
+import { asError, featuresRow, makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
@@ -76,6 +76,37 @@ describe('search', () => {
       deps,
     )) as SearchOutput;
     expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual(['T-GLORYBOX', 'T-TEARDROP']);
+  });
+
+  it('surfaces audio features rounded for the wire, omitted when unknown', async () => {
+    deps.cache().saveAudioFeatures([featuresRow()]);
+    const enriched = (await handleSearch({ query: 'teardrop' }, deps)) as SearchOutput;
+    expect(enriched.tracks[0]).toMatchObject({
+      bpm: 78.4, // 78.42 → one decimal
+      musical_key: 'A minor',
+      danceability: 0.62, // 0.618 → two decimals
+    });
+
+    // Native Music.app tag is the bpm fallback; key/danceability stay absent.
+    const native = (await handleSearch({ query: 'glory' }, deps)) as SearchOutput;
+    expect(native.tracks[0]!.bpm).toBe(95);
+    expect(native.tracks[0]!.musical_key).toBeUndefined();
+
+    const unknown = (await handleSearch({ query: 'angel' }, deps)) as SearchOutput;
+    expect(unknown.tracks[0]!.bpm).toBeUndefined();
+    expect(unknown.tracks[0]!.danceability).toBeUndefined();
+  });
+
+  it('filters to a bpm band', async () => {
+    deps.cache().saveAudioFeatures([featuresRow()]);
+    const out = (await handleSearch({ bpm_min: 70, bpm_max: 100 }, deps)) as SearchOutput;
+    expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual(['T-GLORYBOX', 'T-TEARDROP']);
+  });
+
+  it('rejects an inverted bpm range', async () => {
+    const err = asError(await handleSearch({ bpm_min: 140, bpm_max: 90 }, deps));
+    expect(err.error).toBe('validation_error');
+    expect(err.hint).toContain('bpm_min');
   });
 
   it('filters by playlist membership', async () => {
@@ -286,6 +317,22 @@ describe('get_track_context', () => {
     expect(err.error).toBe('track_not_found');
     expect(err.hint).toContain('refresh_library');
   });
+
+  it('carries audio features on the seed and the surrounding tracks', async () => {
+    deps.cache().saveAudioFeatures([
+      featuresRow(),
+      featuresRow({ trackPersistentId: 'T-GLORYBOX', bpm: 118.3, musicalKey: 'E minor' }),
+    ]);
+    const out = (await handleGetTrackContext(
+      { track_id: 'T-TEARDROP' },
+      deps,
+    )) as TrackContextOutput;
+    expect(out.seed.bpm).toBe(78.4);
+    expect(out.seed.musical_key).toBe('A minor');
+    const glory = out.co_occurring_tracks.find((t) => t.persistent_id === 'T-GLORYBOX')!;
+    expect(glory.bpm).toBe(118.3);
+    expect(glory.musical_key).toBe('E minor');
+  });
 });
 
 describe('list_playlists', () => {
@@ -327,6 +374,7 @@ describe('library_overview', () => {
     expect(out.total_tracks).toBe(6);
     expect(out.total_runtime_seconds).toBe(1563);
     expect(out.total_runtime_human).toBe('26m');
+    expect(out.tracks_with_bpm).toBe(1); // T-GLORYBOX's native tag
     expect(out.genres).toEqual([
       { name: 'Trip-Hop', count: 4 },
       { name: 'Electronic', count: 1 },
@@ -424,6 +472,7 @@ describe('shapeOverview', () => {
       rated: 0,
       unrated: 0,
       neverPlayed: 0,
+      withBpm: 0,
       local: 0,
       cloud: 0,
       missing: 0,

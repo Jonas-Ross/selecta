@@ -4,6 +4,7 @@
 
 import { expect, vi } from 'vitest';
 import type { Bridge } from '../src/types/bridge.js';
+import type { AudioFeaturesRow } from '../src/types/cache.js';
 import type { SelectaError } from '../src/types/errors.js';
 
 export function makeBridge(overrides: Partial<Bridge> = {}): Bridge {
@@ -25,4 +26,20 @@ export function makeBridge(overrides: Partial<Bridge> = {}): Bridge {
 export function asError(result: object): SelectaError {
   expect(result).toHaveProperty('error');
   return result as SelectaError;
+}
+
+/** A fully-populated audio_features row for T-TEARDROP; override to taste. */
+export function featuresRow(overrides: Partial<AudioFeaturesRow> = {}): AudioFeaturesRow {
+  return {
+    trackPersistentId: 'T-TEARDROP',
+    bpm: 78.42,
+    musicalKey: 'A minor',
+    danceability: 0.618,
+    sources: { bpm: 'deezer', musicalKey: 'acousticbrainz', danceability: 'acousticbrainz' },
+    mbRecordingMbid: 'mbid-teardrop',
+    deezerTrackId: 3129407,
+    status: 'ok',
+    fetchedAt: '2026-07-01T00:00:00.000Z',
+    ...overrides,
+  };
 }
