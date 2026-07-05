@@ -193,11 +193,11 @@ describe('enrichPendingTracks', () => {
     expect(ticks).toEqual([3]); // 3 tracks = one chunk
   });
 
-  it('paces every MusicBrainz and AcousticBrainz request, including the first of a run', async () => {
-    // Frozen clock → the throttle always sees zero elapsed time, so each
-    // rate-limited request must wait out its host's full spacing. Limit 2
-    // (Midnight City + Teardrop): 2 MB searches, then one AB bulk low-level
-    // + one bulk high-level for the chunk.
+  it('paces every request on every host, including the first of a run', async () => {
+    // Frozen clock → the throttles always see zero elapsed time, so each
+    // request must wait out its host's full spacing. Limit 2 (Midnight City +
+    // Teardrop): 2 MB searches, one AB bulk low-level + one high-level for
+    // the chunk, then Midnight City's 2 Deezer calls for the bpm gap.
     const { fetchLike } = fakeFetch(scenarioHandler);
     const sleeps: number[] = [];
     await enrichPendingTracks(cache, { limit: 2 }, {
@@ -207,10 +207,10 @@ describe('enrichPendingTracks', () => {
       },
       now: () => new Date('2026-07-04T00:00:00.000Z'),
     });
-    // 2 MusicBrainz + 2 AcousticBrainz requests → 4 waits (Deezer unthrottled:
-    // its 50 req/5s ceiling is unreachable at this cadence).
-    expect(sleeps).toHaveLength(4);
-    for (const ms of sleeps) expect(ms).toBeGreaterThanOrEqual(1000);
+    // 2 MusicBrainz + 2 AcousticBrainz waits at ≥1s, 2 Deezer waits at ≥200ms.
+    expect(sleeps.filter((ms) => ms >= 1000)).toHaveLength(4);
+    expect(sleeps).toHaveLength(6);
+    for (const ms of sleeps) expect(ms).toBeGreaterThanOrEqual(200);
   });
 
   it('never re-attempts a track with a row — all statuses are terminal', async () => {

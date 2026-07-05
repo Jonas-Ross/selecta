@@ -10,8 +10,8 @@
 // host at the boundary.
 //   MusicBrainz    1 req/s avg per IP (503 on breach)  → 1.1s spacing
 //   AcousticBrainz 10 req per 10s per IP (429)         → 1.1s spacing
-//   Deezer         50 req per 5s (in-body quota error) → no throttle needed
-//                  (≤2 calls/track at ≥1s cadence stays far under)
+//   Deezer         50 req per 5s (in-body quota error) → 250ms spacing
+//                  (caps us at 20 per 5s by construction, not by latency luck)
 
 import { BridgeError } from '../types/errors.js';
 import { durationCompatible, luceneEscape, primaryArtist, stripFeat } from './match.js';
@@ -21,6 +21,7 @@ export const USER_AGENT = 'Selecta/0.1 (https://github.com/Jonas-Ross/selecta)';
 
 const MB_SPACING_MS = 1100;
 const AB_SPACING_MS = 1100;
+const DZ_SPACING_MS = 250;
 
 // Structural fetch so tests inject canned responses; production wraps the
 // global fetch via withUserAgent.
@@ -72,6 +73,7 @@ function makeThrottle(spacingMs: number, deps: SourceDeps): () => Promise<void> 
 export function createSources(deps: SourceDeps) {
   const paceMb = makeThrottle(MB_SPACING_MS, deps);
   const paceAb = makeThrottle(AB_SPACING_MS, deps);
+  const paceDz = makeThrottle(DZ_SPACING_MS, deps);
 
   async function getJson(url: string, source: string): Promise<unknown> {
     let res: Awaited<ReturnType<FetchLike>>;
@@ -185,11 +187,13 @@ export function createSources(deps: SourceDeps) {
   ): Promise<{ trackId: number; bpm: number | null } | null> {
     const query = `artist:"${primaryArtist(target.artist)}" track:"${stripFeat(target.title)}"`;
     const url = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=5`;
+    await paceDz();
     const search = dzChecked((await getJson(url, 'Deezer')) as DzSearchResponse);
     const hit = (search.data ?? []).find((h) =>
       durationCompatible(h.duration, target.durationSeconds),
     );
     if (!hit) return null;
+    await paceDz();
     const detail = dzChecked(
       (await getJson(`https://api.deezer.com/track/${hit.id}`, 'Deezer')) as DzTrackResponse,
     );
