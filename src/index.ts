@@ -22,6 +22,14 @@ function lazyCache(): () => SelectaCache {
   return () => (cache ??= SelectaCache.open());
 }
 
+// "2h 10m" / "4m" / "<1m" — chunk-level progress needs no finer grain.
+function formatEta(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return '<1m';
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
 function reportError(err: unknown): void {
   if (err instanceof BridgeError) {
     log.error(`[${err.errorCode}] ${err.message}`);
@@ -106,9 +114,19 @@ program
       );
       // One engine call — it saves per 25-track chunk, so Ctrl-C loses at
       // most the chunk in flight; the callback narrates each chunk landing.
+      // ETA extrapolates the run's own pace so far, so it absorbs real
+      // source latency instead of guessing from the rate-limit floor.
+      const startedAt = Date.now();
       const summary = await enrichPendingTracks(cache, { limit: budget }, {
-        onProgress: (p) =>
-          log.info(`enriched ${p.enriched}/${p.processed} attempted, ${budget - p.processed} to go`),
+        onProgress: (p) => {
+          const pct = Math.floor((p.processed / budget) * 100);
+          const remaining = budget - p.processed;
+          const eta =
+            remaining === 0
+              ? 'done'
+              : `~${formatEta(remaining * ((Date.now() - startedAt) / p.processed))} remaining`;
+          log.info(`enriched ${p.enriched}/${p.processed} attempted — ${pct}% of ${budget}, ${eta}`);
+        },
       });
       cache.close();
       process.stdout.write(
