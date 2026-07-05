@@ -53,6 +53,12 @@ import {
   libraryOverviewInputShape,
   LIBRARY_OVERVIEW_DESCRIPTION,
 } from './tools/library_overview.js';
+import { handleSetLoved, setLovedInputShape, SET_LOVED_DESCRIPTION } from './tools/set_loved.js';
+import {
+  handleSetRating,
+  setRatingInputShape,
+  SET_RATING_DESCRIPTION,
+} from './tools/set_rating.js';
 
 export const SERVER_INFO = { name: 'selecta', version: '0.1.0' };
 
@@ -130,6 +136,18 @@ export function createServer(deps: ToolDeps): McpServer {
     'delete_playlist',
     { description: DELETE_PLAYLIST_DESCRIPTION, inputSchema: deletePlaylistInputShape },
     async (args) => toToolResult(await handleDeletePlaylist(args, deps)),
+  );
+
+  server.registerTool(
+    'set_loved',
+    { description: SET_LOVED_DESCRIPTION, inputSchema: setLovedInputShape },
+    async (args) => toToolResult(await handleSetLoved(args, deps)),
+  );
+
+  server.registerTool(
+    'set_rating',
+    { description: SET_RATING_DESCRIPTION, inputSchema: setRatingInputShape },
+    async (args) => toToolResult(await handleSetRating(args, deps)),
   );
 
   return server;

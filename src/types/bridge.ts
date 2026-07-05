@@ -63,6 +63,24 @@ export type PlaylistEditResult = {
   movedCount?: number; // reorder path only: entries the script actually moved
 };
 
+// One track's value for the signal property a write targeted — each write
+// path reads back only the property it writes (readbacks cost Apple events).
+export type TrackLovedState = { persistentId: string; loved: boolean }; // Music.app's 'favorited'
+// rating is Music.app's 0..100 user-rating scale; null = unrated (the bridge
+// normalizes Music.app's 0-means-unrated, mirroring read_library).
+export type TrackRatingState = { persistentId: string; rating: number | null };
+
+// Result of a track-signal write (set_loved / set_rating). `tracks` is the
+// post-write state read back in the same script execution — ground truth for
+// the surgical cache patch. `preWriteTracks` is the state the SAME execution
+// saw before writing (the atomic-baseline idea from PlaylistEditResult):
+// the exact restore point for tests and callers. One entry per UNIQUE
+// requested ID, in first-seen order.
+export type TrackSignalResult<State> = {
+  tracks: State[];
+  preWriteTracks: State[];
+};
+
 export interface Bridge {
   // Single-playlist read; used by integration tests and debugging.
   readPlaylist(persistentId: string): Promise<RawPlaylist>;
@@ -118,4 +136,20 @@ export interface Bridge {
     order: number[];
     expectedTrackIds: string[];
   }): Promise<PlaylistEditResult>;
+
+  // Set the favorited ("loved") flag on library tracks — one value for all.
+  // Reversible. Throws track_not_found without writing when any ID is
+  // missing from the live library.
+  setTrackLoved(input: {
+    trackIds: string[];
+    loved: boolean;
+  }): Promise<TrackSignalResult<TrackLovedState>>;
+
+  // Set the user rating on library tracks — 0..100 native scale, 0 clears
+  // (reads back null when unrated). Reversible. Throws track_not_found
+  // without writing when any ID is missing from the live library.
+  setTrackRating(input: {
+    trackIds: string[];
+    rating: number;
+  }): Promise<TrackSignalResult<TrackRatingState>>;
 }

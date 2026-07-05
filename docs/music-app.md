@@ -8,9 +8,9 @@ What Music.app actually does when you script it. Learned on a real iCloud-synced
 - `subscription` playlists (class `subscriptionPlaylist`) are Apple Music playlists the user added. Real libraries are full of them. Treat them read-only, like smart playlists.
 - The special playlists (Library, Music, …) are excluded from the snapshot entirely. Caching the whole library as one giant playlist would poison co-occurrence and waste rows.
 - Playlists can reference tracks that aren't in the library track list — unavailable or greyed-out entries. The bridge reports membership exactly as Music.app states it. Read queries JOIN `tracks`, so these dangling members never reach the model, except in `track_count`, which deliberately matches what Music.app displays.
-- The `loved` property is gone from modern Music.app; read `favorited` instead.
+- The `loved` property is gone from modern Music.app; read **and write** `favorited` instead (`set_loved` assigns it directly).
 - The `location` property raises on cloud tracks. Derive locality from the track class instead: `fileTrack` means local, anything else is cloud.
-- Ratings are 0–100 internally. Tools translate to 1–5 stars at the API boundary, both directions.
+- Ratings are 0–100 internally, writable via plain assignment (`track.rating = 80`); 0 clears the user rating. Tools translate to stars at the API boundary, both directions. With the user rating cleared, `rating()` may report a computed (album-derived) value rather than 0 — `ratingKind` ('user' vs 'computed') tells them apart, and the signal write scripts report null for anything non-user so computed values never masquerade as user signal.
 
 ## Persistent IDs
 

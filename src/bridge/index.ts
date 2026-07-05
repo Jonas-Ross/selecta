@@ -27,6 +27,7 @@ import {
   buildRemoveTracksScript,
   buildReorderTracksScript,
 } from './scripts/edit_playlist.js';
+import { buildSetLovedScript, buildSetRatingScript } from './scripts/track_signal.js';
 import { BridgeError } from '../types/errors.js';
 import {
   type Bridge,
@@ -34,6 +35,9 @@ import {
   type PlaylistEditResult,
   type PlaylistWriteResult,
   type RawPlaylist,
+  type TrackLovedState,
+  type TrackRatingState,
+  type TrackSignalResult,
 } from '../types/bridge.js';
 
 // Validate the JXA payload at the bridge boundary so a shape mismatch surfaces
@@ -102,6 +106,12 @@ export const bridge: Bridge = {
   },
   async reorderPlaylistTracks(input): Promise<PlaylistEditResult> {
     return parseEditResult(await runJxa(buildReorderTracksScript(input)), 'reorder');
+  },
+  async setTrackLoved(input): Promise<TrackSignalResult<TrackLovedState>> {
+    return parseSignalResult(await runJxa(buildSetLovedScript(input)), isLovedState);
+  },
+  async setTrackRating(input): Promise<TrackSignalResult<TrackRatingState>> {
+    return parseSignalResult(await runJxa(buildSetRatingScript(input)), isRatingState);
   },
 };
 
@@ -172,6 +182,51 @@ function isPlaylistEditResult(v: Record<string, unknown>): v is PlaylistEditResu
   );
 }
 
+// Shared handling for the RESOLVE_TRACKS sentinel: scripts that resolve
+// tracks return { missingTrackIds } — without writing anything — when any
+// requested ID is absent from the live library (stale cache).
+function throwIfMissingTracks(v: Record<string, unknown>): void {
+  if (Array.isArray(v.missingTrackIds)) {
+    const missing = v.missingTrackIds as string[];
+    throw new BridgeError(
+      'track_not_found',
+      `Music.app has no tracks with persistent IDs: ${missing.join(', ')}`,
+      'These IDs are in the cache but not the live library — the cache is stale. Run refresh_library and re-resolve the tracks.',
+    );
+  }
+}
+
+function parseSignalResult<State>(
+  result: unknown,
+  isState: (t: unknown) => t is State,
+): TrackSignalResult<State> {
+  if (typeof result === 'object' && result !== null) {
+    const v = result as Record<string, unknown>;
+    throwIfMissingTracks(v);
+    if (
+      Array.isArray(v.tracks) &&
+      v.tracks.every(isState) &&
+      Array.isArray(v.preWriteTracks) &&
+      v.preWriteTracks.every(isState)
+    ) {
+      return { tracks: v.tracks, preWriteTracks: v.preWriteTracks };
+    }
+  }
+  throw new BridgeError('jxa_error', 'JXA returned an unexpected TrackSignalResult shape.');
+}
+
+function isLovedState(t: unknown): t is TrackLovedState {
+  if (typeof t !== 'object' || t === null) return false;
+  const s = t as Record<string, unknown>;
+  return typeof s.persistentId === 'string' && typeof s.loved === 'boolean';
+}
+
+function isRatingState(t: unknown): t is TrackRatingState {
+  if (typeof t !== 'object' || t === null) return false;
+  const s = t as Record<string, unknown>;
+  return typeof s.persistentId === 'string' && (typeof s.rating === 'number' || s.rating === null);
+}
+
 function parseDeleteResult(result: unknown): number {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
@@ -183,19 +238,10 @@ function parseDeleteResult(result: unknown): number {
   throw new BridgeError('jxa_error', 'JXA returned an unexpected delete result shape.');
 }
 
-// The write scripts return { missingTrackIds } without touching Music.app when
-// any requested ID is absent from the live library — i.e. the cache is stale.
 function parseWriteResult(result: unknown): PlaylistWriteResult {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
-    if (Array.isArray(v.missingTrackIds)) {
-      const missing = v.missingTrackIds as string[];
-      throw new BridgeError(
-        'track_not_found',
-        `Music.app has no tracks with persistent IDs: ${missing.join(', ')}`,
-        'These IDs are in the cache but not the live library — the cache is stale. Run refresh_library and re-resolve the tracks.',
-      );
-    }
+    throwIfMissingTracks(v);
     if (typeof v.persistentId === 'string' && typeof v.trackCount === 'number') {
       return { persistentId: v.persistentId, trackCount: v.trackCount };
     }

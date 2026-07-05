@@ -8,7 +8,7 @@ A local MCP server that exposes the user's Apple Music library to Claude so play
 
 Three layers, top-down dependency. Cache + bridge are usable as a plain Node library without MCP — keeps tests fast and boundaries crisp.
 
-- **`src/tools/`** — eleven MCP handlers (`search`, `library_overview`, `get_track_context`, `list_playlists`, `create_playlist`, `preview_playlist`, `add_tracks`, `remove_tracks`, `reorder_tracks`, `delete_playlist`, `refresh_library`). Thin orchestrators: validate input, query cache and/or bridge, shape response. Only layer that knows MCP exists. `search` and `library_overview` share `common.libraryFilterShape`.
+- **`src/tools/`** — thirteen MCP handlers (`search`, `library_overview`, `get_track_context`, `list_playlists`, `create_playlist`, `preview_playlist`, `add_tracks`, `remove_tracks`, `reorder_tracks`, `delete_playlist`, `set_loved`, `set_rating`, `refresh_library`). Thin orchestrators: validate input, query cache and/or bridge, shape response. Only layer that knows MCP exists. `search` and `library_overview` share `common.libraryFilterShape`.
 - **`src/cache/`** — SQLite at `~/Library/Application Support/Selecta/library.db`. Tracks, playlists, playlist_tracks, refresh_log + FTS5. All model-triggered reads hit this layer.
 - **`src/bridge/`** — wraps Music.app. Builds JXA snippets, shells out via `osascript -l JavaScript`, parses JSON.
 
@@ -79,7 +79,7 @@ Build autonomously: design, implement, test, branch, and open PRs without per-st
 
 ## Status
 
-v1 complete — eleven tools live over MCP stdio, unit + integration suites green. v2 underway, tracked in issues #15–#20. Shipped: exclusion filters (#17); playlist mutation (#15, complete) — `add_tracks`/`remove_tracks` plus a `playlist_order` search sort, `reorder_tracks`, `delete_playlist`; search dedup (#16) — `dedupe` flag on `search` collapsing same-song copies, suppressed IDs in `alternate_ids`. Remaining: `set_loved`/`set_rating` (#18), audio-feature enrichment (#19), multi-seed co-occurrence (#20).
+v1 complete — eleven tools live over MCP stdio, unit + integration suites green. v2 underway, tracked in issues #15–#20. Shipped: exclusion filters (#17); playlist mutation (#15, complete) — `add_tracks`/`remove_tracks` plus a `playlist_order` search sort, `reorder_tracks`, `delete_playlist`; search dedup (#16) — `dedupe` flag on `search` collapsing same-song copies, suppressed IDs in `alternate_ids`; write-back signal (#18) — `set_loved`/`set_rating` (stars 0–5, halves; 0 clears). Remaining: audio-feature enrichment (#19), multi-seed co-occurrence (#20).
 
 ⚠️ **Before touching the playlist edit paths, read `docs/music-app.md`** — scripted playlist-entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn).
 
