@@ -11,6 +11,9 @@ export type TrackRow = {
   genre: string | null;
   year: number | null;
   durationSeconds: number | null;
+  // The effective tempo, resolved in SQL (EFFECTIVE_BPM in cache/queries.ts):
+  // the enriched audio_features value when present, else the native Music.app
+  // tag. The raw native tag stays in the tracks.bpm column.
   bpm: number | null;
   trackNumber: number | null;
   discNumber: number | null;
@@ -23,6 +26,31 @@ export type TrackRow = {
   disliked: 0 | 1;
   comments: string | null;
   locationKind: 'local' | 'cloud' | 'missing' | null;
+  // Enriched audio features, carried on every track projection. Null until
+  // enrichment (issue #19) has covered the track.
+  musicalKey: string | null; // e.g. "F# minor"
+  danceability: number | null; // 0..1
+};
+
+// What the enrichment backlog query returns: just the fields matching needs.
+// Deliberately not a full TrackRow — the projection skips the feature
+// subqueries, which are NULL by construction for pending tracks.
+export type PendingTrack = Pick<TrackRow, 'persistentId' | 'title' | 'artist' | 'durationSeconds'>;
+
+// A full audio_features row — the enrichment engine's read/write shape.
+// Feature columns land on TrackRow via the join; this adds provenance.
+// status is terminal ('ok' | 'no_data' | 'no_match'): a track with a row is
+// never re-enriched, so dead ends aren't retried on every run.
+export type AudioFeaturesRow = {
+  trackPersistentId: string;
+  bpm: number | null;
+  musicalKey: string | null;
+  danceability: number | null;
+  sources: Partial<Record<'bpm' | 'musicalKey' | 'danceability', string>> | null;
+  mbRecordingMbid: string | null;
+  deezerTrackId: number | null;
+  status: 'ok' | 'no_data' | 'no_match';
+  fetchedAt: string;
 };
 
 export type PlaylistRow = {
@@ -79,6 +107,7 @@ export type OverviewStats = {
   rated: number; // rating > 0
   unrated: number; // rating null or 0
   neverPlayed: number; // play_count = 0
+  withBpm: number; // tracks with a tempo (enriched or native tag)
   local: number;
   cloud: number;
   missing: number;
@@ -100,6 +129,9 @@ export type SearchFilters = {
   genre?: string;
   yearMin?: number;
   yearMax?: number;
+  // Tempo band over COALESCE(enriched, native) bpm; unenriched tracks never match.
+  bpmMin?: number;
+  bpmMax?: number;
   loved?: boolean;
   disliked?: boolean;
   ratingMin?: number; // 0..100

@@ -10,8 +10,10 @@ import type {
   TrackRatingState,
 } from '../types/bridge.js';
 import type {
+  AudioFeaturesRow,
   CoOccurringTrack,
   OverviewStats,
+  PendingTrack,
   PlaylistCreationRow,
   PlaylistRef,
   PlaylistRow,
@@ -22,15 +24,30 @@ import type {
 
 export type Queries = ReturnType<typeof createQueries>;
 
+// Audio-feature lookups as correlated scalar subqueries (PK probes) rather
+// than a LEFT JOIN: TRACK_COLUMNS stays self-contained — no call site has to
+// remember a join — and aggregate queries over the same FROM never pay for
+// features they don't read.
+const featureColumn = (column: string): string =>
+  `(SELECT ${column} FROM audio_features af WHERE af.track_persistent_id = t.persistent_id)`;
+
+// The one tempo, decided once: the enriched value wins (consistent,
+// analyzer-derived); the native Music.app tag is the fallback (rarely set).
+// Projections and bpm filters both read this, so wire values and filter
+// matches can't disagree.
+const EFFECTIVE_BPM = `COALESCE(${featureColumn('bpm')}, t.bpm)`;
+
 // SELECT fragment aliasing snake_case columns to TrackRow's camelCase fields.
 const TRACK_COLUMNS = `
   t.persistent_id AS persistentId, t.title, t.artist,
   t.album_artist AS albumArtist, t.album, t.genre, t.year,
-  t.duration_seconds AS durationSeconds, t.bpm,
+  t.duration_seconds AS durationSeconds, ${EFFECTIVE_BPM} AS bpm,
   t.track_number AS trackNumber, t.disc_number AS discNumber,
   t.date_added AS dateAdded, t.last_played AS lastPlayed,
   t.play_count AS playCount, t.skip_count AS skipCount, t.rating,
-  t.loved, t.disliked, t.comments, t.location_kind AS locationKind
+  t.loved, t.disliked, t.comments, t.location_kind AS locationKind,
+  ${featureColumn('musical_key')} AS musicalKey,
+  ${featureColumn('danceability')} AS danceability
 `;
 
 // SELECT fragment for PlaylistRow, shared by getPlaylist and listPlaylists so
@@ -96,6 +113,14 @@ function buildTrackFilter(filters: SearchFilters): {
   if (filters.yearMax != null) {
     where.push('t.year <= @yearMax');
     params.yearMax = filters.yearMax;
+  }
+  if (filters.bpmMin != null) {
+    where.push(`${EFFECTIVE_BPM} >= @bpmMin`);
+    params.bpmMin = filters.bpmMin;
+  }
+  if (filters.bpmMax != null) {
+    where.push(`${EFFECTIVE_BPM} <= @bpmMax`);
+    params.bpmMax = filters.bpmMax;
   }
   if (filters.loved != null) {
     where.push('t.loved = @loved');
@@ -270,6 +295,11 @@ export function createQueries(db: Database) {
   const pruneTracksStmt = db.prepare(
     'DELETE FROM tracks WHERE persistent_id NOT IN (SELECT value FROM json_each(?))',
   );
+  // Features follow their track out of the library; features of surviving
+  // tracks are untouched by refresh (the survive-refresh guarantee on #19).
+  const pruneFeaturesStmt = db.prepare(
+    'DELETE FROM audio_features WHERE track_persistent_id NOT IN (SELECT value FROM json_each(?))',
+  );
   const prunePlaylistsStmt = db.prepare(
     'DELETE FROM playlists WHERE persistent_id NOT IN (SELECT value FROM json_each(?))',
   );
@@ -319,6 +349,38 @@ export function createQueries(db: Database) {
     'SELECT track_persistent_id AS id FROM playlist_tracks WHERE playlist_persistent_id = ? ORDER BY position',
   );
   const deletePlaylistRowStmt = db.prepare('DELETE FROM playlists WHERE persistent_id = ?');
+
+  const upsertAudioFeaturesStmt = db.prepare(`
+    INSERT OR REPLACE INTO audio_features
+      (track_persistent_id, bpm, musical_key, danceability, sources,
+       mb_recording_mbid, deezer_track_id, status, fetched_at)
+    VALUES (@trackPersistentId, @bpm, @musicalKey, @danceability, @sources,
+            @mbRecordingMbid, @deezerTrackId, @status, @fetchedAt)
+  `);
+  const getAudioFeaturesStmt = db.prepare(`
+    SELECT track_persistent_id AS trackPersistentId, bpm,
+           musical_key AS musicalKey, danceability, sources,
+           mb_recording_mbid AS mbRecordingMbid, deezer_track_id AS deezerTrackId,
+           status, fetched_at AS fetchedAt
+    FROM audio_features WHERE track_persistent_id = ?
+  `);
+
+  // The enrichment backlog: tracks never attempted (no row — attempted tracks
+  // are terminal whatever their status). Most-played first, so the tracks the
+  // model touches most gain features earliest; stable ID tiebreak. Slim
+  // projection: only what matching needs, not TRACK_COLUMNS (whose feature
+  // subqueries are NULL by construction here).
+  const pendingEnrichmentSql = `
+    FROM tracks t
+    WHERE NOT EXISTS (SELECT 1 FROM audio_features af WHERE af.track_persistent_id = t.persistent_id)
+  `;
+  const pendingEnrichmentStmt = db.prepare(`
+    SELECT t.persistent_id AS persistentId, t.title, t.artist,
+           t.duration_seconds AS durationSeconds
+    ${pendingEnrichmentSql}
+    ORDER BY t.play_count DESC, t.persistent_id LIMIT ?
+  `);
+  const countPendingEnrichmentStmt = db.prepare(`SELECT COUNT(*) AS n ${pendingEnrichmentSql}`);
 
   return {
     upsertTrack(track: RawTrack): void {
@@ -377,7 +439,38 @@ export function createQueries(db: Database) {
     },
 
     pruneTracksNotIn(presentPersistentIds: Set<string>): void {
-      pruneTracksStmt.run(JSON.stringify([...presentPersistentIds]));
+      const ids = JSON.stringify([...presentPersistentIds]);
+      pruneTracksStmt.run(ids);
+      pruneFeaturesStmt.run(ids);
+    },
+
+    upsertAudioFeatures(row: AudioFeaturesRow): void {
+      upsertAudioFeaturesStmt.run({
+        ...row,
+        sources: row.sources != null ? JSON.stringify(row.sources) : null,
+      });
+    },
+
+    getTracksPendingEnrichment(limit: number): PendingTrack[] {
+      // Clamp: a negative LIMIT means "unlimited" to SQLite — a caller bug
+      // must not turn a bounded batch into a full-library crawl.
+      return pendingEnrichmentStmt.all(Math.max(0, limit)) as PendingTrack[];
+    },
+
+    countPendingEnrichment(): number {
+      return (countPendingEnrichmentStmt.get() as { n: number }).n;
+    },
+
+    getAudioFeatures(trackPersistentId: string): AudioFeaturesRow | null {
+      const row = getAudioFeaturesStmt.get(trackPersistentId) as
+        | (Omit<AudioFeaturesRow, 'sources'> & { sources: string | null })
+        | undefined;
+      if (!row) return null;
+      return {
+        ...row,
+        sources:
+          row.sources != null ? (JSON.parse(row.sources) as AudioFeaturesRow['sources']) : null,
+      };
     },
 
     prunePlaylistsNotIn(presentPersistentIds: Set<string>): void {
@@ -538,6 +631,7 @@ export function createQueries(db: Database) {
              COALESCE(SUM(CASE WHEN t.rating > 0 THEN 1 ELSE 0 END), 0) AS rated,
              COALESCE(SUM(CASE WHEN t.rating IS NULL OR t.rating = 0 THEN 1 ELSE 0 END), 0) AS unrated,
              COALESCE(SUM(CASE WHEN t.play_count = 0 THEN 1 ELSE 0 END), 0) AS neverPlayed,
+             COALESCE(SUM(CASE WHEN ${EFFECTIVE_BPM} IS NOT NULL THEN 1 ELSE 0 END), 0) AS withBpm,
              COALESCE(SUM(CASE WHEN t.location_kind = 'local' THEN 1 ELSE 0 END), 0) AS local,
              COALESCE(SUM(CASE WHEN t.location_kind = 'cloud' THEN 1 ELSE 0 END), 0) AS cloud,
              COALESCE(SUM(CASE WHEN t.location_kind = 'missing' THEN 1 ELSE 0 END), 0) AS missing,

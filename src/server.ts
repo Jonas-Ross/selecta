@@ -53,6 +53,11 @@ import {
   libraryOverviewInputShape,
   LIBRARY_OVERVIEW_DESCRIPTION,
 } from './tools/library_overview.js';
+import {
+  handleEnrichFeatures,
+  enrichFeaturesInputShape,
+  ENRICH_FEATURES_DESCRIPTION,
+} from './tools/enrich_features.js';
 import { handleSetLoved, setLovedInputShape, SET_LOVED_DESCRIPTION } from './tools/set_loved.js';
 import {
   handleSetRating,
@@ -136,6 +141,12 @@ export function createServer(deps: ToolDeps): McpServer {
     'delete_playlist',
     { description: DELETE_PLAYLIST_DESCRIPTION, inputSchema: deletePlaylistInputShape },
     async (args) => toToolResult(await handleDeletePlaylist(args, deps)),
+  );
+
+  server.registerTool(
+    'enrich_features',
+    { description: ENRICH_FEATURES_DESCRIPTION, inputSchema: enrichFeaturesInputShape },
+    async (args) => toToolResult(await handleEnrichFeatures(args, deps)),
   );
 
   server.registerTool(

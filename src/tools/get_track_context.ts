@@ -34,7 +34,7 @@ export type TrackContextOutput = {
 const SAME_ARTIST_CAP = 30;
 const CO_OCCURRENCE_CAP = 50;
 
-export const GET_TRACK_CONTEXT_DESCRIPTION = `Curatorial context for one owned track: the seed with signal, up to ${SAME_ARTIST_CAP} same-artist tracks (by play count), the playlists containing it, and up to ${CO_OCCURRENCE_CAP} tracks that co-occur with it in the user's own (hand-made) playlists, ranked by how many playlists they share — the strongest "belongs together" signal available. Call after resolving a seed track via search. On track_not_found the cache may be stale; consider refresh_library.`;
+export const GET_TRACK_CONTEXT_DESCRIPTION = `Curatorial context for one owned track: the seed with signal, up to ${SAME_ARTIST_CAP} same-artist tracks (by play count), the playlists containing it, and up to ${CO_OCCURRENCE_CAP} tracks that co-occur with it in the user's own (hand-made) playlists, ranked by how many playlists they share — the strongest "belongs together" signal available. All tracks carry enriched audio features (bpm, musical_key, danceability) where known — use them to judge tempo/key fit around the seed. Call after resolving a seed track via search. On track_not_found the cache may be stale; consider refresh_library.`;
 
 export async function handleGetTrackContext(
   raw: unknown,

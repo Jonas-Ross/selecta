@@ -31,10 +31,13 @@ export type RefreshLibraryOutput = {
   track_count: number;
   playlist_count: number;
   refreshed_at: string;
+  // Tracks enrich_features has never attempted — newly added tracks land
+  // here, so the model can see when a top-up run is worthwhile.
+  audio_features_pending: number;
   sync_reconciliation?: SyncReconciliation;
 };
 
-export const REFRESH_LIBRARY_DESCRIPTION = `Reread the entire Music.app library into the local cache. Takes seconds to a minute depending on library size, and requires Music.app automation permission. Only call when the user asks for a refresh, when cache_age_hours is null (never populated), or when stale-cache errors (track_not_found) suggest the library changed. Also worth one call a few minutes after create_playlist: it reconciles iCloud sync echoes of recent creations (removes the duplicate copy, remaps rekeyed IDs) and reports what it did in sync_reconciliation. Never call it routinely before searches.`;
+export const REFRESH_LIBRARY_DESCRIPTION = `Reread the entire Music.app library into the local cache. Takes seconds to a minute depending on library size, and requires Music.app automation permission. Only call when the user asks for a refresh, when cache_age_hours is null (never populated), or when stale-cache errors (track_not_found) suggest the library changed. Also worth one call a few minutes after create_playlist: it reconciles iCloud sync echoes of recent creations (removes the duplicate copy, remaps rekeyed IDs) and reports what it did in sync_reconciliation. audio_features_pending in the response counts tracks enrich_features hasn't attempted yet (a refresh never wipes existing features). Never call it routinely before searches.`;
 
 export async function handleRefreshLibrary(
   raw: unknown,
@@ -106,6 +109,7 @@ export async function handleRefreshLibrary(
       // is the deletes this very handler performed.
       playlist_count: result.playlistCount - reconciliation.duplicates_removed.length,
       refreshed_at: result.refreshedAt,
+      audio_features_pending: cache.countPendingEnrichment(),
       ...(actions.length > 0 ? { sync_reconciliation: reconciliation } : {}),
     };
   } catch (err) {

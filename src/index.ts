@@ -5,10 +5,11 @@
 // would corrupt the wire), and all commander output routes to stderr so stdout
 // stays pure MCP.
 
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { bridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
+import { enrichPendingTracks } from './enrich/index.js';
 import { createServer } from './server.js';
 import { BridgeError, defaultHints } from './types/errors.js';
 import { log } from './log.js';
@@ -19,6 +20,14 @@ import { log } from './log.js';
 function lazyCache(): () => SelectaCache {
   let cache: SelectaCache | undefined;
   return () => (cache ??= SelectaCache.open());
+}
+
+// "2h 10m" / "4m" / "<1m" — chunk-level progress needs no finer grain.
+function formatEta(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return '<1m';
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 function reportError(err: unknown): void {
@@ -69,6 +78,78 @@ program
             track_count: result.trackCount,
             playlist_count: result.playlistCount,
             refreshed_at: result.refreshedAt,
+            db_path: defaultDbPath(),
+          },
+          null,
+          2,
+        ) + '\n',
+      );
+    } catch (err) {
+      reportError(err);
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('enrich')
+  .description(
+    'Fetch audio features (bpm/key/danceability) from MusicBrainz/AcousticBrainz/Deezer for tracks not yet attempted',
+  )
+  .option('-n, --limit <count>', 'stop after this many tracks (default: all pending)', (v) => {
+    // Number, not parseInt: '12abc' must be rejected, not read as 12. A
+    // negative value would reach SQLite's LIMIT, where it means "unlimited".
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1) {
+      throw new InvalidArgumentError('must be a positive integer');
+    }
+    return n;
+  })
+  .action(async ({ limit }: { limit?: number }) => {
+    try {
+      const cache = SelectaCache.open();
+      const pending = cache.countPendingEnrichment();
+      const budget = Math.min(limit ?? pending, pending);
+      log.info(
+        `${pending} tracks pending enrichment; attempting ${budget} at ~1-2s each (source rate limits)`,
+      );
+      // One engine call — it saves per 25-track chunk, so Ctrl-C loses at
+      // most the chunk in flight; the callback narrates each chunk landing.
+      // ETA extrapolates the run's own pace so far, so it absorbs real
+      // source latency instead of guessing from the rate-limit floor.
+      const startedAt = Date.now();
+      const summary = await enrichPendingTracks(cache, { limit: budget }, {
+        onProgress: (p) => {
+          // Skipped chunks count as covered ground for pace/ETA purposes —
+          // their tracks are this run's past, a later run's future.
+          const covered = p.processed + p.skipped;
+          const pct = Math.floor((covered / budget) * 100);
+          const remaining = budget - covered;
+          const eta =
+            remaining === 0
+              ? 'done'
+              : `~${formatEta(remaining * ((Date.now() - startedAt) / covered))} remaining`;
+          const skipped = p.skipped > 0 ? `, ${p.skipped} skipped` : '';
+          log.info(
+            `enriched ${p.enriched}/${p.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
+          );
+        },
+        onChunkError: (message, trackCount) =>
+          log.error(`chunk skipped (${trackCount} tracks stay pending): ${message}`),
+        // Moment-to-moment narration: every request and its outcome, so a
+        // multi-hour backfill is never a silent cursor.
+        trace: (line) => log.info(line),
+      });
+      cache.close();
+      process.stdout.write(
+        JSON.stringify(
+          {
+            processed: summary.processed,
+            enriched: summary.enriched,
+            no_data: summary.noData,
+            no_match: summary.noMatch,
+            skipped: summary.skipped,
+            source_errors: summary.errors,
+            pending_remaining: summary.pendingRemaining,
             db_path: defaultDbPath(),
           },
           null,

@@ -9,7 +9,9 @@ import type {
   TrackRatingState,
 } from '../types/bridge.js';
 import type {
+  AudioFeaturesRow,
   CoOccurringTrack,
+  PendingTrack,
   OverviewStats,
   PlaylistRef,
   PlaylistRow,
@@ -137,6 +139,32 @@ export class SelectaCache {
 
   getCoOccurringTracks(trackPersistentId: string, limit?: number): CoOccurringTrack[] {
     return this.queries.getCoOccurringTracks(trackPersistentId, limit);
+  }
+
+  /**
+   * Persist one enrichment batch atomically. Rows live outside the tracks
+   * refresh cycle (see schema.ts) — a refresh never rewrites them, only prunes
+   * rows whose track left the library.
+   */
+  saveAudioFeatures(rows: AudioFeaturesRow[]): void {
+    const run = this.db.transaction(() => {
+      for (const row of rows) this.queries.upsertAudioFeatures(row);
+    });
+    run();
+  }
+
+  /** Full features row with provenance; feature values also ride every TrackRow. */
+  getAudioFeatures(trackPersistentId: string): AudioFeaturesRow | null {
+    return this.queries.getAudioFeatures(trackPersistentId);
+  }
+
+  /** The enrichment backlog, most-played first: tracks never attempted. */
+  getTracksPendingEnrichment(limit: number): PendingTrack[] {
+    return this.queries.getTracksPendingEnrichment(limit);
+  }
+
+  countPendingEnrichment(): number {
+    return this.queries.countPendingEnrichment();
   }
 
   /**

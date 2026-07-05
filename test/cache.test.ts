@@ -6,6 +6,7 @@ import { SelectaCache } from '../src/cache/index.js';
 import { openDatabase } from '../src/cache/db.js';
 import { BridgeError } from '../src/types/errors.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
+import { featuresRow } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
@@ -153,6 +154,71 @@ describe('refreshFromSnapshot', () => {
       )
       .get() as { ms: number; tracks: number; playlists: number };
     expect(row).toEqual({ ms: 1234, tracks: 6, playlists: 4 });
+  });
+});
+
+describe('audio features', () => {
+  let cache: SelectaCache;
+  beforeEach(() => {
+    cache = refreshed();
+  });
+
+  it('round-trips a row, including the JSON sources map', () => {
+    const row = featuresRow();
+    cache.saveAudioFeatures([row]);
+    expect(cache.getAudioFeatures('T-TEARDROP')).toEqual(row);
+    expect(cache.getAudioFeatures('T-ANGEL')).toBeNull();
+  });
+
+  it('rides every track projection, enriched bpm shadowing the native tag', () => {
+    cache.saveAudioFeatures([featuresRow()]);
+    const track = cache.getTrack('T-TEARDROP')!;
+    expect(track.bpm).toBe(78.42);
+    expect(track.musicalKey).toBe('A minor');
+    expect(track.danceability).toBe(0.618);
+    // Unenriched: native tag where present, else null.
+    expect(cache.getTrack('T-GLORYBOX')!.bpm).toBe(95);
+    expect(cache.getTrack('T-ANGEL')!.bpm).toBeNull();
+  });
+
+  it('survives a full library refresh untouched', () => {
+    cache.saveAudioFeatures([featuresRow()]);
+    cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+    expect(cache.getAudioFeatures('T-TEARDROP')).toEqual(featuresRow());
+    expect(cache.getTrack('T-TEARDROP')!.bpm).toBe(78.42);
+  });
+
+  it('is pruned when its track leaves the library', () => {
+    cache.saveAudioFeatures([featuresRow()]);
+    const without = {
+      ...snapshot,
+      tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-TEARDROP'),
+    };
+    cache.refreshFromSnapshot(without, { durationMs: 1 });
+    expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
+  });
+
+  it('filters search by effective bpm: enriched wins over native, unknown never matches', () => {
+    // T-GLORYBOX carries a native tag of 95 from the fixture.
+    let { rows } = cache.searchTracks({ bpmMin: 90, bpmMax: 100 });
+    expect(rows.map((r) => r.persistentId)).toEqual(['T-GLORYBOX']);
+
+    // An enriched value overrides the native tag...
+    cache.saveAudioFeatures([featuresRow({ trackPersistentId: 'T-GLORYBOX', bpm: 120 })]);
+    rows = cache.searchTracks({ bpmMin: 90, bpmMax: 100 }).rows;
+    expect(rows).toEqual([]);
+    rows = cache.searchTracks({ bpmMin: 115, bpmMax: 125 }).rows;
+    expect(rows.map((r) => r.persistentId)).toEqual(['T-GLORYBOX']);
+
+    // ...and tracks with no tempo at all never match a bpm filter.
+    rows = cache.searchTracks({ bpmMin: 1 }).rows;
+    expect(rows.map((r) => r.persistentId)).toEqual(['T-GLORYBOX']);
+  });
+
+  it('counts withBpm across native and enriched tempos in overview stats', () => {
+    expect(cache.getOverview({}).withBpm).toBe(1); // native T-GLORYBOX
+    cache.saveAudioFeatures([featuresRow()]);
+    expect(cache.getOverview({}).withBpm).toBe(2);
   });
 });
 

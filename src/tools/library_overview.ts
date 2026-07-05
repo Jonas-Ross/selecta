@@ -29,6 +29,7 @@ export type LibraryOverviewOutput = {
   total_tracks: number;
   total_runtime_seconds: number;
   total_runtime_human: string;
+  tracks_with_bpm: number;
   genres: { name: string; count: number }[];
   genres_other?: { distinct: number; tracks: number };
   decades: { decade: string; count: number }[];
@@ -47,7 +48,7 @@ export type LibraryOverviewOutput = {
   cache_age_hours: number | null;
 };
 
-export const LIBRARY_OVERVIEW_DESCRIPTION = `Aggregate shape of the owned library, or a filtered slice: total tracks + runtime, genre distribution, decade histogram, top artists by track count, signal coverage (loved/rated/never-played + rating histogram), location split. Use it to orient before vibe-only requests, then search the slices. Same optional filters as search (all ANDed, no limit); none → whole library. Counts are RAW — genres are NOT normalized ("Hip-Hop" vs "Hip-Hop/Rap" stay separate), and top_artists is "most tracks owned", not a recommendation. genres caps at 50 (rest in genres_other), top_artists at 25 (artists_total carries the full count). cache_age_hours null → cache empty, call refresh_library once.`;
+export const LIBRARY_OVERVIEW_DESCRIPTION = `Aggregate shape of the owned library, or a filtered slice: total tracks + runtime, genre distribution, decade histogram, top artists by track count, signal coverage (loved/rated/never-played + rating histogram), location split, and tracks_with_bpm (how much of the slice has a known tempo — gauge whether bpm filtering is viable before relying on it). Use it to orient before vibe-only requests, then search the slices. Same optional filters as search (all ANDed, no limit); none → whole library. Counts are RAW — genres are NOT normalized ("Hip-Hop" vs "Hip-Hop/Rap" stay separate), and top_artists is "most tracks owned", not a recommendation. genres caps at 50 (rest in genres_other), top_artists at 25 (artists_total carries the full count). cache_age_hours null → cache empty, call refresh_library once.`;
 
 // 100 → "5", 90 → "4.5". Music stores half-stars as multiples of 10.
 function formatStars(rating: number): string {
@@ -92,6 +93,7 @@ export function shapeOverview(
     total_tracks: stats.totalTracks,
     total_runtime_seconds: stats.totalRuntimeSeconds,
     total_runtime_human: humanizeDuration(stats.totalRuntimeSeconds),
+    tracks_with_bpm: stats.withBpm,
     genres,
     ...(overflow.length > 0
       ? {
