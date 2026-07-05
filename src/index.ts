@@ -5,7 +5,7 @@
 // would corrupt the wire), and all commander output routes to stderr so stdout
 // stays pure MCP.
 
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { bridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
@@ -87,9 +87,15 @@ program
   .description(
     'Fetch audio features (bpm/key/danceability) from MusicBrainz/AcousticBrainz/Deezer for tracks not yet attempted',
   )
-  .option('-n, --limit <count>', 'stop after this many tracks (default: all pending)', (v) =>
-    parseInt(v, 10),
-  )
+  .option('-n, --limit <count>', 'stop after this many tracks (default: all pending)', (v) => {
+    // Number, not parseInt: '12abc' must be rejected, not read as 12. A
+    // negative value would reach SQLite's LIMIT, where it means "unlimited".
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1) {
+      throw new InvalidArgumentError('must be a positive integer');
+    }
+    return n;
+  })
   .action(async ({ limit }: { limit?: number }) => {
     try {
       const cache = SelectaCache.open();

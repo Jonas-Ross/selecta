@@ -452,7 +452,9 @@ export function createQueries(db: Database) {
     },
 
     getTracksPendingEnrichment(limit: number): PendingTrack[] {
-      return pendingEnrichmentStmt.all(limit) as PendingTrack[];
+      // Clamp: a negative LIMIT means "unlimited" to SQLite — a caller bug
+      // must not turn a bounded batch into a full-library crawl.
+      return pendingEnrichmentStmt.all(Math.max(0, limit)) as PendingTrack[];
     },
 
     countPendingEnrichment(): number {

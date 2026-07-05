@@ -174,6 +174,16 @@ describe('enrichPendingTracks', () => {
     expect(cache.getTrack('T-GLORYBOX')!.bpm).toBe(95); // native tag survives no_match
   });
 
+  it('treats a negative limit as zero, never as SQLite-unlimited', async () => {
+    // Regression (PR #29 review): LIMIT -1 means "no limit" to SQLite — a
+    // caller bug must not become a full-library crawl of external services.
+    expect(cache.getTracksPendingEnrichment(-1)).toEqual([]);
+    const { fetchLike, calls } = fakeFetch(scenarioHandler);
+    const summary = await enrichPendingTracks(cache, { limit: -1 }, testDeps(fetchLike));
+    expect(summary.processed).toBe(0);
+    expect(calls).toHaveLength(0);
+  });
+
   it('respects the batch limit and reports the rest as pending', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
     const summary = await enrichPendingTracks(cache, { limit: 2 }, testDeps(fetchLike));
