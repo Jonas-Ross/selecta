@@ -46,6 +46,9 @@ export type SourceDeps = {
   fetchLike: FetchLike;
   sleep: (ms: number) => Promise<void>;
   nowMs: () => number;
+  // Moment-to-moment narration ("MusicBrainz "Red Lights" — Tiësto …", then
+  // the outcome). The CLI wires this to stderr; the MCP tool leaves it unset.
+  trace?: (line: string) => void;
 };
 
 export type AbFeatures = {
@@ -74,6 +77,7 @@ export function createSources(deps: SourceDeps) {
   const paceMb = makeThrottle(MB_SPACING_MS, deps);
   const paceAb = makeThrottle(AB_SPACING_MS, deps);
   const paceDz = makeThrottle(DZ_SPACING_MS, deps);
+  const trace = deps.trace ?? (() => {});
 
   async function getJson(url: string, source: string): Promise<unknown> {
     let res: Awaited<ReturnType<FetchLike>>;
@@ -109,13 +113,16 @@ export function createSources(deps: SourceDeps) {
     const query = `recording:"${luceneEscape(stripFeat(target.title))}" AND artist:"${luceneEscape(primaryArtist(target.artist))}"`;
     const url = `https://musicbrainz.org/ws/2/recording?query=${encodeURIComponent(query)}&fmt=json&limit=5`;
     await paceMb();
+    trace(`MusicBrainz "${target.title}" — ${target.artist} …`);
     const data = (await getJson(url, 'MusicBrainz')) as MbSearchResponse;
     for (const rec of data.recordings ?? []) {
       if (rec.score < MB_MIN_SCORE) break;
       if (durationCompatible(rec.length != null ? rec.length / 1000 : null, target.durationSeconds)) {
+        trace(`  ↳ recording ${rec.id.slice(0, 8)} (score ${rec.score})`);
         return rec.id;
       }
     }
+    trace('  ↳ no confident match');
     return null;
   }
 
@@ -139,18 +146,22 @@ export function createSources(deps: SourceDeps) {
       const batch = mbids.slice(i, i + AB_BULK_MAX);
       const ids = batch.join(';');
       await paceAb();
+      trace(`AcousticBrainz bulk low-level: ${batch.length} recordings …`);
       const low = (await getJson(
         `https://acousticbrainz.org/api/v1/low-level?recording_ids=${ids}`,
         'AcousticBrainz',
       )) as AbBulk<AbLowLevel>;
+      trace(`  ↳ data for ${Object.keys(low).length}/${batch.length}`);
       // High-level is derived from low-level: nothing low, nothing high.
       let high: AbBulk<AbHighLevel> = {};
       if (Object.keys(low).length > 0) {
         await paceAb();
+        trace(`AcousticBrainz bulk high-level: ${batch.length} recordings …`);
         high = (await getJson(
           `https://acousticbrainz.org/api/v1/high-level?recording_ids=${ids}`,
           'AcousticBrainz',
         )) as AbBulk<AbHighLevel>;
+        trace(`  ↳ data for ${Object.keys(high).length}/${batch.length}`);
       }
       for (const mbid of batch) {
         const l = low[mbid]?.['0'];
@@ -188,15 +199,20 @@ export function createSources(deps: SourceDeps) {
     const query = `artist:"${primaryArtist(target.artist)}" track:"${stripFeat(target.title)}"`;
     const url = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=5`;
     await paceDz();
+    trace(`Deezer "${target.title}" — ${target.artist} …`);
     const search = dzChecked((await getJson(url, 'Deezer')) as DzSearchResponse);
     const hit = (search.data ?? []).find((h) =>
       durationCompatible(h.duration, target.durationSeconds),
     );
-    if (!hit) return null;
+    if (!hit) {
+      trace('  ↳ no match');
+      return null;
+    }
     await paceDz();
     const detail = dzChecked(
       (await getJson(`https://api.deezer.com/track/${hit.id}`, 'Deezer')) as DzTrackResponse,
     );
+    trace(detail.bpm ? `  ↳ bpm ${detail.bpm}` : '  ↳ matched, bpm unknown');
     return { trackId: hit.id, bpm: detail.bpm ? detail.bpm : null };
   }
 

@@ -194,6 +194,22 @@ describe('enrichPendingTracks', () => {
     expect(cache.getAudioFeatures('T-GLORYBOX')).toBeNull();
   });
 
+  it('narrates every source request through trace', async () => {
+    const { fetchLike } = fakeFetch(scenarioHandler);
+    const lines: string[] = [];
+    await enrichPendingTracks(cache, { limit: 10 }, {
+      ...testDeps(fetchLike),
+      trace: (line) => lines.push(line),
+    });
+    const text = lines.join('\n');
+    expect(text).toContain('chunk 1/1');
+    expect(text).toContain('MusicBrainz "Teardrop" — Massive Attack …');
+    expect(text).toContain('AcousticBrainz bulk low-level');
+    expect(text).toContain('Deezer "Midnight City" — M83 …');
+    expect(text).toContain('↳ bpm 105');
+    expect(text).toContain('chunk saved — 2 ok, 1 no_data, 3 no_match');
+  });
+
   it('reports progress after each saved chunk', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
     const ticks: number[] = [];

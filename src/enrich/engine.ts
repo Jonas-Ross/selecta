@@ -42,6 +42,8 @@ export type EnrichDeps = {
   now?: () => Date;
   onProgress?: (progress: EnrichmentProgress) => void;
   onChunkError?: (message: string, trackCount: number) => void;
+  // Moment-to-moment narration of every request and chunk (see SourceDeps.trace).
+  trace?: (line: string) => void;
 };
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,13 +54,16 @@ export async function enrichPendingTracks(
   deps: EnrichDeps = {},
 ): Promise<EnrichmentSummary> {
   const now = deps.now ?? (() => new Date());
+  const trace = deps.trace ?? (() => {});
   const sources = createSources({
     fetchLike: deps.fetchLike ?? withUserAgent(fetch),
     sleep: deps.sleep ?? defaultSleep,
     nowMs: () => now().getTime(),
+    trace: deps.trace,
   });
 
   const pending = cache.getTracksPendingEnrichment(opts.limit);
+  const totalChunks = Math.ceil(pending.length / CHUNK_SIZE);
   const progress: EnrichmentProgress = {
     processed: 0,
     enriched: 0,
@@ -69,6 +74,7 @@ export async function enrichPendingTracks(
   const errors: string[] = [];
   for (let i = 0; i < pending.length; i += CHUNK_SIZE) {
     const chunk = pending.slice(i, i + CHUNK_SIZE);
+    trace(`— chunk ${i / CHUNK_SIZE + 1}/${totalChunks}: ${chunk.length} tracks —`);
     let rows: AudioFeaturesRow[];
     try {
       rows = await resolveChunk(sources, chunk, now().toISOString());
@@ -82,12 +88,15 @@ export async function enrichPendingTracks(
       continue;
     }
     cache.saveAudioFeatures(rows);
+    const counts = { ok: 0, no_data: 0, no_match: 0 };
     for (const row of rows) {
       progress.processed += 1;
+      counts[row.status] += 1;
       if (row.status === 'ok') progress.enriched += 1;
       else if (row.status === 'no_data') progress.noData += 1;
       else progress.noMatch += 1;
     }
+    trace(`chunk saved — ${counts.ok} ok, ${counts.no_data} no_data, ${counts.no_match} no_match`);
     deps.onProgress?.({ ...progress });
   }
   return { ...progress, pendingRemaining: cache.countPendingEnrichment(), errors };

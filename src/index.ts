@@ -135,6 +135,9 @@ program
         },
         onChunkError: (message, trackCount) =>
           log.error(`chunk skipped (${trackCount} tracks stay pending): ${message}`),
+        // Moment-to-moment narration: every request and its outcome, so a
+        // multi-hour backfill is never a silent cursor.
+        trace: (line) => log.info(line),
       });
       cache.close();
       process.stdout.write(
