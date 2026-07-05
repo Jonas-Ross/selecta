@@ -59,6 +59,9 @@ describe('JXA script builders interpolate args as JSON, never via shell quoting'
     expect(script.indexOf('missingTrackIds')).toBeLessThan(
       script.indexOf('.rating = args.rating'),
     );
+    // Computed (album-derived) ratings must never read back as user signal —
+    // the readback goes through the ratingKind guard.
+    expect(script).toContain("t.ratingKind() === 'user'");
   });
 
   it('buildDeletePlaylistByIdScript embeds the args and guards editability before deleting', () => {

@@ -2,9 +2,10 @@
 //
 // Modern Music.app has no 'loved' property — the read/write name is
 // 'favorited' (docs/music-app.md, library contents). Rating writes the user
-// rating, 0..100 native scale; an unrated track reads back as null — the
-// script normalizes Music.app's 0-means-unrated here in the bridge, mirroring
-// read_library's omit-when-unset, so the cache stores what it's given.
+// rating, 0..100 native scale; a track without a USER rating reads back as
+// null — the script normalizes both Music.app's 0-means-unrated and
+// computed (album-derived) ratings here in the bridge, so the cache and the
+// restore baseline only ever carry real user signal.
 //
 // One skeleton, parameterized by the property read/write. It resolves every
 // requested track before writing anything (RESOLVE_TRACKS returns
@@ -48,7 +49,11 @@ export function buildSetLovedScript(args: { trackIds: string[]; loved: boolean }
 
 export function buildSetRatingScript(args: { trackIds: string[]; rating: number }): string {
   return buildTrackSignalScript(args, {
-    read: 'rating: t.rating() || null',
+    // Only a USER rating is signal: with the user rating cleared, rating()
+    // reports a computed (album-derived) value on some tracks — recording
+    // that in preWriteTracks would make a later restore write it back as an
+    // explicit user rating the user never set. ratingKind distinguishes them.
+    read: "rating: t.ratingKind() === 'user' ? (t.rating() || null) : null",
     write: 'trackById[id].rating = args.rating',
   });
 }

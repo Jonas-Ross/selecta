@@ -406,11 +406,9 @@ describe('bridge track-signal writes against real Music.app', { tags: ['integrat
 
       const cleared = await bridge.setTrackRating({ trackIds: [t], rating: 0 });
       expect(cleared.preWriteTracks[0]!.rating).toBe(80);
-      // No strict assert on the cleared value: unrated reads back null, but
-      // with the user rating gone Music.app may report a computed
-      // (album-derived) rating instead.
-      const clearedRating = cleared.tracks[0]!.rating;
-      expect(clearedRating === null || typeof clearedRating === 'number').toBe(true);
+      // Strictly null: the script reports null for both plain-unrated and a
+      // computed (album-derived) rating — only user ratings are signal.
+      expect(cleared.tracks[0]!.rating).toBeNull();
     } finally {
       // preWrite null = the track was unrated — restore by clearing (0).
       await bridge.setTrackRating({ trackIds: [t], rating: set.preWriteTracks[0]!.rating ?? 0 });
