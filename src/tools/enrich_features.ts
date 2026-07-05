@@ -11,11 +11,14 @@ import { parseInput, toErrorEnvelope, type ToolDeps } from './common.js';
 const DEFAULT_LIMIT = 25;
 
 export const enrichFeaturesInputShape = {
+  // Capped at 50: at ~1-3s/track a bigger batch runs past the ~60s tool-call
+  // timeout some MCP clients enforce. A timeout only loses result visibility
+  // (chunks save as they land), but the CLI is the right tool for bulk work.
   limit: z
     .number()
     .int()
     .min(1)
-    .max(100)
+    .max(50)
     .optional()
     .describe(
       `Tracks to attempt this call (default ${DEFAULT_LIMIT}). Source rate limits (MusicBrainz 1 req/s, AcousticBrainz 10 req/10s) pace the run at ~1-3s per track — size the batch to how long you're willing to wait.`,
