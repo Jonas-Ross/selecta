@@ -60,6 +60,12 @@ export type CoOccurringTrack = TrackRow & {
   sharedPlaylistNames: string[]; // cap 3
 };
 
+// searchTracks row. alternateIds is only present on a dedupe search, on rows
+// that collapsed duplicates: the suppressed copies' persistent IDs, sorted.
+export type SearchResultRow = TrackRow & {
+  alternateIds?: string[];
+};
+
 // Aggregate "shape of the crate" for library_overview (post-v1). Computed over
 // the same filtered rowset SearchFilters describes — so an overview can scope to
 // a slice. Counts are RAW: genres are grouped verbatim (no normalization), the
@@ -107,6 +113,11 @@ export type SearchFilters = {
   locationKind?: 'local' | 'cloud';
   excludeArtists?: string[]; // exact names, case-insensitive; NULL-artist rows are kept
   excludeTracks?: string[]; // persistent IDs
+  // Collapse rows that are the same song (same normalized title + artist) to
+  // one canonical representative. Presentation, not ranking: the winner is a
+  // deterministic tiebreak (DEDUPE_TIEBREAK in cache/queries.ts), never a
+  // quality score. search-only, like `sort`.
+  dedupe?: boolean;
   limit?: number; // default 50, max 500
   // How to order results. Omitted → relevance (with query) else most-played.
   // A neutral lens, not a ranking opinion: lets the model escape the

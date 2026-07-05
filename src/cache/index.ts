@@ -10,6 +10,7 @@ import type {
   PlaylistRow,
   ReconcileAction,
   SearchFilters,
+  SearchResultRow,
   TrackRow,
 } from '../types/cache.js';
 import { openDatabase } from './db.js';
@@ -89,7 +90,7 @@ export class SelectaCache {
     return this.queries.resolveCreatedPlaylistId(persistentId) ?? persistentId;
   }
 
-  searchTracks(filters: SearchFilters): { rows: TrackRow[]; total: number } {
+  searchTracks(filters: SearchFilters): { rows: SearchResultRow[]; total: number } {
     if (filters.inPlaylist != null) {
       filters = { ...filters, inPlaylist: this.resolvePlaylistId(filters.inPlaylist) };
     }

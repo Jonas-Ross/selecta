@@ -79,7 +79,7 @@ Build autonomously: design, implement, test, branch, and open PRs without per-st
 
 ## Status
 
-v1 complete — eleven tools live over MCP stdio, unit + integration suites green. v2 underway, tracked in issues #15–#20. Shipped: exclusion filters (#17); playlist mutation (#15, complete) — `add_tracks`/`remove_tracks` plus a `playlist_order` search sort, `reorder_tracks`, `delete_playlist`. Remaining: search dedup (#16), `set_loved`/`set_rating` (#18), audio-feature enrichment (#19), multi-seed co-occurrence (#20).
+v1 complete — eleven tools live over MCP stdio, unit + integration suites green. v2 underway, tracked in issues #15–#20. Shipped: exclusion filters (#17); playlist mutation (#15, complete) — `add_tracks`/`remove_tracks` plus a `playlist_order` search sort, `reorder_tracks`, `delete_playlist`; search dedup (#16) — `dedupe` flag on `search` collapsing same-song copies, suppressed IDs in `alternate_ids`. Remaining: `set_loved`/`set_rating` (#18), audio-feature enrichment (#19), multi-seed co-occurrence (#20).
 
 ⚠️ **Before touching the playlist edit paths, read `docs/music-app.md`** — scripted playlist-entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn).
 
