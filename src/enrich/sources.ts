@@ -193,10 +193,15 @@ export function createSources(deps: SourceDeps) {
     return data;
   }
 
+  // Deezer documents no escape for quotes inside artist:"…"/track:"…" — an
+  // embedded " would end the field early and fabricate a terminal no_match.
+  // Strip them; the duration gate still guards the match.
+  const dzField = (s: string): string => s.replace(/"/g, '');
+
   async function dzFindTrack(
     target: MatchTarget,
   ): Promise<{ trackId: number; bpm: number | null } | null> {
-    const query = `artist:"${primaryArtist(target.artist)}" track:"${stripFeat(target.title)}"`;
+    const query = `artist:"${dzField(primaryArtist(target.artist))}" track:"${dzField(stripFeat(target.title))}"`;
     const url = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=5`;
     await paceDz();
     trace(`Deezer "${target.title}" — ${target.artist} …`);

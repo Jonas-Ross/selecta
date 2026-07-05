@@ -302,6 +302,37 @@ describe('enrichPendingTracks', () => {
     expect(big.getAudioFeatures('T-10')).toBeNull();
   });
 
+  it('strips embedded quotes from Deezer query fields (no escape exists)', async () => {
+    // Regression (PR #29 review): an embedded " ends the artist:/track: field
+    // early on Deezer's side and fabricates a terminal no_match.
+    const quoted = SelectaCache.open(':memory:');
+    quoted.refreshFromSnapshot(
+      {
+        capturedAt: '2026-07-04T00:00:00.000Z',
+        tracks: [
+          {
+            persistentId: 'T-Q',
+            title: 'Say "Boom" Again',
+            artist: 'The "Q" Band',
+            durationSeconds: 200,
+            playCount: 1,
+          },
+        ],
+        playlists: [],
+      } as LibrarySnapshot,
+      { durationMs: 1 },
+    );
+    const { fetchLike, calls } = fakeFetch((url) => {
+      const u = decodeURIComponent(url);
+      if (u.includes('musicbrainz.org')) return [200, { recordings: [] }];
+      if (u.includes('api.deezer.com/search')) return [200, { data: [] }];
+      throw new Error(`unrouted url: ${url}`);
+    });
+    await enrichPendingTracks(quoted, { limit: 1 }, testDeps(fetchLike));
+    const dzCall = decodeURIComponent(calls.find((c) => c.includes('deezer'))!);
+    expect(dzCall).toContain('artist:"The Q Band" track:"Say Boom Again"');
+  });
+
   it('reports transport failures naming the source, without failing the run', async () => {
     const fetchLike: FetchLike = async () => {
       throw new Error('getaddrinfo ENOTFOUND musicbrainz.org');
