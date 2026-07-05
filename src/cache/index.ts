@@ -11,6 +11,7 @@ import type {
 import type {
   AudioFeaturesRow,
   CoOccurringTrack,
+  PendingTrack,
   OverviewStats,
   PlaylistRef,
   PlaylistRow,
@@ -155,6 +156,15 @@ export class SelectaCache {
   /** Full features row with provenance; feature values also ride every TrackRow. */
   getAudioFeatures(trackPersistentId: string): AudioFeaturesRow | null {
     return this.queries.getAudioFeatures(trackPersistentId);
+  }
+
+  /** The enrichment backlog, most-played first: tracks never attempted. */
+  getTracksPendingEnrichment(limit: number): PendingTrack[] {
+    return this.queries.getTracksPendingEnrichment(limit);
+  }
+
+  countPendingEnrichment(): number {
+    return this.queries.countPendingEnrichment();
   }
 
   /**

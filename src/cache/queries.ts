@@ -13,6 +13,7 @@ import type {
   AudioFeaturesRow,
   CoOccurringTrack,
   OverviewStats,
+  PendingTrack,
   PlaylistCreationRow,
   PlaylistRef,
   PlaylistRow,
@@ -364,6 +365,23 @@ export function createQueries(db: Database) {
     FROM audio_features WHERE track_persistent_id = ?
   `);
 
+  // The enrichment backlog: tracks never attempted (no row — attempted tracks
+  // are terminal whatever their status). Most-played first, so the tracks the
+  // model touches most gain features earliest; stable ID tiebreak. Slim
+  // projection: only what matching needs, not TRACK_COLUMNS (whose feature
+  // subqueries are NULL by construction here).
+  const pendingEnrichmentSql = `
+    FROM tracks t
+    WHERE NOT EXISTS (SELECT 1 FROM audio_features af WHERE af.track_persistent_id = t.persistent_id)
+  `;
+  const pendingEnrichmentStmt = db.prepare(`
+    SELECT t.persistent_id AS persistentId, t.title, t.artist,
+           t.duration_seconds AS durationSeconds
+    ${pendingEnrichmentSql}
+    ORDER BY t.play_count DESC, t.persistent_id LIMIT ?
+  `);
+  const countPendingEnrichmentStmt = db.prepare(`SELECT COUNT(*) AS n ${pendingEnrichmentSql}`);
+
   return {
     upsertTrack(track: RawTrack): void {
       upsertTrackStmt.run({
@@ -431,6 +449,14 @@ export function createQueries(db: Database) {
         ...row,
         sources: row.sources != null ? JSON.stringify(row.sources) : null,
       });
+    },
+
+    getTracksPendingEnrichment(limit: number): PendingTrack[] {
+      return pendingEnrichmentStmt.all(limit) as PendingTrack[];
+    },
+
+    countPendingEnrichment(): number {
+      return (countPendingEnrichmentStmt.get() as { n: number }).n;
     },
 
     getAudioFeatures(trackPersistentId: string): AudioFeaturesRow | null {

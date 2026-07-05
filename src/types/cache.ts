@@ -32,6 +32,11 @@ export type TrackRow = {
   danceability: number | null; // 0..1
 };
 
+// What the enrichment backlog query returns: just the fields matching needs.
+// Deliberately not a full TrackRow — the projection skips the feature
+// subqueries, which are NULL by construction for pending tracks.
+export type PendingTrack = Pick<TrackRow, 'persistentId' | 'title' | 'artist' | 'durationSeconds'>;
+
 // A full audio_features row — the enrichment engine's read/write shape.
 // Feature columns land on TrackRow via the join; this adds provenance.
 // status is terminal ('ok' | 'no_data' | 'no_match'): a track with a row is

@@ -8,13 +8,17 @@ import type { Bridge } from '../types/bridge.js';
 import type { PlaylistRow, SearchFilters, TrackRow } from '../types/cache.js';
 import { BridgeError, defaultHints, type SelectaError } from '../types/errors.js';
 import type { SelectaCache } from '../cache/index.js';
+import type { EnrichDeps } from '../enrich/index.js';
 
 // cache is a lazy getter so a broken cache (unwritable dir, corrupt file)
 // surfaces per-call as a cache_unavailable envelope instead of crashing the
 // server at startup — and cold start stays under the 200ms budget.
+// enrich overrides the enrichment engine's fetch/clock/timer — tests inject
+// canned sources here; production leaves it unset for the real network.
 export type ToolDeps = {
   cache: () => SelectaCache;
   bridge: Bridge;
+  enrich?: EnrichDeps;
 };
 
 // The model-facing track shape: identity fields plus the behavioral signal

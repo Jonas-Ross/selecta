@@ -1,7 +1,8 @@
-// Cross-cutting error envelope. Shared by every layer:
-// the bridge THROWS BridgeError; tool handlers CATCH it and RETURN SelectaError
-// (the MCP wire shape). Lives in src/types/ — not inside bridge/ — because
-// cache/ and tools/ consume these too and must not depend on the bridge package.
+// Cross-cutting error envelope. Shared by every layer: the external-world
+// adapters (bridge/, enrich/) THROW BridgeError; tool handlers CATCH it and
+// RETURN SelectaError (the MCP wire shape). Lives in src/types/ — not inside
+// bridge/ — because every other layer consumes these too and must not depend
+// on the bridge package.
 
 export type ErrorCode =
   | 'not_implemented' // bridge method not yet built in the current milestone
@@ -12,7 +13,8 @@ export type ErrorCode =
   | 'playlist_not_found' // same, for playlists
   | 'playlist_not_editable' // edit target is smart/subscription/folder, not a user playlist
   | 'validation_error' // input failed schema check
-  | 'cache_unavailable'; // DB open failed (perms, disk full)
+  | 'cache_unavailable' // DB open failed (perms, disk full)
+  | 'enrichment_error'; // an external metadata source failed mid-enrichment
 
 export type SelectaError = {
   error: ErrorCode;
@@ -53,4 +55,6 @@ export const defaultHints: Record<ErrorCode, string> = {
     'Input failed validation; see message for the offending field.',
   cache_unavailable:
     'Could not open the local cache. Check filesystem permissions on ~/Library/Application Support/Selecta/.',
+  enrichment_error:
+    'An external metadata source failed (network down or rate-limiting). Completed chunks of this run are already saved — call enrich_features again later to continue.',
 };

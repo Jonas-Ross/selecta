@@ -9,6 +9,7 @@ import { Command } from 'commander';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { bridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
+import { enrichPendingTracks } from './enrich/index.js';
 import { createServer } from './server.js';
 import { BridgeError, defaultHints } from './types/errors.js';
 import { log } from './log.js';
@@ -69,6 +70,49 @@ program
             track_count: result.trackCount,
             playlist_count: result.playlistCount,
             refreshed_at: result.refreshedAt,
+            db_path: defaultDbPath(),
+          },
+          null,
+          2,
+        ) + '\n',
+      );
+    } catch (err) {
+      reportError(err);
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('enrich')
+  .description(
+    'Fetch audio features (bpm/key/danceability) from MusicBrainz/AcousticBrainz/Deezer for tracks not yet attempted',
+  )
+  .option('-n, --limit <count>', 'stop after this many tracks (default: all pending)', (v) =>
+    parseInt(v, 10),
+  )
+  .action(async ({ limit }: { limit?: number }) => {
+    try {
+      const cache = SelectaCache.open();
+      const pending = cache.countPendingEnrichment();
+      const budget = Math.min(limit ?? pending, pending);
+      log.info(
+        `${pending} tracks pending enrichment; attempting ${budget} at ~1-2s each (source rate limits)`,
+      );
+      // One engine call — it saves per 25-track chunk, so Ctrl-C loses at
+      // most the chunk in flight; the callback narrates each chunk landing.
+      const summary = await enrichPendingTracks(cache, { limit: budget }, {
+        onProgress: (p) =>
+          log.info(`enriched ${p.enriched}/${p.processed} attempted, ${budget - p.processed} to go`),
+      });
+      cache.close();
+      process.stdout.write(
+        JSON.stringify(
+          {
+            processed: summary.processed,
+            enriched: summary.enriched,
+            no_data: summary.noData,
+            no_match: summary.noMatch,
+            pending_remaining: summary.pendingRemaining,
             db_path: defaultDbPath(),
           },
           null,

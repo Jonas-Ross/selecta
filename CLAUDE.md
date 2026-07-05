@@ -6,11 +6,12 @@ A local MCP server that exposes the user's Apple Music library to Claude so play
 
 ## Architecture
 
-Three layers, top-down dependency. Cache + bridge are usable as a plain Node library without MCP — keeps tests fast and boundaries crisp.
+Tools on top, three external/storage peers below — cache, bridge, and enrich are all usable as a plain Node library without MCP, which keeps tests fast and boundaries crisp.
 
-- **`src/tools/`** — thirteen MCP handlers (`search`, `library_overview`, `get_track_context`, `list_playlists`, `create_playlist`, `preview_playlist`, `add_tracks`, `remove_tracks`, `reorder_tracks`, `delete_playlist`, `set_loved`, `set_rating`, `refresh_library`). Thin orchestrators: validate input, query cache and/or bridge, shape response. Only layer that knows MCP exists. `search` and `library_overview` share `common.libraryFilterShape`.
-- **`src/cache/`** — SQLite at `~/Library/Application Support/Selecta/library.db`. Tracks, playlists, playlist_tracks, refresh_log + FTS5. All model-triggered reads hit this layer.
+- **`src/tools/`** — fourteen MCP handlers (`search`, `library_overview`, `get_track_context`, `list_playlists`, `create_playlist`, `preview_playlist`, `add_tracks`, `remove_tracks`, `reorder_tracks`, `delete_playlist`, `set_loved`, `set_rating`, `refresh_library`, `enrich_features`). Thin orchestrators: validate input, query cache and/or bridge, shape response. Only layer that knows MCP exists. `search` and `library_overview` share `common.libraryFilterShape`.
+- **`src/cache/`** — SQLite at `~/Library/Application Support/Selecta/library.db`. Tracks, playlists, playlist_tracks, audio_features, refresh_log + FTS5. All model-triggered reads hit this layer. audio_features (bpm/musical_key/danceability + per-field provenance, keyed by persistent ID) sits outside the refresh cycle: a reread never wipes enrichment; rows are pruned only when their track leaves the library.
 - **`src/bridge/`** — wraps Music.app. Builds JXA snippets, shells out via `osascript -l JavaScript`, parses JSON.
+- **`src/enrich/`** — wraps the external metadata sources (MusicBrainz→AcousticBrainz, Deezer; free, no API keys). Sources self-throttle to each host's documented limit (MusicBrainz 1 req/s, AcousticBrainz 10 req/10s; throttles start "as if a call just happened" so run boundaries can't burst); every attempted track gets a terminal status (`ok`/`no_data`/`no_match`) so dead ends are never retried, and a 503/429 aborts with a structured error — no retry-hammering. Runs only when explicitly invoked (`enrich_features` tool, `enrich` CLI) — never as a side effect of refresh.
 
 Shared types live in `src/types/`; the cross-cutting error envelope in `src/types/errors.ts`.
 
@@ -26,6 +27,7 @@ Shared types live in `src/types/`; the cross-cutting error envelope in `src/type
 | `npm run verify:echo` | Live iCloud-echo reconciliation harness |
 | `npm run dev` | Run the MCP server over stdio |
 | `node dist/index.js refresh` | Refresh the library cache from the CLI, no MCP client needed |
+| `node dist/index.js enrich [-n N]` | Backfill audio features from the CLI (default all pending, ~1-3s/track) |
 
 ## Testing
 
@@ -79,7 +81,7 @@ Build autonomously: design, implement, test, branch, and open PRs without per-st
 
 ## Status
 
-v1 complete — eleven tools live over MCP stdio, unit + integration suites green. v2 underway, tracked in issues #15–#20. Shipped: exclusion filters (#17); playlist mutation (#15, complete) — `add_tracks`/`remove_tracks` plus a `playlist_order` search sort, `reorder_tracks`, `delete_playlist`; search dedup (#16) — `dedupe` flag on `search` collapsing same-song copies, suppressed IDs in `alternate_ids`; write-back signal (#18) — `set_loved`/`set_rating` (stars 0–5, halves; 0 clears). Remaining: audio-feature enrichment (#19), multi-seed co-occurrence (#20).
+v1 complete — eleven tools live over MCP stdio, unit + integration suites green. v2 underway, tracked in issues #15–#20. Shipped: exclusion filters (#17); playlist mutation (#15, complete) — `add_tracks`/`remove_tracks` plus a `playlist_order` search sort, `reorder_tracks`, `delete_playlist`; search dedup (#16) — `dedupe` flag on `search` collapsing same-song copies, suppressed IDs in `alternate_ids`; write-back signal (#18) — `set_loved`/`set_rating` (stars 0–5, halves; 0 clears); audio-feature enrichment (#19) — `audio_features` cache, `enrich_features` tool + `enrich` CLI, bpm/musical_key/danceability on every track surface plus `bpm_min`/`bpm_max` filters and overview `tracks_with_bpm` (coverage is partial by nature — a live probe of this library measured ~57% bpm / ~37% key, weakest on 2022+ releases). Remaining: multi-seed co-occurrence (#20).
 
 ⚠️ **Before touching the playlist edit paths, read `docs/music-app.md`** — scripted playlist-entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn).
 
