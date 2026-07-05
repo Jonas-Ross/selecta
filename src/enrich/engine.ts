@@ -107,11 +107,14 @@ function matchTarget(track: PendingTrack): { artist: string; title: string; dura
   return { artist: track.artist, title: track.title, durationSeconds: track.durationSeconds };
 }
 
+// Per-field provenance built up alongside each row, folded in by finalizeRows.
+type Provenance = NonNullable<AudioFeaturesRow['sources']>;
+
 /**
  * One chunk through the source chain: per-track MusicBrainz matching, one
  * bulk AcousticBrainz features fetch for all matches, Deezer for bpm the
  * others couldn't supply. Always returns terminal rows; source failures
- * throw BridgeError and abort the run.
+ * throw BridgeError and abort the chunk.
  */
 async function resolveChunk(
   sources: Sources,
@@ -129,15 +132,36 @@ async function resolveChunk(
     status: 'no_match', // tracks with no artist/title stay here without any network
     fetchedAt,
   }));
-  const provenance = rows.map(() => ({}) as NonNullable<AudioFeaturesRow['sources']>);
+  const provenance: Provenance[] = rows.map(() => ({}));
 
+  await matchViaMusicBrainz(sources, chunk, rows);
+  await applyAcousticBrainzFeatures(sources, rows, provenance);
+  await fillDeezerBpm(sources, chunk, rows, provenance);
+  finalizeRows(rows, provenance);
+  return rows;
+}
+
+async function matchViaMusicBrainz(
+  sources: Sources,
+  chunk: PendingTrack[],
+  rows: AudioFeaturesRow[],
+): Promise<void> {
   for (const [i, track] of chunk.entries()) {
     const target = matchTarget(track);
     if (target) rows[i]!.mbRecordingMbid = await sources.mbFindRecording(target);
   }
+}
 
-  const mbids = [...new Set(rows.flatMap((r) => (r.mbRecordingMbid != null ? [r.mbRecordingMbid] : [])))];
-  const abFeatures = mbids.length > 0 ? await sources.abLookupFeatures(mbids) : new Map();
+async function applyAcousticBrainzFeatures(
+  sources: Sources,
+  rows: AudioFeaturesRow[],
+  provenance: Provenance[],
+): Promise<void> {
+  const mbids = [
+    ...new Set(rows.flatMap((r) => (r.mbRecordingMbid != null ? [r.mbRecordingMbid] : []))),
+  ];
+  if (mbids.length === 0) return;
+  const abFeatures = await sources.abLookupFeatures(mbids);
   for (const [i, row] of rows.entries()) {
     const ab = row.mbRecordingMbid != null ? abFeatures.get(row.mbRecordingMbid) : undefined;
     if (!ab) continue;
@@ -154,7 +178,14 @@ async function resolveChunk(
       provenance[i]!.danceability = 'acousticbrainz';
     }
   }
+}
 
+async function fillDeezerBpm(
+  sources: Sources,
+  chunk: PendingTrack[],
+  rows: AudioFeaturesRow[],
+  provenance: Provenance[],
+): Promise<void> {
   for (const [i, track] of chunk.entries()) {
     const row = rows[i]!;
     const target = matchTarget(track);
@@ -168,7 +199,10 @@ async function resolveChunk(
       }
     }
   }
+}
 
+/** Terminal status per row: any feature → ok; any match → no_data; else no_match. */
+function finalizeRows(rows: AudioFeaturesRow[], provenance: Provenance[]): void {
   for (const [i, row] of rows.entries()) {
     const hasData = row.bpm != null || row.musicalKey != null || row.danceability != null;
     row.status = hasData
@@ -178,5 +212,4 @@ async function resolveChunk(
         : 'no_match';
     row.sources = hasData ? provenance[i]! : null;
   }
-  return rows;
 }
