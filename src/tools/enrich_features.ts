@@ -30,9 +30,13 @@ export type EnrichFeaturesOutput = {
   no_data: number;
   no_match: number;
   pending_remaining: number;
+  // Present only when a source outage skipped chunks: those tracks stay
+  // pending (counted in pending_remaining) and are picked up by a later call.
+  skipped?: number;
+  source_errors?: string[];
 };
 
-export const ENRICH_FEATURES_DESCRIPTION = `Fetch audio features (bpm, musical_key, danceability) for owned tracks not yet attempted, from free public sources (MusicBrainz→AcousticBrainz, Deezer; network required, no keys). One call processes one batch (~1-3s per track; source rate limits are honored automatically), most-played tracks first, saving in 25-track chunks; call again while pending_remaining > 0. Attempted tracks are terminal — no_match / no_data are recorded and never retried, so coverage is partial by nature (bpm lands on roughly half a typical library; recent releases are weakest). Features then appear on search / get_track_context results. On enrichment_error every completed chunk is already saved — safe to call again later. For a first-time backfill of a whole library prefer the CLI: node dist/index.js enrich.`;
+export const ENRICH_FEATURES_DESCRIPTION = `Fetch audio features (bpm, musical_key, danceability) for owned tracks not yet attempted, from free public sources (MusicBrainz→AcousticBrainz, Deezer; network required, no keys). One call processes one batch (~1-3s per track; source rate limits are honored automatically), most-played tracks first, saving in 25-track chunks; call again while pending_remaining > 0. Attempted tracks are terminal — no_match / no_data are recorded and never retried, so coverage is partial by nature (bpm lands on roughly half a typical library; recent releases are weakest). Features then appear on search / get_track_context results. Chunks that hit a source outage (AcousticBrainz throws intermittent 5xx) are skipped, reported in skipped/source_errors, and their tracks stay pending — call again later to pick them up; nothing is retried within a run. For a first-time backfill of a whole library prefer the CLI: node dist/index.js enrich.`;
 
 export async function handleEnrichFeatures(
   raw: unknown,
@@ -53,6 +57,9 @@ export async function handleEnrichFeatures(
       no_data: summary.noData,
       no_match: summary.noMatch,
       pending_remaining: summary.pendingRemaining,
+      ...(summary.skipped > 0
+        ? { skipped: summary.skipped, source_errors: summary.errors }
+        : {}),
     };
   } catch (err) {
     return toErrorEnvelope(err);

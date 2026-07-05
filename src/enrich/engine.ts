@@ -3,14 +3,20 @@
 // chunk, MusicBrainz matches each track (paced per request by the sources),
 // two bulk AcousticBrainz calls fetch features for every match at once —
 // per-MBID AB lookups take ~60s and are unusable — then Deezer fills bpm
-// gaps, and the chunk's rows are saved in one transaction. An abort (network
-// down, a source rate-limiting) loses at most the in-flight chunk; earlier
-// chunks are already durable. Every saved row — 'no_match' and 'no_data'
+// gaps, and the chunk's rows are saved in one transaction.
+//
+// A source failure (AB in particular throws intermittent 5xx) SKIPS the
+// chunk and continues: nothing is saved for it — so no terminal row is ever
+// written from a degraded look — its tracks stay pending for a later run,
+// and the skip is reported in the summary (and onChunkError), never
+// swallowed. This is failure isolation, not a retry: no request is ever
+// reissued within a run. Every saved row — 'no_match' and 'no_data'
 // included — is terminal, so the next run starts on fresh tracks and dead
 // ends are never retried.
 
 import type { SelectaCache } from '../cache/index.js';
 import type { AudioFeaturesRow, PendingTrack } from '../types/cache.js';
+import { BridgeError } from '../types/errors.js';
 import { createSources, withUserAgent, type FetchLike, type Sources } from './sources.js';
 
 const CHUNK_SIZE = 25;
@@ -20,19 +26,22 @@ export type EnrichmentProgress = {
   enriched: number; // status 'ok'
   noData: number;
   noMatch: number;
+  skipped: number; // tracks in chunks that hit a source failure; still pending
 };
 
 export type EnrichmentSummary = EnrichmentProgress & {
   pendingRemaining: number;
+  errors: string[]; // deduped source-failure messages from skipped chunks
 };
 
-// Injection points for tests plus the per-chunk progress hook the CLI uses;
+// Injection points for tests plus the progress/failure hooks the CLI uses;
 // production defaults to the real fetch/clock/timer.
 export type EnrichDeps = {
   fetchLike?: FetchLike;
   sleep?: (ms: number) => Promise<void>;
   now?: () => Date;
   onProgress?: (progress: EnrichmentProgress) => void;
+  onChunkError?: (message: string, trackCount: number) => void;
 };
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,10 +59,28 @@ export async function enrichPendingTracks(
   });
 
   const pending = cache.getTracksPendingEnrichment(opts.limit);
-  const progress: EnrichmentProgress = { processed: 0, enriched: 0, noData: 0, noMatch: 0 };
+  const progress: EnrichmentProgress = {
+    processed: 0,
+    enriched: 0,
+    noData: 0,
+    noMatch: 0,
+    skipped: 0,
+  };
+  const errors: string[] = [];
   for (let i = 0; i < pending.length; i += CHUNK_SIZE) {
     const chunk = pending.slice(i, i + CHUNK_SIZE);
-    const rows = await resolveChunk(sources, chunk, now().toISOString());
+    let rows: AudioFeaturesRow[];
+    try {
+      rows = await resolveChunk(sources, chunk, now().toISOString());
+    } catch (err) {
+      // Only source failures are skippable; anything else is a bug and rethrows.
+      if (!(err instanceof BridgeError) || err.errorCode !== 'enrichment_error') throw err;
+      progress.skipped += chunk.length;
+      if (!errors.includes(err.message)) errors.push(err.message);
+      deps.onChunkError?.(err.message, chunk.length);
+      deps.onProgress?.({ ...progress });
+      continue;
+    }
     cache.saveAudioFeatures(rows);
     for (const row of rows) {
       progress.processed += 1;
@@ -63,7 +90,7 @@ export async function enrichPendingTracks(
     }
     deps.onProgress?.({ ...progress });
   }
-  return { ...progress, pendingRemaining: cache.countPendingEnrichment() };
+  return { ...progress, pendingRemaining: cache.countPendingEnrichment(), errors };
 }
 
 function matchTarget(track: PendingTrack): { artist: string; title: string; durationSeconds: number | null } | null {

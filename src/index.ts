@@ -119,14 +119,22 @@ program
       const startedAt = Date.now();
       const summary = await enrichPendingTracks(cache, { limit: budget }, {
         onProgress: (p) => {
-          const pct = Math.floor((p.processed / budget) * 100);
-          const remaining = budget - p.processed;
+          // Skipped chunks count as covered ground for pace/ETA purposes —
+          // their tracks are this run's past, a later run's future.
+          const covered = p.processed + p.skipped;
+          const pct = Math.floor((covered / budget) * 100);
+          const remaining = budget - covered;
           const eta =
             remaining === 0
               ? 'done'
-              : `~${formatEta(remaining * ((Date.now() - startedAt) / p.processed))} remaining`;
-          log.info(`enriched ${p.enriched}/${p.processed} attempted — ${pct}% of ${budget}, ${eta}`);
+              : `~${formatEta(remaining * ((Date.now() - startedAt) / covered))} remaining`;
+          const skipped = p.skipped > 0 ? `, ${p.skipped} skipped` : '';
+          log.info(
+            `enriched ${p.enriched}/${p.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
+          );
         },
+        onChunkError: (message, trackCount) =>
+          log.error(`chunk skipped (${trackCount} tracks stay pending): ${message}`),
       });
       cache.close();
       process.stdout.write(
@@ -136,6 +144,8 @@ program
             enriched: summary.enriched,
             no_data: summary.noData,
             no_match: summary.noMatch,
+            skipped: summary.skipped,
+            source_errors: summary.errors,
             pending_remaining: summary.pendingRemaining,
             db_path: defaultDbPath(),
           },

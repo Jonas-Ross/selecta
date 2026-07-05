@@ -13,7 +13,6 @@ import {
 import { handleEnrichFeatures, type EnrichFeaturesOutput } from '../src/tools/enrich_features.js';
 import type { ToolDeps } from '../src/tools/common.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
-import { BridgeError } from '../src/types/errors.js';
 import { asError, makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
@@ -130,7 +129,9 @@ describe('enrichPendingTracks', () => {
       enriched: 2,
       noData: 1,
       noMatch: 3,
+      skipped: 0,
       pendingRemaining: 0,
+      errors: [],
     });
 
     // Most-played first: Midnight City (55 plays) hits MusicBrainz before Teardrop (42).
@@ -233,49 +234,80 @@ describe('enrichPendingTracks', () => {
     expect(calls.length).toBe(callsAfterFirstRun);
   });
 
-  it('aborts on a source failure, losing at most the in-flight chunk', async () => {
+  it('skips the chunk on a source failure — nothing half-written, tracks stay pending', async () => {
     const { fetchLike } = fakeFetch((url) => {
       if (decodeURIComponent(url).includes('Teardrop')) return [503, { error: 'rate limited' }];
       return scenarioHandler(url);
     });
-    await expect(
-      enrichPendingTracks(cache, { limit: 10 }, testDeps(fetchLike)),
-    ).rejects.toSatisfy(
-      (err) => err instanceof BridgeError && err.errorCode === 'enrichment_error',
-    );
-    // The whole (single) chunk is unsaved — every track stays pending, so the
-    // next run re-attempts them all. Nothing half-written.
+    const chunkErrors: [string, number][] = [];
+    const summary = await enrichPendingTracks(cache, { limit: 10 }, {
+      ...testDeps(fetchLike),
+      onChunkError: (message, trackCount) => chunkErrors.push([message, trackCount]),
+    });
+    expect(summary.processed).toBe(0);
+    expect(summary.skipped).toBe(6); // the whole (single) chunk
+    expect(summary.pendingRemaining).toBe(6);
+    expect(summary.errors).toEqual([expect.stringContaining('MusicBrainz responded 503')]);
+    expect(chunkErrors).toEqual([[expect.stringContaining('503'), 6]]);
     expect(cache.getAudioFeatures('T-MIDNIGHT')).toBeNull();
-    expect(cache.countPendingEnrichment()).toBe(6);
   });
 
-  it('translates transport failures into enrichment_error naming the source', async () => {
+  it('continues past a failed chunk to the next one', async () => {
+    // 30 synthetic tracks → two chunks (25 + 5), play-count order T-01…T-30.
+    // Chunk 1 dies on Song 10's MusicBrainz call; chunk 2 must still land.
+    const big = SelectaCache.open(':memory:');
+    big.refreshFromSnapshot(
+      {
+        capturedAt: '2026-07-04T00:00:00.000Z',
+        tracks: Array.from({ length: 30 }, (_, i) => ({
+          persistentId: `T-${String(i + 1).padStart(2, '0')}`,
+          title: `Song ${String(i + 1).padStart(2, '0')}`,
+          artist: `Artist ${i + 1}`,
+          durationSeconds: 200,
+          playCount: 100 - i,
+        })),
+        playlists: [],
+      } as LibrarySnapshot,
+      { durationMs: 1 },
+    );
+    const { fetchLike } = fakeFetch((url) => {
+      const u = decodeURIComponent(url);
+      if (u.includes('Song 10')) return [503, { error: 'gateway' }];
+      if (u.includes('musicbrainz.org')) return [200, { recordings: [] }];
+      if (u.includes('api.deezer.com/search')) return [200, { data: [] }];
+      throw new Error(`unrouted url: ${url}`);
+    });
+    const summary = await enrichPendingTracks(big, { limit: 30 }, testDeps(fetchLike));
+    expect(summary.skipped).toBe(25); // chunk 1 lost to the 503
+    expect(summary.processed).toBe(5); // chunk 2 completed (all no_match)
+    expect(summary.noMatch).toBe(5);
+    expect(summary.pendingRemaining).toBe(25);
+    expect(big.getAudioFeatures('T-26')).toMatchObject({ status: 'no_match' });
+    expect(big.getAudioFeatures('T-10')).toBeNull();
+  });
+
+  it('reports transport failures naming the source, without failing the run', async () => {
     const fetchLike: FetchLike = async () => {
       throw new Error('getaddrinfo ENOTFOUND musicbrainz.org');
     };
-    await expect(
-      enrichPendingTracks(cache, { limit: 1 }, testDeps(fetchLike)),
-    ).rejects.toSatisfy(
-      (err) =>
-        err instanceof BridgeError &&
-        err.errorCode === 'enrichment_error' &&
-        err.message.includes('MusicBrainz unreachable') &&
-        err.message.includes('ENOTFOUND'),
-    );
+    const summary = await enrichPendingTracks(cache, { limit: 6 }, testDeps(fetchLike));
+    expect(summary.skipped).toBe(6);
+    expect(summary.errors).toEqual([
+      expect.stringContaining('MusicBrainz unreachable: getaddrinfo ENOTFOUND'),
+    ]);
   });
 
-  it('fails structurally on a Deezer in-body error instead of storing junk', async () => {
+  it('treats a Deezer in-body error as a chunk skip, never as data', async () => {
     const { fetchLike } = fakeFetch((url) => {
       const u = decodeURIComponent(url);
       if (u.includes('api.deezer.com/search'))
         return [200, { error: { message: 'Quota limit exceeded' } }];
       return scenarioHandler(url);
     });
-    await expect(
-      enrichPendingTracks(cache, { limit: 1 }, testDeps(fetchLike)),
-    ).rejects.toSatisfy(
-      (err) => err instanceof BridgeError && err.message.includes('Quota limit exceeded'),
-    );
+    const summary = await enrichPendingTracks(cache, { limit: 1 }, testDeps(fetchLike));
+    expect(summary.skipped).toBe(1);
+    expect(summary.errors).toEqual([expect.stringContaining('Quota limit exceeded')]);
+    expect(cache.getAudioFeatures('T-MIDNIGHT')).toBeNull();
   });
 });
 
@@ -304,12 +336,14 @@ describe('enrich_features tool', () => {
     expect(err.error).toBe('validation_error');
   });
 
-  it('envelopes a source failure with the progress-is-saved hint', async () => {
+  it('reports skipped chunks in the summary instead of failing the call', async () => {
     const fetchLike: FetchLike = async () => {
       throw new Error('network down');
     };
-    const err = asError(await handleEnrichFeatures({}, makeDeps(fetchLike)));
-    expect(err.error).toBe('enrichment_error');
-    expect(err.hint).toContain('saved');
+    const out = (await handleEnrichFeatures({}, makeDeps(fetchLike))) as EnrichFeaturesOutput;
+    expect(out.processed).toBe(0);
+    expect(out.skipped).toBe(6);
+    expect(out.pending_remaining).toBe(6);
+    expect(out.source_errors).toEqual([expect.stringContaining('MusicBrainz unreachable')]);
   });
 });

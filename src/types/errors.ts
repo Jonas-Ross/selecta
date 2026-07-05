@@ -14,7 +14,11 @@ export type ErrorCode =
   | 'playlist_not_editable' // edit target is smart/subscription/folder, not a user playlist
   | 'validation_error' // input failed schema check
   | 'cache_unavailable' // DB open failed (perms, disk full)
-  | 'enrichment_error'; // an external metadata source failed mid-enrichment
+  // Thrown by enrich/sources.ts on any source failure. The engine converts it
+  // into a per-chunk skip (reported in the summary), so it normally never
+  // reaches the wire — the code exists so the engine can tell "source failed,
+  // skippable" apart from a genuine bug, which rethrows.
+  | 'enrichment_error';
 
 export type SelectaError = {
   error: ErrorCode;
