@@ -6,7 +6,7 @@ import { SelectaCache } from '../src/cache/index.js';
 import { openDatabase } from '../src/cache/db.js';
 import { BridgeError } from '../src/types/errors.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
-import { featuresRow } from './helpers.js';
+import { bumpedSnapshot, featuresRow } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
@@ -467,5 +467,156 @@ describe('sync reconciliation', () => {
     const cache = cacheAfterCreate();
     expect(cache.getRecentCreationNames(60)).toEqual([NAME]);
     expect(cache.getRecentCreationNames(60, new Date(Date.now() + 2 * 3_600_000))).toEqual([]);
+  });
+});
+
+// Play-history capture (issue #31): sparse per-refresh deltas, recorded inside
+// the refresh transaction by comparing incoming counters to the previous row.
+describe('play history', () => {
+  const bumped = (deltas: Record<string, { plays?: number; skips?: number }>): LibrarySnapshot =>
+    bumpedSnapshot(snapshot, deltas);
+
+  function historyFor(cache: SelectaCache, id: string) {
+    return cache.db
+      .prepare(
+        'SELECT play_count_delta AS plays, skip_count_delta AS skips FROM play_history WHERE track_persistent_id = ? ORDER BY refreshed_at',
+      )
+      .all(id) as { plays: number; skips: number }[];
+  }
+
+  it('records nothing on first sighting — baseline is silent', () => {
+    const cache = refreshed();
+    const n = cache.db.prepare('SELECT COUNT(*) AS n FROM play_history').get() as { n: number };
+    expect(n.n).toBe(0);
+  });
+
+  it('records a delta row with the absolute count when counters rise', () => {
+    const cache = refreshed();
+    const result = cache.refreshFromSnapshot(bumped({ 'T-TEARDROP': { plays: 3, skips: 1 } }), {
+      durationMs: 1,
+    });
+    expect(result.playDeltasRecorded).toBe(1);
+    expect(result.playCountResets).toBe(0);
+    expect(historyFor(cache, 'T-TEARDROP')).toEqual([{ plays: 3, skips: 1 }]);
+  });
+
+  it('records no row when counters are unchanged', () => {
+    const cache = refreshed();
+    const result = cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+    expect(result.playDeltasRecorded).toBe(0);
+    const n = cache.db.prepare('SELECT COUNT(*) AS n FROM play_history').get() as { n: number };
+    expect(n.n).toBe(0);
+  });
+
+  it('a decreased counter resets the baseline: no negative delta, reset counted and logged', () => {
+    const cache = refreshed();
+    const result = cache.refreshFromSnapshot(bumped({ 'T-TEARDROP': { plays: -10 } }), {
+      durationMs: 1,
+    });
+    expect(result.playDeltasRecorded).toBe(0);
+    expect(result.playCountResets).toBe(1);
+    expect(historyFor(cache, 'T-TEARDROP')).toEqual([]);
+    const log = cache.db
+      .prepare('SELECT notes FROM refresh_log WHERE refreshed_at = ?')
+      .get(result.refreshedAt) as { notes: string | null };
+    expect(log.notes).toContain('reset');
+
+    // Later listening measures from the NEW baseline (32), not the old one.
+    cache.refreshFromSnapshot(bumped({ 'T-TEARDROP': { plays: -10 + 2 } }), { durationMs: 1 });
+    expect(historyFor(cache, 'T-TEARDROP')).toEqual([{ plays: 2, skips: 0 }]);
+  });
+
+  it('one counter down, the other up: the rise records, the drop clamps to zero', () => {
+    const cache = refreshed();
+    const result = cache.refreshFromSnapshot(bumped({ 'T-ROADS': { plays: 4, skips: -2 } }), {
+      durationMs: 1,
+    });
+    expect(result.playDeltasRecorded).toBe(1);
+    expect(result.playCountResets).toBe(1);
+    expect(historyFor(cache, 'T-ROADS')).toEqual([{ plays: 4, skips: 0 }]);
+  });
+
+  it('prunes history with its track; surviving tracks keep theirs', () => {
+    const cache = refreshed();
+    cache.refreshFromSnapshot(
+      bumped({ 'T-TEARDROP': { plays: 1 }, 'T-MIDNIGHT': { plays: 1 } }),
+      { durationMs: 1 },
+    );
+    const without: LibrarySnapshot = {
+      ...snapshot,
+      tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-MIDNIGHT'),
+    };
+    cache.refreshFromSnapshot(without, { durationMs: 1 });
+    expect(historyFor(cache, 'T-MIDNIGHT')).toEqual([]);
+    expect(historyFor(cache, 'T-TEARDROP')).toHaveLength(1);
+  });
+
+  function insertHistory(cache: SelectaCache, id: string, at: string, plays: number, skips: number) {
+    cache.db
+      .prepare(
+        'INSERT INTO play_history (track_persistent_id, refreshed_at, play_count_delta, skip_count_delta) VALUES (?, ?, ?, ?)',
+      )
+      .run(id, at, plays, skips);
+  }
+
+  it('getTrackPlayHistory returns windows newest first, capped', () => {
+    const cache = refreshed();
+    insertHistory(cache, 'T-ANGEL', '2026-06-01T00:00:00.000Z', 2, 0);
+    insertHistory(cache, 'T-ANGEL', '2026-06-15T00:00:00.000Z', 5, 1);
+    insertHistory(cache, 'T-ANGEL', '2026-07-01T00:00:00.000Z', 1, 0);
+
+    const all = cache.getTrackPlayHistory('T-ANGEL', 12);
+    expect(all.map((w) => w.playCountDelta)).toEqual([1, 5, 2]);
+    expect(all[1]).toEqual({
+      refreshedAt: '2026-06-15T00:00:00.000Z',
+      playCountDelta: 5,
+      skipCountDelta: 1,
+    });
+    expect(cache.getTrackPlayHistory('T-ANGEL', 2)).toHaveLength(2);
+  });
+
+  it('overview recentActivity sums deltas since the cutoff, scoped by filters', () => {
+    const cache = refreshed();
+    cache.refreshFromSnapshot(
+      bumped({ 'T-TEARDROP': { plays: 3, skips: 1 }, 'T-ROADS': { plays: 2 } }),
+      { durationMs: 1 },
+    );
+    // A window recorded long before the cutoff must not count.
+    insertHistory(cache, 'T-ANGEL', '2020-01-01T00:00:00.000Z', 99, 0);
+
+    const since = '2026-01-01T00:00:00.000Z';
+    const recent = (filters: Parameters<SelectaCache['getOverview']>[0], cutoff = since) =>
+      cache.getOverview(filters, cutoff).recentActivity;
+    expect(recent({})).toEqual({ tracksPlayed: 2, totalPlays: 5, totalSkips: 1 });
+    // Everything counts from an earlier cutoff.
+    expect(recent({}, '2019-01-01T00:00:00.000Z').totalPlays).toBe(104);
+    // Filters scope the slice like the rest of the overview.
+    const teardropArtist = snapshot.tracks.find((t) => t.persistentId === 'T-TEARDROP')!.artist!;
+    expect(recent({ artist: teardropArtist }).totalPlays).toBe(3);
+    expect(recent({ artist: 'Nobody' })).toEqual({ tracksPlayed: 0, totalPlays: 0, totalSkips: 0 });
+  });
+
+  it('a skip-only window counts skips but not tracksPlayed', () => {
+    const cache = refreshed();
+    cache.refreshFromSnapshot(bumped({ 'T-GLORYBOX': { skips: 2 } }), { durationMs: 1 });
+    expect(cache.getOverview({}, '2026-01-01T00:00:00.000Z').recentActivity).toEqual({
+      tracksPlayed: 0,
+      totalPlays: 0,
+      totalSkips: 2,
+    });
+  });
+
+  it('sort recent_plays orders by recent deltas, not lifetime count', () => {
+    const cache = refreshed();
+    // T-ROADS (lifetime 7) gets the most recent plays; T-MIDNIGHT (lifetime 55) none.
+    cache.refreshFromSnapshot(
+      bumped({ 'T-ROADS': { plays: 6 }, 'T-ANGEL': { plays: 1 } }),
+      { durationMs: 1 },
+    );
+    const { rows } = cache.searchTracks({ sort: 'recent_plays' });
+    expect(rows.slice(0, 2).map((t) => t.persistentId)).toEqual(['T-ROADS', 'T-ANGEL']);
+    // The zero-delta tail is stable (ID order), so paging can't shuffle it.
+    const tail = rows.slice(2).map((t) => t.persistentId);
+    expect(tail).toEqual([...tail].sort());
   });
 });

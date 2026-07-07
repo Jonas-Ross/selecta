@@ -27,10 +27,17 @@ export const searchInputShape = {
       'Collapse copies of the same song (same title + artist, e.g. album vs compilation) to one row; the suppressed copies come back in that row\'s alternate_ids. Distinct titles (remix/live/edit) never collapse. Default off — duplicates stay visible.',
     ),
   sort: z
-    .enum(['most_played', 'least_played', 'recently_added', 'random', 'playlist_order'])
+    .enum([
+      'most_played',
+      'least_played',
+      'recently_added',
+      'random',
+      'playlist_order',
+      'recent_plays',
+    ])
     .optional()
     .describe(
-      "Result order. Omit for relevance (with query) or most-played. Use random / least_played / recently_added to dig past the top tracks when building a varied playlist. playlist_order (requires in_playlist) returns the playlist's own running order — use before positional add_tracks/remove_tracks.",
+      "Result order. Omit for relevance (with query) or most-played. Use random / least_played / recently_added to dig past the top tracks when building a varied playlist. recent_plays orders by plays recorded in the last 30 days of refreshes (current rotation, not lifetime count) — needs refresh history to exist; without it everything ties at zero. playlist_order (requires in_playlist) returns the playlist's own running order — use before positional add_tracks/remove_tracks.",
     ),
 };
 
@@ -50,7 +57,7 @@ export type SearchOutput = {
   cache_age_hours: number | null;
 };
 
-export const SEARCH_DESCRIPTION = `Search the user's owned Apple Music library (local cache). All filters optional, ANDed together. Returns tracks with behavioral signal (play_count, skip_count, rating 0-5 stars, loved=favorited, last_played, date_added) — that signal is context for YOU to weigh, not a mandate. Tracks also carry enriched audio features where known: bpm, musical_key (e.g. "F# minor"), danceability (0-1) — raw facts for tempo/key-aware sequencing; absent fields mean the track has no data yet (coverage is partial, never assume). bpm_min/bpm_max filter to a tempo band; tracks with unknown tempo never match a bpm filter. Ordering: with a free-text query, by relevance; otherwise by play count. Use the sort knob to escape the most-played pool — random for a fresh representative sample, least_played / recently_added (or last_played_before for forgotten gems) to dig into the long tail. When building a playlist, vary the lens so results don't collapse onto the same heavy-rotation tracks every time. Multi-source libraries hold duplicate copies of the same song (album + compilation + best-of): set dedupe true when building a tracklist so the same song can't ship twice — each collapsed row lists its suppressed copies in alternate_ids (the winner is a deterministic tiebreak: loved, then studio album over Various Artists compilation, then earliest year). Remix/live/edit versions have different titles and are never collapsed. An empty tracks array means the user owns nothing matching — broaden the search instead of retrying the same query. If cache_age_hours is null the cache has never been populated: call refresh_library once.`;
+export const SEARCH_DESCRIPTION = `Search the user's owned Apple Music library (local cache). All filters optional, ANDed together. Returns tracks with behavioral signal (play_count, skip_count, rating 0-5 stars, loved=favorited, last_played, date_added) — that signal is context for YOU to weigh, not a mandate. Tracks also carry enriched audio features where known: bpm, musical_key (e.g. "F# minor"), danceability (0-1) — raw facts for tempo/key-aware sequencing; absent fields mean the track has no data yet (coverage is partial, never assume). bpm_min/bpm_max filter to a tempo band; tracks with unknown tempo never match a bpm filter. Ordering: with a free-text query, by relevance; otherwise by play count. Use the sort knob to escape the most-played pool — random for a fresh representative sample, least_played / recently_added (or last_played_before for forgotten gems) to dig into the long tail, recent_plays for what's in current rotation. When building a playlist, vary the lens so results don't collapse onto the same heavy-rotation tracks every time. Multi-source libraries hold duplicate copies of the same song (album + compilation + best-of): set dedupe true when building a tracklist so the same song can't ship twice — each collapsed row lists its suppressed copies in alternate_ids (the winner is a deterministic tiebreak: loved, then studio album over Various Artists compilation, then earliest year). Remix/live/edit versions have different titles and are never collapsed. An empty tracks array means the user owns nothing matching — broaden the search instead of retrying the same query. If cache_age_hours is null the cache has never been populated: call refresh_library once.`;
 
 export async function handleSearch(
   raw: unknown,

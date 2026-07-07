@@ -13,6 +13,7 @@ import type {
   CoOccurringTrack,
   PendingTrack,
   OverviewStats,
+  PlayHistoryWindow,
   PlaylistRef,
   PlaylistRow,
   ReconcileAction,
@@ -21,7 +22,7 @@ import type {
   TrackRow,
 } from '../types/cache.js';
 import { openDatabase } from './db.js';
-import { createQueries, type Queries } from './queries.js';
+import { createQueries, recentSinceIso, type Queries } from './queries.js';
 
 export { defaultDbPath } from './db.js';
 
@@ -29,6 +30,11 @@ export type RefreshResult = {
   trackCount: number;
   playlistCount: number;
   refreshedAt: string;
+  // Play-history capture (issue #31): how many tracks got a delta row this
+  // refresh, and how many had a counter go DOWN (re-import/iCloud weirdness) —
+  // those reset their baseline instead of recording a negative delta.
+  playDeltasRecorded: number;
+  playCountResets: number;
 };
 
 export class SelectaCache {
@@ -46,19 +52,45 @@ export class SelectaCache {
 
   /**
    * Replace the cache contents with a library snapshot, atomically:
-   * upsert all tracks and playlists, replace memberships, prune rows absent
-   * from the snapshot, rebuild FTS, append a refresh_log entry. After commit
-   * the cache reflects the snapshot exactly.
+   * record play/skip deltas against the previous counters, upsert all tracks
+   * and playlists, replace memberships, prune rows absent from the snapshot,
+   * rebuild FTS, append a refresh_log entry. After commit the cache reflects
+   * the snapshot exactly, plus one sparse play_history window.
    */
   refreshFromSnapshot(
     snapshot: LibrarySnapshot,
     opts: { durationMs: number; notes?: string },
   ): RefreshResult {
-    // One timestamp for both the refresh_log row and the return value.
+    // One timestamp for the refresh_log row, the play_history window, and the
+    // return value.
     const refreshedAt = new Date().toISOString();
     const q = this.queries;
+    let playDeltasRecorded = 0;
+    let playCountResets = 0;
     const run = this.db.transaction(() => {
-      for (const track of snapshot.tracks) q.upsertTrack(track);
+      // Previous counters BEFORE any upsert — the delta compare needs them.
+      const prior = q.getPlayCounts();
+      for (const track of snapshot.tracks) {
+        const prev = prior.get(track.persistentId);
+        if (prev) {
+          // First sighting (no prev) establishes baseline silently. A counter
+          // that went down resets its baseline — no negative deltas; the other
+          // counter still records if it rose.
+          const playDelta = (track.playCount ?? 0) - prev.playCount;
+          const skipDelta = (track.skipCount ?? 0) - prev.skipCount;
+          if (playDelta < 0 || skipDelta < 0) playCountResets += 1;
+          if (playDelta > 0 || skipDelta > 0) {
+            q.insertPlayHistory({
+              trackPersistentId: track.persistentId,
+              refreshedAt,
+              playCountDelta: Math.max(0, playDelta),
+              skipCountDelta: Math.max(0, skipDelta),
+            });
+            playDeltasRecorded += 1;
+          }
+        }
+        q.upsertTrack(track);
+      }
       for (const playlist of snapshot.playlists) {
         q.upsertPlaylist(playlist);
         q.replacePlaylistMembership(playlist.persistentId, playlist.trackPersistentIds);
@@ -66,12 +98,14 @@ export class SelectaCache {
       q.pruneTracksNotIn(new Set(snapshot.tracks.map((t) => t.persistentId)));
       q.prunePlaylistsNotIn(new Set(snapshot.playlists.map((p) => p.persistentId)));
       q.rebuildFts();
+      const resetNote =
+        playCountResets > 0 ? `${playCountResets} play-counter reset(s), baseline re-established` : null;
       q.appendRefreshLog({
         refreshedAt,
         durationMs: opts.durationMs,
         trackCount: snapshot.tracks.length,
         playlistCount: snapshot.playlists.length,
-        notes: opts.notes,
+        notes: [opts.notes, resetNote].filter(Boolean).join('; ') || undefined,
       });
     });
     run();
@@ -79,6 +113,8 @@ export class SelectaCache {
       trackCount: snapshot.tracks.length,
       playlistCount: snapshot.playlists.length,
       refreshedAt,
+      playDeltasRecorded,
+      playCountResets,
     };
   }
 
@@ -104,12 +140,21 @@ export class SelectaCache {
     return this.queries.searchTracks(filters);
   }
 
-  /** Aggregate shape of the library, or of the slice the filters describe. */
-  getOverview(filters: SearchFilters): OverviewStats {
+  /**
+   * Aggregate shape of the library, or of the slice the filters describe.
+   * recentSince bounds the recentActivity sums; defaults to the shared
+   * RECENT_WINDOW_DAYS cutoff.
+   */
+  getOverview(filters: SearchFilters, recentSince = recentSinceIso()): OverviewStats {
     if (filters.inPlaylist != null) {
       filters = { ...filters, inPlaylist: this.resolvePlaylistId(filters.inPlaylist) };
     }
-    return this.queries.overviewStats(filters);
+    return this.queries.overviewStats(filters, recentSince);
+  }
+
+  /** A track's play_history windows, newest first. */
+  getTrackPlayHistory(trackPersistentId: string, limit: number): PlayHistoryWindow[] {
+    return this.queries.getTrackPlayHistory(trackPersistentId, limit);
   }
 
   listPlaylists(filters: { kind?: PlaylistRow['kind']; nameQuery?: string }): PlaylistRow[] {

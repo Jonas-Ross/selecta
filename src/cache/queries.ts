@@ -14,9 +14,11 @@ import type {
   CoOccurringTrack,
   OverviewStats,
   PendingTrack,
+  PlayHistoryWindow,
   PlaylistCreationRow,
   PlaylistRef,
   PlaylistRow,
+  RecentActivity,
   SearchFilters,
   SearchResultRow,
   TrackRow,
@@ -77,6 +79,15 @@ const UNIT_SEPARATOR = '\u001f';
 // library_overview returns a fact, not a ranking, so the artist cap only exists
 // to bound tokens; artistsTotal carries the full breadth past it.
 const TOP_ARTISTS_LIMIT = 25;
+
+// The shared "recent" window for play-history surfaces (issue #31): the
+// recent_plays sort lens and library_overview's recent_activity both look back
+// this far, so "recent" means one thing everywhere the model sees it.
+export const RECENT_WINDOW_DAYS = 30;
+
+export function recentSinceIso(): string {
+  return new Date(Date.now() - RECENT_WINDOW_DAYS * 86_400_000).toISOString();
+}
 
 // The faceted WHERE clause shared by searchTracks and overviewStats: identical
 // predicates over the same rowset, so a search and an overview of that search
@@ -218,16 +229,33 @@ const DEDUPE_TIEBREAK = `
 // persistent_id tiebreak so paging is stable; `random` is deliberately not.
 // `rankRef` names the FTS rank column for the relevance default — the dedupe
 // path reads it from its windowed subquery instead of the FTS join directly.
-function orderClause(filters: SearchFilters, rankRef = 'f.rank'): string {
+// A lens owns any params its SQL references (like buildTrackFilter does):
+// searchTracks spreads them into the ordered row queries only, so the COUNT
+// totals never see params they don't use (better-sqlite3 rejects those).
+function orderClause(
+  filters: SearchFilters,
+  rankRef = 'f.rank',
+): { sql: string; params: Record<string, unknown> } {
   switch (filters.sort) {
     case 'most_played':
-      return 'ORDER BY t.play_count DESC';
+      return { sql: 'ORDER BY t.play_count DESC', params: {} };
     case 'least_played':
-      return 'ORDER BY t.play_count ASC, t.persistent_id';
+      return { sql: 'ORDER BY t.play_count ASC, t.persistent_id', params: {} };
     case 'recently_added':
-      return 'ORDER BY t.date_added DESC, t.persistent_id'; // NULL dates sort last
+      // NULL dates sort last.
+      return { sql: 'ORDER BY t.date_added DESC, t.persistent_id', params: {} };
     case 'random':
-      return 'ORDER BY RANDOM()';
+      return { sql: 'ORDER BY RANDOM()', params: {} };
+    case 'recent_plays':
+      // Play deltas recorded in the last RECENT_WINDOW_DAYS — current rotation
+      // rather than lifetime count. Tracks with no recorded window sum to 0
+      // and tiebreak on stable ID.
+      return {
+        sql: `ORDER BY (SELECT COALESCE(SUM(ph.play_count_delta), 0) FROM play_history ph
+                WHERE ph.track_persistent_id = t.persistent_id
+                  AND ph.refreshed_at >= @recentSince) DESC, t.persistent_id`,
+        params: { recentSince: recentSinceIso() },
+      };
     case 'playlist_order':
       // The tool layer returns a structured validation_error first; this
       // defends the SQL for plain-library consumers of the cache, where an
@@ -236,12 +264,19 @@ function orderClause(filters: SearchFilters, rankRef = 'f.rank'): string {
         throw new Error('sort playlist_order requires the inPlaylist filter');
       }
       // MIN(position): a track duplicated in the playlist is one search row —
-      // it sorts at its first occurrence.
-      return `ORDER BY (SELECT MIN(position) FROM playlist_tracks
+      // it sorts at its first occurrence. @inPlaylist is already bound as a
+      // filter param.
+      return {
+        sql: `ORDER BY (SELECT MIN(position) FROM playlist_tracks
                 WHERE playlist_persistent_id = @inPlaylist
-                  AND track_persistent_id = t.persistent_id)`;
+                  AND track_persistent_id = t.persistent_id)`,
+        params: {},
+      };
     default:
-      return filters.query ? `ORDER BY ${rankRef}` : 'ORDER BY t.play_count DESC';
+      return {
+        sql: filters.query ? `ORDER BY ${rankRef}` : 'ORDER BY t.play_count DESC',
+        params: {},
+      };
   }
 }
 
@@ -291,6 +326,25 @@ export function createQueries(db: Database) {
     'INSERT INTO playlist_tracks (playlist_persistent_id, track_persistent_id, position) VALUES (?, ?, ?)',
   );
 
+  // Pre-refresh counter snapshot for play-history deltas: read before any
+  // upsert so the comparison sees the previous refresh's values.
+  const playCountsStmt = db.prepare(
+    'SELECT persistent_id AS persistentId, play_count AS playCount, skip_count AS skipCount FROM tracks',
+  );
+  // OR REPLACE mirrors refresh_log: two refreshes in the same millisecond
+  // collapse to the latest.
+  const insertPlayHistoryStmt = db.prepare(`
+    INSERT OR REPLACE INTO play_history
+      (track_persistent_id, refreshed_at, play_count_delta, skip_count_delta)
+    VALUES (@trackPersistentId, @refreshedAt, @playCountDelta, @skipCountDelta)
+  `);
+  const trackPlayHistoryStmt = db.prepare(`
+    SELECT refreshed_at AS refreshedAt, play_count_delta AS playCountDelta,
+           skip_count_delta AS skipCountDelta
+    FROM play_history WHERE track_persistent_id = ?
+    ORDER BY refreshed_at DESC LIMIT ?
+  `);
+
   // json_each keeps us clear of SQLite's bound-variable ceiling on 10k-track prunes.
   const pruneTracksStmt = db.prepare(
     'DELETE FROM tracks WHERE persistent_id NOT IN (SELECT value FROM json_each(?))',
@@ -299,6 +353,10 @@ export function createQueries(db: Database) {
   // tracks are untouched by refresh (the survive-refresh guarantee on #19).
   const pruneFeaturesStmt = db.prepare(
     'DELETE FROM audio_features WHERE track_persistent_id NOT IN (SELECT value FROM json_each(?))',
+  );
+  // Play history follows its track out too — same lifecycle as features.
+  const prunePlayHistoryStmt = db.prepare(
+    'DELETE FROM play_history WHERE track_persistent_id NOT IN (SELECT value FROM json_each(?))',
   );
   const prunePlaylistsStmt = db.prepare(
     'DELETE FROM playlists WHERE persistent_id NOT IN (SELECT value FROM json_each(?))',
@@ -442,6 +500,25 @@ export function createQueries(db: Database) {
       const ids = JSON.stringify([...presentPersistentIds]);
       pruneTracksStmt.run(ids);
       pruneFeaturesStmt.run(ids);
+      prunePlayHistoryStmt.run(ids);
+    },
+
+    /** All tracks' current counters, keyed for the pre-refresh delta compare. */
+    getPlayCounts(): Map<string, { playCount: number; skipCount: number }> {
+      const rows = playCountsStmt.all() as {
+        persistentId: string;
+        playCount: number;
+        skipCount: number;
+      }[];
+      return new Map(rows.map((r) => [r.persistentId, r]));
+    },
+
+    insertPlayHistory(row: PlayHistoryWindow & { trackPersistentId: string }): void {
+      insertPlayHistoryStmt.run(row);
+    },
+
+    getTrackPlayHistory(trackPersistentId: string, limit: number): PlayHistoryWindow[] {
+      return trackPlayHistoryStmt.all(trackPersistentId, Math.max(0, limit)) as PlayHistoryWindow[];
     },
 
     upsertAudioFeatures(row: AudioFeaturesRow): void {
@@ -567,9 +644,10 @@ export function createQueries(db: Database) {
         const total = (
           db.prepare(`SELECT COUNT(*) AS n ${from} ${whereSql}`).get(params) as { n: number }
         ).n;
+        const order = orderClause(filters);
         const rows = db
-          .prepare(`SELECT ${TRACK_COLUMNS} ${from} ${whereSql} ${orderClause(filters)} LIMIT @limit`)
-          .all({ ...params, limit }) as TrackRow[];
+          .prepare(`SELECT ${TRACK_COLUMNS} ${from} ${whereSql} ${order.sql} LIMIT @limit`)
+          .all({ ...params, ...order.params, limit }) as TrackRow[];
         return { rows, total };
       }
 
@@ -590,14 +668,15 @@ export function createQueries(db: Database) {
                group_concat(t.persistent_id) OVER (PARTITION BY ${DEDUPE_KEY}) AS groupIds
         ${from} ${whereSql}
       `;
+      const order = orderClause(filters, 'w.ftsRank');
       const rows = db
         .prepare(
           `SELECT ${TRACK_COLUMNS}, w.groupIds
            FROM (${winners}) w JOIN tracks t ON t.persistent_id = w.pid
            WHERE w.rn = 1
-           ${orderClause(filters, 'w.ftsRank')} LIMIT @limit`,
+           ${order.sql} LIMIT @limit`,
         )
-        .all({ ...params, limit }) as (TrackRow & { groupIds: string })[];
+        .all({ ...params, ...order.params, limit }) as (TrackRow & { groupIds: string })[];
       return {
         rows: rows.map(({ groupIds, ...row }) => {
           const alternates = groupIds
@@ -612,11 +691,14 @@ export function createQueries(db: Database) {
 
     // Aggregate "shape of the crate" over the same filtered rowset as
     // searchTracks. Pure GROUP BY work, cache-only. The
-    // grand totals come back in one scan; genre/decade/artist/rating
-    // breakdowns are separate grouped scans. Genres are returned in full
-    // (ordered) and capped by the tool; artists are capped here to bound the
-    // long tail, with artistsTotal carrying the breadth past the cap.
-    overviewStats(filters: SearchFilters): OverviewStats {
+    // grand totals come back in one scan; genre/decade/artist/rating/recent-
+    // activity breakdowns are separate grouped scans. Genres are returned in
+    // full (ordered) and capped by the tool; artists are capped here to bound
+    // the long tail, with artistsTotal carrying the breadth past the cap.
+    // recentSince is the recent-activity cutoff: deltas are summed over
+    // windows *recorded* since then — refresh cadence is manual, so this is
+    // "activity captured since", never a per-day rate.
+    overviewStats(filters: SearchFilters, recentSince: string): OverviewStats {
       const { from, whereSql, params } = buildTrackFilter(filters);
       const and = (cond: string): string => (whereSql ? `${whereSql} AND ${cond}` : `WHERE ${cond}`);
 
@@ -681,7 +763,20 @@ export function createQueries(db: Database) {
         )
         .all(params) as { rating: number; count: number }[];
 
-      return { ...totals, genres, decades, topArtists, ratingHistogram };
+      // Driven from the sparse play_history side (idx_play_history_at), so
+      // cost scales with recorded windows, not library size.
+      const recentActivity = db
+        .prepare(
+          `SELECT
+             COUNT(DISTINCT CASE WHEN ph.play_count_delta > 0 THEN ph.track_persistent_id END) AS tracksPlayed,
+             COALESCE(SUM(ph.play_count_delta), 0) AS totalPlays,
+             COALESCE(SUM(ph.skip_count_delta), 0) AS totalSkips
+           ${from} JOIN play_history ph ON ph.track_persistent_id = t.persistent_id
+           ${and('ph.refreshed_at >= @recentSince')}`,
+        )
+        .get({ ...params, recentSince }) as RecentActivity;
+
+      return { ...totals, genres, decades, topArtists, ratingHistogram, recentActivity };
     },
 
     listPlaylists(filters: { kind?: PlaylistRow['kind']; nameQuery?: string }): PlaylistRow[] {

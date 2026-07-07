@@ -53,6 +53,25 @@ export type AudioFeaturesRow = {
   fetchedAt: string;
 };
 
+// One play_history window (issue #31): what changed for a track between two
+// refreshes. Deltas are never negative (a decreased counter resets the
+// baseline instead of recording). Windows are as long as the user's refresh
+// cadence — irregular by nature, so surfaces present "since <date>", never a
+// rate.
+export type PlayHistoryWindow = {
+  refreshedAt: string;
+  playCountDelta: number;
+  skipCountDelta: number;
+};
+
+// Aggregate recent listening over a filtered slice (library_overview's
+// recent_activity): sums of play_history deltas recorded since a given date.
+export type RecentActivity = {
+  tracksPlayed: number; // distinct tracks with a play delta in the window
+  totalPlays: number;
+  totalSkips: number;
+};
+
 export type PlaylistRow = {
   persistentId: string;
   name: string;
@@ -121,6 +140,7 @@ export type OverviewStats = {
   decades: { decade: number; count: number }[]; // decade start (1990), asc
   topArtists: { name: string; trackCount: number }[]; // already capped in SQL
   ratingHistogram: { rating: number; count: number }[]; // rating 0..100, desc
+  recentActivity: RecentActivity; // deltas recorded since the caller's cutoff
 };
 
 // Faceted search filters. All optional, combined as AND.
@@ -158,6 +178,14 @@ export type SearchFilters = {
   // A neutral lens, not a ranking opinion: lets the model escape the
   // most-played pool when building a varied playlist. search-only (overview
   // aggregates, so it never sets this). 'playlist_order' is only valid with
-  // inPlaylist set — the tool layer enforces that.
-  sort?: 'most_played' | 'least_played' | 'recently_added' | 'random' | 'playlist_order';
+  // inPlaylist set — the tool layer enforces that. 'recent_plays' orders by
+  // play deltas recorded in the last RECENT_WINDOW_DAYS (cache/queries.ts) —
+  // recent rotation, not lifetime count.
+  sort?:
+    | 'most_played'
+    | 'least_played'
+    | 'recently_added'
+    | 'random'
+    | 'playlist_order'
+    | 'recent_plays';
 };

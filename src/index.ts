@@ -78,6 +78,8 @@ program
             track_count: result.trackCount,
             playlist_count: result.playlistCount,
             refreshed_at: result.refreshedAt,
+            play_deltas_recorded: result.playDeltasRecorded,
+            ...(result.playCountResets > 0 ? { play_count_resets: result.playCountResets } : {}),
             db_path: defaultDbPath(),
           },
           null,
