@@ -732,6 +732,10 @@ export function createQueries(db: Database) {
     },
 
     getCoOccurringTracks(seedIds: string[], limit = 50): CoOccurringTrack[] {
+      // Clamp like getTracksPendingEnrichment: a negative LIMIT means
+      // "unlimited" to SQLite. No seeds → no co-occurrence (and `IN ()` is a
+      // syntax error), so answer the degenerate question directly.
+      if (seedIds.length === 0 || limit <= 0) return [];
       // Co-occurrence counts only the user's own playlists (kind 'user') — the
       // curatorial signal. Smart and subscription playlists are machine- or
       // Apple-curated and would drown it out.
