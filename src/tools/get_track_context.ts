@@ -80,10 +80,10 @@ export async function handleGetTrackContext(
 
     if (seed_ids != null) {
       const seedIds = [...new Set(seed_ids)];
-      const missing = missingTrackIdsError(cache, seedIds);
-      if (missing) return missing;
+      const seedRows = seedIds.map((id) => cache.getTrack(id));
+      if (seedRows.includes(null)) return missingTrackIdsError(cache, seedIds)!;
       return {
-        seeds: seedIds.map((id) => toApiTrack(cache.getTrack(id)!)),
+        seeds: seedRows.map((row) => toApiTrack(row!)),
         co_occurring_tracks: cache
           .getCoOccurringTracks(seedIds, MULTI_CO_OCCURRENCE_CAP)
           .map((t) => ({
