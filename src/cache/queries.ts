@@ -731,30 +731,45 @@ export function createQueries(db: Database) {
         .all(trackPersistentId) as PlaylistRef[];
     },
 
-    getCoOccurringTracks(trackPersistentId: string, limit = 50): CoOccurringTrack[] {
+    getCoOccurringTracks(seedIds: string[], limit = 50): CoOccurringTrack[] {
+      // Clamp like getTracksPendingEnrichment: a negative LIMIT means
+      // "unlimited" to SQLite. No seeds → no co-occurrence (and `IN ()` is a
+      // syntax error), so answer the degenerate question directly.
+      if (seedIds.length === 0 || limit <= 0) return [];
       // Co-occurrence counts only the user's own playlists (kind 'user') — the
       // curatorial signal. Smart and subscription playlists are machine- or
       // Apple-curated and would drown it out.
+      // Aggregated across the seed set: total = distinct (seed, playlist)
+      // pairs, i.e. the sum of per-seed shared-playlist counts; seeds are never
+      // candidates themselves. Sorting by count is a convenience ordering of
+      // facts, not a similarity score.
+      const seedList = seedIds.map((_, i) => `@seed${i}`).join(', ');
+      const seedParams = Object.fromEntries(seedIds.map((id, i) => [`seed${i}`, id]));
       const rows = db
         .prepare(
-          `SELECT ${TRACK_COLUMNS}, shared.cnt AS sharedPlaylistCount, shared.names AS namesRaw
+          `SELECT ${TRACK_COLUMNS},
+                  shared.total AS totalSharedPlaylistCount,
+                  shared.seeds AS seedsMatched,
+                  shared.names AS namesRaw
            FROM (
              SELECT pt2.track_persistent_id AS tid,
-                    COUNT(DISTINCT pt1.playlist_persistent_id) AS cnt,
+                    COUNT(DISTINCT pt1.track_persistent_id || '${UNIT_SEPARATOR}' || pt1.playlist_persistent_id) AS total,
+                    COUNT(DISTINCT pt1.track_persistent_id) AS seeds,
                     group_concat(p.name, '${UNIT_SEPARATOR}') AS names
              FROM playlist_tracks pt1
              JOIN playlists p ON p.persistent_id = pt1.playlist_persistent_id AND p.kind = 'user'
              JOIN playlist_tracks pt2 ON pt2.playlist_persistent_id = pt1.playlist_persistent_id
-               AND pt2.track_persistent_id <> pt1.track_persistent_id
-             WHERE pt1.track_persistent_id = @trackId
+             WHERE pt1.track_persistent_id IN (${seedList})
+               AND pt2.track_persistent_id NOT IN (${seedList})
              GROUP BY pt2.track_persistent_id
            ) shared
            JOIN tracks t ON t.persistent_id = shared.tid
-           ORDER BY shared.cnt DESC, t.play_count DESC
+           ORDER BY shared.total DESC, shared.seeds DESC, t.play_count DESC
            LIMIT @limit`,
         )
-        .all({ trackId: trackPersistentId, limit }) as (TrackRow & {
-        sharedPlaylistCount: number;
+        .all({ ...seedParams, limit }) as (TrackRow & {
+        totalSharedPlaylistCount: number;
+        seedsMatched: number;
         namesRaw: string;
       })[];
       return rows.map(({ namesRaw, ...row }) => ({

@@ -6,6 +6,7 @@ import { SelectaCache } from '../src/cache/index.js';
 import { handleSearch, type SearchOutput } from '../src/tools/search.js';
 import {
   handleGetTrackContext,
+  type MultiSeedContextOutput,
   type TrackContextOutput,
 } from '../src/tools/get_track_context.js';
 import {
@@ -332,6 +333,76 @@ describe('get_track_context', () => {
     const glory = out.co_occurring_tracks.find((t) => t.persistent_id === 'T-GLORYBOX')!;
     expect(glory.bpm).toBe(118.3);
     expect(glory.musical_key).toBe('E minor');
+  });
+
+  it('aggregates co-occurrence across a seed set, seeds excluded as candidates', async () => {
+    // User playlists: Late Night [TEARDROP, GLORYBOX, ROADS],
+    // Trip Hop Essentials [TEARDROP, ANGEL, GLORYBOX].
+    const out = (await handleGetTrackContext(
+      { seed_ids: ['T-TEARDROP', 'T-ANGEL'] },
+      deps,
+    )) as MultiSeedContextOutput;
+
+    expect(out.seeds.map((s) => s.persistent_id)).toEqual(['T-TEARDROP', 'T-ANGEL']);
+    // GLORYBOX: 2 playlists with TEARDROP + 1 with ANGEL = 3 across 2 seeds.
+    // ROADS: 1 playlist with TEARDROP only. Seeds never appear as candidates.
+    expect(
+      out.co_occurring_tracks.map((t) => [
+        t.persistent_id,
+        t.total_shared_playlist_count,
+        t.seeds_matched,
+      ]),
+    ).toEqual([
+      ['T-GLORYBOX', 3, 2],
+      ['T-ROADS', 1, 1],
+    ]);
+    expect(out.co_occurring_tracks[0]!.shared_playlist_names.sort()).toEqual([
+      'Late Night',
+      'Trip Hop Essentials',
+    ]);
+  });
+
+  it('collapses duplicate seed IDs instead of double-counting', async () => {
+    const out = (await handleGetTrackContext(
+      { seed_ids: ['T-TEARDROP', 'T-TEARDROP'] },
+      deps,
+    )) as MultiSeedContextOutput;
+    expect(out.seeds.map((s) => s.persistent_id)).toEqual(['T-TEARDROP']);
+    const glory = out.co_occurring_tracks.find((t) => t.persistent_id === 'T-GLORYBOX')!;
+    expect(glory.total_shared_playlist_count).toBe(2);
+    expect(glory.seeds_matched).toBe(1);
+  });
+
+  it('multi-seed ignores smart-playlist co-occurrence too', async () => {
+    // T-MIDNIGHT and T-BARE only share the smart playlist P-RECENT.
+    const out = (await handleGetTrackContext(
+      { seed_ids: ['T-MIDNIGHT', 'T-BARE'] },
+      deps,
+    )) as MultiSeedContextOutput;
+    expect(out.co_occurring_tracks).toEqual([]);
+  });
+
+  it('rejects neither / both of track_id and seed_ids', async () => {
+    const neither = asError(await handleGetTrackContext({}, deps));
+    expect(neither.error).toBe('validation_error');
+    const both = asError(
+      await handleGetTrackContext({ track_id: 'T-TEARDROP', seed_ids: ['T-ANGEL'] }, deps),
+    );
+    expect(both.error).toBe('validation_error');
+  });
+
+  it('rejects a seed set past the cap as validation_error', async () => {
+    const ids = Array.from({ length: 21 }, (_, i) => `T-${i}`);
+    const err = asError(await handleGetTrackContext({ seed_ids: ids }, deps));
+    expect(err.error).toBe('validation_error');
+  });
+
+  it('names unknown seeds in a track_not_found envelope', async () => {
+    const err = asError(
+      await handleGetTrackContext({ seed_ids: ['T-TEARDROP', 'T-NOPE'] }, deps),
+    );
+    expect(err.error).toBe('track_not_found');
+    expect(err.hint).toContain('T-NOPE');
   });
 });
 

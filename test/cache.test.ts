@@ -243,6 +243,16 @@ describe('searchTracks guards', () => {
   });
 });
 
+describe('getCoOccurringTracks guards', () => {
+  it('answers empty seed sets and non-positive limits with [] (cache-as-library callers)', () => {
+    // A negative LIMIT means "unlimited" to SQLite and `IN ()` is a syntax
+    // error — neither should reach the engine.
+    const cache = refreshed();
+    expect(cache.getCoOccurringTracks([], 10)).toEqual([]);
+    expect(cache.getCoOccurringTracks(['T-TEARDROP'], -1)).toEqual([]);
+  });
+});
+
 describe('overviewStats', () => {
   it('aggregates the whole library', () => {
     const stats = refreshed().getOverview({});
