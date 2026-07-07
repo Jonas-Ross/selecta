@@ -27,7 +27,7 @@ import {
 import type { ToolDeps } from '../src/tools/common.js';
 import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
-import { asError, featuresRow, makeBridge } from './helpers.js';
+import { asError, bumpedSnapshot, featuresRow, makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
@@ -554,10 +554,16 @@ describe('shapeOverview', () => {
       decades: [],
       topArtists: [],
       ratingHistogram: [],
+      recentActivity: { tracksPlayed: 0, totalPlays: 0, totalSkips: 0 },
       ...overrides,
     };
   }
-  const shape = (stats: OverviewStats) => shapeOverview(stats, { filtered: false, cacheAgeHours: 0 });
+  const shape = (stats: OverviewStats) =>
+    shapeOverview(stats, {
+      filtered: false,
+      cacheAgeHours: 0,
+      recentSince: '2026-06-01T00:00:00.000Z',
+    });
 
   it('caps genres and rolls the tail into genres_other', () => {
     const genres = Array.from({ length: GENRE_CAP + 5 }, (_, i) => ({
@@ -713,5 +719,70 @@ describe('refresh_library sync reconciliation', () => {
     const deps = makeDeps();
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
     expect(out.sync_reconciliation).toBeUndefined();
+  });
+});
+
+// Play-history surfaces (issue #31): capture happens in the cache; these prove
+// the deltas ride the wire on the three read surfaces and the refresh report.
+describe('play history surfaces', () => {
+  const bumped = (deltas: Record<string, { plays?: number; skips?: number }>): LibrarySnapshot =>
+    bumpedSnapshot(snapshot, deltas);
+
+  it('get_track_context: seed play_history windows, empty before any delta', async () => {
+    const deps = makeDeps();
+    let out = (await handleGetTrackContext({ track_id: 'T-TEARDROP' }, deps)) as TrackContextOutput;
+    expect(out.play_history).toEqual([]);
+
+    deps.cache().refreshFromSnapshot(bumped({ 'T-TEARDROP': { plays: 3, skips: 1 } }), {
+      durationMs: 1,
+    });
+    out = (await handleGetTrackContext({ track_id: 'T-TEARDROP' }, deps)) as TrackContextOutput;
+    expect(out.play_history).toHaveLength(1);
+    expect(out.play_history[0]).toMatchObject({ plays: 3, skips: 1 });
+    expect(Date.parse(out.play_history[0]!.at)).not.toBeNaN();
+  });
+
+  it('library_overview: recent_activity reports the captured window, scoped by filters', async () => {
+    const deps = makeDeps();
+    deps.cache().refreshFromSnapshot(
+      bumped({ 'T-TEARDROP': { plays: 3, skips: 1 }, 'T-ROADS': { plays: 2 } }),
+      { durationMs: 1 },
+    );
+
+    const out = (await handleLibraryOverview({}, deps)) as LibraryOverviewOutput;
+    expect(out.recent_activity).toMatchObject({
+      window_days: 30,
+      tracks_played: 2,
+      total_plays: 5,
+      total_skips: 1,
+    });
+    expect(Date.parse(out.recent_activity.since)).not.toBeNaN();
+
+    const teardropArtist = snapshot.tracks.find((t) => t.persistentId === 'T-TEARDROP')!.artist!;
+    const scoped = (await handleLibraryOverview({ artist: teardropArtist }, deps)) as LibraryOverviewOutput;
+    expect(scoped.recent_activity.total_plays).toBe(3);
+  });
+
+  it('refresh_library: reports deltas recorded; resets only when a counter dropped', async () => {
+    const grew = makeDeps({
+      readLibrary: vi.fn().mockResolvedValue(bumped({ 'T-ROADS': { plays: 2 } })),
+    });
+    const out = (await handleRefreshLibrary({}, grew)) as RefreshLibraryOutput;
+    expect(out.play_deltas_recorded).toBe(1);
+    expect(out.play_count_resets).toBeUndefined();
+
+    const shrank = makeDeps({
+      readLibrary: vi.fn().mockResolvedValue(bumped({ 'T-ROADS': { plays: -5 } })),
+    });
+    const out2 = (await handleRefreshLibrary({}, shrank)) as RefreshLibraryOutput;
+    expect(out2.play_deltas_recorded).toBe(0);
+    expect(out2.play_count_resets).toBe(1);
+  });
+
+  it('search: sort recent_plays surfaces current rotation first', async () => {
+    const deps = makeDeps();
+    deps.cache().refreshFromSnapshot(bumped({ 'T-ROADS': { plays: 6 } }), { durationMs: 1 });
+    const out = (await handleSearch({ sort: 'recent_plays' }, deps)) as SearchOutput;
+    expect(out.tracks[0]!.persistent_id).toBe('T-ROADS');
   });
 });

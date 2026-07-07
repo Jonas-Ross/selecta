@@ -39,6 +39,10 @@ const GetTrackContextInput = z.strictObject(getTrackContextInputShape);
 
 export type TrackContextOutput = {
   seed: ApiTrack;
+  // The seed's play_history windows (issue #31), newest first: what changed
+  // between consecutive refreshes. Sparse — rows exist only where a counter
+  // moved; empty until refreshes have bracketed some listening.
+  play_history: { at: string; plays: number; skips: number }[];
   same_artist: ApiTrack[];
   appearing_in_playlists: PlaylistRef[];
   co_occurring_tracks: (ApiTrack & {
@@ -61,8 +65,9 @@ export type MultiSeedContextOutput = {
 const SAME_ARTIST_CAP = 30;
 const CO_OCCURRENCE_CAP = 50;
 const MULTI_CO_OCCURRENCE_CAP = 100;
+const PLAY_HISTORY_CAP = 12;
 
-export const GET_TRACK_CONTEXT_DESCRIPTION = `Curatorial context from the user's own (hand-made) playlists — the strongest "belongs together" signal available. Exactly one of track_id / seed_ids. Single seed (track_id): the seed with signal, up to ${SAME_ARTIST_CAP} same-artist tracks (by play count), the playlists containing it, and up to ${CO_OCCURRENCE_CAP} co-occurring tracks ranked by shared-playlist count. Multiple seeds (seed_ids, up to ${MAX_SEEDS}): one call instead of N — up to ${MULTI_CO_OCCURRENCE_CAP} candidates, each with total_shared_playlist_count (co-occurrence summed across the seed set) and seeds_matched (how many seeds it appears alongside); seeds themselves are excluded, and same_artist/appearing_in_playlists are single-seed only. Counts are library facts, not a recommendation — ranking is yours. All tracks carry enriched audio features (bpm, musical_key, danceability) where known — use them to judge tempo/key fit around the seeds. Call after resolving seeds via search. On track_not_found the cache may be stale; consider refresh_library.`;
+export const GET_TRACK_CONTEXT_DESCRIPTION = `Curatorial context from the user's own (hand-made) playlists — the strongest "belongs together" signal available. Exactly one of track_id / seed_ids. Single seed (track_id): the seed with signal, its play_history (per-refresh play/skip deltas, newest first, up to ${PLAY_HISTORY_CAP} windows — recent-rotation evidence; empty just means no refresh bracketed any listening yet), up to ${SAME_ARTIST_CAP} same-artist tracks (by play count), the playlists containing it, and up to ${CO_OCCURRENCE_CAP} co-occurring tracks ranked by shared-playlist count. Multiple seeds (seed_ids, up to ${MAX_SEEDS}): one call instead of N — up to ${MULTI_CO_OCCURRENCE_CAP} candidates, each with total_shared_playlist_count (co-occurrence summed across the seed set) and seeds_matched (how many seeds it appears alongside); seeds themselves are excluded, and same_artist/appearing_in_playlists are single-seed only. Counts are library facts, not a recommendation — ranking is yours. All tracks carry enriched audio features (bpm, musical_key, danceability) where known — use them to judge tempo/key fit around the seeds. Call after resolving seeds via search. On track_not_found the cache may be stale; consider refresh_library.`;
 
 function multiSeedContext(seed_ids: string[], deps: ToolDeps): MultiSeedContextOutput | SelectaError {
   const cache = deps.cache();
@@ -116,6 +121,9 @@ export async function handleGetTrackContext(
 
     return {
       seed: toApiTrack(seed),
+      play_history: cache
+        .getTrackPlayHistory(seed.persistentId, PLAY_HISTORY_CAP)
+        .map((w) => ({ at: w.refreshedAt, plays: w.playCountDelta, skips: w.skipCountDelta })),
       same_artist: sameArtist.map(toApiTrack),
       appearing_in_playlists: cache.getPlaylistsContainingTrack(seed.persistentId),
       co_occurring_tracks: cache

@@ -5,6 +5,7 @@
 
 import type { SelectaError } from '../types/errors.js';
 import type { OverviewStats } from '../types/cache.js';
+import { RECENT_WINDOW_DAYS, recentSinceIso } from '../cache/queries.js';
 import {
   LibraryFilters,
   libraryFilterShape,
@@ -44,11 +45,21 @@ export type LibraryOverviewOutput = {
     rating_histogram: Record<string, number>;
   };
   location: { local: number; cloud: number; missing?: number; unknown?: number };
+  // Play-history deltas recorded in the recent window (issue #31), scoped to
+  // the same filtered slice. Deltas only exist where refreshes bracketed the
+  // listening — "activity captured since", never a per-day rate.
+  recent_activity: {
+    window_days: number;
+    since: string;
+    tracks_played: number;
+    total_plays: number;
+    total_skips: number;
+  };
   date_added_range: { earliest: string; latest: string } | null;
   cache_age_hours: number | null;
 };
 
-export const LIBRARY_OVERVIEW_DESCRIPTION = `Aggregate shape of the owned library, or a filtered slice: total tracks + runtime, genre distribution, decade histogram, top artists by track count, signal coverage (loved/rated/never-played + rating histogram), location split, and tracks_with_bpm (how much of the slice has a known tempo — gauge whether bpm filtering is viable before relying on it). Use it to orient before vibe-only requests, then search the slices. Same optional filters as search (all ANDed, no limit); none → whole library. Counts are RAW — genres are NOT normalized ("Hip-Hop" vs "Hip-Hop/Rap" stay separate), and top_artists is "most tracks owned", not a recommendation. genres caps at 50 (rest in genres_other), top_artists at 25 (artists_total carries the full count). cache_age_hours null → cache empty, call refresh_library once.`;
+export const LIBRARY_OVERVIEW_DESCRIPTION = `Aggregate shape of the owned library, or a filtered slice: total tracks + runtime, genre distribution, decade histogram, top artists by track count, signal coverage (loved/rated/never-played + rating histogram), location split, tracks_with_bpm (how much of the slice has a known tempo — gauge whether bpm filtering is viable before relying on it), and recent_activity (plays/skips captured by refreshes in the last 30 days — zeros mean no refresh bracketed recent listening, not necessarily silence). Use it to orient before vibe-only requests, then search the slices. Same optional filters as search (all ANDed, no limit); none → whole library. Counts are RAW — genres are NOT normalized ("Hip-Hop" vs "Hip-Hop/Rap" stay separate), and top_artists is "most tracks owned", not a recommendation. genres caps at 50 (rest in genres_other), top_artists at 25 (artists_total carries the full count). cache_age_hours null → cache empty, call refresh_library once.`;
 
 // 100 → "5", 90 → "4.5". Music stores half-stars as multiples of 10.
 function formatStars(rating: number): string {
@@ -74,7 +85,7 @@ function humanizeDuration(totalSeconds: number): string {
  */
 export function shapeOverview(
   stats: OverviewStats,
-  opts: { filtered: boolean; cacheAgeHours: number | null },
+  opts: { filtered: boolean; cacheAgeHours: number | null; recentSince: string },
 ): LibraryOverviewOutput {
   const genres = stats.genres.slice(0, GENRE_CAP);
   const overflow = stats.genres.slice(GENRE_CAP);
@@ -115,6 +126,13 @@ export function shapeOverview(
       rating_histogram: ratingHistogram,
     },
     location,
+    recent_activity: {
+      window_days: RECENT_WINDOW_DAYS,
+      since: opts.recentSince,
+      tracks_played: stats.recentActivity.tracksPlayed,
+      total_plays: stats.recentActivity.totalPlays,
+      total_skips: stats.recentActivity.totalSkips,
+    },
     date_added_range:
       stats.earliestAdded != null && stats.latestAdded != null
         ? { earliest: stats.earliestAdded, latest: stats.latestAdded }
@@ -134,10 +152,11 @@ export async function handleLibraryOverview(
   if (rangeError) return rangeError;
 
   try {
-    const stats = deps.cache().getOverview(toSearchFilters(input));
-    return shapeOverview(stats, {
+    const recentSince = recentSinceIso();
+    return shapeOverview(deps.cache().getOverview(toSearchFilters(input), recentSince), {
       filtered: Object.keys(input).length > 0,
       cacheAgeHours: roundedCacheAge(deps),
+      recentSince,
     });
   } catch (err) {
     return toErrorEnvelope(err);
