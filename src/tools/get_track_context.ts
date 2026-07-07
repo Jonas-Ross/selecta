@@ -64,6 +64,25 @@ const MULTI_CO_OCCURRENCE_CAP = 100;
 
 export const GET_TRACK_CONTEXT_DESCRIPTION = `Curatorial context from the user's own (hand-made) playlists — the strongest "belongs together" signal available. Exactly one of track_id / seed_ids. Single seed (track_id): the seed with signal, up to ${SAME_ARTIST_CAP} same-artist tracks (by play count), the playlists containing it, and up to ${CO_OCCURRENCE_CAP} co-occurring tracks ranked by shared-playlist count. Multiple seeds (seed_ids, up to ${MAX_SEEDS}): one call instead of N — up to ${MULTI_CO_OCCURRENCE_CAP} candidates, each with total_shared_playlist_count (co-occurrence summed across the seed set) and seeds_matched (how many seeds it appears alongside); seeds themselves are excluded, and same_artist/appearing_in_playlists are single-seed only. Counts are library facts, not a recommendation — ranking is yours. All tracks carry enriched audio features (bpm, musical_key, danceability) where known — use them to judge tempo/key fit around the seeds. Call after resolving seeds via search. On track_not_found the cache may be stale; consider refresh_library.`;
 
+function multiSeedContext(seed_ids: string[], deps: ToolDeps): MultiSeedContextOutput | SelectaError {
+  const cache = deps.cache();
+  const seedIds = [...new Set(seed_ids)];
+  const seedRows = seedIds.map((id) => cache.getTrack(id));
+  if (seedRows.includes(null)) return missingTrackIdsError(cache, seedIds)!;
+  return {
+    seeds: seedRows.map((row) => toApiTrack(row!)),
+    co_occurring_tracks: cache
+      .getCoOccurringTracks(seedIds, MULTI_CO_OCCURRENCE_CAP)
+      .map((t) => ({
+        ...toApiTrack(t),
+        total_shared_playlist_count: t.totalSharedPlaylistCount,
+        seeds_matched: t.seedsMatched,
+        shared_playlist_names: t.sharedPlaylistNames,
+      })),
+    cache_age_hours: roundedCacheAge(deps),
+  };
+}
+
 export async function handleGetTrackContext(
   raw: unknown,
   deps: ToolDeps,
@@ -76,26 +95,9 @@ export async function handleGetTrackContext(
   }
 
   try {
+    if (seed_ids != null) return multiSeedContext(seed_ids, deps);
+
     const cache = deps.cache();
-
-    if (seed_ids != null) {
-      const seedIds = [...new Set(seed_ids)];
-      const seedRows = seedIds.map((id) => cache.getTrack(id));
-      if (seedRows.includes(null)) return missingTrackIdsError(cache, seedIds)!;
-      return {
-        seeds: seedRows.map((row) => toApiTrack(row!)),
-        co_occurring_tracks: cache
-          .getCoOccurringTracks(seedIds, MULTI_CO_OCCURRENCE_CAP)
-          .map((t) => ({
-            ...toApiTrack(t),
-            total_shared_playlist_count: t.totalSharedPlaylistCount,
-            seeds_matched: t.seedsMatched,
-            shared_playlist_names: t.sharedPlaylistNames,
-          })),
-        cache_age_hours: roundedCacheAge(deps),
-      };
-    }
-
     const seed = cache.getTrack(track_id!);
     if (!seed) {
       return {
