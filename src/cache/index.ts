@@ -137,8 +137,9 @@ export class SelectaCache {
     return this.queries.getPlaylistsContainingTrack(trackPersistentId);
   }
 
-  getCoOccurringTracks(trackPersistentId: string, limit?: number): CoOccurringTrack[] {
-    return this.queries.getCoOccurringTracks(trackPersistentId, limit);
+  /** Co-occurrence aggregated across the seed set; seeds are never candidates. */
+  getCoOccurringTracks(seedIds: string[], limit?: number): CoOccurringTrack[] {
+    return this.queries.getCoOccurringTracks(seedIds, limit);
   }
 
   /**

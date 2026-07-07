@@ -83,8 +83,12 @@ export type ReconcileAction =
   | { kind: 'rekey'; createdId: string; name: string; fromId: string; toId: string }
   | { kind: 'duplicate'; createdId: string; name: string; keepId: string; deleteIds: string[] };
 
+// getCoOccurringTracks row, aggregated over the seed set (a single seed is the
+// degenerate case: totalSharedPlaylistCount is that seed's shared-playlist
+// count and seedsMatched is 1). Counts are library facts, not a score.
 export type CoOccurringTrack = TrackRow & {
-  sharedPlaylistCount: number;
+  totalSharedPlaylistCount: number; // Σ over seeds of distinct shared user playlists
+  seedsMatched: number; // how many seeds it co-occurs with
   sharedPlaylistNames: string[]; // cap 3
 };
 
