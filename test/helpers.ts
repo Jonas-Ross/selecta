@@ -3,9 +3,28 @@
 // (adding the #15 edit methods touched four copies before this existed).
 
 import { expect, vi } from 'vitest';
-import type { Bridge } from '../src/types/bridge.js';
+import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
 import type { AudioFeaturesRow } from '../src/types/cache.js';
 import type { SelectaError } from '../src/types/errors.js';
+
+/** The snapshot with per-track play/skip counters moved — the play-history stimulus. */
+export function bumpedSnapshot(
+  snapshot: LibrarySnapshot,
+  deltas: Record<string, { plays?: number; skips?: number }>,
+): LibrarySnapshot {
+  return {
+    ...snapshot,
+    tracks: snapshot.tracks.map((t) => {
+      const d = deltas[t.persistentId];
+      if (!d) return t;
+      return {
+        ...t,
+        playCount: (t.playCount ?? 0) + (d.plays ?? 0),
+        skipCount: (t.skipCount ?? 0) + (d.skips ?? 0),
+      };
+    }),
+  };
+}
 
 export function makeBridge(overrides: Partial<Bridge> = {}): Bridge {
   return {

@@ -62,6 +62,23 @@ CREATE TABLE IF NOT EXISTS audio_features (
   fetched_at TEXT NOT NULL
 );
 
+-- Per-refresh play/skip deltas (issue #31): a sparse longitudinal record of
+-- listening, written inside the refresh transaction by comparing incoming
+-- counters against the previous tracks row. Rows exist only where a counter
+-- increased; a track's first sighting establishes baseline silently, and a
+-- decreased counter (re-import, iCloud weirdness) resets the baseline with no
+-- row. Deltas only — the current absolute rides tracks.play_count. Pruned with
+-- its track, like audio_features.
+CREATE TABLE IF NOT EXISTS play_history (
+  track_persistent_id TEXT,
+  refreshed_at TEXT,
+  play_count_delta INTEGER NOT NULL DEFAULT 0,
+  skip_count_delta INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (track_persistent_id, refreshed_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_play_history_at ON play_history(refreshed_at);
+
 CREATE TABLE IF NOT EXISTS refresh_log (
   refreshed_at TEXT PRIMARY KEY,
   duration_ms INTEGER,
