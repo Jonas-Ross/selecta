@@ -630,3 +630,153 @@ describe('play history', () => {
     expect(tail).toEqual([...tail].sort());
   });
 });
+
+// Model-persisted notes (issue #32): verbatim memory outside the refresh
+// cycle, pruned with its subject, following playlist rekeys via the receipt.
+describe('notes', () => {
+  const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+  function withPlaylists(...copies: { id: string; tracks?: string[] }[]): LibrarySnapshot {
+    return {
+      ...snapshot,
+      playlists: [
+        ...snapshot.playlists,
+        ...copies.map((c) => ({
+          persistentId: c.id,
+          name: 'Rearview',
+          kind: 'user' as const,
+          trackPersistentIds: c.tracks ?? ['T-TEARDROP', 'T-ROADS'],
+        })),
+      ],
+    };
+  }
+
+  function cacheAfterCreate(): SelectaCache {
+    const cache = refreshed();
+    cache.upsertPlaylistAfterWrite({ persistentId: 'P-CREATED', trackCount: 2 }, 'Rearview', [
+      'T-TEARDROP',
+      'T-ROADS',
+    ]);
+    cache.recordPlaylistCreation('P-CREATED', 'Rearview', ['T-TEARDROP', 'T-ROADS']);
+    return cache;
+  }
+
+  it('upserts one note per subject, keeping created_at across rewrites', async () => {
+    const cache = refreshed();
+    const first = cache.setNote('track', 'T-TEARDROP', 'great opener');
+    expect(first).toEqual({
+      subjectKind: 'track',
+      subjectId: 'T-TEARDROP',
+      body: 'great opener',
+      createdAt: expect.stringMatching(ISO),
+      updatedAt: first.createdAt,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    const second = cache.setNote('track', 'T-TEARDROP', 'great opener, too long for dinner');
+    expect(second.body).toBe('great opener, too long for dinner');
+    expect(second.createdAt).toBe(first.createdAt);
+    expect(second.updatedAt > first.updatedAt).toBe(true);
+    expect(cache.db.prepare('SELECT COUNT(*) AS n FROM notes').get()).toEqual({ n: 1 });
+  });
+
+  it('keeps track and playlist notes on the same ID apart', () => {
+    const cache = refreshed();
+    cache.setNote('track', 'X', 'track note');
+    cache.setNote('playlist', 'X', 'playlist note');
+    expect(cache.getNote('track', 'X')!.body).toBe('track note');
+    expect(cache.getNote('playlist', 'X')!.body).toBe('playlist note');
+  });
+
+  it('clears a note and reports whether one existed', () => {
+    const cache = refreshed();
+    cache.setNote('playlist', 'P-LATENIGHT', 'dinner set');
+    expect(cache.clearNote('playlist', 'P-LATENIGHT')).toBe(true);
+    expect(cache.getNote('playlist', 'P-LATENIGHT')).toBeNull();
+    expect(cache.clearNote('playlist', 'P-LATENIGHT')).toBe(false);
+  });
+
+  it('rides every track and playlist projection verbatim', () => {
+    const cache = refreshed();
+    const note = cache.setNote('track', 'T-TEARDROP', '  use this version, not the remaster  ');
+    cache.setNote('playlist', 'P-LATENIGHT', 'the arc works');
+    const track = cache.getTrack('T-TEARDROP')!;
+    expect(track.noteBody).toBe('  use this version, not the remaster  ');
+    expect(track.noteCreatedAt).toBe(note.createdAt);
+    expect(track.noteUpdatedAt).toBe(note.updatedAt);
+    expect(cache.getTrack('T-ANGEL')!.noteBody).toBeNull();
+    expect(cache.searchTracks({ query: 'teardrop' }).rows[0]!.noteBody).toBe(
+      '  use this version, not the remaster  ',
+    );
+    expect(cache.getCoOccurrence(['T-ROADS']).tracks.find((t) => t.persistentId === 'T-TEARDROP')!.noteBody).toBe(
+      '  use this version, not the remaster  ',
+    );
+    expect(cache.getPlaylist('P-LATENIGHT')!.noteBody).toBe('the arc works');
+    expect(cache.listPlaylists({}).find((p) => p.persistentId === 'P-LATENIGHT')!.noteBody).toBe(
+      'the arc works',
+    );
+    expect(cache.getPlaylist('P-TRIPHOP')!.noteBody).toBeNull();
+  });
+
+  it('survives a full library refresh untouched', () => {
+    const cache = refreshed();
+    const track = cache.setNote('track', 'T-TEARDROP', 'keep');
+    const playlist = cache.setNote('playlist', 'P-LATENIGHT', 'keep too');
+    cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+    expect(cache.getNote('track', 'T-TEARDROP')).toEqual(track);
+    expect(cache.getNote('playlist', 'P-LATENIGHT')).toEqual(playlist);
+  });
+
+  it('is pruned when its subject leaves the library', () => {
+    const cache = refreshed();
+    cache.setNote('track', 'T-TEARDROP', 'gone soon');
+    cache.setNote('track', 'T-ANGEL', 'stays');
+    cache.setNote('playlist', 'P-LATENIGHT', 'gone soon');
+    cache.setNote('playlist', 'P-TRIPHOP', 'stays');
+    cache.refreshFromSnapshot(
+      {
+        ...snapshot,
+        tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-TEARDROP'),
+        playlists: snapshot.playlists.filter((p) => p.persistentId !== 'P-LATENIGHT'),
+      },
+      { durationMs: 1 },
+    );
+    expect(cache.getNote('track', 'T-TEARDROP')).toBeNull();
+    expect(cache.getNote('track', 'T-ANGEL')!.body).toBe('stays');
+    expect(cache.getNote('playlist', 'P-LATENIGHT')).toBeNull();
+    expect(cache.getNote('playlist', 'P-TRIPHOP')!.body).toBe('stays');
+  });
+
+  it('follows an iCloud rekey through refresh and reconciliation', () => {
+    const cache = cacheAfterCreate();
+    const note = cache.setNote('playlist', 'P-CREATED', 'user liked the arc; kept the plain name');
+    // The refresh sees only the rekeyed ID: the receipt shields the note from
+    // the prune until reconciliation moves it.
+    cache.refreshFromSnapshot(withPlaylists({ id: 'P-REKEYED' }), { durationMs: 1 });
+    expect(cache.getNote('playlist', 'P-CREATED')).toEqual(note);
+    cache.applyRekey('P-CREATED', 'P-REKEYED');
+    expect(cache.getNote('playlist', 'P-CREATED')).toBeNull();
+    expect(cache.getNote('playlist', 'P-REKEYED')).toEqual({ ...note, subjectId: 'P-REKEYED' });
+    expect(cache.getPlaylist('P-REKEYED')!.noteBody).toBe(note.body);
+    // A second refresh no longer needs the shield: the note is keyed live.
+    cache.refreshFromSnapshot(withPlaylists({ id: 'P-REKEYED' }), { durationMs: 1 });
+    expect(cache.getNote('playlist', 'P-REKEYED')!.body).toBe(note.body);
+  });
+
+  it('moves to the surviving twin when an echo duplicate is removed', () => {
+    const cache = cacheAfterCreate();
+    cache.setNote('playlist', 'P-CREATED', 'arc approved');
+    cache.refreshFromSnapshot(withPlaylists({ id: 'P-CREATED' }, { id: 'P-ECHO' }), {
+      durationMs: 1,
+    });
+    cache.applyDuplicateRemoval('P-CREATED', 'P-CREATED', 'P-ECHO');
+    expect(cache.getNote('playlist', 'P-CREATED')).toBeNull();
+    expect(cache.getNote('playlist', 'P-ECHO')!.body).toBe('arc approved');
+  });
+
+  it('goes with the playlist on deletePlaylistRow', () => {
+    const cache = refreshed();
+    cache.setNote('playlist', 'P-TRIPHOP', 'doomed');
+    cache.deletePlaylistRow('P-TRIPHOP');
+    expect(cache.getNote('playlist', 'P-TRIPHOP')).toBeNull();
+  });
+});

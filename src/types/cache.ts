@@ -30,6 +30,11 @@ export type TrackRow = {
   // enrichment (issue #19) has covered the track.
   musicalKey: string | null; // e.g. "F# minor"
   danceability: number | null; // 0..1
+  // The model's own note on this track (issue #32), verbatim. Null until the
+  // model writes one via set_note. Projection-only — never a filter or sort.
+  noteBody: string | null;
+  noteCreatedAt: string | null;
+  noteUpdatedAt: string | null;
 };
 
 // What the enrichment backlog query returns: just the fields matching needs.
@@ -78,6 +83,23 @@ export type PlaylistRow = {
   kind: 'user' | 'smart' | 'folder' | 'special' | 'subscription';
   parentPersistentId: string | null;
   trackCount: number;
+  // The model's own note on this playlist (issue #32), verbatim; null when unset.
+  noteBody: string | null;
+  noteCreatedAt: string | null;
+  noteUpdatedAt: string | null;
+};
+
+export type NoteSubject = 'track' | 'playlist';
+
+// A notes row: the model's annotation on one subject. Keyed by the subject's
+// canonical persistent ID — playlist notes follow iCloud rekeys via the
+// creation receipt, track IDs are stable per library.
+export type NoteRow = {
+  subjectKind: NoteSubject;
+  subjectId: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type PlaylistRef = { id: string; name: string };

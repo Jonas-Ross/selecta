@@ -12,6 +12,8 @@ import type {
   AudioFeaturesRow,
   CoOccurrenceFilters,
   CoOccurrenceResult,
+  NoteRow,
+  NoteSubject,
   PendingTrack,
   OverviewStats,
   PlayHistoryWindow,
@@ -219,6 +221,27 @@ export class SelectaCache {
   }
 
   /**
+   * Upsert the model's note on a track or playlist (issue #32) and return the
+   * stored row. Callers key playlists by canonical ID (resolvePlaylistId) so
+   * the note lands where reconciliation expects it. Like audio_features, notes
+   * live outside the refresh cycle: a reread never rewrites one, only prunes
+   * notes whose subject left the library.
+   */
+  setNote(subjectKind: NoteSubject, subjectId: string, body: string): NoteRow {
+    this.queries.upsertNote(subjectKind, subjectId, body, new Date().toISOString());
+    return this.queries.getNote(subjectKind, subjectId)!;
+  }
+
+  /** Remove a note; false when there was none. */
+  clearNote(subjectKind: NoteSubject, subjectId: string): boolean {
+    return this.queries.deleteNote(subjectKind, subjectId);
+  }
+
+  getNote(subjectKind: NoteSubject, subjectId: string): NoteRow | null {
+    return this.queries.getNote(subjectKind, subjectId);
+  }
+
+  /**
    * Surgical patch after a successful playlist write:
    * upsert the playlist row and replace its membership so the cache doesn't
    * desync — WITHOUT a full reread. Tracks are untouched, so no FTS work.
@@ -270,11 +293,12 @@ export class SelectaCache {
 
   /**
    * Surgical patch after the bridge deleted a playlist on the user's behalf:
-   * drop its row and membership, and retire any creation receipt pointing at
-   * it — otherwise the next refresh's sync reconciliation could rekey the dead
-   * receipt onto an iCloud-resurrected copy and undo the deliberate delete.
-   * (Echo dedupe keeps its receipts — it remaps them via applyDuplicateRemoval
-   * instead.) Track rows are untouched — only the playlist goes.
+   * drop its row, membership, and note, and retire any creation receipt
+   * pointing at it — otherwise the next refresh's sync reconciliation could
+   * rekey the dead receipt onto an iCloud-resurrected copy and undo the
+   * deliberate delete. (Echo dedupe keeps its receipts — it remaps them via
+   * applyDuplicateRemoval instead.) Track rows are untouched — only the
+   * playlist goes.
    */
   deletePlaylistRow(persistentId: string): void {
     const run = this.db.transaction(() => {
@@ -361,17 +385,27 @@ export class SelectaCache {
     return actions;
   }
 
-  /** Point a creation receipt at the playlist's current canonical ID. */
+  /**
+   * Point a creation receipt at the playlist's current canonical ID, moving
+   * the playlist's note with it so model memory survives an iCloud rekey.
+   */
   applyRekey(createdId: string, toId: string): void {
-    this.queries.setCreationCurrentId(createdId, toId);
+    const run = this.db.transaction(() => {
+      const fromId = this.queries.resolveCreatedPlaylistId(createdId);
+      if (fromId != null) this.queries.movePlaylistNote(fromId, toId);
+      this.queries.setCreationCurrentId(createdId, toId);
+    });
+    run();
   }
 
   /**
-   * Patch the cache after the bridge deleted an echo duplicate: drop the
-   * deleted playlist's rows and point the creation receipt at the survivor.
+   * Patch the cache after the bridge deleted an echo duplicate: move any note
+   * from the deleted copy to the survivor, drop the deleted playlist's rows,
+   * and point the creation receipt at the survivor.
    */
   applyDuplicateRemoval(createdId: string, deletedId: string, keptId: string): void {
     const run = this.db.transaction(() => {
+      this.queries.movePlaylistNote(deletedId, keptId);
       this.queries.deletePlaylistRow(deletedId);
       this.queries.setCreationCurrentId(createdId, keptId);
     });
