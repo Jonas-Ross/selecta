@@ -51,9 +51,9 @@ describe('inspect_tracklist', () => {
     expect(out.tracks[2]!.signal).toEqual({
       play_count: 4,
       skip_count: 3,
-      rating: null,
-      loved: false,
     });
+    expect(out.tracks[2]!.signal).not.toHaveProperty('rating');
+    expect(out.tracks[2]!.signal).not.toHaveProperty('loved');
     expect(out.tracks[0]).not.toHaveProperty('genre');
     expect(out.tracks[0]).not.toHaveProperty('year');
     expect(out.tracks[0]).not.toHaveProperty('location_kind');

@@ -9,7 +9,9 @@ import {
   missingTrackIdsError,
   parseInput,
   roundedCacheAge,
+  toApiTrack,
   toErrorEnvelope,
+  type ApiTrack,
   type ToolDeps,
 } from './common.js';
 
@@ -25,21 +27,18 @@ export const inspectTracklistInputShape = {
 
 const InspectTracklistInput = z.strictObject(inspectTracklistInputShape);
 
-export type InspectedTrack = {
-  persistent_id: string;
-  title?: string;
-  artist?: string;
-  album?: string;
-  duration_seconds?: number;
-  bpm?: number;
-  musical_key?: string;
-  danceability?: number;
-  signal: {
-    play_count: number;
-    skip_count: number;
-    rating: number | null;
-    loved: boolean;
-  };
+export type InspectedTrack = Pick<
+  ApiTrack,
+  | 'persistent_id'
+  | 'title'
+  | 'artist'
+  | 'album'
+  | 'duration_seconds'
+  | 'bpm'
+  | 'musical_key'
+  | 'danceability'
+> & {
+  signal: Pick<ApiTrack['signal'], 'play_count' | 'skip_count' | 'rating' | 'loved'>;
 };
 
 type MissingCoverage = {
@@ -89,23 +88,24 @@ export type InspectTracklistOutput = TracklistInspection & {
 export const INSPECT_TRACKLIST_DESCRIPTION = `Inspect an ordered playlist draft using only Selecta's local cache, before preview_playlist or create_playlist. Returns the resolved tracks in the exact supplied order, known runtime (with any missing-duration IDs), exact repeated IDs, distinct owned copies of the same trimmed/case-insensitive title + artist where detectable, artist occurrence counts, raw play/skip/loved/rating signal, BPM/key/danceability coverage and missing IDs, and a sha256 fingerprint of the ordered ID array. Duplicate positions are 0-based. The fingerprint matches only the identical ordered ID list. Unknown IDs fail with track_not_found and no partial inspection. Reports facts only — no transition score, variety judgment, quality flag, or recommendation. Never reads Music.app or the network.`;
 
 function compactTrack(row: TrackRow): InspectedTrack {
-  return {
-    persistent_id: row.persistentId,
-    title: row.title ?? undefined,
-    artist: row.artist ?? undefined,
-    album: row.album ?? undefined,
-    duration_seconds: row.durationSeconds ?? undefined,
-    bpm: row.bpm != null ? Math.round(row.bpm * 10) / 10 : undefined,
-    musical_key: row.musicalKey ?? undefined,
-    danceability:
-      row.danceability != null ? Math.round(row.danceability * 100) / 100 : undefined,
+  const api = toApiTrack(row);
+  const compact: InspectedTrack = {
+    persistent_id: api.persistent_id,
     signal: {
-      play_count: row.playCount,
-      skip_count: row.skipCount,
-      rating: row.rating != null ? row.rating / 20 : null,
-      loved: row.loved === 1,
+      play_count: api.signal.play_count,
+      skip_count: api.signal.skip_count,
     },
   };
+  if (api.title !== undefined) compact.title = api.title;
+  if (api.artist !== undefined) compact.artist = api.artist;
+  if (api.album !== undefined) compact.album = api.album;
+  if (api.duration_seconds !== undefined) compact.duration_seconds = api.duration_seconds;
+  if (api.bpm !== undefined) compact.bpm = api.bpm;
+  if (api.musical_key !== undefined) compact.musical_key = api.musical_key;
+  if (api.danceability !== undefined) compact.danceability = api.danceability;
+  if (api.signal.rating !== undefined) compact.signal.rating = api.signal.rating;
+  if (api.signal.loved !== undefined) compact.signal.loved = api.signal.loved;
+  return compact;
 }
 
 function positionsById(rows: TrackRow[]): Map<string, number[]> {
