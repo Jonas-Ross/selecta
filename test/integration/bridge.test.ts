@@ -67,7 +67,11 @@ describe('bridge write paths against real Music.app', { tags: ['integration'] },
   // sync reassigns a fresh playlist's persistent ID (and can resurrect a
   // just-deleted one), so creation-time IDs are unreliable for cleanup. The
   // sweep also collects resurrected copies left by earlier runs.
-  const SCRATCH_NAMES = ['Selecta Integration Scratch', 'Selecta Integration Preview Scratch'];
+  const SCRATCH_NAMES = [
+    'Selecta Integration Scratch',
+    'Selecta Integration Clone Scratch',
+    'Selecta Integration Preview Scratch',
+  ];
   afterEach(async () => {
     for (const name of SCRATCH_NAMES) {
       await deletePlaylistsByName(name);
@@ -98,6 +102,21 @@ describe('bridge write paths against real Music.app', { tags: ['integration'] },
     const readBack = await bridge.readPlaylist(result.persistentId);
     expect(readBack.trackPersistentIds).toEqual(trackIds);
     expect(readBack.kind).toBe('user');
+  }, 60_000);
+
+  it('clonePlaylist materializes the fixture playlist in its exact live order', async () => {
+    const source = await bridge.readPlaylist(await requireFixturePlaylistId());
+    const result = await bridge.clonePlaylist({
+      name: 'Selecta Integration Clone Scratch',
+      sourcePlaylistId: source.persistentId,
+      description: 'cloned by integration test — safe to delete',
+    });
+
+    expect(result.sourcePersistentId).toBe(source.persistentId);
+    expect(result.sourceName).toBe(source.name);
+    expect(result.sourceTrackPersistentIds).toEqual(source.trackPersistentIds);
+    const readBack = await bridge.readPlaylist(result.persistentId);
+    expect(readBack.trackPersistentIds).toEqual(result.sourceTrackPersistentIds);
   }, 60_000);
 
   it('replacePlaylist reuses the slot by name: one playlist, contents replaced', async () => {

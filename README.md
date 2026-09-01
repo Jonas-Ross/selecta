@@ -60,7 +60,7 @@ Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vib
 | `get_track_context` | Everything around one track: other tracks by the same artist, the playlists it's in, and the tracks that sit next to it in your own playlists. |
 | `list_playlists` | Your playlists, with kind (`user`/`smart`/`subscription`/`folder`) and track counts. |
 | `preview_playlist` | Overwrites the single "Selecta Preview" playlist so you can audition a draft. |
-| `create_playlist` | Creates the real playlist: name, ordered tracks, optional description. |
+| `create_playlist` | Creates the real playlist from ordered tracks or a verified live source playlist; optional description. |
 | `add_tracks` / `remove_tracks` | Edit an existing user playlist. Smart and subscription playlists are read-only. |
 | `reorder_tracks` | Rearrange a user playlist's entries to a new order (a full permutation of its current positions). |
 | `delete_playlist` | Delete a user playlist outright. Irreversible — the tracks stay in your library, the playlist doesn't. |

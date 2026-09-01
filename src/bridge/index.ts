@@ -16,6 +16,7 @@ import {
 } from './scripts/find_playlist_by_name.js';
 import {
   buildCreatePlaylistScript,
+  buildClonePlaylistScript,
   buildReplacePlaylistScript,
 } from './scripts/write_playlist.js';
 import {
@@ -32,6 +33,7 @@ import { BridgeError } from '../types/errors.js';
 import {
   type Bridge,
   type LibrarySnapshot,
+  type PlaylistCloneResult,
   type PlaylistEditResult,
   type PlaylistWriteResult,
   type RawPlaylist,
@@ -91,6 +93,9 @@ export const bridge: Bridge = {
   },
   async createPlaylist(input): Promise<PlaylistWriteResult> {
     return parseWriteResult(await runJxa(buildCreatePlaylistScript(input)));
+  },
+  async clonePlaylist(input): Promise<PlaylistCloneResult> {
+    return parseCloneResult(await runJxa(buildClonePlaylistScript(input)));
   },
   async replacePlaylist(input): Promise<PlaylistWriteResult> {
     return parseWriteResult(await runJxa(buildReplacePlaylistScript(input)));
@@ -247,6 +252,36 @@ function parseWriteResult(result: unknown): PlaylistWriteResult {
     }
   }
   throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistWriteResult shape.');
+}
+
+function parseCloneResult(result: unknown): PlaylistCloneResult {
+  if (typeof result === 'object' && result !== null) {
+    const v = result as Record<string, unknown>;
+    if (v.playlistNotFound === true) {
+      throw new BridgeError(
+        'playlist_not_found',
+        'Music.app has no source playlist with that persistent ID.',
+        'The source playlist is not in the live library — run refresh_library and re-resolve it via list_playlists.',
+      );
+    }
+    throwIfMissingTracks(v);
+    if (
+      typeof v.persistentId === 'string' &&
+      typeof v.trackCount === 'number' &&
+      typeof v.sourcePersistentId === 'string' &&
+      typeof v.sourceName === 'string' &&
+      isIdArray(v.sourceTrackPersistentIds)
+    ) {
+      return {
+        persistentId: v.persistentId,
+        trackCount: v.trackCount,
+        sourcePersistentId: v.sourcePersistentId,
+        sourceName: v.sourceName,
+        sourceTrackPersistentIds: v.sourceTrackPersistentIds,
+      };
+    }
+  }
+  throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistCloneResult shape.');
 }
 
 // Test-support: the library's track persistent IDs in one bulk Apple event —

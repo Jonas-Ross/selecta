@@ -76,7 +76,7 @@ describe('runJxa', () => {
 
 // The edit scripts return guard sentinels instead of mutating when the live
 // library disagrees with the request; the bridge maps each to a BridgeError.
-describe('bridge edit-result sentinel mapping', () => {
+describe('bridge result sentinel mapping', () => {
   beforeEach(() => {
     mockExecFile.mockReset();
   });
@@ -122,6 +122,30 @@ describe('bridge edit-result sentinel mapping', () => {
       trackPersistentIds: ['T1', 'T2'],
       preEditTrackPersistentIds: ['T1', 'T2', 'T3'],
       removedCount: 1,
+    });
+  });
+
+  it('maps a missing clone source to playlist_not_found', async () => {
+    stubExecFile({ stdout: '{"playlistNotFound":true}' });
+    await expectErrorCode(
+      (await editBridge()).clonePlaylist({ name: 'x', sourcePlaylistId: 'P-NOPE' }),
+      'playlist_not_found',
+    );
+  });
+
+  it('returns a clone result with the exact source order', async () => {
+    stubExecFile({
+      stdout:
+        '{"persistentId":"P-NEW","trackCount":3,"sourcePersistentId":"P-SOURCE","sourceName":"Preview","sourceTrackPersistentIds":["T3","T1","T2"]}',
+    });
+    await expect(
+      (await editBridge()).clonePlaylist({ name: 'Final', sourcePlaylistId: 'P-SOURCE' }),
+    ).resolves.toEqual({
+      persistentId: 'P-NEW',
+      trackCount: 3,
+      sourcePersistentId: 'P-SOURCE',
+      sourceName: 'Preview',
+      sourceTrackPersistentIds: ['T3', 'T1', 'T2'],
     });
   });
 
