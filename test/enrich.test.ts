@@ -10,10 +10,11 @@ import {
   primaryArtist,
   stripFeat,
 } from '../src/enrich/match.js';
+import { USER_AGENT, withUserAgent } from '../src/enrich/sources.js';
 import { handleEnrichFeatures, type EnrichFeaturesOutput } from '../src/tools/enrich_features.js';
 import type { ToolDeps } from '../src/tools/common.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
-import { asError, makeBridge } from './helpers.js';
+import { asError, featuresRow, makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
@@ -44,6 +45,21 @@ describe('match heuristics', () => {
   it('escapes Lucene syntax in titles', () => {
     expect(luceneEscape('W.D.Y.W.F.M?')).toBe('W.D.Y.W.F.M\\?');
     expect(luceneEscape('AC/DC')).toBe('AC\\/DC');
+  });
+});
+
+describe('source request identity', () => {
+  it('sends the identifying Selecta User-Agent', async () => {
+    let requestInit: RequestInit | undefined;
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestInit = init;
+      return new Response('{}');
+    }) as typeof fetch;
+
+    await withUserAgent(fetchImpl)('https://example.test');
+
+    expect(new Headers(requestInit?.headers).get('User-Agent')).toBe(USER_AGENT);
+    expect(USER_AGENT).toContain('github.com/Jonas-Ross/selecta');
   });
 });
 
@@ -194,6 +210,87 @@ describe('enrichPendingTracks', () => {
     expect(cache.getAudioFeatures('T-GLORYBOX')).toBeNull();
   });
 
+  it('targets only the supplied pending IDs and reports each outcome in request order', async () => {
+    const { fetchLike, calls } = fakeFetch(scenarioHandler);
+    const summary = await enrichPendingTracks(
+      cache,
+      { trackIds: ['T-ROADS', 'T-TEARDROP'] },
+      testDeps(fetchLike),
+    );
+
+    expect(summary).toMatchObject({
+      processed: 2,
+      enriched: 1,
+      noData: 0,
+      noMatch: 1,
+      skipped: 0,
+      alreadyAttempted: 0,
+      pendingRemaining: 4,
+      outcomes: [
+        { trackPersistentId: 'T-ROADS', outcome: 'no_match' },
+        { trackPersistentId: 'T-TEARDROP', outcome: 'enriched' },
+      ],
+    });
+    expect(cache.getAudioFeatures('T-ROADS')).toMatchObject({ status: 'no_match' });
+    expect(cache.getAudioFeatures('T-TEARDROP')).toMatchObject({ status: 'ok' });
+    expect(cache.getAudioFeatures('T-MIDNIGHT')).toBeNull();
+
+    const requestLog = calls.map(decodeURIComponent).join('\n');
+    expect(requestLog).toContain('Roads');
+    expect(requestLog).toContain('Teardrop');
+    expect(requestLog).not.toContain('Midnight City');
+    expect(requestLog).not.toContain('Glory Box');
+    expect(requestLog).not.toContain('Angel');
+  });
+
+  it('reports already-terminal targets and never retries them', async () => {
+    cache.saveAudioFeatures([featuresRow()]);
+    const { fetchLike, calls } = fakeFetch(scenarioHandler);
+    const summary = await enrichPendingTracks(
+      cache,
+      { trackIds: ['T-TEARDROP', 'T-ANGEL'] },
+      testDeps(fetchLike),
+    );
+
+    expect(summary.processed).toBe(1);
+    expect(summary.alreadyAttempted).toBe(1);
+    expect(summary.outcomes).toEqual([
+      {
+        trackPersistentId: 'T-TEARDROP',
+        outcome: 'already_attempted',
+        existingResult: 'enriched',
+      },
+      { trackPersistentId: 'T-ANGEL', outcome: 'no_data' },
+    ]);
+    expect(calls.map(decodeURIComponent).join('\n')).not.toContain('Teardrop');
+  });
+
+  it('rejects unknown targeted IDs before any external request', async () => {
+    const { fetchLike, calls } = fakeFetch(scenarioHandler);
+    await expect(
+      enrichPendingTracks(
+        cache,
+        { trackIds: ['T-TEARDROP', 'T-UNKNOWN'] },
+        testDeps(fetchLike),
+      ),
+    ).rejects.toMatchObject({ errorCode: 'track_not_found' });
+    expect(calls).toHaveLength(0);
+    expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
+  });
+
+  it('defensively rejects duplicate targeted IDs before any external request', async () => {
+    const { fetchLike, calls } = fakeFetch(scenarioHandler);
+    await expect(
+      enrichPendingTracks(
+        cache,
+        { trackIds: ['T-TEARDROP', 'T-TEARDROP'] },
+        testDeps(fetchLike),
+      ),
+    ).rejects.toMatchObject({ errorCode: 'validation_error' });
+    expect(calls).toHaveLength(0);
+    expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
+  });
+
   it('narrates every source request through trace', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
     const lines: string[] = [];
@@ -269,7 +366,7 @@ describe('enrichPendingTracks', () => {
   });
 
   it('continues past a failed chunk to the next one', async () => {
-    // 30 synthetic tracks → two chunks (25 + 5), play-count order T-01…T-30.
+    // 30 targeted tracks → two chunks (25 + 5), requested order T-01…T-30.
     // Chunk 1 dies on Song 10's MusicBrainz call; chunk 2 must still land.
     const big = SelectaCache.open(':memory:');
     big.refreshFromSnapshot(
@@ -293,11 +390,26 @@ describe('enrichPendingTracks', () => {
       if (u.includes('api.deezer.com/search')) return [200, { data: [] }];
       throw new Error(`unrouted url: ${url}`);
     });
-    const summary = await enrichPendingTracks(big, { limit: 30 }, testDeps(fetchLike));
+    const targetIds = Array.from({ length: 30 }, (_, i) =>
+      `T-${String(i + 1).padStart(2, '0')}`,
+    );
+    const summary = await enrichPendingTracks(big, { trackIds: targetIds }, testDeps(fetchLike));
     expect(summary.skipped).toBe(25); // chunk 1 lost to the 503
     expect(summary.processed).toBe(5); // chunk 2 completed (all no_match)
     expect(summary.noMatch).toBe(5);
     expect(summary.pendingRemaining).toBe(25);
+    expect(summary.outcomes?.slice(0, 25)).toEqual(
+      targetIds.slice(0, 25).map((trackPersistentId) => ({
+        trackPersistentId,
+        outcome: 'skipped',
+      })),
+    );
+    expect(summary.outcomes?.slice(25)).toEqual(
+      targetIds.slice(25).map((trackPersistentId) => ({
+        trackPersistentId,
+        outcome: 'no_match',
+      })),
+    );
     expect(big.getAudioFeatures('T-26')).toMatchObject({ status: 'no_match' });
     expect(big.getAudioFeatures('T-10')).toBeNull();
   });
@@ -375,6 +487,95 @@ describe('enrich_features tool', () => {
       no_match: 3,
       pending_remaining: 0,
     });
+  });
+
+  it('runs targeted mode and reports per-ID outcomes', async () => {
+    const { fetchLike } = fakeFetch(scenarioHandler);
+    const deps = makeDeps(fetchLike);
+    deps.cache().saveAudioFeatures([
+      featuresRow({
+        trackPersistentId: 'T-GLORYBOX',
+        bpm: null,
+        musicalKey: null,
+        danceability: null,
+        sources: null,
+        mbRecordingMbid: null,
+        deezerTrackId: null,
+        status: 'no_match',
+      }),
+    ]);
+
+    const out = (await handleEnrichFeatures(
+      { track_ids: ['T-GLORYBOX', 'T-MIDNIGHT'] },
+      deps,
+    )) as EnrichFeaturesOutput;
+    expect(out).toEqual({
+      processed: 1,
+      enriched: 1,
+      no_data: 0,
+      no_match: 0,
+      pending_remaining: 4,
+      already_attempted: 1,
+      track_outcomes: [
+        {
+          track_id: 'T-GLORYBOX',
+          outcome: 'already_attempted',
+          existing_result: 'no_match',
+        },
+        { track_id: 'T-MIDNIGHT', outcome: 'enriched' },
+      ],
+    });
+  });
+
+  it('rejects unknown targeted IDs without making a source request', async () => {
+    const { fetchLike, calls } = fakeFetch(scenarioHandler);
+    const err = asError(
+      await handleEnrichFeatures(
+        { track_ids: ['T-TEARDROP', 'T-UNKNOWN'] },
+        makeDeps(fetchLike),
+      ),
+    );
+    expect(err).toMatchObject({ error: 'track_not_found' });
+    expect(err.hint).toContain('T-UNKNOWN');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('caps targeted input and rejects mixing targeted and backlog modes', async () => {
+    const { fetchLike, calls } = fakeFetch(scenarioHandler);
+    const deps = makeDeps(fetchLike);
+    const tooMany = Array.from({ length: 51 }, (_, i) => `T-${i}`);
+
+    expect(asError(await handleEnrichFeatures({ track_ids: tooMany }, deps)).error).toBe(
+      'validation_error',
+    );
+    expect(
+      asError(
+        await handleEnrichFeatures(
+          { track_ids: ['T-TEARDROP'], limit: 1 },
+          deps,
+        ),
+      ).error,
+    ).toBe('validation_error');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('rejects duplicate target IDs at the parse boundary', async () => {
+    let cacheRead = false;
+    const result = await handleEnrichFeatures(
+      { track_ids: ['T-TEARDROP', 'T-TEARDROP'] },
+      {
+        cache: () => {
+          cacheRead = true;
+          throw new Error('cache should not be read');
+        },
+        bridge: makeBridge(),
+      },
+    );
+
+    const err = asError(result);
+    expect(err).toMatchObject({ error: 'validation_error' });
+    expect(err.hint).toContain('track_ids: must not contain duplicate IDs');
+    expect(cacheRead).toBe(false);
   });
 
   it('rejects an out-of-range limit', async () => {
