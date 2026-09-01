@@ -64,6 +64,7 @@ Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vib
 | `add_tracks` / `remove_tracks` | Edit an existing user playlist. Smart and subscription playlists are read-only. |
 | `reorder_tracks` | Rearrange a user playlist's entries to a new order (a full permutation of its current positions). |
 | `delete_playlist` | Delete a user playlist outright. Irreversible — the tracks stay in your library, the playlist doesn't. |
+| `set_note` | Save Claude's own note on a track or playlist ("great opener", "user preferred the plain name") so it's there next session. Notes come back verbatim on reads; Selecta never filters or ranks on them. |
 | `refresh_library` | Full reread of the library into the cache. Manual by design. |
 
 Selecta only writes where you point it: it creates playlists, overwrites its own preview slot, and edits or deletes the user playlists you ask it to.
