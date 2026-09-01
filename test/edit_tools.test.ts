@@ -4,28 +4,16 @@
 // result and the no-write-on-bad-input guarantees.
 
 import { describe, it, expect, vi } from 'vitest';
-import { SelectaCache } from '../src/cache/index.js';
 import { handleAddTracks, type AddTracksOutput } from '../src/tools/add_tracks.js';
 import { handleRemoveTracks, type RemoveTracksOutput } from '../src/tools/remove_tracks.js';
 import { handleReorderTracks, type ReorderTracksOutput } from '../src/tools/reorder_tracks.js';
 import { handleDeletePlaylist, type DeletePlaylistOutput } from '../src/tools/delete_playlist.js';
-import type { ToolDeps } from '../src/tools/common.js';
-import type { Bridge, LibrarySnapshot, PlaylistEditResult } from '../src/types/bridge.js';
+import type { PlaylistEditResult } from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
-import { asError, makeBridge } from './helpers.js';
-import fixture from './fixtures/library.json' with { type: 'json' };
-
-const snapshot = fixture as LibrarySnapshot;
+import { asError, makeToolDeps } from './helpers.js';
 
 // P-TRIPHOP (user): [T-TEARDROP, T-ANGEL, T-GLORYBOX]; P-RECENT is smart.
 
-function makeDeps(
-  bridgeOverrides: Partial<Bridge> = {},
-): ToolDeps & { cacheInstance: SelectaCache } {
-  const cache = SelectaCache.open(':memory:');
-  cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
-  return { cache: () => cache, bridge: makeBridge(bridgeOverrides), cacheInstance: cache };
-}
 
 function editResult(
   ids: string[],
@@ -43,7 +31,7 @@ function editResult(
 describe('add_tracks', () => {
   it('appends via the bridge and patches the cache from the post-edit order', async () => {
     const finalIds = ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX', 'T-ROADS', 'T-MIDNIGHT'];
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       addPlaylistTracks: vi.fn().mockResolvedValue(editResult(finalIds)),
     });
     const out = (await handleAddTracks(
@@ -65,7 +53,7 @@ describe('add_tracks', () => {
     // Bridge is the ground truth — even if it reports an order the tool
     // wouldn't have predicted, the cache must store what Music.app has.
     const finalIds = ['T-TEARDROP', 'T-ROADS', 'T-ANGEL', 'T-GLORYBOX'];
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       addPlaylistTracks: vi.fn().mockResolvedValue(editResult(finalIds)),
     });
     const out = (await handleAddTracks(
@@ -83,7 +71,7 @@ describe('add_tracks', () => {
   });
 
   it('rejects an unknown playlist before any bridge call', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(
       await handleAddTracks({ playlist_id: 'P-NOPE', track_ids: ['T-ROADS'] }, deps),
     );
@@ -93,7 +81,7 @@ describe('add_tracks', () => {
   });
 
   it('rejects a smart playlist as playlist_not_editable', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(
       await handleAddTracks({ playlist_id: 'P-RECENT', track_ids: ['T-ROADS'] }, deps),
     );
@@ -103,7 +91,7 @@ describe('add_tracks', () => {
   });
 
   it('rejects unknown track IDs before any bridge call', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(
       await handleAddTracks({ playlist_id: 'P-TRIPHOP', track_ids: ['T-FAKE'] }, deps),
     );
@@ -113,7 +101,7 @@ describe('add_tracks', () => {
   });
 
   it('propagates a bridge failure without patching the cache', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       addPlaylistTracks: vi
         .fn()
         .mockRejectedValue(new BridgeError('playlist_not_found', 'gone live', 'stale')),
@@ -132,7 +120,7 @@ describe('add_tracks', () => {
 
 describe('remove_tracks', () => {
   it('removes by track id and patches the cache from the post-edit order', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       removePlaylistTracks: vi
         .fn()
         .mockResolvedValue(editResult(['T-TEARDROP', 'T-GLORYBOX'], { removedCount: 1 })),
@@ -160,7 +148,7 @@ describe('remove_tracks', () => {
   });
 
   it('removes by position', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       removePlaylistTracks: vi
         .fn()
         .mockResolvedValue(editResult(['T-ANGEL', 'T-GLORYBOX'], { removedCount: 1 })),
@@ -177,7 +165,7 @@ describe('remove_tracks', () => {
   });
 
   it('requires track_ids and/or positions', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     expect(asError(await handleRemoveTracks({ playlist_id: 'P-TRIPHOP' }, deps)).error).toBe(
       'validation_error',
     );
@@ -190,7 +178,7 @@ describe('remove_tracks', () => {
   });
 
   it('rejects tracks that are not in the playlist before any bridge call', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     // T-MIDNIGHT exists in the library but not in P-TRIPHOP.
     const err = asError(
       await handleRemoveTracks({ playlist_id: 'P-TRIPHOP', track_ids: ['T-MIDNIGHT'] }, deps),
@@ -201,7 +189,7 @@ describe('remove_tracks', () => {
   });
 
   it('rejects out-of-range positions before any bridge call', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(
       await handleRemoveTracks({ playlist_id: 'P-TRIPHOP', positions: [3] }, deps),
     );
@@ -211,7 +199,7 @@ describe('remove_tracks', () => {
   });
 
   it('rejects a non-user playlist as playlist_not_editable', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(
       await handleRemoveTracks({ playlist_id: 'P-MOODS', positions: [0] }, deps),
     );
@@ -220,7 +208,7 @@ describe('remove_tracks', () => {
   });
 
   it('propagates a stale-cache bridge failure without patching the cache', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       removePlaylistTracks: vi
         .fn()
         .mockRejectedValue(new BridgeError('track_not_found', 'no live occurrence')),
@@ -240,7 +228,7 @@ describe('remove_tracks', () => {
 describe('reorder_tracks', () => {
   it('reorders via the bridge and patches the cache from the post-edit order', async () => {
     const permuted = ['T-GLORYBOX', 'T-TEARDROP', 'T-ANGEL'];
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       reorderPlaylistTracks: vi.fn().mockResolvedValue(editResult(permuted, { movedCount: 3 })),
     });
     const out = (await handleReorderTracks(
@@ -263,7 +251,7 @@ describe('reorder_tracks', () => {
   });
 
   it('rejects an order whose length does not match the cached track count', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(
       await handleReorderTracks({ playlist_id: 'P-TRIPHOP', order: [0, 1] }, deps),
     );
@@ -275,7 +263,7 @@ describe('reorder_tracks', () => {
   });
 
   it('rejects a non-permutation with a duplicated index', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(
       await handleReorderTracks({ playlist_id: 'P-TRIPHOP', order: [0, 0, 1] }, deps),
     );
@@ -288,7 +276,7 @@ describe('reorder_tracks', () => {
     // search shows one row per distinct track, so a model following the
     // advertised workflow sends a 2-entry order for this 3-entry playlist —
     // the hint must name the real problem, not send it to refresh_library.
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     deps.cacheInstance.patchPlaylistMembership('P-TRIPHOP', [
       'T-TEARDROP',
       'T-ANGEL',
@@ -304,7 +292,7 @@ describe('reorder_tracks', () => {
   });
 
   it('rejects a non-permutation with an out-of-range index', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(
       await handleReorderTracks({ playlist_id: 'P-TRIPHOP', order: [0, 1, 3] }, deps),
     );
@@ -314,7 +302,7 @@ describe('reorder_tracks', () => {
   });
 
   it('rejects an unknown playlist before any bridge call', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(
       await handleReorderTracks({ playlist_id: 'P-NOPE', order: [0] }, deps),
     );
@@ -324,7 +312,7 @@ describe('reorder_tracks', () => {
   });
 
   it('rejects a smart playlist as playlist_not_editable', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(
       await handleReorderTracks({ playlist_id: 'P-RECENT', order: [0] }, deps),
     );
@@ -334,7 +322,7 @@ describe('reorder_tracks', () => {
 
   it('still calls the bridge for an identity permutation, so the drift guard runs', async () => {
     const identity = ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX'];
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       reorderPlaylistTracks: vi.fn().mockResolvedValue(editResult(identity, { movedCount: 0 })),
     });
     const out = (await handleReorderTracks(
@@ -351,7 +339,7 @@ describe('reorder_tracks', () => {
   });
 
   it('propagates a bridge drift rejection without patching the cache', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       reorderPlaylistTracks: vi
         .fn()
         .mockRejectedValue(new BridgeError('validation_error', 'live order drifted')),
@@ -370,7 +358,7 @@ describe('reorder_tracks', () => {
 
 describe('delete_playlist', () => {
   it('deletes via the bridge and drops the playlist cache rows, keeping the tracks', async () => {
-    const deps = makeDeps({ deletePlaylistById: vi.fn().mockResolvedValue(1) });
+    const deps = makeToolDeps({ deletePlaylistById: vi.fn().mockResolvedValue(1) });
 
     const out = (await handleDeletePlaylist(
       { playlist_id: 'P-TRIPHOP' },
@@ -392,7 +380,7 @@ describe('delete_playlist', () => {
   });
 
   it('retires the creation receipt so a later refresh cannot rekey it onto a resurrected copy', async () => {
-    const deps = makeDeps({ deletePlaylistById: vi.fn().mockResolvedValue(1) });
+    const deps = makeToolDeps({ deletePlaylistById: vi.fn().mockResolvedValue(1) });
     deps.cacheInstance.recordPlaylistCreation('P-TRIPHOP', 'Trip Hop Essentials', [
       'T-TEARDROP',
       'T-ANGEL',
@@ -409,21 +397,21 @@ describe('delete_playlist', () => {
   });
 
   it('rejects an unknown playlist before any bridge call', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(await handleDeletePlaylist({ playlist_id: 'P-NOPE' }, deps));
     expect(err.error).toBe('playlist_not_found');
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
   });
 
   it('rejects a smart playlist as playlist_not_editable before any bridge call', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(await handleDeletePlaylist({ playlist_id: 'P-RECENT' }, deps));
     expect(err.error).toBe('playlist_not_editable');
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
   });
 
   it('maps a live miss (deleted: 0) to playlist_not_found and keeps the cache row', async () => {
-    const deps = makeDeps({ deletePlaylistById: vi.fn().mockResolvedValue(0) });
+    const deps = makeToolDeps({ deletePlaylistById: vi.fn().mockResolvedValue(0) });
     const err = asError(await handleDeletePlaylist({ playlist_id: 'P-TRIPHOP' }, deps));
     expect(err.error).toBe('playlist_not_found');
     expect(err.hint).toContain('refresh_library');
@@ -431,7 +419,7 @@ describe('delete_playlist', () => {
   });
 
   it('propagates a bridge failure without touching the cache', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       deletePlaylistById: vi
         .fn()
         .mockRejectedValue(new BridgeError('playlist_not_editable', 'not a user playlist')),

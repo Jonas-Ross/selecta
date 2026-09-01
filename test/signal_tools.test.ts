@@ -7,23 +7,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
 import { handleSetLoved, type SetLovedOutput } from '../src/tools/set_loved.js';
 import { handleSetRating, type SetRatingOutput } from '../src/tools/set_rating.js';
-import type { ToolDeps } from '../src/tools/common.js';
-import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
-import { asError, makeBridge } from './helpers.js';
-import fixture from './fixtures/library.json' with { type: 'json' };
-
-const snapshot = fixture as LibrarySnapshot;
+import { asError, makeToolDeps } from './helpers.js';
 
 // Fixture signal baselines: T-TEARDROP loved, rating 100; T-ANGEL neither.
 
-function makeDeps(
-  bridgeOverrides: Partial<Bridge> = {},
-): ToolDeps & { cacheInstance: SelectaCache } {
-  const cache = SelectaCache.open(':memory:');
-  cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
-  return { cache: () => cache, bridge: makeBridge(bridgeOverrides), cacheInstance: cache };
-}
 
 function signalResult<State>(tracks: State[], preWriteTracks: State[] = tracks) {
   return { tracks, preWriteTracks };
@@ -37,7 +25,7 @@ function signalRow(cache: SelectaCache, id: string): { loved: 0 | 1; rating: num
 
 describe('set_loved', () => {
   it('loves via the bridge and patches the cache from the readback', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       setTrackLoved: vi.fn().mockResolvedValue(
         signalResult(
           [
@@ -67,7 +55,7 @@ describe('set_loved', () => {
   });
 
   it('unloves without touching the rating column', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       setTrackLoved: vi
         .fn()
         .mockResolvedValue(signalResult([{ persistentId: 'T-TEARDROP', loved: false }])),
@@ -85,7 +73,7 @@ describe('set_loved', () => {
   it('stores the readback as ground truth even when it disagrees with the request', async () => {
     // A settling sync could report a different value than we wrote; the cache
     // must reflect what Music.app SAYS, not what we asked for.
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       setTrackLoved: vi
         .fn()
         .mockResolvedValue(signalResult([{ persistentId: 'T-ANGEL', loved: false }])),
@@ -95,7 +83,7 @@ describe('set_loved', () => {
   });
 
   it('rejects unknown track IDs before any bridge call', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(await handleSetLoved({ track_ids: ['T-FAKE'], loved: true }, deps));
     expect(err.error).toBe('track_not_found');
     expect(err.hint).toContain('T-FAKE');
@@ -103,7 +91,7 @@ describe('set_loved', () => {
   });
 
   it('propagates a bridge failure without patching the cache', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       setTrackLoved: vi
         .fn()
         .mockRejectedValue(new BridgeError('track_not_found', 'gone live', 'stale')),
@@ -114,7 +102,7 @@ describe('set_loved', () => {
   });
 
   it('rejects an empty track_ids array', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(await handleSetLoved({ track_ids: [], loved: true }, deps));
     expect(err.error).toBe('validation_error');
     expect(deps.bridge.setTrackLoved).not.toHaveBeenCalled();
@@ -123,7 +111,7 @@ describe('set_loved', () => {
 
 describe('set_rating', () => {
   it('converts stars to the 0–100 scale and patches the cache from the readback', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       setTrackRating: vi
         .fn()
         .mockResolvedValue(signalResult([{ persistentId: 'T-ANGEL', rating: 90 }])),
@@ -142,7 +130,7 @@ describe('set_rating', () => {
   });
 
   it('rating 0 clears: the bridge reads back null and the cache stores it', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       setTrackRating: vi
         .fn()
         .mockResolvedValue(signalResult([{ persistentId: 'T-TEARDROP', rating: null }])),
@@ -161,28 +149,28 @@ describe('set_rating', () => {
   });
 
   it('rejects a non-half-star rating', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(await handleSetRating({ track_ids: ['T-ANGEL'], rating: 3.7 }, deps));
     expect(err.error).toBe('validation_error');
     expect(deps.bridge.setTrackRating).not.toHaveBeenCalled();
   });
 
   it('rejects a rating above 5', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(await handleSetRating({ track_ids: ['T-ANGEL'], rating: 6 }, deps));
     expect(err.error).toBe('validation_error');
     expect(deps.bridge.setTrackRating).not.toHaveBeenCalled();
   });
 
   it('rejects unknown track IDs before any bridge call', async () => {
-    const deps = makeDeps();
+    const deps = makeToolDeps();
     const err = asError(await handleSetRating({ track_ids: ['T-FAKE'], rating: 5 }, deps));
     expect(err.error).toBe('track_not_found');
     expect(deps.bridge.setTrackRating).not.toHaveBeenCalled();
   });
 
   it('propagates a bridge failure without patching the cache', async () => {
-    const deps = makeDeps({
+    const deps = makeToolDeps({
       setTrackRating: vi.fn().mockRejectedValue(new BridgeError('jxa_error', 'boom')),
     });
     const err = asError(await handleSetRating({ track_ids: ['T-MIDNIGHT'], rating: 1 }, deps));

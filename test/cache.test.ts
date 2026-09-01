@@ -6,7 +6,7 @@ import { SelectaCache } from '../src/cache/index.js';
 import { openDatabase } from '../src/cache/db.js';
 import { BridgeError } from '../src/types/errors.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
-import { bumpedSnapshot, featuresRow } from './helpers.js';
+import { ISO_TIMESTAMP, bumpedSnapshot, featuresRow } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
@@ -342,37 +342,38 @@ describe('overviewStats', () => {
 
 // iCloud-echo reconciliation (docs/music-app.md, iCloud sync): creation
 // receipts + planSyncReconciliation + the apply helpers.
+// Sync-reconciliation fixtures, shared by the reconciliation and notes suites:
+// a playlist Selecta created, and snapshots as the next refresh would see it.
+const CREATED_ID = 'P-CREATED';
+const TRACKS = ['T-TEARDROP', 'T-ROADS'];
+const NAME = 'Rearview';
+
+// The fixture library plus the given variants of the playlist Selecta created.
+function snapshotWith(
+  ...copies: { id: string; name?: string; tracks?: string[] }[]
+): LibrarySnapshot {
+  return {
+    ...snapshot,
+    playlists: [
+      ...snapshot.playlists,
+      ...copies.map((c) => ({
+        persistentId: c.id,
+        name: c.name ?? NAME,
+        kind: 'user' as const,
+        trackPersistentIds: c.tracks ?? TRACKS,
+      })),
+    ],
+  };
+}
+
+function cacheAfterCreate(): SelectaCache {
+  const cache = refreshed();
+  cache.upsertPlaylistAfterWrite({ persistentId: CREATED_ID, trackCount: TRACKS.length }, NAME, TRACKS);
+  cache.recordPlaylistCreation(CREATED_ID, NAME, TRACKS);
+  return cache;
+}
+
 describe('sync reconciliation', () => {
-  const CREATED_ID = 'P-CREATED';
-  const TRACKS = ['T-TEARDROP', 'T-ROADS'];
-  const NAME = 'Rearview';
-
-  // A snapshot as the next refresh would see it: the fixture library plus the
-  // given variants of the playlist Selecta created.
-  function snapshotWith(
-    ...copies: { id: string; name?: string; tracks?: string[] }[]
-  ): LibrarySnapshot {
-    return {
-      ...snapshot,
-      playlists: [
-        ...snapshot.playlists,
-        ...copies.map((c) => ({
-          persistentId: c.id,
-          name: c.name ?? NAME,
-          kind: 'user' as const,
-          trackPersistentIds: c.tracks ?? TRACKS,
-        })),
-      ],
-    };
-  }
-
-  function cacheAfterCreate(): SelectaCache {
-    const cache = refreshed();
-    cache.upsertPlaylistAfterWrite({ persistentId: CREATED_ID, trackCount: TRACKS.length }, NAME, TRACKS);
-    cache.recordPlaylistCreation(CREATED_ID, NAME, TRACKS);
-    return cache;
-  }
-
   it('plans nothing when the created playlist survives cleanly (LOW BEAMS case)', () => {
     const cache = cacheAfterCreate();
     cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }), { durationMs: 1 });
@@ -457,7 +458,7 @@ describe('sync reconciliation', () => {
   it('applyRekey keeps the creation-time ID resolvable after an iCloud rekey', () => {
     const cache = cacheAfterCreate();
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
-    cache.applyRekey(CREATED_ID, 'P-REKEYED');
+    cache.applyRekey(CREATED_ID, CREATED_ID, 'P-REKEYED');
 
     const { rows } = cache.searchTracks({ inPlaylist: CREATED_ID });
     expect(rows.map((t) => t.persistentId).sort()).toEqual([...TRACKS].sort());
@@ -466,7 +467,7 @@ describe('sync reconciliation', () => {
   it('getOverview scopes by a creation-time ID after a rekey (resolve path)', () => {
     const cache = cacheAfterCreate();
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
-    cache.applyRekey(CREATED_ID, 'P-REKEYED');
+    cache.applyRekey(CREATED_ID, CREATED_ID, 'P-REKEYED');
 
     // The canonical-ID overview test exercises the no-op resolve; this covers
     // the receipt-follow branch getOverview shares with searchTracks.
@@ -536,7 +537,7 @@ describe('sync reconciliation', () => {
     // Refresh-time rekey first: CREATED_ID -> P-MID. Then the bridge finds
     // P-MID gone too; the one receipt must end up at the newest live ID.
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-MID' }), { durationMs: 1 });
-    cache.applyRekey(CREATED_ID, 'P-MID');
+    cache.applyRekey(CREATED_ID, CREATED_ID, 'P-MID');
     cache.applyLiveRekey('P-MID', { persistentId: 'P-NEWEST', name: NAME, trackIds: TRACKS });
 
     expect(cache.resolvePlaylistId(CREATED_ID)).toBe('P-NEWEST');
@@ -701,5 +702,149 @@ describe('play history', () => {
     // The zero-delta tail is stable (ID order), so paging can't shuffle it.
     const tail = rows.slice(2).map((t) => t.persistentId);
     expect(tail).toEqual([...tail].sort());
+  });
+});
+
+// Model-persisted notes (issue #32): verbatim memory outside the refresh
+// cycle, pruned with its subject, following playlist rekeys via the receipt.
+describe('notes', () => {
+  it('upserts one note per subject, keeping created_at across rewrites', async () => {
+    const cache = refreshed();
+    const first = cache.setNote('track', 'T-TEARDROP', 'great opener');
+    expect(first).toEqual({
+      subjectKind: 'track',
+      subjectId: 'T-TEARDROP',
+      body: 'great opener',
+      createdAt: expect.stringMatching(ISO_TIMESTAMP),
+      updatedAt: first.createdAt,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    const second = cache.setNote('track', 'T-TEARDROP', 'great opener, too long for dinner');
+    expect(second.body).toBe('great opener, too long for dinner');
+    expect(second.createdAt).toBe(first.createdAt);
+    expect(second.updatedAt > first.updatedAt).toBe(true);
+    expect(cache.db.prepare('SELECT COUNT(*) AS n FROM notes').get()).toEqual({ n: 1 });
+  });
+
+  it('keeps track and playlist notes on the same ID apart', () => {
+    const cache = refreshed();
+    cache.setNote('track', 'X', 'track note');
+    cache.setNote('playlist', 'X', 'playlist note');
+    expect(cache.getNote('track', 'X')!.body).toBe('track note');
+    expect(cache.getNote('playlist', 'X')!.body).toBe('playlist note');
+  });
+
+  it('clears a note; clearing again is a no-op', () => {
+    const cache = refreshed();
+    cache.setNote('playlist', 'P-LATENIGHT', 'dinner set');
+    cache.clearNote('playlist', 'P-LATENIGHT');
+    expect(cache.getNote('playlist', 'P-LATENIGHT')).toBeNull();
+    expect(() => cache.clearNote('playlist', 'P-LATENIGHT')).not.toThrow();
+  });
+
+  it('rides every track and playlist projection verbatim', () => {
+    const cache = refreshed();
+    const note = cache.setNote('track', 'T-TEARDROP', '  use this version, not the remaster  ');
+    cache.setNote('playlist', 'P-LATENIGHT', 'the arc works');
+    const track = cache.getTrack('T-TEARDROP')!;
+    expect(track.noteBody).toBe('  use this version, not the remaster  ');
+    expect(track.noteCreatedAt).toBe(note.createdAt);
+    expect(track.noteUpdatedAt).toBe(note.updatedAt);
+    expect(cache.getTrack('T-ANGEL')!.noteBody).toBeNull();
+    expect(cache.searchTracks({ query: 'teardrop' }).rows[0]!.noteBody).toBe(
+      '  use this version, not the remaster  ',
+    );
+    expect(cache.getCoOccurrence(['T-ROADS']).tracks.find((t) => t.persistentId === 'T-TEARDROP')!.noteBody).toBe(
+      '  use this version, not the remaster  ',
+    );
+    expect(cache.getPlaylist('P-LATENIGHT')!.noteBody).toBe('the arc works');
+    expect(cache.listPlaylists({}).find((p) => p.persistentId === 'P-LATENIGHT')!.noteBody).toBe(
+      'the arc works',
+    );
+    expect(cache.getPlaylist('P-TRIPHOP')!.noteBody).toBeNull();
+  });
+
+  it('survives a full library refresh untouched', () => {
+    const cache = refreshed();
+    const track = cache.setNote('track', 'T-TEARDROP', 'keep');
+    const playlist = cache.setNote('playlist', 'P-LATENIGHT', 'keep too');
+    cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+    expect(cache.getNote('track', 'T-TEARDROP')).toEqual(track);
+    expect(cache.getNote('playlist', 'P-LATENIGHT')).toEqual(playlist);
+  });
+
+  it('is pruned when its subject leaves the library', () => {
+    const cache = refreshed();
+    cache.setNote('track', 'T-TEARDROP', 'gone soon');
+    cache.setNote('track', 'T-ANGEL', 'stays');
+    cache.setNote('playlist', 'P-LATENIGHT', 'gone soon');
+    cache.setNote('playlist', 'P-TRIPHOP', 'stays');
+    cache.refreshFromSnapshot(
+      {
+        ...snapshot,
+        tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-TEARDROP'),
+        playlists: snapshot.playlists.filter((p) => p.persistentId !== 'P-LATENIGHT'),
+      },
+      { durationMs: 1 },
+    );
+    expect(cache.getNote('track', 'T-TEARDROP')).toBeNull();
+    expect(cache.getNote('track', 'T-ANGEL')!.body).toBe('stays');
+    expect(cache.getNote('playlist', 'P-LATENIGHT')).toBeNull();
+    expect(cache.getNote('playlist', 'P-TRIPHOP')!.body).toBe('stays');
+  });
+
+  it('follows an iCloud rekey through refresh and reconciliation', () => {
+    const cache = cacheAfterCreate();
+    const note = cache.setNote('playlist', 'P-CREATED', 'user liked the arc; kept the plain name');
+    // The refresh sees only the rekeyed ID: the receipt shields the note from
+    // the prune until reconciliation moves it.
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
+    expect(cache.getNote('playlist', 'P-CREATED')).toEqual(note);
+    cache.applyRekey('P-CREATED', 'P-CREATED', 'P-REKEYED');
+    expect(cache.getNote('playlist', 'P-CREATED')).toBeNull();
+    expect(cache.getNote('playlist', 'P-REKEYED')).toEqual({ ...note, subjectId: 'P-REKEYED' });
+    expect(cache.getPlaylist('P-REKEYED')!.noteBody).toBe(note.body);
+    // A second refresh no longer needs the shield: the note is keyed live.
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
+    expect(cache.getNote('playlist', 'P-REKEYED')!.body).toBe(note.body);
+  });
+
+  it('is pruned once its receipt is too old to reconcile and the playlist is gone', () => {
+    const cache = cacheAfterCreate();
+    cache.setNote('playlist', CREATED_ID, 'deleted in Music.app later');
+    // The user removed the playlist in Music.app well after the reconciliation
+    // window: the receipt lingers, but it can no longer move anything.
+    cache.db
+      .prepare('UPDATE playlist_creations SET created_at = ? WHERE created_persistent_id = ?')
+      .run(new Date(Date.now() - 2 * 3_600_000).toISOString(), CREATED_ID);
+    cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+    expect(cache.getNote('playlist', CREATED_ID)).toBeNull();
+  });
+
+  it('follows a write-time (live) rekey of the preview slot', () => {
+    const cache = cacheAfterCreate();
+    cache.setNote('playlist', CREATED_ID, 'draft 3: softer close');
+    cache.applyLiveRekey(CREATED_ID, { persistentId: 'P-LIVE', name: NAME, trackIds: TRACKS });
+    expect(cache.getNote('playlist', CREATED_ID)).toBeNull();
+    expect(cache.getNote('playlist', 'P-LIVE')!.body).toBe('draft 3: softer close');
+    expect(cache.getPlaylist('P-LIVE')!.noteBody).toBe('draft 3: softer close');
+  });
+
+  it('moves to the surviving twin when an echo duplicate is removed', () => {
+    const cache = cacheAfterCreate();
+    cache.setNote('playlist', 'P-CREATED', 'arc approved');
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-CREATED' }, { id: 'P-ECHO' }), {
+      durationMs: 1,
+    });
+    cache.applyDuplicateRemoval('P-CREATED', 'P-CREATED', 'P-ECHO');
+    expect(cache.getNote('playlist', 'P-CREATED')).toBeNull();
+    expect(cache.getNote('playlist', 'P-ECHO')!.body).toBe('arc approved');
+  });
+
+  it('goes with the playlist on deletePlaylistRow', () => {
+    const cache = refreshed();
+    cache.setNote('playlist', 'P-TRIPHOP', 'doomed');
+    cache.deletePlaylistRow('P-TRIPHOP');
+    expect(cache.getNote('playlist', 'P-TRIPHOP')).toBeNull();
   });
 });

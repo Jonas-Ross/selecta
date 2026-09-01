@@ -62,7 +62,7 @@ Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vib
 
 ## Tools
 
-Fifteen tools, in three groups. The first group answers from the local cache and never touches Music.app; the second writes to Music.app; the third keeps the cache current.
+Sixteen tools, in three groups. The first group answers from the local cache and never touches Music.app; the second writes to Music.app; the third keeps the cache current and holds Claude's own notes.
 
 ### Reading
 
@@ -79,7 +79,7 @@ Fifteen tools, in three groups. The first group answers from the local cache and
 | Tool | What it does |
 |---|---|
 | `preview_playlist` | Overwrites the single "Selecta Preview" playlist so you can audition a draft. Previous preview contents are discarded. |
-| `create_playlist` | Creates the real playlist, either from ordered track IDs or by cloning an approved preview (or any plain user playlist, max 500 entries) in its current live order. Optional description. |
+| `create_playlist` | Creates the real playlist, either from ordered track IDs or by cloning an approved preview (or any plain user playlist, max 500 entries) in its current live order. Optional description and note. |
 | `add_tracks` / `remove_tracks` | Append or insert tracks into a user playlist; remove entries by track ID or by position. Smart and subscription playlists are read-only. |
 | `reorder_tracks` | Rearrange a user playlist's entries to a new order (a full permutation of its current positions). |
 | `delete_playlist` | Delete a user playlist outright. Irreversible — the tracks stay in your library, the playlist doesn't. |
@@ -90,6 +90,7 @@ Fifteen tools, in three groups. The first group answers from the local cache and
 | Tool | What it does |
 |---|---|
 | `refresh_library` | Full reread of Music.app into the cache. Manual by design. Also records play and skip deltas since the previous refresh, and cleans up iCloud echo copies of playlists created in the last hour. |
+| `set_note` | Save Claude's own note on a track or playlist ("great opener", "user preferred the plain name") so it's there next session. Cache-only, never written to Music.app. Notes come back verbatim on reads; Selecta never filters or ranks on them. |
 | `enrich_features` | Fetch BPM, key and danceability for tracks not yet attempted, from MusicBrainz/AcousticBrainz and Deezer. Works through the most-played backlog, or targets specific track IDs (up to 50). The only tool that uses the network. For a whole-library backfill, prefer the `enrich` CLI command above. |
 
 Selecta only writes where you point it: it creates playlists, overwrites its own preview slot, edits or deletes the user playlists you ask it to, and sets favorites and ratings on the tracks you name. Smart, subscription and folder playlists are never modified.

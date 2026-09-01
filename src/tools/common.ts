@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import type { Bridge } from '../types/bridge.js';
-import type { PlaylistRow, SearchFilters, TrackRow } from '../types/cache.js';
+import type { NoteRow, PlaylistRow, SearchFilters, TrackRow } from '../types/cache.js';
 import {
   BridgeError,
   defaultHints,
@@ -26,6 +26,36 @@ export type ToolDeps = {
   enrich?: EnrichDeps;
 };
 
+// The model's own note on a track or playlist (issue #32), verbatim, with
+// when it was first written and last changed. Same shape on every surface.
+export type ApiNote = {
+  body: string;
+  created_at: string;
+  updated_at: string;
+};
+
+// Notes are bounded at the zod boundary so a runaway body can't bloat every
+// later read; the model structures the body however it likes within that.
+export const NOTE_MAX_LENGTH = 2000;
+
+/** The wire note from any row carrying note columns; undefined when unset. */
+export function toApiNote(row: {
+  noteBody: string | null;
+  noteCreatedAt: string | null;
+  noteUpdatedAt: string | null;
+}): ApiNote | undefined {
+  if (row.noteBody == null) return undefined;
+  return { body: row.noteBody, created_at: row.noteCreatedAt!, updated_at: row.noteUpdatedAt! };
+}
+
+/** The wire note from a stored notes row (write responses); undefined when there is none. */
+export function apiNoteFromRow(note: NoteRow): ApiNote;
+export function apiNoteFromRow(note: NoteRow | null): ApiNote | undefined;
+export function apiNoteFromRow(note: NoteRow | null): ApiNote | undefined {
+  if (note === null) return undefined;
+  return { body: note.body, created_at: note.createdAt, updated_at: note.updatedAt };
+}
+
 // The model-facing track shape: identity fields plus the behavioral signal
 // bundle. Ratings are 0–5 stars here (Music.app's 0–100 internally). Absent
 // fields are omitted entirely — undefined keys disappear in JSON, and over a
@@ -44,6 +74,9 @@ export type ApiTrack = {
   bpm?: number;
   musical_key?: string; // e.g. "F# minor"
   danceability?: number; // 0..1
+  // The model's own earlier note on this track, verbatim. Memory, not signal:
+  // Selecta never filters or orders on it.
+  note?: ApiNote;
   signal: {
     play_count: number;
     skip_count: number;
@@ -76,6 +109,7 @@ export const COMPACT_TRACK_FIELDS = [
   'signal.disliked',
   'signal.last_played',
   'signal.date_added',
+  'note',
 ] as const;
 
 // Fixed row aligned with COMPACT_TRACK_FIELDS. Null marks an unavailable
@@ -98,6 +132,7 @@ export type CompactApiTrack = [
   disliked: true | null,
   lastPlayed: string | null,
   dateAdded: string | null,
+  note: ApiNote | null,
 ];
 
 export function toApiTrack(row: TrackRow): ApiTrack {
@@ -115,6 +150,7 @@ export function toApiTrack(row: TrackRow): ApiTrack {
     bpm: row.bpm != null ? Math.round(row.bpm * 10) / 10 : undefined,
     musical_key: row.musicalKey ?? undefined,
     danceability: row.danceability != null ? Math.round(row.danceability * 100) / 100 : undefined,
+    note: toApiNote(row),
     signal: {
       play_count: row.playCount,
       skip_count: row.skipCount,
@@ -147,6 +183,7 @@ export function toCompactApiTrack(track: ApiTrack): CompactApiTrack {
     track.signal.disliked ?? null,
     track.signal.last_played ?? null,
     track.signal.date_added ?? null,
+    track.note ?? null,
   ];
 }
 

@@ -14,6 +14,8 @@ import type {
   CoOccurrenceFilters,
   CoOccurrenceResult,
   CoOccurringTrack,
+  NoteRow,
+  NoteSubject,
   OverviewStats,
   PendingTrack,
   PlayHistoryWindow,
@@ -42,6 +44,17 @@ const featureColumn = (column: string): string =>
 // matches can't disagree.
 const EFFECTIVE_BPM = `COALESCE(${featureColumn('bpm')}, t.bpm)`;
 
+// The model's own note rides every track and playlist projection the same
+// way features do (PK probe per column). Projection only: no filter, sort, or
+// FTS ever reads the notes table — a note is memory, not signal.
+const noteColumn = (kind: NoteSubject, column: string, subjectIdExpr: string): string =>
+  `(SELECT ${column} FROM notes n WHERE n.subject_kind = '${kind}' AND n.subject_id = ${subjectIdExpr})`;
+const noteColumns = (kind: NoteSubject, subjectIdExpr: string): string => `
+  ${noteColumn(kind, 'body', subjectIdExpr)} AS noteBody,
+  ${noteColumn(kind, 'created_at', subjectIdExpr)} AS noteCreatedAt,
+  ${noteColumn(kind, 'updated_at', subjectIdExpr)} AS noteUpdatedAt
+`;
+
 // SELECT fragment aliasing snake_case columns to TrackRow's camelCase fields.
 const TRACK_COLUMNS = `
   t.persistent_id AS persistentId, t.title, t.artist,
@@ -52,7 +65,8 @@ const TRACK_COLUMNS = `
   t.play_count AS playCount, t.skip_count AS skipCount, t.rating,
   t.loved, t.disliked, t.comments, t.location_kind AS locationKind,
   ${featureColumn('musical_key')} AS musicalKey,
-  ${featureColumn('danceability')} AS danceability
+  ${featureColumn('danceability')} AS danceability,
+  ${noteColumns('track', 't.persistent_id')}
 `;
 
 // SELECT fragment for PlaylistRow, shared by getPlaylist and listPlaylists so
@@ -61,7 +75,8 @@ const PLAYLIST_COLUMNS = `
   p.persistent_id AS persistentId, p.name, p.kind,
   p.parent_persistent_id AS parentPersistentId,
   (SELECT COUNT(*) FROM playlist_tracks pt
-   WHERE pt.playlist_persistent_id = p.persistent_id) AS trackCount
+   WHERE pt.playlist_persistent_id = p.persistent_id) AS trackCount,
+  ${noteColumns('playlist', 'p.persistent_id')}
 `;
 
 // FTS5 treats quotes/operators as syntax; quote each whitespace-separated term
@@ -409,6 +424,22 @@ export function createQueries(db: Database) {
   const prunePlayHistoryStmt = db.prepare(
     'DELETE FROM play_history WHERE track_persistent_id NOT IN (SELECT value FROM json_each(?))',
   );
+  // Notes follow their subject out of the library (issue #32). A playlist note
+  // whose ID a still-reconcilable creation receipt names is kept: the ID may
+  // have been rekeyed by iCloud, and reconciliation moves the note to the new
+  // ID right after this refresh. Older receipts can never be reconciled, so
+  // their notes prune like any other.
+  const pruneTrackNotesStmt = db.prepare(
+    `DELETE FROM notes WHERE subject_kind = 'track'
+       AND subject_id NOT IN (SELECT value FROM json_each(?))`,
+  );
+  const prunePlaylistNotesStmt = db.prepare(
+    `DELETE FROM notes WHERE subject_kind = 'playlist'
+       AND subject_id NOT IN (SELECT value FROM json_each(?))
+       AND subject_id NOT IN (
+         SELECT current_persistent_id FROM playlist_creations WHERE created_at >= ?
+       )`,
+  );
   const prunePlaylistsStmt = db.prepare(
     'DELETE FROM playlists WHERE persistent_id NOT IN (SELECT value FROM json_each(?))',
   );
@@ -461,6 +492,32 @@ export function createQueries(db: Database) {
     'SELECT track_persistent_id AS id FROM playlist_tracks WHERE playlist_persistent_id = ? ORDER BY position',
   );
   const deletePlaylistRowStmt = db.prepare('DELETE FROM playlists WHERE persistent_id = ?');
+
+  // One note per subject: an existing row keeps its created_at and takes the
+  // new body and updated_at.
+  const NOTE_COLUMNS = `
+    subject_kind AS subjectKind, subject_id AS subjectId, body,
+    created_at AS createdAt, updated_at AS updatedAt
+  `;
+  const upsertNoteStmt = db.prepare(`
+    INSERT INTO notes (subject_kind, subject_id, body, created_at, updated_at)
+    VALUES (@subjectKind, @subjectId, @body, @now, @now)
+    ON CONFLICT (subject_kind, subject_id)
+    DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at
+    RETURNING ${NOTE_COLUMNS}
+  `);
+  const deleteNoteStmt = db.prepare(
+    'DELETE FROM notes WHERE subject_kind = ? AND subject_id = ?',
+  );
+  const getNoteStmt = db.prepare(
+    `SELECT ${NOTE_COLUMNS} FROM notes WHERE subject_kind = ? AND subject_id = ?`,
+  );
+  // OR REPLACE: if the destination somehow already carries a note, the moving
+  // one wins — both describe the same playlist, and the alternative is a PK
+  // failure mid-reconciliation.
+  const movePlaylistNoteStmt = db.prepare(
+    `UPDATE OR REPLACE notes SET subject_id = ? WHERE subject_kind = 'playlist' AND subject_id = ?`,
+  );
 
   const upsertAudioFeaturesStmt = db.prepare(`
     INSERT OR REPLACE INTO audio_features
@@ -555,6 +612,7 @@ export function createQueries(db: Database) {
       pruneTracksStmt.run(ids);
       pruneFeaturesStmt.run(ids);
       prunePlayHistoryStmt.run(ids);
+      pruneTrackNotesStmt.run(ids);
     },
 
     /** All tracks' current counters, keyed for the pre-refresh delta compare. */
@@ -604,10 +662,12 @@ export function createQueries(db: Database) {
       };
     },
 
-    prunePlaylistsNotIn(presentPersistentIds: Set<string>): void {
+    /** reconcilableSince: receipts created at or after it still shield their note. */
+    prunePlaylistsNotIn(presentPersistentIds: Set<string>, reconcilableSince: string): void {
       const ids = JSON.stringify([...presentPersistentIds]);
       prunePlaylistsStmt.run(ids);
       pruneMembershipsStmt.run(ids);
+      prunePlaylistNotesStmt.run(ids, reconcilableSince);
     },
 
     appendRefreshLog(entry: {
@@ -691,6 +751,24 @@ export function createQueries(db: Database) {
     deletePlaylistRow(persistentId: string): void {
       deletePlaylistRowStmt.run(persistentId);
       deleteMembershipStmt.run(persistentId);
+      deleteNoteStmt.run('playlist', persistentId);
+    },
+
+    upsertNote(subjectKind: NoteSubject, subjectId: string, body: string, now: string): NoteRow {
+      return upsertNoteStmt.get({ subjectKind, subjectId, body, now }) as NoteRow;
+    },
+
+    deleteNote(subjectKind: NoteSubject, subjectId: string): void {
+      deleteNoteStmt.run(subjectKind, subjectId);
+    },
+
+    getNote(subjectKind: NoteSubject, subjectId: string): NoteRow | null {
+      return (getNoteStmt.get(subjectKind, subjectId) as NoteRow | undefined) ?? null;
+    },
+
+    /** Re-key a playlist note when reconciliation moves the playlist's canonical ID. */
+    movePlaylistNote(fromId: string, toId: string): void {
+      if (fromId !== toId) movePlaylistNoteStmt.run(toId, fromId);
     },
 
     getCacheAgeHours(): number | null {

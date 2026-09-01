@@ -7,11 +7,14 @@ import type { SelectaError } from '../types/errors.js';
 import type { SelectaCache } from '../cache/index.js';
 import type { PlaylistRow } from '../types/cache.js';
 import {
+  NOTE_MAX_LENGTH,
+  apiNoteFromRow,
   missingTrackIdsError,
   parseInput,
   resolvePlaylist,
   toErrorEnvelope,
   validationError,
+  type ApiNote,
   type ToolDeps,
 } from './common.js';
 import { PREVIEW_PLAYLIST_NAME } from './preview_playlist.js';
@@ -34,6 +37,14 @@ export const createPlaylistInputShape = {
       `Non-empty plain user playlist to clone from its current live Music.app order (max ${PLAYLIST_WRITE_TRACK_LIMIT} entries). Mutually exclusive with track_ids.`,
     ),
   description: z.string().optional().describe('Optional playlist description.'),
+  note: z
+    .string()
+    .max(NOTE_MAX_LENGTH)
+    .refine((body) => body.trim() !== '', 'note must not be blank')
+    .optional()
+    .describe(
+      'Optional note to store on the new playlist (same as a set_note call right after creation): verbatim memory for later sessions, e.g. what the user approved and why the name won. Cache-only, never shown in Music.app.',
+    ),
 };
 
 const CreatePlaylistInput = z.strictObject(createPlaylistInputShape).refine(
@@ -48,6 +59,7 @@ export type CreatePlaylistOutput = {
   playlist_id: string;
   name: string;
   track_count: number;
+  note?: ApiNote;
   source?: {
     playlist_id: string;
     name: string;
@@ -58,7 +70,18 @@ export type CreatePlaylistOutput = {
   };
 };
 
-export const CREATE_PLAYLIST_DESCRIPTION = `Create a real playlist in the user's Music.app, preserving order. Provide exactly one source: ordered track_ids, or source_playlist_id to clone an approved preview/existing playlist from its current live order without resending IDs. This writes to the user's library — only call once the user has approved the final tracklist (use preview_playlist for auditioning). Clone sources must be non-empty plain user playlists with at most ${PLAYLIST_WRITE_TRACK_LIMIT} entries; generated, smart, subscription, special, and folder playlists fail with playlist_not_editable before creation because their external curation is not stable user signal. A clone reads and resolves every live source entry before creating anything. Clone-path track_not_found means the live source contains unavailable/dangling entries: remove or replace those entries in the source before trying again; refresh_library cannot repair the live source, and do not retry it unchanged. Explicit track_ids still fail before creation if an ID is unknown; re-resolve those IDs via search, or refresh_library if that cache is stale. A preview_playlist playlist_id keeps working after iCloud rekeys a first-ever "${PREVIEW_PLAYLIST_NAME}": only that reserved slot is re-resolved by name when its ID is gone live (source.rekeyed_from reports it); every other source is a strict live-ID lookup. Preview-slot playlist_not_found means no "${PREVIEW_PLAYLIST_NAME}" exists any more — call preview_playlist again rather than retrying; a validation_error naming several copies means the slot is ambiguous — run refresh_library (removes an identical twin) or delete the extra copy, never guess. Duplicate names are allowed by Music.app, so reuse of an existing name creates a second playlist rather than editing the first. The returned playlist_id may be reassigned by iCloud sync later — re-resolve via list_playlists if you need it in a much later turn. iCloud sync occasionally duplicates a just-created playlist (same tracks, different ID) within ~3 minutes — the create did not fail or run twice, so never retry; running refresh_library a few minutes after creation detects and removes the echo copy automatically (reported in its sync_reconciliation field) as long as it runs within an hour of the create.`;
+export const CREATE_PLAYLIST_DESCRIPTION = `Create a real playlist in the user's Music.app, preserving order. Provide exactly one source: ordered track_ids, or source_playlist_id to clone an approved preview/existing playlist from its current live order without resending IDs. This writes to the user's library — only call once the user has approved the final tracklist (use preview_playlist for auditioning). Clone sources must be non-empty plain user playlists with at most ${PLAYLIST_WRITE_TRACK_LIMIT} entries; generated, smart, subscription, special, and folder playlists fail with playlist_not_editable before creation because their external curation is not stable user signal. A clone reads and resolves every live source entry before creating anything. Clone-path track_not_found means the live source contains unavailable/dangling entries: remove or replace those entries in the source before trying again; refresh_library cannot repair the live source, and do not retry it unchanged. Explicit track_ids still fail before creation if an ID is unknown; re-resolve those IDs via search, or refresh_library if that cache is stale. A preview_playlist playlist_id keeps working after iCloud rekeys a first-ever "${PREVIEW_PLAYLIST_NAME}": only that reserved slot is re-resolved by name when its ID is gone live (source.rekeyed_from reports it); every other source is a strict live-ID lookup. Preview-slot playlist_not_found means no "${PREVIEW_PLAYLIST_NAME}" exists any more — call preview_playlist again rather than retrying; a validation_error naming several copies means the slot is ambiguous — run refresh_library (removes an identical twin) or delete the extra copy, never guess. Duplicate names are allowed by Music.app, so reuse of an existing name creates a second playlist rather than editing the first. The returned playlist_id may be reassigned by iCloud sync later — re-resolve via list_playlists if you need it in a much later turn. iCloud sync occasionally duplicates a just-created playlist (same tracks, different ID) within ~3 minutes — the create did not fail or run twice, so never retry; running refresh_library a few minutes after creation detects and removes the echo copy automatically (reported in its sync_reconciliation field) as long as it runs within an hour of the create. Pass note to record playlist-level memory (the user's verdict on the arc, the name they preferred) at creation — it follows the playlist through later iCloud rekeys and comes back on list_playlists.`;
+
+// The creation-time note lands on the ID Music.app just returned — the same
+// ID the receipt names, so reconciliation carries it through a later rekey.
+function storeNote(
+  cache: SelectaCache,
+  playlistId: string,
+  note: string | undefined,
+): ApiNote | undefined {
+  if (note === undefined) return undefined;
+  return apiNoteFromRow(cache.setNote('playlist', playlistId, note));
+}
 
 export async function handleCreatePlaylist(
   raw: unknown,
@@ -66,7 +89,7 @@ export async function handleCreatePlaylist(
 ): Promise<CreatePlaylistOutput | SelectaError> {
   const parsed = parseInput(CreatePlaylistInput, raw);
   if (!parsed.ok) return parsed.error;
-  const { name, track_ids, source_playlist_id, description } = parsed.data;
+  const { name, track_ids, source_playlist_id, description, note } = parsed.data;
 
   try {
     const cache = deps.cache();
@@ -77,7 +100,12 @@ export async function handleCreatePlaylist(
       const result = await deps.bridge.createPlaylist({ name, trackIds: track_ids, description });
       cache.upsertPlaylistAfterWrite(result, name, track_ids);
       cache.recordPlaylistCreation(result.persistentId, name, track_ids);
-      return { playlist_id: result.persistentId, name, track_count: result.trackCount };
+      return {
+        playlist_id: result.persistentId,
+        name,
+        track_count: result.trackCount,
+        note: storeNote(cache, result.persistentId, note),
+      };
     }
 
     const requestedId = source_playlist_id!;
@@ -115,6 +143,7 @@ export async function handleCreatePlaylist(
       playlist_id: result.persistentId,
       name,
       track_count: result.trackCount,
+      note: storeNote(cache, result.persistentId, note),
       source: {
         playlist_id: result.sourcePersistentId,
         name: result.sourceName,

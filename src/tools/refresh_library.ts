@@ -6,16 +6,13 @@
 // survivor) and reported in the response — never silently.
 
 import { z } from 'zod';
+import { RECONCILE_WINDOW_MINUTES } from '../cache/index.js';
 import { log } from '../log.js';
 import type { SelectaError } from '../types/errors.js';
 import { parseInput, toErrorEnvelope, type ToolDeps } from './common.js';
 import { PREVIEW_PLAYLIST_NAME } from './preview_playlist.js';
 
-// Echo twins arrive ~10s–3min after creation; the window bounds how long a
-// creation receipt can trigger a delete, so a later intentional copy of the
-// same playlist is never touched. Generous vs. the observed echo latency to
-// cover slow refresh habits, small vs. "intentional duplicate" timescales.
-export const RECONCILE_WINDOW_MINUTES = 60;
+export { RECONCILE_WINDOW_MINUTES };
 
 export const refreshLibraryInputShape = {};
 
@@ -83,7 +80,7 @@ export async function handleRefreshLibrary(
     };
     for (const action of actions) {
       if (action.kind === 'rekey') {
-        cache.applyRekey(action.createdId, action.toId);
+        cache.applyRekey(action.createdId, action.fromId, action.toId);
         reconciliation.rekeys.push({ name: action.name, from_id: action.fromId, to_id: action.toId });
         log.info(`[sync-reconcile] rekey "${action.name}": ${action.fromId} -> ${action.toId}`);
         continue;
