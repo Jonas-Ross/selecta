@@ -3,16 +3,17 @@
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
 import {
+  COMPACT_TRACK_FIELDS,
   libraryFilterShape,
   parseInput,
-  toApiTrack,
-  toCompactApiTrack,
+  projectApiTrack,
   toErrorEnvelope,
   toSearchFilters,
   validateFilterRanges,
   validationError,
   roundedCacheAge,
   type ApiTrack,
+  type CompactApiTrack,
   type ToolDeps,
 } from './common.js';
 
@@ -24,7 +25,7 @@ export const searchInputShape = {
     .boolean()
     .optional()
     .describe(
-      'Use for broad discovery: returns a smaller track shape while preserving IDs, identity, behavioral signal, audio features, and dedupe metadata. Default false returns the full track shape.',
+      'Use for broad discovery: tracks become fixed value rows aligned with top-level track_fields; preserves IDs, identity, genre, behavioral signal (including date_added), audio features, and alternate_ids; omits only location_kind. Default false returns full track objects.',
     ),
   limit: z.number().int().min(1).max(500).optional().describe('Default 50, max 500.'),
   dedupe: z
@@ -64,12 +65,19 @@ export type SearchOutput = {
   cache_age_hours: number | null;
 };
 
-export const SEARCH_DESCRIPTION = `Search the user's owned Apple Music library (local cache). All filters optional, ANDed together. Returns tracks with behavioral signal (play_count, skip_count, rating 0-5 stars, loved=favorited, last_played, date_added) — that signal is context for YOU to weigh, not a mandate. Tracks also carry enriched audio features where known: bpm, musical_key (e.g. "F# minor"), danceability (0-1) — raw facts for tempo/key-aware sequencing; absent fields mean the track has no data yet (coverage is partial, never assume). Set compact true for broad discovery across many results: it keeps track IDs, identity, comparison signal, audio features, and alternate_ids while omitting secondary track fields; omit it for the full close-inspection shape. Compact mode never changes ordering or silently truncates results. bpm_min/bpm_max filter to a tempo band; tracks with unknown tempo never match a bpm filter. Ordering: with a free-text query, by relevance; otherwise by play count. Use the sort knob to escape the most-played pool — random for a fresh representative sample, least_played / recently_added (or last_played_before for forgotten gems) to dig into the long tail, recent_plays for what's in current rotation. When building a playlist, vary the lens so results don't collapse onto the same heavy-rotation tracks every time. Multi-source libraries hold duplicate copies of the same song (album + compilation + best-of): set dedupe true when building a tracklist so the same song can't ship twice — each collapsed row lists its suppressed copies in alternate_ids (the winner is a deterministic tiebreak: loved, then studio album over Various Artists compilation, then earliest year). Remix/live/edit versions have different titles and are never collapsed. An empty tracks array means the user owns nothing matching — broaden the search instead of retrying the same query. If cache_age_hours is null the cache has never been populated: call refresh_library once.`;
+export type CompactSearchOutput = {
+  track_fields: typeof COMPACT_TRACK_FIELDS;
+  tracks: { track: CompactApiTrack; alternate_ids?: string[] }[];
+  total_matches: number;
+  cache_age_hours: number | null;
+};
+
+export const SEARCH_DESCRIPTION = `Search the user's owned Apple Music library (local cache). All filters optional, ANDed together. Returns tracks with behavioral signal (play_count, skip_count, rating 0-5 stars, loved=favorited, last_played, date_added) — that signal is context for YOU to weigh, not a mandate. Tracks also carry enriched audio features where known: bpm, musical_key (e.g. "F# minor"), danceability (0-1) — raw facts for tempo/key-aware sequencing; absent fields mean the track has no data yet (coverage is partial, never assume). Set compact true for broad discovery across many results. Compact tracks are fixed value rows under each track key, aligned positionally with the top-level track_fields array; null means that fact is unavailable. The rows preserve persistent_id, title, artist, album, year, genre, duration_seconds, the complete comparison signal (including date_added), and audio features; alternate_ids stays beside its row. Only location_kind is omitted. Omit compact for full track objects. Compact mode never changes ordering or silently truncates results. bpm_min/bpm_max filter to a tempo band; tracks with unknown tempo never match a bpm filter. Ordering: with a free-text query, by relevance; otherwise by play count. Use the sort knob to escape the most-played pool — random for a fresh representative sample, least_played / recently_added (or last_played_before for forgotten gems) to dig into the long tail, recent_plays for what's in current rotation. When building a playlist, vary the lens so results don't collapse onto the same heavy-rotation tracks every time. Multi-source libraries hold duplicate copies of the same song (album + compilation + best-of): set dedupe true when building a tracklist so the same song can't ship twice — each collapsed row lists its suppressed copies in alternate_ids (the winner is a deterministic tiebreak: loved, then studio album over Various Artists compilation, then earliest year). Remix/live/edit versions have different titles and are never collapsed. An empty tracks array means the user owns nothing matching — broaden the search instead of retrying the same query. If cache_age_hours is null the cache has never been populated: call refresh_library once.`;
 
 export async function handleSearch(
   raw: unknown,
   deps: ToolDeps,
-): Promise<SearchOutput | SelectaError> {
+): Promise<SearchOutput | CompactSearchOutput | SelectaError> {
   const parsed = parseInput(SearchInput, raw);
   if (!parsed.ok) return parsed.error;
   const input = parsed.data;
@@ -86,16 +94,23 @@ export async function handleSearch(
       sort: input.sort,
       dedupe: input.dedupe,
     });
-    return {
-      tracks: rows.map((row) => {
-        const track = toApiTrack(row);
-        return {
-          ...(input.compact === true ? toCompactApiTrack(track) : track),
+    const common = { total_matches: total, cache_age_hours: roundedCacheAge(deps) };
+    if (input.compact === true) {
+      return {
+        track_fields: COMPACT_TRACK_FIELDS,
+        tracks: rows.map((row) => ({
+          track: projectApiTrack(row, true),
           alternate_ids: row.alternateIds,
-        };
-      }),
-      total_matches: total,
-      cache_age_hours: roundedCacheAge(deps),
+        })),
+        ...common,
+      };
+    }
+    return {
+      tracks: rows.map((row) => ({
+        ...projectApiTrack(row, false),
+        alternate_ids: row.alternateIds,
+      })),
+      ...common,
     };
   } catch (err) {
     return toErrorEnvelope(err);

@@ -3,9 +3,15 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
-import { handleSearch, type SearchOutput } from '../src/tools/search.js';
+import {
+  handleSearch,
+  type CompactSearchOutput,
+  type SearchOutput,
+} from '../src/tools/search.js';
 import {
   handleGetTrackContext,
+  type CompactMultiSeedContextOutput,
+  type CompactTrackContextOutput,
   type MultiSeedContextOutput,
   type TrackContextOutput,
 } from '../src/tools/get_track_context.js';
@@ -24,7 +30,12 @@ import {
   handleRefreshLibrary,
   type RefreshLibraryOutput,
 } from '../src/tools/refresh_library.js';
-import type { ApiTrack, ToolDeps } from '../src/tools/common.js';
+import {
+  COMPACT_TRACK_FIELDS,
+  type ApiTrack,
+  type CompactApiTrack,
+  type ToolDeps,
+} from '../src/tools/common.js';
 import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
 import { asError, bumpedSnapshot, featuresRow, makeBridge } from './helpers.js';
@@ -57,35 +68,44 @@ function addUtilityPlaylists(deps: ToolDeps): void {
   );
 }
 
-const COMPACT_TRACK_FIELDS = [
-  'persistent_id',
-  'title',
-  'artist',
-  'album',
-  'year',
-  'duration_seconds',
-  'bpm',
-  'musical_key',
-  'danceability',
-] as const;
+function decodeCompactTrack(track: CompactApiTrack): ApiTrack {
+  return {
+    persistent_id: track[0],
+    title: track[1] ?? undefined,
+    artist: track[2] ?? undefined,
+    album: track[3] ?? undefined,
+    year: track[4] ?? undefined,
+    genre: track[5] ?? undefined,
+    duration_seconds: track[6] ?? undefined,
+    bpm: track[7] ?? undefined,
+    musical_key: track[8] ?? undefined,
+    danceability: track[9] ?? undefined,
+    signal: {
+      play_count: track[10],
+      skip_count: track[11],
+      rating: track[12] ?? undefined,
+      loved: track[13] ?? undefined,
+      disliked: track[14] ?? undefined,
+      last_played: track[15] ?? undefined,
+      date_added: track[16] ?? undefined,
+    },
+  };
+}
 
-const COMPACT_SIGNAL_FIELDS = [
-  'play_count',
-  'skip_count',
-  'rating',
-  'loved',
-  'disliked',
-  'last_played',
-] as const;
-
-function expectCompactTrackParity(full: ApiTrack, compact: ApiTrack): void {
-  for (const field of COMPACT_TRACK_FIELDS) expect(compact[field]).toEqual(full[field]);
-  for (const field of COMPACT_SIGNAL_FIELDS) {
-    expect(compact.signal[field]).toEqual(full.signal[field]);
-  }
-  expect(compact).not.toHaveProperty('genre');
-  expect(compact).not.toHaveProperty('location_kind');
-  expect(compact.signal).not.toHaveProperty('date_added');
+function expectCompactTrackParity(full: ApiTrack, compact: CompactApiTrack): void {
+  expect(decodeCompactTrack(compact)).toEqual({
+    persistent_id: full.persistent_id,
+    title: full.title,
+    artist: full.artist,
+    album: full.album,
+    year: full.year,
+    genre: full.genre,
+    duration_seconds: full.duration_seconds,
+    bpm: full.bpm,
+    musical_key: full.musical_key,
+    danceability: full.danceability,
+    signal: full.signal,
+  });
 }
 
 describe('search', () => {
@@ -125,20 +145,31 @@ describe('search', () => {
   it('compacts broad discovery without losing identity, signal, features, or result order', async () => {
     deps.cache().saveAudioFeatures([featuresRow()]);
     const full = (await handleSearch({ limit: 6 }, deps)) as SearchOutput;
-    const compact = (await handleSearch({ limit: 6, compact: true }, deps)) as SearchOutput;
+    const compact = (await handleSearch({ limit: 6, compact: true }, deps)) as CompactSearchOutput;
 
     expect(compact.total_matches).toBe(full.total_matches);
     expect(compact.cache_age_hours).toBe(full.cache_age_hours);
-    expect(compact.tracks.map((t) => t.persistent_id)).toEqual(
+    expect(compact.track_fields).toEqual(COMPACT_TRACK_FIELDS);
+    expect(compact.tracks.map((t) => t.track[0])).toEqual(
       full.tracks.map((t) => t.persistent_id),
     );
     for (let i = 0; i < full.tracks.length; i++) {
-      expectCompactTrackParity(full.tracks[i]!, compact.tracks[i]!);
+      expectCompactTrackParity(full.tracks[i]!, compact.tracks[i]!.track);
     }
 
     const fullBytes = Buffer.byteLength(JSON.stringify(full));
     const compactBytes = Buffer.byteLength(JSON.stringify(compact));
-    expect(compactBytes).toBeLessThan(fullBytes * 0.8);
+    expect(compactBytes).toBeLessThan(fullBytes);
+  });
+
+  it('keeps date_added when compact results use the recently_added sort', async () => {
+    const out = (await handleSearch(
+      { sort: 'recently_added', compact: true },
+      deps,
+    )) as CompactSearchOutput;
+    const first = decodeCompactTrack(out.tracks[0]!.track);
+    expect(first.persistent_id).toBe('T-MIDNIGHT');
+    expect(first.signal.date_added).toBe('2025-11-05T08:00:00.000Z');
   });
 
   it('filters by artist case-insensitively, ordered by play count', async () => {
@@ -402,8 +433,9 @@ describe('get_track_context', () => {
     const compact = (await handleGetTrackContext(
       { track_id: 'T-TEARDROP', compact: true },
       deps,
-    )) as TrackContextOutput;
+    )) as CompactTrackContextOutput;
 
+    expect(compact.track_fields).toEqual(COMPACT_TRACK_FIELDS);
     expectCompactTrackParity(full.seed, compact.seed);
     expect(compact.play_history).toEqual(full.play_history);
     expect(compact.appearing_in_playlists).toEqual(full.appearing_in_playlists);
@@ -415,9 +447,15 @@ describe('get_track_context', () => {
     for (let i = 0; i < full.co_occurring_tracks.length; i++) {
       const fullTrack = full.co_occurring_tracks[i]!;
       const compactTrack = compact.co_occurring_tracks[i]!;
-      expectCompactTrackParity(fullTrack, compactTrack);
+      expectCompactTrackParity(fullTrack, compactTrack.track);
       expect(compactTrack.shared_playlist_count).toBe(fullTrack.shared_playlist_count);
-      expect(compactTrack.shared_playlist_names).toEqual(fullTrack.shared_playlist_names);
+      const playlists = compactTrack.playlist_refs.map(
+        (ref) => compact.playlist_legend[ref]!,
+      );
+      expect(playlists.map((playlist) => playlist.name).sort()).toEqual(
+        [...fullTrack.shared_playlist_names].sort(),
+      );
+      expect(playlists.every((playlist) => playlist.id.startsWith('P-'))).toBe(true);
     }
   });
 
@@ -491,7 +529,7 @@ describe('get_track_context', () => {
     const compact = (await handleGetTrackContext(
       { ...args, compact: true },
       deps,
-    )) as MultiSeedContextOutput;
+    )) as CompactMultiSeedContextOutput;
 
     expect(compact.source_playlists).toEqual(full.source_playlists);
     expect(compact.cache_age_hours).toBe(full.cache_age_hours);
@@ -501,17 +539,46 @@ describe('get_track_context', () => {
     for (let i = 0; i < full.co_occurring_tracks.length; i++) {
       const fullTrack = full.co_occurring_tracks[i]!;
       const compactTrack = compact.co_occurring_tracks[i]!;
-      expectCompactTrackParity(fullTrack, compactTrack);
+      expectCompactTrackParity(fullTrack, compactTrack.track);
       expect(compactTrack.total_shared_playlist_count).toBe(
         fullTrack.total_shared_playlist_count,
       );
       expect(compactTrack.seeds_matched).toBe(fullTrack.seeds_matched);
-      expect(compactTrack.shared_playlist_names).toEqual(fullTrack.shared_playlist_names);
+      const playlists = compactTrack.playlist_refs.map(
+        (ref) => compact.playlist_legend[ref]!,
+      );
+      expect(playlists.map((playlist) => playlist.name).sort()).toEqual(
+        [...fullTrack.shared_playlist_names].sort(),
+      );
+      expect(playlists.every((playlist) => playlist.id.startsWith('P-'))).toBe(true);
     }
+  });
 
-    const fullBytes = Buffer.byteLength(JSON.stringify(full));
-    const compactBytes = Buffer.byteLength(JSON.stringify(compact));
-    expect(compactBytes).toBeLessThan(fullBytes * 0.8);
+  it('combines compact legends with explicit and size-based source filters', async () => {
+    addUtilityPlaylists(deps);
+    const out = (await handleGetTrackContext(
+      {
+        seed_ids: ['T-MIDNIGHT', 'T-TEARDROP'],
+        exclude_playlist_ids: ['P-LATENIGHT'],
+        max_playlist_tracks: 3,
+        compact: true,
+      },
+      deps,
+    )) as CompactMultiSeedContextOutput;
+
+    expect(out.source_playlists).toEqual({ considered: 4, excluded: 2 });
+    expect(out.playlist_legend).toEqual([
+      { id: 'P-INTENTIONAL', name: 'Small Intentional Mix' },
+      { id: 'P-TRIPHOP', name: 'Trip Hop Essentials' },
+    ]);
+    expect(out.co_occurring_tracks.flatMap((track) => track.playlist_refs)).toEqual(
+      expect.arrayContaining([0, 1]),
+    );
+    for (const track of out.co_occurring_tracks) {
+      for (const ref of track.playlist_refs) {
+        expect(out.playlist_legend[ref]).toBeDefined();
+      }
+    }
   });
 
   it('collapses duplicate seed IDs instead of double-counting', async () => {

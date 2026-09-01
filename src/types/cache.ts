@@ -108,6 +108,7 @@ export type CoOccurringTrack = TrackRow & {
   totalSharedPlaylistCount: number; // Σ over seeds of distinct shared user playlists
   seedsMatched: number; // how many seeds it co-occurs with
   sharedPlaylistNames: string[]; // cap 3
+  sharedPlaylists: PlaylistRef[]; // same capped facts with stable IDs for compact legends
 };
 
 export type CoOccurrenceFilters = {

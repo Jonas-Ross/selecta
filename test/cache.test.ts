@@ -252,6 +252,15 @@ describe('getCoOccurrence guards', () => {
     expect(cache.getCoOccurrence([], {}, 10)).toEqual(empty);
     expect(cache.getCoOccurrence(['T-TEARDROP'], {}, -1)).toEqual(empty);
   });
+
+  it('returns capped shared playlist references with stable IDs and exact names', () => {
+    const result = refreshed().getCoOccurrence(['T-TEARDROP'], {}, 10);
+    const glory = result.tracks.find((track) => track.persistentId === 'T-GLORYBOX')!;
+    expect(glory.sharedPlaylists).toEqual([
+      { id: 'P-LATENIGHT', name: 'Late Night' },
+      { id: 'P-TRIPHOP', name: 'Trip Hop Essentials' },
+    ]);
+  });
 });
 
 describe('overviewStats', () => {

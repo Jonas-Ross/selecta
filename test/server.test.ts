@@ -73,6 +73,20 @@ describe('MCP server over in-memory transport', () => {
     expect(body.cache_age_hours).not.toBeNull();
   });
 
+  it('round-trips the self-describing compact search rows', async () => {
+    const client = await connectedClient();
+    const result = await client.callTool({
+      name: 'search',
+      arguments: { query: 'teardrop', compact: true },
+    });
+    expect(result.isError).toBeFalsy();
+    const body = JSON.parse(textOf(result));
+    expect(body.track_fields[0]).toBe('persistent_id');
+    expect(body.track_fields).toContain('genre');
+    expect(body.track_fields).toContain('signal.date_added');
+    expect(body.tracks[0].track[0]).toBe('T-TEARDROP');
+  });
+
   it('marks structured error envelopes with isError', async () => {
     const client = await connectedClient();
     const result = await client.callTool({
