@@ -4,9 +4,9 @@
     "tracks": [
       {
         "persistentId": "T-DREAM-A",
-        "title": "Night Drive",
-        "artist": "Neon Coast",
-        "albumArtist": "Neon Coast",
+        "title": "Été Noir",
+        "artist": "Beyoncé",
+        "albumArtist": "Beyoncé",
         "album": "First Light",
         "durationSeconds": 210.4,
         "playCount": 12,
@@ -17,8 +17,8 @@
       },
       {
         "persistentId": "T-DREAM-B",
-        "title": " night drive ",
-        "artist": "NEON COAST",
+        "title": " ÉTÉ NOIR ",
+        "artist": "BEYONCÉ",
         "albumArtist": "Various Artists",
         "album": "Night Roads",
         "durationSeconds": 212,

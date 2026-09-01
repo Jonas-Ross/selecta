@@ -2,6 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { songIdentityKey } from '../cache/song_identity.js';
 import type { TrackRow } from '../types/cache.js';
 import type { SelectaError } from '../types/errors.js';
 import {
@@ -130,7 +131,7 @@ function duplicateOwnedCopies(
     const title = row.title?.trim();
     const artist = row.artist?.trim();
     if (!title || !artist) continue;
-    const key = `${title.toLowerCase()}\u001f${artist.toLowerCase()}`;
+    const key = songIdentityKey(row.title, row.artist, row.persistentId);
     const existing = groups.get(key);
     if (existing) existing.persistentIds.add(row.persistentId);
     else groups.set(key, { title, artist, persistentIds: new Set([row.persistentId]) });

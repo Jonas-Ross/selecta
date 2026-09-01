@@ -39,8 +39,8 @@ describe('inspect_tracklist', () => {
     expect(out.tracks.map((track) => track.persistent_id)).toEqual(inspectFixture.draftTrackIds);
     expect(out.tracks[0]).toEqual({
       persistent_id: 'T-DREAM-A',
-      title: 'Night Drive',
-      artist: 'Neon Coast',
+      title: 'Été Noir',
+      artist: 'Beyoncé',
       album: 'First Light',
       duration_seconds: 210,
       bpm: 118.4,
@@ -70,7 +70,7 @@ describe('inspect_tracklist', () => {
       missing_track_ids: ['T-BARE'],
     });
     expect(out.artist_counts).toEqual([
-      { artist: 'Neon Coast', count: 3 },
+      { artist: 'Beyoncé', count: 3 },
       { artist: 'Mira', count: 1 },
     ]);
     expect(out.unknown_artist_count).toBe(1);
@@ -100,8 +100,8 @@ describe('inspect_tracklist', () => {
     ]);
     expect(out.duplicate_owned_copies).toEqual([
       {
-        title: 'Night Drive',
-        artist: 'Neon Coast',
+        title: 'Été Noir',
+        artist: 'Beyoncé',
         copies: [
           { persistent_id: 'T-DREAM-A', positions: [0, 3] },
           { persistent_id: 'T-DREAM-B', positions: [2] },
