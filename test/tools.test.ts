@@ -985,28 +985,29 @@ describe('refresh_library', () => {
 describe('refresh_library sync reconciliation', () => {
   const TRACKS = ['T-TEARDROP', 'T-ROADS'];
 
-  function echoSnapshot(ids: string[]): LibrarySnapshot {
+  function echoSnapshot(ids: string[], name = 'Rearview', tracks = TRACKS): LibrarySnapshot {
     return {
       ...snapshot,
       playlists: [
         ...snapshot.playlists,
         ...ids.map((id) => ({
           persistentId: id,
-          name: 'Rearview',
+          name,
           kind: 'user' as const,
-          trackPersistentIds: TRACKS,
+          trackPersistentIds: tracks,
         })),
       ],
     };
   }
 
-  function depsAfterCreate(overrides: Partial<Bridge> = {}): ToolDeps & {
-    cacheInstance: SelectaCache;
-  } {
+  function depsAfterCreate(
+    overrides: Partial<Bridge> = {},
+    created = { id: 'P-CREATED', name: 'Rearview' },
+  ): ToolDeps & { cacheInstance: SelectaCache } {
     const cache = SelectaCache.open(':memory:');
     cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
-    cache.upsertPlaylistAfterWrite({ persistentId: 'P-CREATED', trackCount: 2 }, 'Rearview', TRACKS);
-    cache.recordPlaylistCreation('P-CREATED', 'Rearview', TRACKS);
+    cache.upsertPlaylistAfterWrite({ persistentId: created.id, trackCount: 2 }, created.name, TRACKS);
+    cache.recordPlaylistCreation(created.id, created.name, TRACKS);
     const bridge = makeBridge({ deletePlaylistById: vi.fn().mockResolvedValue(1), ...overrides });
     return { cache: () => cache, bridge, cacheInstance: cache };
   }
@@ -1039,6 +1040,25 @@ describe('refresh_library sync reconciliation', () => {
     // The ID create_playlist returned still resolves for searches.
     const { rows } = deps.cacheInstance.searchTracks({ inPlaylist: 'P-CREATED' });
     expect(rows).toHaveLength(2);
+  });
+
+  it('rekeys a reordered preview slot by its reserved name', async () => {
+    // The user reordered the slot while auditioning, so the exact-sequence
+    // match fails — only the reserved name carries the identity.
+    const deps = depsAfterCreate(
+      {
+        readLibrary: vi
+          .fn()
+          .mockResolvedValue(echoSnapshot(['P-PREVIEW-2'], 'Selecta Preview', [...TRACKS].reverse())),
+      },
+      { id: 'P-PREVIEW', name: 'Selecta Preview' },
+    );
+
+    const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+    expect(out.sync_reconciliation!.rekeys).toEqual([
+      { name: 'Selecta Preview', from_id: 'P-PREVIEW', to_id: 'P-PREVIEW-2' },
+    ]);
+    expect(deps.cacheInstance.resolvePlaylistId('P-PREVIEW')).toBe('P-PREVIEW-2');
   });
 
   it('surfaces a failed delete as a reconciliation failure, refresh still succeeds', async () => {

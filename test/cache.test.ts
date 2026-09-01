@@ -474,6 +474,79 @@ describe('sync reconciliation', () => {
     expect(cache.getOverview({ inPlaylist: CREATED_ID }).totalTracks).toBe(TRACKS.length);
   });
 
+  // Reserved slots (#44): the preview's identity is its name, so a lone
+  // same-name user playlist under a new ID is a rekey even after the user
+  // reordered it while auditioning — but only for names the caller reserves.
+  it('rekeys a reserved slot by name alone when the sequence changed', () => {
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED', tracks: [...TRACKS].reverse() }), {
+      durationMs: 1,
+    });
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+    expect(cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] })).toEqual([
+      { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: CREATED_ID, toId: 'P-REKEYED' },
+    ]);
+  });
+
+  it('never rekeys a reserved slot onto one of several copies, even the sequence match', () => {
+    // iCloud twinned the fresh preview; the user reordered only the copy they
+    // auditioned. The untouched twin still matches the receipt, but treating
+    // it as "the" slot would clone the stale order. A generic receipt keeps
+    // the exact-sequence rekey; the reserved name must stand down.
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(
+      snapshotWith({ id: 'P-TWIN' }, { id: 'P-AUDITIONED', tracks: [...TRACKS].reverse() }),
+      { durationMs: 1 },
+    );
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
+      { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: CREATED_ID, toId: 'P-TWIN' },
+    ]);
+    expect(
+      cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] }),
+    ).toEqual([]);
+  });
+
+  it('leaves a reserved slot alone when several same-name copies diverged', () => {
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(
+      snapshotWith(
+        { id: 'P-ONE', tracks: [...TRACKS].reverse() },
+        { id: 'P-TWO', tracks: [...TRACKS, 'T-ANGEL'] },
+      ),
+      { durationMs: 1 },
+    );
+    expect(
+      cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] }),
+    ).toEqual([]);
+  });
+
+  it('applyLiveRekey aliases a stale ID to the live playlist and mirrors its order', () => {
+    const cache = cacheAfterCreate();
+    const liveOrder = [...TRACKS].reverse();
+    cache.applyLiveRekey(CREATED_ID, { persistentId: 'P-LIVE', name: NAME, trackIds: liveOrder });
+
+    expect(cache.getPlaylist(CREATED_ID)).toBeNull();
+    expect(cache.getPlaylist('P-LIVE')).toMatchObject({ name: NAME, kind: 'user', trackCount: 2 });
+    expect(cache.getPlaylistTrackIds('P-LIVE')).toEqual(liveOrder);
+    expect(cache.resolvePlaylistId(CREATED_ID)).toBe('P-LIVE');
+    expect(cache.getCreationName(CREATED_ID)).toBe(NAME);
+  });
+
+  it('applyLiveRekey follows a receipt chain without minting a new receipt', () => {
+    const cache = cacheAfterCreate();
+    // Refresh-time rekey first: CREATED_ID -> P-MID. Then the bridge finds
+    // P-MID gone too; the one receipt must end up at the newest live ID.
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-MID' }), { durationMs: 1 });
+    cache.applyRekey(CREATED_ID, CREATED_ID, 'P-MID');
+    cache.applyLiveRekey('P-MID', { persistentId: 'P-NEWEST', name: NAME, trackIds: TRACKS });
+
+    expect(cache.resolvePlaylistId(CREATED_ID)).toBe('P-NEWEST');
+    expect(cache.getPlaylist('P-MID')).toBeNull();
+    expect(cache.searchTracks({ inPlaylist: CREATED_ID }).rows).toHaveLength(TRACKS.length);
+    expect(cache.getRecentCreationNames(60)).toEqual([NAME]);
+    expect(cache.db.prepare('SELECT COUNT(*) AS n FROM playlist_creations').get()).toEqual({ n: 1 });
+  });
+
   it('getRecentCreationNames lists only in-window names', () => {
     const cache = cacheAfterCreate();
     expect(cache.getRecentCreationNames(60)).toEqual([NAME]);
@@ -746,6 +819,15 @@ describe('notes', () => {
       .run(new Date(Date.now() - 2 * 3_600_000).toISOString(), CREATED_ID);
     cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
     expect(cache.getNote('playlist', CREATED_ID)).toBeNull();
+  });
+
+  it('follows a write-time (live) rekey of the preview slot', () => {
+    const cache = cacheAfterCreate();
+    cache.setNote('playlist', CREATED_ID, 'draft 3: softer close');
+    cache.applyLiveRekey(CREATED_ID, { persistentId: 'P-LIVE', name: NAME, trackIds: TRACKS });
+    expect(cache.getNote('playlist', CREATED_ID)).toBeNull();
+    expect(cache.getNote('playlist', 'P-LIVE')!.body).toBe('draft 3: softer close');
+    expect(cache.getPlaylist('P-LIVE')!.noteBody).toBe('draft 3: softer close');
   });
 
   it('moves to the surviving twin when an echo duplicate is removed', () => {

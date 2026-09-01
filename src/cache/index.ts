@@ -336,6 +336,36 @@ export class SelectaCache {
     });
   }
 
+  /** The name on a creation receipt, by the ID Selecta created it under. */
+  getCreationName(createdId: string): string | null {
+    return this.queries.getCreationName(createdId);
+  }
+
+  /**
+   * The bridge just proved, in one script execution, that `staleId` is gone
+   * from Music.app and the same playlist now lives under `live` (an iCloud
+   * rekey observed at write time, not refresh time). Repoint every receipt
+   * at the live ID, move the note, mirror the live row and order, drop the
+   * stale row. No receipt is retired or created.
+   */
+  applyLiveRekey(
+    staleId: string,
+    live: { persistentId: string; name: string; trackIds: string[] },
+  ): void {
+    const run = this.db.transaction(() => {
+      this.queries.repointCreations(staleId, live.persistentId);
+      // Move before delete: deletePlaylistRow takes the note with the row.
+      this.queries.movePlaylistNote(staleId, live.persistentId);
+      this.upsertPlaylistAfterWrite(
+        { persistentId: live.persistentId, trackCount: live.trackIds.length },
+        live.name,
+        live.trackIds,
+      );
+      this.queries.deletePlaylistRow(staleId);
+    });
+    run();
+  }
+
   /** Names of playlists created within the window — the "watch list" for echo logging. */
   getRecentCreationNames(windowMinutes: number, now = new Date()): string[] {
     const since = new Date(now.getTime() - windowMinutes * 60_000).toISOString();
@@ -350,8 +380,20 @@ export class SelectaCache {
    * 'user', and the EXACT ordered track sequence we created — so intentional
    * same-name playlists and user-edited copies are never touched. Only
    * creations within `windowMinutes` are considered.
+   *
+   * `reservedSlotNames` are Selecta-owned slots whose identity is the name,
+   * not the contents (the user may reorder the preview while auditioning):
+   * for those, a lone same-name user playlist under a new ID is a rekey even
+   * when the sequence differs — and several same-name copies are never
+   * rekeyed, even if exactly one still matches the receipt's sequence: the
+   * untouched copy may be the iCloud twin, not the one the user auditioned.
+   * Ambiguity is reported at clone time; only identical twins are deduped.
    */
-  planSyncReconciliation(opts: { windowMinutes: number; now?: Date }): ReconcileAction[] {
+  planSyncReconciliation(opts: {
+    windowMinutes: number;
+    now?: Date;
+    reservedSlotNames?: readonly string[];
+  }): ReconcileAction[] {
     const now = opts.now ?? new Date();
     const since = new Date(now.getTime() - opts.windowMinutes * 60_000).toISOString();
     const creations = this.queries.getCreationsSince(since);
@@ -369,17 +411,28 @@ export class SelectaCache {
     const actions: ReconcileAction[] = [];
     for (const creation of creations) {
       const wanted = JSON.stringify(creation.trackIds);
-      const matchIds = this.queries
-        .getUserPlaylistIdsByName(creation.name)
-        .filter((id) => JSON.stringify(this.queries.getPlaylistTrackIds(id)) === wanted);
+      const sameNameIds = this.queries.getUserPlaylistIdsByName(creation.name);
+      const matchIds = sameNameIds.filter(
+        (id) => JSON.stringify(this.queries.getPlaylistTrackIds(id)) === wanted,
+      );
       const currentId = creation.currentPersistentId;
-      if (matchIds.length === 1 && matchIds[0] !== currentId) {
+      // A reserved slot rekeys by name alone, so several same-name copies
+      // are ambiguous regardless of sequence; any other receipt rekeys to
+      // the single exact-sequence match.
+      const rekeyId = opts.reservedSlotNames?.includes(creation.name)
+        ? sameNameIds.length === 1
+          ? sameNameIds[0]!
+          : null
+        : matchIds.length === 1
+          ? matchIds[0]!
+          : null;
+      if (rekeyId !== null && rekeyId !== currentId) {
         actions.push({
           kind: 'rekey',
           createdId: creation.createdPersistentId,
           name: creation.name,
           fromId: currentId,
-          toId: matchIds[0]!,
+          toId: rekeyId,
         });
       } else if (
         matchIds.length >= 2 &&

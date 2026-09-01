@@ -36,6 +36,7 @@ import {
   PLAYLIST_WRITE_TRACK_LIMIT,
   type PlaylistCloneResult,
   type PlaylistEditResult,
+  type PlaylistReplaceResult,
   type PlaylistWriteResult,
   type RawPlaylist,
   type TrackLovedState,
@@ -96,10 +97,15 @@ export const bridge: Bridge = {
     return parseWriteResult(await runJxa(buildCreatePlaylistScript(input)));
   },
   async clonePlaylist(input): Promise<PlaylistCloneResult> {
-    return parseCloneResult(await runJxa(buildClonePlaylistScript(input)));
+    return parseCloneResult(await runJxa(buildClonePlaylistScript(input)), input.reservedSourceName);
   },
-  async replacePlaylist(input): Promise<PlaylistWriteResult> {
-    return parseWriteResult(await runJxa(buildReplacePlaylistScript(input)));
+  async replacePlaylist(input): Promise<PlaylistReplaceResult> {
+    const result = await runJxa(buildReplacePlaylistScript(input));
+    const created = (result as Record<string, unknown> | null)?.created;
+    if (typeof created !== 'boolean') {
+      throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistReplaceResult shape.');
+    }
+    return { ...parseWriteResult(result), created };
   },
   async deletePlaylistById(persistentId): Promise<number> {
     return parseDeleteResult(await runJxa(buildDeletePlaylistByIdScript({ persistentId })));
@@ -175,6 +181,12 @@ function parseEditResult(result: unknown, op: 'add' | 'remove' | 'reorder'): Pla
 
 function isIdArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((id) => typeof id === 'string');
+}
+
+function isAmbiguousSource(value: unknown): value is { name: string; persistentIds: string[] } {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.name === 'string' && isIdArray(v.persistentIds);
 }
 
 function isPlaylistEditResult(v: Record<string, unknown>): v is PlaylistEditResult & Record<string, unknown> {
@@ -255,14 +267,29 @@ function parseWriteResult(result: unknown): PlaylistWriteResult {
   throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistWriteResult shape.');
 }
 
-function parseCloneResult(result: unknown): PlaylistCloneResult {
+function parseCloneResult(result: unknown, reservedSourceName?: string): PlaylistCloneResult {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
+    if (v.playlistNotFound === true && reservedSourceName !== undefined) {
+      throw new BridgeError(
+        'playlist_not_found',
+        `Music.app has neither that persistent ID nor a plain user playlist named "${reservedSourceName}".`,
+        `The "${reservedSourceName}" slot no longer exists in Music.app. Call preview_playlist again to rebuild it, then clone that result. Nothing was created.`,
+      );
+    }
     if (v.playlistNotFound === true) {
       throw new BridgeError(
         'playlist_not_found',
         'Music.app has no source playlist with that persistent ID.',
         'The source playlist is not in the live library — run refresh_library and re-resolve it via list_playlists.',
+      );
+    }
+    if (isAmbiguousSource(v.ambiguousSource)) {
+      const { name, persistentIds } = v.ambiguousSource;
+      throw new BridgeError(
+        'validation_error',
+        `Music.app has ${persistentIds.length} plain user playlists named "${name}": ${persistentIds.join(', ')}.`,
+        `The "${name}" slot is ambiguous — Selecta will not guess which copy the user auditioned. Run refresh_library (it removes an identical iCloud twin automatically) and clone the intended copy by its list_playlists ID, or delete the extra copy with delete_playlist and retry. Nothing was created.`,
       );
     }
     if (v.sourceNotUser === true && typeof v.sourceKind === 'string') {

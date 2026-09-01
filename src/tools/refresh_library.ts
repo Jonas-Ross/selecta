@@ -10,6 +10,7 @@ import { RECONCILE_WINDOW_MINUTES } from '../cache/index.js';
 import { log } from '../log.js';
 import type { SelectaError } from '../types/errors.js';
 import { parseInput, toErrorEnvelope, type ToolDeps } from './common.js';
+import { PREVIEW_PLAYLIST_NAME } from './preview_playlist.js';
 
 export { RECONCILE_WINDOW_MINUTES };
 
@@ -68,7 +69,10 @@ export async function handleRefreshLibrary(
 
     const result = cache.refreshFromSnapshot(snapshot, { durationMs });
 
-    const actions = cache.planSyncReconciliation({ windowMinutes: RECONCILE_WINDOW_MINUTES });
+    const actions = cache.planSyncReconciliation({
+      windowMinutes: RECONCILE_WINDOW_MINUTES,
+      reservedSlotNames: [PREVIEW_PLAYLIST_NAME],
+    });
     const reconciliation: SyncReconciliation = {
       rekeys: [],
       duplicates_removed: [],

@@ -476,7 +476,10 @@ export function createQueries(db: Database) {
     'DELETE FROM playlist_creations WHERE current_persistent_id = ?',
   );
   const resolveCreationStmt = db.prepare(
-    'SELECT current_persistent_id AS currentId FROM playlist_creations WHERE created_persistent_id = ?',
+    'SELECT current_persistent_id AS currentId, name FROM playlist_creations WHERE created_persistent_id = ?',
+  );
+  const repointCreationsByCurrentIdStmt = db.prepare(
+    'UPDATE playlist_creations SET current_persistent_id = ? WHERE current_persistent_id = ?',
   );
   const playlistExistsStmt = db.prepare('SELECT 1 FROM playlists WHERE persistent_id = ?');
   const getPlaylistStmt = db.prepare(
@@ -718,6 +721,15 @@ export function createQueries(db: Database) {
     resolveCreatedPlaylistId(createdId: string): string | null {
       const row = resolveCreationStmt.get(createdId) as { currentId: string } | undefined;
       return row?.currentId ?? null;
+    },
+
+    getCreationName(createdId: string): string | null {
+      const row = resolveCreationStmt.get(createdId) as { name: string } | undefined;
+      return row?.name ?? null;
+    },
+
+    repointCreations(fromCurrentId: string, toCurrentId: string): void {
+      repointCreationsByCurrentIdStmt.run(toCurrentId, fromCurrentId);
     },
 
     playlistExists(persistentId: string): boolean {
