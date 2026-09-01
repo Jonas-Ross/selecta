@@ -1,0 +1,80 @@
+{
+  "snapshot": {
+    "capturedAt": "2026-08-01T12:00:00.000Z",
+    "tracks": [
+      {
+        "persistentId": "T-DREAM-A",
+        "title": "Été Noir",
+        "artist": "Beyoncé",
+        "albumArtist": "Beyoncé",
+        "album": "First Light",
+        "durationSeconds": 210.4,
+        "playCount": 12,
+        "skipCount": 1,
+        "rating": 80,
+        "loved": true,
+        "locationKind": "local"
+      },
+      {
+        "persistentId": "T-DREAM-B",
+        "title": " ÉTÉ NOIR ",
+        "artist": "BEYONCÉ",
+        "albumArtist": "Various Artists",
+        "album": "Night Roads",
+        "durationSeconds": 212,
+        "playCount": 4,
+        "skipCount": 3,
+        "locationKind": "cloud"
+      },
+      {
+        "persistentId": "T-TURN",
+        "title": "Afterglow",
+        "artist": "Mira",
+        "album": "Arc Lines",
+        "durationSeconds": 185,
+        "bpm": 105,
+        "playCount": 7,
+        "skipCount": 0
+      },
+      {
+        "persistentId": "T-BARE",
+        "title": "Interlude",
+        "playCount": 0,
+        "skipCount": 0
+      }
+    ],
+    "playlists": []
+  },
+  "audioFeatures": [
+    {
+      "trackPersistentId": "T-DREAM-A",
+      "bpm": 118.44,
+      "musicalKey": "F# minor",
+      "danceability": 0.734,
+      "sources": {
+        "bpm": "deezer",
+        "musicalKey": "acousticbrainz",
+        "danceability": "acousticbrainz"
+      },
+      "mbRecordingMbid": "mbid-dream-a",
+      "deezerTrackId": 101,
+      "status": "ok",
+      "fetchedAt": "2026-08-02T00:00:00.000Z"
+    },
+    {
+      "trackPersistentId": "T-DREAM-B",
+      "bpm": null,
+      "musicalKey": "F# minor",
+      "danceability": 0.65,
+      "sources": {
+        "musicalKey": "acousticbrainz",
+        "danceability": "acousticbrainz"
+      },
+      "mbRecordingMbid": "mbid-dream-b",
+      "deezerTrackId": null,
+      "status": "ok",
+      "fetchedAt": "2026-08-02T00:00:00.000Z"
+    }
+  ],
+  "draftTrackIds": ["T-DREAM-A", "T-TURN", "T-DREAM-B", "T-DREAM-A", "T-BARE"]
+}

@@ -25,6 +25,7 @@ import type {
   SearchResultRow,
   TrackRow,
 } from '../types/cache.js';
+import { SONG_IDENTITY_SQL_FUNCTION, songIdentityKey } from './song_identity.js';
 
 export type Queries = ReturnType<typeof createQueries>;
 
@@ -74,8 +75,7 @@ function toFtsQuery(query: string): string {
 }
 
 // group_concat(DISTINCT …) cannot take a separator in SQLite, so names use the
-// unit separator and are deduped/capped in JS. Also the field separator inside
-// the dedupe key (DEDUPE_KEY below).
+// unit separator and are deduped/capped in JS.
 const UNIT_SEPARATOR = '\u001f';
 
 function parsePlaylistRefs(raw: string): PlaylistRef[] {
@@ -257,15 +257,9 @@ function buildTrackFilter(filters: SearchFilters): {
 // Canonical identity for "same song": normalized title + artist. Parenthetical
 // qualifiers stay in the title on purpose — "Levels (Radio Edit)" is a
 // different version of "Levels", not a duplicate. Rows missing a title or
-// artist can't establish identity, so each keys to itself (a real key always
-// contains the unit separator, which a persistent ID never does, so the two
-// namespaces can't collide). lower() is ASCII-only in SQLite — non-ASCII case
-// variants don't fold, which is acceptable for this collapse.
-const DEDUPE_KEY = `
-  CASE WHEN t.title IS NULL OR TRIM(t.title) = '' OR t.artist IS NULL OR TRIM(t.artist) = ''
-       THEN t.persistent_id
-       ELSE lower(TRIM(t.title)) || '${UNIT_SEPARATOR}' || lower(TRIM(t.artist)) END
-`;
+// artist can't establish identity, so each keys to itself. The registered
+// function is the same Unicode-aware implementation inspect_tracklist uses.
+const DEDUPE_KEY = `${SONG_IDENTITY_SQL_FUNCTION}(t.title, t.artist, t.persistent_id)`;
 
 // Which copy wins: a DETERMINISTIC tiebreak, not quality ranking (the identity
 // guardrail on #16). Prefer loved → studio album over a Various Artists
@@ -336,6 +330,8 @@ function orderClause(
 }
 
 export function createQueries(db: Database) {
+  db.function(SONG_IDENTITY_SQL_FUNCTION, { deterministic: true }, songIdentityKey);
+
   const upsertTrackStmt: Statement = db.prepare(`
     INSERT INTO tracks (
       persistent_id, title, artist, album_artist, album, genre,

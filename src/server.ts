@@ -64,6 +64,11 @@ import {
   setRatingInputShape,
   SET_RATING_DESCRIPTION,
 } from './tools/set_rating.js';
+import {
+  handleInspectTracklist,
+  inspectTracklistInputShape,
+  INSPECT_TRACKLIST_DESCRIPTION,
+} from './tools/inspect_tracklist.js';
 
 export const SERVER_INFO = { name: 'selecta', version: '0.1.0' };
 
@@ -117,6 +122,12 @@ export function createServer(deps: ToolDeps): McpServer {
     'preview_playlist',
     { description: PREVIEW_PLAYLIST_DESCRIPTION, inputSchema: previewPlaylistInputShape },
     async (args) => toToolResult(await handlePreviewPlaylist(args, deps)),
+  );
+
+  server.registerTool(
+    'inspect_tracklist',
+    { description: INSPECT_TRACKLIST_DESCRIPTION, inputSchema: inspectTracklistInputShape },
+    async (args) => toToolResult(await handleInspectTracklist(args, deps)),
   );
 
   server.registerTool(

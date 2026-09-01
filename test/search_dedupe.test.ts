@@ -94,6 +94,21 @@ const snapshot: LibrarySnapshot = {
       year: 2014,
       playCount: 2,
     }),
+    // Non-ASCII case variants use the same Unicode-aware key as inspection.
+    track('T-ETE-A', {
+      title: 'Été Noir',
+      artist: 'Beyoncé',
+      album: 'Lumière',
+      year: 2020,
+      playCount: 12,
+    }),
+    track('T-ETE-B', {
+      title: 'ÉTÉ NOIR',
+      artist: 'BEYONCÉ',
+      album: 'Nuits',
+      year: 2022,
+      playCount: 4,
+    }),
     // A live version variant next to its studio original.
     track('T-ONEMORE', {
       title: 'One More Time',
@@ -178,6 +193,12 @@ describe('cache searchTracks dedupe', () => {
     expect(rows[0]?.alternateIds).toEqual(['T-SUMMER-B']);
   });
 
+  it('collapses non-ASCII case variants with the shared Unicode-aware key', () => {
+    const { rows } = freshCache().searchTracks({ dedupe: true });
+    const winner = rows.find((row) => row.persistentId === 'T-ETE-A');
+    expect(winner?.alternateIds).toEqual(['T-ETE-B']);
+  });
+
   it('keeps version variants: live/radio-edit titles are different songs', () => {
     const { rows, total } = freshCache().searchTracks({ query: 'one more time', dedupe: true });
     expect(total).toBe(2);
@@ -186,9 +207,10 @@ describe('cache searchTracks dedupe', () => {
 
   it('never collapses rows missing a title or artist', () => {
     const { total } = freshCache().searchTracks({ dedupe: true });
-    // 13 tracks − 2 Levels dupes − 1 Dark Paradise dupe − 1 Summertime dupe;
+    // 15 tracks − 2 Levels dupes − 1 Dark Paradise dupe − 1 Summertime dupe
+    // − 1 Été Noir dupe;
     // the two artist-less "Untitled Demo" rows and T-BARE all survive.
-    expect(total).toBe(9);
+    expect(total).toBe(10);
   });
 
   it('applies sort lenses to the representatives', () => {
