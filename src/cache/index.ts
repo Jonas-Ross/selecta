@@ -297,6 +297,34 @@ export class SelectaCache {
     });
   }
 
+  /** The name on a creation receipt, by the ID Selecta created it under. */
+  getCreationName(createdId: string): string | null {
+    return this.queries.getCreationName(createdId);
+  }
+
+  /**
+   * The bridge just proved, in one script execution, that `staleId` is gone
+   * from Music.app and the same playlist now lives under `live` (an iCloud
+   * rekey observed at write time, not refresh time). Repoint every receipt
+   * at the live ID, mirror the live row and order, drop the stale row. No
+   * receipt is retired or created.
+   */
+  applyLiveRekey(
+    staleId: string,
+    live: { persistentId: string; name: string; trackIds: string[] },
+  ): void {
+    const run = this.db.transaction(() => {
+      this.queries.repointCreations(staleId, live.persistentId);
+      this.upsertPlaylistAfterWrite(
+        { persistentId: live.persistentId, trackCount: live.trackIds.length },
+        live.name,
+        live.trackIds,
+      );
+      this.queries.deletePlaylistRow(staleId);
+    });
+    run();
+  }
+
   /** Names of playlists created within the window — the "watch list" for echo logging. */
   getRecentCreationNames(windowMinutes: number, now = new Date()): string[] {
     const since = new Date(now.getTime() - windowMinutes * 60_000).toISOString();
@@ -311,8 +339,18 @@ export class SelectaCache {
    * 'user', and the EXACT ordered track sequence we created — so intentional
    * same-name playlists and user-edited copies are never touched. Only
    * creations within `windowMinutes` are considered.
+   *
+   * `reservedSlotNames` are Selecta-owned slots whose identity is the name,
+   * not the contents (the user may reorder the preview while auditioning):
+   * for those, a lone same-name user playlist under a new ID is a rekey even
+   * when the sequence differs. Several same-name copies stay untouched —
+   * ambiguity is reported at clone time, never resolved by deletion here.
    */
-  planSyncReconciliation(opts: { windowMinutes: number; now?: Date }): ReconcileAction[] {
+  planSyncReconciliation(opts: {
+    windowMinutes: number;
+    now?: Date;
+    reservedSlotNames?: readonly string[];
+  }): ReconcileAction[] {
     const now = opts.now ?? new Date();
     const since = new Date(now.getTime() - opts.windowMinutes * 60_000).toISOString();
     const creations = this.queries.getCreationsSince(since);
@@ -330,17 +368,27 @@ export class SelectaCache {
     const actions: ReconcileAction[] = [];
     for (const creation of creations) {
       const wanted = JSON.stringify(creation.trackIds);
-      const matchIds = this.queries
-        .getUserPlaylistIdsByName(creation.name)
-        .filter((id) => JSON.stringify(this.queries.getPlaylistTrackIds(id)) === wanted);
+      const sameNameIds = this.queries.getUserPlaylistIdsByName(creation.name);
+      const matchIds = sameNameIds.filter(
+        (id) => JSON.stringify(this.queries.getPlaylistTrackIds(id)) === wanted,
+      );
       const currentId = creation.currentPersistentId;
-      if (matchIds.length === 1 && matchIds[0] !== currentId) {
+      // A reserved slot is the same-name list without the sequence filter.
+      const rekeyId =
+        matchIds.length === 1
+          ? matchIds[0]!
+          : matchIds.length === 0 &&
+              sameNameIds.length === 1 &&
+              opts.reservedSlotNames?.includes(creation.name)
+            ? sameNameIds[0]!
+            : null;
+      if (rekeyId !== null && rekeyId !== currentId) {
         actions.push({
           kind: 'rekey',
           createdId: creation.createdPersistentId,
           name: creation.name,
           fromId: currentId,
-          toId: matchIds[0]!,
+          toId: rekeyId,
         });
       } else if (
         matchIds.length >= 2 &&
