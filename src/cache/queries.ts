@@ -425,8 +425,10 @@ export function createQueries(db: Database) {
     'DELETE FROM play_history WHERE track_persistent_id NOT IN (SELECT value FROM json_each(?))',
   );
   // Notes follow their subject out of the library (issue #32). A playlist note
-  // whose ID a creation receipt still names is kept: the ID may have been
-  // rekeyed by iCloud, and sync reconciliation moves the note to the new ID.
+  // whose ID a still-reconcilable creation receipt names is kept: the ID may
+  // have been rekeyed by iCloud, and reconciliation moves the note to the new
+  // ID right after this refresh. Older receipts can never be reconciled, so
+  // their notes prune like any other.
   const pruneTrackNotesStmt = db.prepare(
     `DELETE FROM notes WHERE subject_kind = 'track'
        AND subject_id NOT IN (SELECT value FROM json_each(?))`,
@@ -434,7 +436,9 @@ export function createQueries(db: Database) {
   const prunePlaylistNotesStmt = db.prepare(
     `DELETE FROM notes WHERE subject_kind = 'playlist'
        AND subject_id NOT IN (SELECT value FROM json_each(?))
-       AND subject_id NOT IN (SELECT current_persistent_id FROM playlist_creations)`,
+       AND subject_id NOT IN (
+         SELECT current_persistent_id FROM playlist_creations WHERE created_at >= ?
+       )`,
   );
   const prunePlaylistsStmt = db.prepare(
     'DELETE FROM playlists WHERE persistent_id NOT IN (SELECT value FROM json_each(?))',
@@ -655,11 +659,12 @@ export function createQueries(db: Database) {
       };
     },
 
-    prunePlaylistsNotIn(presentPersistentIds: Set<string>): void {
+    /** reconcilableSince: receipts created at or after it still shield their note. */
+    prunePlaylistsNotIn(presentPersistentIds: Set<string>, reconcilableSince: string): void {
       const ids = JSON.stringify([...presentPersistentIds]);
       prunePlaylistsStmt.run(ids);
       pruneMembershipsStmt.run(ids);
-      prunePlaylistNotesStmt.run(ids);
+      prunePlaylistNotesStmt.run(ids, reconcilableSince);
     },
 
     appendRefreshLog(entry: {

@@ -83,8 +83,9 @@ CREATE INDEX IF NOT EXISTS idx_play_history_at ON play_history(refreshed_at);
 -- a track or playlist, one per subject, handed back verbatim. Outside the
 -- refresh cycle like audio_features: refresh never rewrites a note, only
 -- prunes notes whose subject left the library. A playlist note is exempt from
--- pruning while a creation receipt still points at its ID, so iCloud rekey
--- reconciliation can move it to the playlist's new ID instead of losing it.
+-- pruning while a still-reconcilable creation receipt points at its ID, so
+-- iCloud rekey reconciliation can move it to the playlist's new ID instead of
+-- losing it.
 -- Never indexed, filtered, or sorted on — a note is memory, not signal.
 CREATE TABLE IF NOT EXISTS notes (
   subject_kind TEXT NOT NULL CHECK (subject_kind IN ('track', 'playlist')),

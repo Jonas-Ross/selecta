@@ -6,15 +6,12 @@
 // survivor) and reported in the response — never silently.
 
 import { z } from 'zod';
+import { RECONCILE_WINDOW_MINUTES } from '../cache/index.js';
 import { log } from '../log.js';
 import type { SelectaError } from '../types/errors.js';
 import { parseInput, toErrorEnvelope, type ToolDeps } from './common.js';
 
-// Echo twins arrive ~10s–3min after creation; the window bounds how long a
-// creation receipt can trigger a delete, so a later intentional copy of the
-// same playlist is never touched. Generous vs. the observed echo latency to
-// cover slow refresh habits, small vs. "intentional duplicate" timescales.
-export const RECONCILE_WINDOW_MINUTES = 60;
+export { RECONCILE_WINDOW_MINUTES };
 
 export const refreshLibraryInputShape = {};
 

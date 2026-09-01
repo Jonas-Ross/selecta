@@ -29,6 +29,16 @@ import { createQueries, recentSinceIso, type Queries } from './queries.js';
 
 export { defaultDbPath } from './db.js';
 
+// How long after creation a receipt can drive iCloud-sync reconciliation
+// (docs/music-app.md, iCloud sync). Echo twins arrive ~10s–3min after
+// creation; the window bounds how long a receipt can trigger a delete, so a
+// later intentional copy of the same playlist is never touched. Generous vs.
+// the observed echo latency to cover slow refresh habits, small vs.
+// "intentional duplicate" timescales. Lives here because the refresh prune
+// uses the same window: a playlist note is shielded from pruning only while
+// its receipt could still move it to a rekeyed ID.
+export const RECONCILE_WINDOW_MINUTES = 60;
+
 export type RefreshResult = {
   trackCount: number;
   playlistCount: number;
@@ -67,6 +77,9 @@ export class SelectaCache {
     // One timestamp for the refresh_log row, the play_history window, and the
     // return value.
     const refreshedAt = new Date().toISOString();
+    const reconcilableSince = new Date(
+      Date.parse(refreshedAt) - RECONCILE_WINDOW_MINUTES * 60_000,
+    ).toISOString();
     const q = this.queries;
     let playDeltasRecorded = 0;
     let playCountResets = 0;
@@ -99,7 +112,10 @@ export class SelectaCache {
         q.replacePlaylistMembership(playlist.persistentId, playlist.trackPersistentIds);
       }
       q.pruneTracksNotIn(new Set(snapshot.tracks.map((t) => t.persistentId)));
-      q.prunePlaylistsNotIn(new Set(snapshot.playlists.map((p) => p.persistentId)));
+      q.prunePlaylistsNotIn(
+        new Set(snapshot.playlists.map((p) => p.persistentId)),
+        reconcilableSince,
+      );
       q.rebuildFts();
       const resetNote =
         playCountResets > 0 ? `${playCountResets} play-counter reset(s), baseline re-established` : null;

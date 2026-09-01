@@ -736,6 +736,18 @@ describe('notes', () => {
     expect(cache.getNote('playlist', 'P-REKEYED')!.body).toBe(note.body);
   });
 
+  it('is pruned once its receipt is too old to reconcile and the playlist is gone', () => {
+    const cache = cacheAfterCreate();
+    cache.setNote('playlist', CREATED_ID, 'deleted in Music.app later');
+    // The user removed the playlist in Music.app well after the reconciliation
+    // window: the receipt lingers, but it can no longer move anything.
+    cache.db
+      .prepare('UPDATE playlist_creations SET created_at = ? WHERE created_persistent_id = ?')
+      .run(new Date(Date.now() - 2 * 3_600_000).toISOString(), CREATED_ID);
+    cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+    expect(cache.getNote('playlist', CREATED_ID)).toBeNull();
+  });
+
   it('moves to the surviving twin when an echo duplicate is removed', () => {
     const cache = cacheAfterCreate();
     cache.setNote('playlist', 'P-CREATED', 'arc approved');
