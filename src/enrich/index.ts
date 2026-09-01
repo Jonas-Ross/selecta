@@ -5,7 +5,9 @@
 export {
   enrichPendingTracks,
   type EnrichDeps,
+  type EnrichOptions,
   type EnrichmentProgress,
   type EnrichmentSummary,
+  type TargetedEnrichmentOutcome,
 } from './engine.js';
 export type { FetchLike } from './sources.js';
