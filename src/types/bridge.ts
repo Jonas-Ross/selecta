@@ -47,6 +47,10 @@ export type PlaylistWriteResult = {
   trackCount: number;
 };
 
+// Slot overwrite: `created` says whether the script had to make the playlist
+// (a fresh playlist is what iCloud may rekey) or found the slot by name.
+export type PlaylistReplaceResult = PlaylistWriteResult & { created: boolean };
+
 export const PLAYLIST_WRITE_TRACK_LIMIT = 500;
 
 // A source clone captures the live source identity and exact ordered entries
@@ -107,17 +111,19 @@ export interface Bridge {
   // Snapshot a live plain-user source's order and materialize that exact
   // sequence as a new playlist in one script execution. Rejects non-user,
   // empty, >500-entry, missing-playlist, and dangling-track sources before
-  // creating anything.
+  // creating anything. reservedSourceName: set only for a Selecta-reserved
+  // slot; the ID wins, else exact-name recovery (docs/music-app.md).
   clonePlaylist(input: {
     name: string;
     sourcePlaylistId: string;
     description?: string;
+    reservedSourceName?: string;
   }): Promise<PlaylistCloneResult>;
 
   replacePlaylist(input: {
     name: string; // find-or-create by name, clear, repopulate
     trackIds: string[];
-  }): Promise<PlaylistWriteResult>;
+  }): Promise<PlaylistReplaceResult>;
 
   // Delete one specific playlist. Used only by refresh-time iCloud-echo
   // reconciliation, where the ID comes from the snapshot just read — never

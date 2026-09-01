@@ -27,7 +27,7 @@ export type PreviewPlaylistOutput = {
   track_count: number;
 };
 
-export const PREVIEW_PLAYLIST_DESCRIPTION = `Overwrite the single "${PREVIEW_PLAYLIST_NAME}" playlist in Music.app with these tracks so the user can audition a draft before committing. The slot is reused on every call (stable playlist, contents replaced) — previous preview contents are discarded without warning. When the user approves, pass this result's playlist_id to create_playlist as source_playlist_id; it clones the current live preview order without resending track IDs. Same track ID rules as create_playlist: unknown IDs fail with track_not_found and nothing is written. iCloud sync occasionally twins the slot right after its first-ever creation — harmless and not a failed call; later previews keep overwriting one copy, and the user can delete the other.`;
+export const PREVIEW_PLAYLIST_DESCRIPTION = `Overwrite the single "${PREVIEW_PLAYLIST_NAME}" playlist in Music.app with these tracks so the user can audition a draft before committing. The slot is reused on every call (stable playlist, contents replaced) — previous preview contents are discarded without warning. When the user approves, pass this result's playlist_id to create_playlist as source_playlist_id; it clones the current live preview order without resending track IDs. That playlist_id stays valid even if iCloud rekeys a first-ever slot while the user auditions — create_playlist re-resolves the slot by its reserved name. Same track ID rules as create_playlist: unknown IDs fail with track_not_found and nothing is written. iCloud sync occasionally twins the slot right after its first-ever creation — harmless and not a failed call; later previews keep overwriting one copy, and refresh_library removes an identical twin (a diverged twin makes the clone fail as ambiguous until one copy is deleted).`;
 
 export async function handlePreviewPlaylist(
   raw: unknown,
@@ -47,6 +47,12 @@ export async function handlePreviewPlaylist(
       trackIds: track_ids,
     });
     cache.upsertPlaylistAfterWrite(result, PREVIEW_PLAYLIST_NAME, track_ids);
+    // A first-ever slot is a fresh playlist, so iCloud may rekey it: the same
+    // receipt create_playlist records keeps this playlist_id resolvable
+    // (docs/music-app.md, iCloud sync). An overwrite created nothing.
+    if (result.created) {
+      cache.recordPlaylistCreation(result.persistentId, PREVIEW_PLAYLIST_NAME, track_ids);
+    }
     return { playlist_id: result.persistentId, track_count: result.trackCount };
   } catch (err) {
     return toErrorEnvelope(err);
