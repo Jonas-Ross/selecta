@@ -47,6 +47,8 @@ export type PlaylistWriteResult = {
   trackCount: number;
 };
 
+export const PLAYLIST_WRITE_TRACK_LIMIT = 500;
+
 // A source clone captures the live source identity and exact ordered entries
 // in the same JXA execution that creates the destination. The tool uses that
 // snapshot for its cache patch, creation receipt, and user-facing receipt.
@@ -102,9 +104,10 @@ export interface Bridge {
     description?: string;
   }): Promise<PlaylistWriteResult>;
 
-  // Snapshot a live source playlist's order and materialize that exact
-  // sequence as a new playlist in one script execution. Throws
-  // playlist_not_found / track_not_found before creating anything.
+  // Snapshot a live plain-user source's order and materialize that exact
+  // sequence as a new playlist in one script execution. Rejects non-user,
+  // empty, >500-entry, missing-playlist, and dangling-track sources before
+  // creating anything.
   clonePlaylist(input: {
     name: string;
     sourcePlaylistId: string;

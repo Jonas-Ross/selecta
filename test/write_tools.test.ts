@@ -15,16 +15,24 @@ import {
 } from '../src/tools/preview_playlist.js';
 import { handleGetTrackContext, type TrackContextOutput } from '../src/tools/get_track_context.js';
 import type { ToolDeps } from '../src/tools/common.js';
-import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
+import {
+  PLAYLIST_WRITE_TRACK_LIMIT,
+  type Bridge,
+  type LibrarySnapshot,
+  type RawPlaylist,
+} from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
 import { asError, makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
 
-function makeDeps(bridgeOverrides: Partial<Bridge> = {}): ToolDeps & { cacheInstance: SelectaCache } {
+function makeDeps(
+  bridgeOverrides: Partial<Bridge> = {},
+  library: LibrarySnapshot = snapshot,
+): ToolDeps & { cacheInstance: SelectaCache } {
   const cache = SelectaCache.open(':memory:');
-  cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+  cache.refreshFromSnapshot(library, { durationMs: 1 });
   const bridge = makeBridge({
     createPlaylist: vi
       .fn()
@@ -49,6 +57,13 @@ function makeDeps(bridgeOverrides: Partial<Bridge> = {}): ToolDeps & { cacheInst
     ...bridgeOverrides,
   });
   return { cache: () => cache, bridge, cacheInstance: cache };
+}
+
+function withSourcePlaylist(source: RawPlaylist): LibrarySnapshot {
+  return {
+    ...snapshot,
+    playlists: [...snapshot.playlists.filter((p) => p.persistentId !== source.persistentId), source],
+  };
 }
 
 describe('create_playlist', () => {
@@ -117,6 +132,98 @@ describe('create_playlist', () => {
       'T-GLORYBOX',
     ]);
     expect(deps.cacheInstance.getRecentCreationNames(60)).toContain('Approved Sequence');
+  });
+
+  it.each([
+    ['smart', 'Generated Mix'],
+    ['subscription', 'Apple Music Mix'],
+    ['special', 'Generated Station'],
+    ['folder', 'Folder'],
+  ] as const)('rejects a cached %s source before any bridge call', async (kind, sourceName) => {
+    const sourceId = `P-${kind.toUpperCase()}`;
+    const deps = makeDeps(
+      {},
+      withSourcePlaylist({
+        persistentId: sourceId,
+        name: sourceName,
+        kind,
+        trackPersistentIds: ['T-TEARDROP'],
+      }),
+    );
+
+    const err = asError(
+      await handleCreatePlaylist({ name: 'x', source_playlist_id: sourceId }, deps),
+    );
+    expect(err.error).toBe('playlist_not_editable');
+    expect(err.hint).toContain(kind);
+    expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty cached user source before any bridge call', async () => {
+    const deps = makeDeps(
+      {},
+      withSourcePlaylist({
+        persistentId: 'P-EMPTY',
+        name: 'Empty Draft',
+        kind: 'user',
+        trackPersistentIds: [],
+      }),
+    );
+
+    const err = asError(
+      await handleCreatePlaylist({ name: 'x', source_playlist_id: 'P-EMPTY' }, deps),
+    );
+    expect(err.error).toBe('validation_error');
+    expect(err.hint).toContain('empty');
+    expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
+  });
+
+  it(`accepts a cached user source at the ${PLAYLIST_WRITE_TRACK_LIMIT}-entry limit`, async () => {
+    const trackIds = Array<string>(PLAYLIST_WRITE_TRACK_LIMIT).fill('T-TEARDROP');
+    const deps = makeDeps(
+      {
+        clonePlaylist: vi.fn().mockResolvedValue({
+          persistentId: 'P-LIMIT-CLONE',
+          trackCount: trackIds.length,
+          sourcePersistentId: 'P-LIMIT',
+          sourceName: 'At Limit',
+          sourceTrackPersistentIds: trackIds,
+        }),
+      },
+      withSourcePlaylist({
+        persistentId: 'P-LIMIT',
+        name: 'At Limit',
+        kind: 'user',
+        trackPersistentIds: trackIds,
+      }),
+    );
+
+    const out = (await handleCreatePlaylist(
+      { name: 'Limit Clone', source_playlist_id: 'P-LIMIT' },
+      deps,
+    )) as CreatePlaylistOutput;
+    expect(out.track_count).toBe(PLAYLIST_WRITE_TRACK_LIMIT);
+    expect(deps.bridge.clonePlaylist).toHaveBeenCalledOnce();
+  });
+
+  it(`rejects a cached source above ${PLAYLIST_WRITE_TRACK_LIMIT} entries`, async () => {
+    const trackIds = Array<string>(PLAYLIST_WRITE_TRACK_LIMIT + 1).fill('T-TEARDROP');
+    const deps = makeDeps(
+      {},
+      withSourcePlaylist({
+        persistentId: 'P-TOO-LARGE',
+        name: 'Too Large',
+        kind: 'user',
+        trackPersistentIds: trackIds,
+      }),
+    );
+
+    const err = asError(
+      await handleCreatePlaylist({ name: 'x', source_playlist_id: 'P-TOO-LARGE' }, deps),
+    );
+    expect(err.error).toBe('validation_error');
+    expect(err.hint).toContain(String(PLAYLIST_WRITE_TRACK_LIMIT));
+    expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
   });
 
   it('requires exactly one of track_ids or source_playlist_id', async () => {

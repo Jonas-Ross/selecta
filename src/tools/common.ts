@@ -115,14 +115,8 @@ export function missingTrackIdsError(cache: SelectaCache, trackIds: string[]): S
   };
 }
 
-/**
- * Pre-flight for the playlist-edit tools: resolve the model-supplied playlist
- * ID (following creation receipts across iCloud rekeys) to a cached plain user
- * playlist. Smart/subscription/folder playlists are read-only in Music.app's
- * scripting interface. The bridge re-checks against the live library; this
- * catches stale/typo'd IDs before any Apple event fires.
- */
-export function resolveEditablePlaylist(
+/** Resolve a model-supplied playlist ID through creation receipts and cache. */
+export function resolvePlaylist(
   cache: SelectaCache,
   playlistId: string,
 ): { ok: true; playlist: PlaylistRow } | { ok: false; error: SelectaError } {
@@ -136,6 +130,20 @@ export function resolveEditablePlaylist(
       },
     };
   }
+  return { ok: true, playlist };
+}
+
+/**
+ * Pre-flight for playlist-edit tools: resolve the cached target, then require
+ * a plain user playlist. The bridge repeats the kind check against Music.app.
+ */
+export function resolveEditablePlaylist(
+  cache: SelectaCache,
+  playlistId: string,
+): { ok: true; playlist: PlaylistRow } | { ok: false; error: SelectaError } {
+  const resolved = resolvePlaylist(cache, playlistId);
+  if (!resolved.ok) return resolved;
+  const { playlist } = resolved;
   if (playlist.kind !== 'user') {
     return {
       ok: false,

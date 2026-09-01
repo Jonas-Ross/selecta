@@ -1,6 +1,7 @@
 // preview_playlist — overwrite the single dedicated audition slot in Music.app.
 
 import { z } from 'zod';
+import { PLAYLIST_WRITE_TRACK_LIMIT } from '../types/bridge.js';
 import type { SelectaError } from '../types/errors.js';
 import {
   missingTrackIdsError,
@@ -15,7 +16,7 @@ export const previewPlaylistInputShape = {
   track_ids: z
     .array(z.string().min(1))
     .min(1)
-    .max(500)
+    .max(PLAYLIST_WRITE_TRACK_LIMIT)
     .describe('Track persistent IDs in the exact order they should play.'),
 };
 
