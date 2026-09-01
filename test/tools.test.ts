@@ -487,6 +487,18 @@ describe('get_track_context', () => {
     expect(tooMany.hint).toContain('exclude_playlist_ids');
     expect(tooMany.hint.length).toBeLessThan(200);
 
+    const atCap = asError(
+      await handleGetTrackContext(
+        {
+          track_id: 'T-TEARDROP',
+          exclude_playlist_ids: Array.from({ length: 500 }, (_, i) => `P-${i}`),
+        },
+        deps,
+      ),
+    );
+    expect(atCap.hint).toContain('(+495 more)');
+    expect(atCap.hint.length).toBeLessThan(250);
+
     for (const max of [0, -1, 1.5]) {
       const invalid = asError(
         await handleGetTrackContext({ track_id: 'T-TEARDROP', max_playlist_tracks: max }, deps),
