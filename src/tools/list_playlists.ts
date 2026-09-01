@@ -2,7 +2,14 @@
 
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
-import { parseInput, toErrorEnvelope, roundedCacheAge, type ToolDeps } from './common.js';
+import {
+  parseInput,
+  toApiNote,
+  toErrorEnvelope,
+  roundedCacheAge,
+  type ApiNote,
+  type ToolDeps,
+} from './common.js';
 
 export const listPlaylistsInputShape = {
   kind: z
@@ -21,11 +28,12 @@ export type ListPlaylistsOutput = {
     kind: string;
     track_count: number;
     parent_id?: string;
+    note?: ApiNote;
   }[];
   cache_age_hours: number | null;
 };
 
-export const LIST_PLAYLISTS_DESCRIPTION = `List the user's playlists from the cache. kind 'user' playlists are hand-made — the strongest taste signal; 'smart' and 'subscription' are rule- or Apple-generated. Use a playlist's id with search's in_playlist filter to see its tracks. Empty array = no playlists match the filter.`;
+export const LIST_PLAYLISTS_DESCRIPTION = `List the user's playlists from the cache. kind 'user' playlists are hand-made — the strongest taste signal; 'smart' and 'subscription' are rule- or Apple-generated. Use a playlist's id with search's in_playlist filter to see its tracks. A note field is your own earlier set_note memory on that playlist, verbatim (absent when none). Empty array = no playlists match the filter.`;
 
 export async function handleListPlaylists(
   raw: unknown,
@@ -46,6 +54,7 @@ export async function handleListPlaylists(
         kind: p.kind,
         track_count: p.trackCount,
         parent_id: p.parentPersistentId ?? undefined,
+        note: toApiNote(p),
       })),
       cache_age_hours: roundedCacheAge(deps),
     };

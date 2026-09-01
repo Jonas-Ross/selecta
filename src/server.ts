@@ -69,6 +69,7 @@ import {
   inspectTracklistInputShape,
   INSPECT_TRACKLIST_DESCRIPTION,
 } from './tools/inspect_tracklist.js';
+import { handleSetNote, setNoteInputShape, SET_NOTE_DESCRIPTION } from './tools/set_note.js';
 
 export const SERVER_INFO = { name: 'selecta', version: '0.1.0' };
 
@@ -170,6 +171,12 @@ export function createServer(deps: ToolDeps): McpServer {
     'set_rating',
     { description: SET_RATING_DESCRIPTION, inputSchema: setRatingInputShape },
     async (args) => toToolResult(await handleSetRating(args, deps)),
+  );
+
+  server.registerTool(
+    'set_note',
+    { description: SET_NOTE_DESCRIPTION, inputSchema: setNoteInputShape },
+    async (args) => toToolResult(await handleSetNote(args, deps)),
   );
 
   return server;

@@ -80,6 +80,7 @@ function decodeCompactTrack(track: CompactApiTrack): ApiTrack {
     bpm: track[7] ?? undefined,
     musical_key: track[8] ?? undefined,
     danceability: track[9] ?? undefined,
+    note: track[17] ?? undefined,
     signal: {
       play_count: track[10],
       skip_count: track[11],
@@ -104,6 +105,7 @@ function expectCompactTrackParity(full: ApiTrack, compact: CompactApiTrack): voi
     bpm: full.bpm,
     musical_key: full.musical_key,
     danceability: full.danceability,
+    note: full.note,
     signal: full.signal,
   });
 }
