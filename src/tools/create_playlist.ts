@@ -37,9 +37,8 @@ export const createPlaylistInputShape = {
   description: z.string().optional().describe('Optional playlist description.'),
   note: z
     .string()
-    .trim()
-    .min(1)
     .max(NOTE_MAX_LENGTH)
+    .refine((body) => body.trim() !== '', 'note must not be blank')
     .optional()
     .describe(
       'Optional note to store on the new playlist (same as a set_note call right after creation): verbatim memory for later sessions, e.g. what the user approved and why the name won. Cache-only, never shown in Music.app.',

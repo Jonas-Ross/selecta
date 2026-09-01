@@ -83,10 +83,14 @@ describe('set_note', () => {
     expect(second.created_at).toBe(first.created_at);
   });
 
-  it('trims the body and clears on empty or whitespace-only', async () => {
+  it('stores the body byte-for-byte and clears on empty or whitespace-only', async () => {
     const deps = makeDeps();
-    const stored = await setNote(deps, 'track', 'T-ANGEL', '  too abrasive for dinner sets \n');
-    expect(stored.body).toBe('too abrasive for dinner sets');
+    const formatted = '  opener candidates:\n    - too abrasive for dinner sets\n  keep for late sets  \n';
+    const stored = await setNote(deps, 'track', 'T-ANGEL', formatted);
+    expect(stored.body).toBe(formatted);
+    expect(deps.cacheInstance.getNote('track', 'T-ANGEL')!.body).toBe(formatted);
+    const found = (await handleSearch({ query: 'angel' }, deps)) as SearchOutput;
+    expect(found.tracks[0]!.note!.body).toBe(formatted);
 
     const clear = (body: string) => handleSetNote({ subject: 'track', id: 'T-ANGEL', body }, deps);
     expect(await clear('   ')).toEqual({ subject: 'track', id: 'T-ANGEL', cleared: true });
@@ -188,6 +192,17 @@ describe('create_playlist note', () => {
     )) as CreatePlaylistOutput;
     expect(out.note!.body).toBe('approved from preview');
     expect(deps.cacheInstance.getNote('playlist', 'P-CLONE')!.body).toBe('approved from preview');
+  });
+
+  it('stores the creation note verbatim, whitespace included', async () => {
+    const deps = createDeps();
+    const formatted = ' arc:\n  1. slow open\n  2. peak at 12\n';
+    const out = (await handleCreatePlaylist(
+      { name: 'Verbatim', track_ids: ['T-TEARDROP'], note: formatted },
+      deps,
+    )) as CreatePlaylistOutput;
+    expect(out.note!.body).toBe(formatted);
+    expect(deps.cacheInstance.getNote('playlist', 'P-NEW')!.body).toBe(formatted);
   });
 
   it('omits note when none was given', async () => {

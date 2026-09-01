@@ -42,8 +42,7 @@ export const SET_NOTE_DESCRIPTION = `Save your own note on a track or playlist s
 export async function handleSetNote(raw: unknown, deps: ToolDeps): Promise<SetNoteOutput | SelectaError> {
   const parsed = parseInput(SetNoteInput, raw);
   if (!parsed.ok) return parsed.error;
-  const { subject } = parsed.data;
-  const body = parsed.data.body.trim();
+  const { subject, body } = parsed.data;
 
   try {
     const cache = deps.cache();
@@ -58,7 +57,9 @@ export async function handleSetNote(raw: unknown, deps: ToolDeps): Promise<SetNo
       id = resolved.playlist.persistentId;
     }
 
-    if (body === '') {
+    // Whitespace-only means clear; anything else is stored byte-for-byte —
+    // indentation and line breaks are the model's own formatting.
+    if (body.trim() === '') {
       cache.clearNote(subject, id);
       return { subject, id, cleared: true };
     }
