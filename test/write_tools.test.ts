@@ -15,16 +15,24 @@ import {
 } from '../src/tools/preview_playlist.js';
 import { handleGetTrackContext, type TrackContextOutput } from '../src/tools/get_track_context.js';
 import type { ToolDeps } from '../src/tools/common.js';
-import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
+import {
+  PLAYLIST_WRITE_TRACK_LIMIT,
+  type Bridge,
+  type LibrarySnapshot,
+  type RawPlaylist,
+} from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
 import { asError, makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
 
-function makeDeps(bridgeOverrides: Partial<Bridge> = {}): ToolDeps & { cacheInstance: SelectaCache } {
+function makeDeps(
+  bridgeOverrides: Partial<Bridge> = {},
+  library: LibrarySnapshot = snapshot,
+): ToolDeps & { cacheInstance: SelectaCache } {
   const cache = SelectaCache.open(':memory:');
-  cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+  cache.refreshFromSnapshot(library, { durationMs: 1 });
   const bridge = makeBridge({
     createPlaylist: vi
       .fn()
@@ -32,6 +40,13 @@ function makeDeps(bridgeOverrides: Partial<Bridge> = {}): ToolDeps & { cacheInst
         persistentId: 'P-NEW',
         trackCount: input.trackIds.length,
       })),
+    clonePlaylist: vi.fn().mockResolvedValue({
+      persistentId: 'P-CLONE',
+      trackCount: 3,
+      sourcePersistentId: 'P-LATENIGHT',
+      sourceName: 'Late Night',
+      sourceTrackPersistentIds: ['T-ROADS', 'T-TEARDROP', 'T-GLORYBOX'],
+    }),
     replacePlaylist: vi
       .fn()
       .mockImplementation(async (input: { trackIds: string[] }) => ({
@@ -42,6 +57,13 @@ function makeDeps(bridgeOverrides: Partial<Bridge> = {}): ToolDeps & { cacheInst
     ...bridgeOverrides,
   });
   return { cache: () => cache, bridge, cacheInstance: cache };
+}
+
+function withSourcePlaylist(source: RawPlaylist): LibrarySnapshot {
+  return {
+    ...snapshot,
+    playlists: [...snapshot.playlists.filter((p) => p.persistentId !== source.persistentId), source],
+  };
 }
 
 describe('create_playlist', () => {
@@ -74,6 +96,175 @@ describe('create_playlist', () => {
     const deps = makeDeps();
     await handleCreatePlaylist({ name: 'Rearview', track_ids: ['T-TEARDROP'] }, deps);
     expect(deps.cacheInstance.getRecentCreationNames(60)).toContain('Rearview');
+  });
+
+  it('clones a live source snapshot without resending track IDs', async () => {
+    const deps = makeDeps();
+    const out = (await handleCreatePlaylist(
+      {
+        name: 'Approved Sequence',
+        source_playlist_id: 'P-LATENIGHT',
+        description: 'auditioned first',
+      },
+      deps,
+    )) as CreatePlaylistOutput;
+
+    expect(deps.bridge.clonePlaylist).toHaveBeenCalledWith({
+      name: 'Approved Sequence',
+      sourcePlaylistId: 'P-LATENIGHT',
+      description: 'auditioned first',
+    });
+    expect(deps.bridge.createPlaylist).not.toHaveBeenCalled();
+    expect(out).toEqual({
+      playlist_id: 'P-CLONE',
+      name: 'Approved Sequence',
+      track_count: 3,
+      source: {
+        playlist_id: 'P-LATENIGHT',
+        name: 'Late Night',
+        track_count: 3,
+      },
+    });
+    // The bridge's live snapshot wins over the source order in the cache.
+    expect(deps.cacheInstance.getPlaylistTrackIds('P-CLONE')).toEqual([
+      'T-ROADS',
+      'T-TEARDROP',
+      'T-GLORYBOX',
+    ]);
+    expect(deps.cacheInstance.getRecentCreationNames(60)).toContain('Approved Sequence');
+  });
+
+  it.each([
+    ['smart', 'Generated Mix'],
+    ['subscription', 'Apple Music Mix'],
+    ['special', 'Generated Station'],
+    ['folder', 'Folder'],
+  ] as const)('rejects a cached %s source before any bridge call', async (kind, sourceName) => {
+    const sourceId = `P-${kind.toUpperCase()}`;
+    const deps = makeDeps(
+      {},
+      withSourcePlaylist({
+        persistentId: sourceId,
+        name: sourceName,
+        kind,
+        trackPersistentIds: ['T-TEARDROP'],
+      }),
+    );
+
+    const err = asError(
+      await handleCreatePlaylist({ name: 'x', source_playlist_id: sourceId }, deps),
+    );
+    expect(err.error).toBe('playlist_not_editable');
+    expect(err.hint).toContain(kind);
+    expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty cached user source before any bridge call', async () => {
+    const deps = makeDeps(
+      {},
+      withSourcePlaylist({
+        persistentId: 'P-EMPTY',
+        name: 'Empty Draft',
+        kind: 'user',
+        trackPersistentIds: [],
+      }),
+    );
+
+    const err = asError(
+      await handleCreatePlaylist({ name: 'x', source_playlist_id: 'P-EMPTY' }, deps),
+    );
+    expect(err.error).toBe('validation_error');
+    expect(err.hint).toContain('empty');
+    expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
+  });
+
+  it(`accepts a cached user source at the ${PLAYLIST_WRITE_TRACK_LIMIT}-entry limit`, async () => {
+    const trackIds = Array<string>(PLAYLIST_WRITE_TRACK_LIMIT).fill('T-TEARDROP');
+    const deps = makeDeps(
+      {
+        clonePlaylist: vi.fn().mockResolvedValue({
+          persistentId: 'P-LIMIT-CLONE',
+          trackCount: trackIds.length,
+          sourcePersistentId: 'P-LIMIT',
+          sourceName: 'At Limit',
+          sourceTrackPersistentIds: trackIds,
+        }),
+      },
+      withSourcePlaylist({
+        persistentId: 'P-LIMIT',
+        name: 'At Limit',
+        kind: 'user',
+        trackPersistentIds: trackIds,
+      }),
+    );
+
+    const out = (await handleCreatePlaylist(
+      { name: 'Limit Clone', source_playlist_id: 'P-LIMIT' },
+      deps,
+    )) as CreatePlaylistOutput;
+    expect(out.track_count).toBe(PLAYLIST_WRITE_TRACK_LIMIT);
+    expect(deps.bridge.clonePlaylist).toHaveBeenCalledOnce();
+  });
+
+  it(`rejects a cached source above ${PLAYLIST_WRITE_TRACK_LIMIT} entries`, async () => {
+    const trackIds = Array<string>(PLAYLIST_WRITE_TRACK_LIMIT + 1).fill('T-TEARDROP');
+    const deps = makeDeps(
+      {},
+      withSourcePlaylist({
+        persistentId: 'P-TOO-LARGE',
+        name: 'Too Large',
+        kind: 'user',
+        trackPersistentIds: trackIds,
+      }),
+    );
+
+    const err = asError(
+      await handleCreatePlaylist({ name: 'x', source_playlist_id: 'P-TOO-LARGE' }, deps),
+    );
+    expect(err.error).toBe('validation_error');
+    expect(err.hint).toContain(String(PLAYLIST_WRITE_TRACK_LIMIT));
+    expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
+  });
+
+  it('requires exactly one of track_ids or source_playlist_id', async () => {
+    const deps = makeDeps();
+
+    for (const input of [
+      { name: 'Neither' },
+      { name: 'Both', track_ids: ['T-TEARDROP'], source_playlist_id: 'P-LATENIGHT' },
+    ]) {
+      const err = asError(await handleCreatePlaylist(input, deps));
+      expect(err.error).toBe('validation_error');
+      expect(err.hint).toContain('exactly one');
+    }
+    expect(deps.bridge.createPlaylist).not.toHaveBeenCalled();
+    expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown source before any bridge call', async () => {
+    const deps = makeDeps();
+    const err = asError(
+      await handleCreatePlaylist({ name: 'x', source_playlist_id: 'P-NOPE' }, deps),
+    );
+    expect(err.error).toBe('playlist_not_found');
+    expect(err.hint).toContain('P-NOPE');
+    expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
+  });
+
+  it('propagates an unreadable live source without patching the cache', async () => {
+    const deps = makeDeps({
+      clonePlaylist: vi
+        .fn()
+        .mockRejectedValue(new BridgeError('playlist_not_found', 'gone live', 'stale source')),
+    });
+    const err = asError(
+      await handleCreatePlaylist(
+        { name: 'Should Not Exist', source_playlist_id: 'P-LATENIGHT' },
+        deps,
+      ),
+    );
+    expect(err.error).toBe('playlist_not_found');
+    expect(deps.cacheInstance.listPlaylists({ nameQuery: 'Should Not Exist' })).toEqual([]);
   });
 
   it('rejects unknown track IDs before any bridge call', async () => {

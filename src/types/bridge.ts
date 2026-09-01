@@ -47,6 +47,17 @@ export type PlaylistWriteResult = {
   trackCount: number;
 };
 
+export const PLAYLIST_WRITE_TRACK_LIMIT = 500;
+
+// A source clone captures the live source identity and exact ordered entries
+// in the same JXA execution that creates the destination. The tool uses that
+// snapshot for its cache patch, creation receipt, and user-facing receipt.
+export type PlaylistCloneResult = PlaylistWriteResult & {
+  sourcePersistentId: string;
+  sourceName: string;
+  sourceTrackPersistentIds: string[];
+};
+
 // Result of an in-place playlist mutation. trackPersistentIds is the playlist's
 // FULL post-edit order read back from Music.app — the cache patch uses it as
 // ground truth instead of recomputing the edit locally. preEditTrackPersistentIds
@@ -92,6 +103,16 @@ export interface Bridge {
     trackIds: string[]; // Music.app persistent IDs
     description?: string;
   }): Promise<PlaylistWriteResult>;
+
+  // Snapshot a live plain-user source's order and materialize that exact
+  // sequence as a new playlist in one script execution. Rejects non-user,
+  // empty, >500-entry, missing-playlist, and dangling-track sources before
+  // creating anything.
+  clonePlaylist(input: {
+    name: string;
+    sourcePlaylistId: string;
+    description?: string;
+  }): Promise<PlaylistCloneResult>;
 
   replacePlaylist(input: {
     name: string; // find-or-create by name, clear, repopulate

@@ -76,7 +76,7 @@ describe('runJxa', () => {
 
 // The edit scripts return guard sentinels instead of mutating when the live
 // library disagrees with the request; the bridge maps each to a BridgeError.
-describe('bridge edit-result sentinel mapping', () => {
+describe('bridge result sentinel mapping', () => {
   beforeEach(() => {
     mockExecFile.mockReset();
   });
@@ -123,6 +123,81 @@ describe('bridge edit-result sentinel mapping', () => {
       preEditTrackPersistentIds: ['T1', 'T2', 'T3'],
       removedCount: 1,
     });
+  });
+
+  it('maps a missing clone source to playlist_not_found', async () => {
+    stubExecFile({ stdout: '{"playlistNotFound":true}' });
+    await expectErrorCode(
+      (await editBridge()).clonePlaylist({ name: 'x', sourcePlaylistId: 'P-NOPE' }),
+      'playlist_not_found',
+    );
+  });
+
+  it('rejects a non-user clone source as playlist_not_editable', async () => {
+    stubExecFile({ stdout: '{"sourceNotUser":true,"sourceKind":"smart"}' });
+    await expect(
+      (await editBridge()).clonePlaylist({ name: 'x', sourcePlaylistId: 'P-SMART' }),
+    ).rejects.toMatchObject({
+      errorCode: 'playlist_not_editable',
+      hint: expect.stringContaining('plain user'),
+    });
+  });
+
+  it.each([0, 501])('rejects a clone source with %i live entries', async (trackCount) => {
+    stubExecFile({ stdout: JSON.stringify({ invalidSourceTrackCount: trackCount }) });
+    await expect(
+      (await editBridge()).clonePlaylist({ name: 'x', sourcePlaylistId: 'P-SOURCE' }),
+    ).rejects.toMatchObject({
+      errorCode: 'validation_error',
+      hint: expect.stringContaining('Nothing was created'),
+    });
+  });
+
+  it('uses clone-specific guidance for unavailable live source entries', async () => {
+    stubExecFile({ stdout: '{"missingTrackIds":["T-DANGLING"]}' });
+    await expect(
+      (await editBridge()).clonePlaylist({ name: 'x', sourcePlaylistId: 'P-SOURCE' }),
+    ).rejects.toMatchObject({
+      errorCode: 'track_not_found',
+      hint: expect.stringContaining('refresh_library cannot repair'),
+    });
+  });
+
+  it('keeps stale-cache guidance for explicit-ID creation misses', async () => {
+    stubExecFile({ stdout: '{"missingTrackIds":["T-MISSING"]}' });
+    await expect(
+      (await editBridge()).createPlaylist({ name: 'x', trackIds: ['T-MISSING'] }),
+    ).rejects.toMatchObject({
+      errorCode: 'track_not_found',
+      hint: expect.stringContaining('cache is stale'),
+    });
+  });
+
+  it('returns a clone result with the exact source order', async () => {
+    stubExecFile({
+      stdout:
+        '{"persistentId":"P-NEW","trackCount":3,"sourcePersistentId":"P-SOURCE","sourceName":"Preview","sourceTrackPersistentIds":["T3","T1","T2"]}',
+    });
+    await expect(
+      (await editBridge()).clonePlaylist({ name: 'Final', sourcePlaylistId: 'P-SOURCE' }),
+    ).resolves.toEqual({
+      persistentId: 'P-NEW',
+      trackCount: 3,
+      sourcePersistentId: 'P-SOURCE',
+      sourceName: 'Preview',
+      sourceTrackPersistentIds: ['T3', 'T1', 'T2'],
+    });
+  });
+
+  it('rejects a clone result whose destination count differs from the source snapshot', async () => {
+    stubExecFile({
+      stdout:
+        '{"persistentId":"P-NEW","trackCount":2,"sourcePersistentId":"P-SOURCE","sourceName":"Preview","sourceTrackPersistentIds":["T3","T1","T2"]}',
+    });
+    await expectErrorCode(
+      (await editBridge()).clonePlaylist({ name: 'Final', sourcePlaylistId: 'P-SOURCE' }),
+      'jxa_error',
+    );
   });
 
   it('rejects an unexpected shape as jxa_error', async () => {

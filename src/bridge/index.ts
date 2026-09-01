@@ -16,6 +16,7 @@ import {
 } from './scripts/find_playlist_by_name.js';
 import {
   buildCreatePlaylistScript,
+  buildClonePlaylistScript,
   buildReplacePlaylistScript,
 } from './scripts/write_playlist.js';
 import {
@@ -32,6 +33,8 @@ import { BridgeError } from '../types/errors.js';
 import {
   type Bridge,
   type LibrarySnapshot,
+  PLAYLIST_WRITE_TRACK_LIMIT,
+  type PlaylistCloneResult,
   type PlaylistEditResult,
   type PlaylistWriteResult,
   type RawPlaylist,
@@ -91,6 +94,9 @@ export const bridge: Bridge = {
   },
   async createPlaylist(input): Promise<PlaylistWriteResult> {
     return parseWriteResult(await runJxa(buildCreatePlaylistScript(input)));
+  },
+  async clonePlaylist(input): Promise<PlaylistCloneResult> {
+    return parseCloneResult(await runJxa(buildClonePlaylistScript(input)));
   },
   async replacePlaylist(input): Promise<PlaylistWriteResult> {
     return parseWriteResult(await runJxa(buildReplacePlaylistScript(input)));
@@ -247,6 +253,57 @@ function parseWriteResult(result: unknown): PlaylistWriteResult {
     }
   }
   throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistWriteResult shape.');
+}
+
+function parseCloneResult(result: unknown): PlaylistCloneResult {
+  if (typeof result === 'object' && result !== null) {
+    const v = result as Record<string, unknown>;
+    if (v.playlistNotFound === true) {
+      throw new BridgeError(
+        'playlist_not_found',
+        'Music.app has no source playlist with that persistent ID.',
+        'The source playlist is not in the live library — run refresh_library and re-resolve it via list_playlists.',
+      );
+    }
+    if (v.sourceNotUser === true && typeof v.sourceKind === 'string') {
+      throw new BridgeError(
+        'playlist_not_editable',
+        `Source is a ${v.sourceKind} playlist, not a plain user playlist.`,
+        'Clone only a non-empty plain user playlist; generated, smart, subscription, special, and folder sources are intentionally rejected.',
+      );
+    }
+    if (typeof v.invalidSourceTrackCount === 'number') {
+      throw new BridgeError(
+        'validation_error',
+        `Source playlist has ${v.invalidSourceTrackCount} live entries; expected 1-${PLAYLIST_WRITE_TRACK_LIMIT}.`,
+        `Choose a non-empty plain user playlist with at most ${PLAYLIST_WRITE_TRACK_LIMIT} entries. Nothing was created.`,
+      );
+    }
+    if (isIdArray(v.missingTrackIds)) {
+      throw new BridgeError(
+        'track_not_found',
+        `Live source playlist contains unavailable track IDs: ${v.missingTrackIds.join(', ')}`,
+        'Remove or replace the unavailable entries in the source playlist before trying again. refresh_library cannot repair entries missing from the live library; do not retry the same source unchanged.',
+      );
+    }
+    if (
+      typeof v.persistentId === 'string' &&
+      typeof v.trackCount === 'number' &&
+      typeof v.sourcePersistentId === 'string' &&
+      typeof v.sourceName === 'string' &&
+      isIdArray(v.sourceTrackPersistentIds) &&
+      v.trackCount === v.sourceTrackPersistentIds.length
+    ) {
+      return {
+        persistentId: v.persistentId,
+        trackCount: v.trackCount,
+        sourcePersistentId: v.sourcePersistentId,
+        sourceName: v.sourceName,
+        sourceTrackPersistentIds: v.sourceTrackPersistentIds,
+      };
+    }
+  }
+  throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistCloneResult shape.');
 }
 
 // Test-support: the library's track persistent IDs in one bulk Apple event —

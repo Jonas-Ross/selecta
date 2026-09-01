@@ -1,6 +1,7 @@
 // preview_playlist — overwrite the single dedicated audition slot in Music.app.
 
 import { z } from 'zod';
+import { PLAYLIST_WRITE_TRACK_LIMIT } from '../types/bridge.js';
 import type { SelectaError } from '../types/errors.js';
 import {
   missingTrackIdsError,
@@ -15,7 +16,7 @@ export const previewPlaylistInputShape = {
   track_ids: z
     .array(z.string().min(1))
     .min(1)
-    .max(500)
+    .max(PLAYLIST_WRITE_TRACK_LIMIT)
     .describe('Track persistent IDs in the exact order they should play.'),
 };
 
@@ -26,7 +27,7 @@ export type PreviewPlaylistOutput = {
   track_count: number;
 };
 
-export const PREVIEW_PLAYLIST_DESCRIPTION = `Overwrite the single "${PREVIEW_PLAYLIST_NAME}" playlist in Music.app with these tracks so the user can audition a draft before committing. The slot is reused on every call (stable playlist, contents replaced) — previous preview contents are discarded without warning. When the user approves, materialize with create_playlist. Same track ID rules as create_playlist: unknown IDs fail with track_not_found and nothing is written. iCloud sync occasionally twins the slot right after its first-ever creation — harmless and not a failed call; later previews keep overwriting one copy, and the user can delete the other.`;
+export const PREVIEW_PLAYLIST_DESCRIPTION = `Overwrite the single "${PREVIEW_PLAYLIST_NAME}" playlist in Music.app with these tracks so the user can audition a draft before committing. The slot is reused on every call (stable playlist, contents replaced) — previous preview contents are discarded without warning. When the user approves, pass this result's playlist_id to create_playlist as source_playlist_id; it clones the current live preview order without resending track IDs. Same track ID rules as create_playlist: unknown IDs fail with track_not_found and nothing is written. iCloud sync occasionally twins the slot right after its first-ever creation — harmless and not a failed call; later previews keep overwriting one copy, and the user can delete the other.`;
 
 export async function handlePreviewPlaylist(
   raw: unknown,

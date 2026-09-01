@@ -1,5 +1,5 @@
-// Shared JXA snippet: resolve args.trackIds to live track objects. Tracks are
-// resolved with whose({persistentID}) — one filtered Apple event per unique
+// Shared JXA snippet: resolve ordered persistent IDs to live track objects.
+// Tracks are resolved with whose({persistentID}) — one filtered Apple event per unique
 // ID. Slower than an index map, but positional indexing (lib.tracks[i]) does
 // NOT follow the bulk persistentID() read order (observed diverging on a real
 // library, silently adding the wrong track), so whose() is the only correct
@@ -9,12 +9,14 @@
 // { missingTrackIds } BEFORE the caller touches anything; the bridge maps
 // that to track_not_found ("cache is stale").
 
-export const RESOLVE_TRACKS = `
+export function resolveTracks(trackIdsExpression: string): string {
+  return `
+  const requestedTrackIds = ${trackIdsExpression};
   const lib = Music.libraryPlaylists[0];
   const trackById = {};
   const missing = [];
-  for (let i = 0; i < args.trackIds.length; i++) {
-    const id = args.trackIds[i];
+  for (let i = 0; i < requestedTrackIds.length; i++) {
+    const id = requestedTrackIds[i];
     if (id in trackById) continue;
     const matches = lib.tracks.whose({ persistentID: id })();
     if (matches.length === 0) missing.push(id);
@@ -24,3 +26,6 @@ export const RESOLVE_TRACKS = `
     return JSON.stringify({ missingTrackIds: missing });
   }
 `;
+}
+
+export const RESOLVE_TRACKS = resolveTracks('args.trackIds');

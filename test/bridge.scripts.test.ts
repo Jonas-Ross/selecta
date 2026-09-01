@@ -4,6 +4,7 @@ import { buildFindPlaylistByNameScript } from '../src/bridge/scripts/find_playli
 import { buildReorderTracksScript } from '../src/bridge/scripts/edit_playlist.js';
 import { buildDeletePlaylistByIdScript } from '../src/bridge/scripts/delete_playlist.js';
 import { buildSetLovedScript, buildSetRatingScript } from '../src/bridge/scripts/track_signal.js';
+import { buildClonePlaylistScript } from '../src/bridge/scripts/write_playlist.js';
 
 describe('JXA script builders interpolate args as JSON, never via shell quoting', () => {
   it('buildReadPlaylistScript embeds the JSON-stringified args', () => {
@@ -24,6 +25,20 @@ describe('JXA script builders interpolate args as JSON, never via shell quoting'
     const args = { name: 'Selecta Test' };
     const script = buildFindPlaylistByNameScript(args);
     expect(script).toContain(JSON.stringify(args));
+  });
+
+  it('buildClonePlaylistScript snapshots and resolves the source before creating', () => {
+    const args = { name: 'Final', sourcePlaylistId: 'P-SOURCE', description: 'approved' };
+    const script = buildClonePlaylistScript(args);
+    expect(script).toContain(JSON.stringify(args));
+    expect(script.indexOf('playlistNotFound')).toBeLessThan(script.indexOf("Music.make"));
+    expect(script.indexOf('sourceNotUser')).toBeLessThan(script.indexOf("Music.make"));
+    expect(script.indexOf('invalidSourceTrackCount')).toBeLessThan(script.indexOf("Music.make"));
+    expect(script.indexOf('source.tracks.persistentID()')).toBeLessThan(
+      script.indexOf("Music.make"),
+    );
+    expect(script.indexOf('missingTrackIds')).toBeLessThan(script.indexOf("Music.make"));
+    expect(script).toContain('addTracksInOrder(pl, sourceTrackPersistentIds)');
   });
 
   it('buildReorderTracksScript embeds the JSON-stringified args', () => {
