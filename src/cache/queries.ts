@@ -11,6 +11,8 @@ import type {
 } from '../types/bridge.js';
 import type {
   AudioFeaturesRow,
+  CoOccurrenceFilters,
+  CoOccurrenceResult,
   CoOccurringTrack,
   OverviewStats,
   PendingTrack,
@@ -826,11 +828,17 @@ export function createQueries(db: Database) {
         .all(trackPersistentId) as PlaylistRef[];
     },
 
-    getCoOccurringTracks(seedIds: string[], limit = 50): CoOccurringTrack[] {
+    getCoOccurrence(
+      seedIds: string[],
+      filters: CoOccurrenceFilters = {},
+      limit = 50,
+    ): CoOccurrenceResult {
       // Clamp like getTracksPendingEnrichment: a negative LIMIT means
       // "unlimited" to SQLite. No seeds → no co-occurrence (and `IN ()` is a
       // syntax error), so answer the degenerate question directly.
-      if (seedIds.length === 0 || limit <= 0) return [];
+      if (seedIds.length === 0 || limit <= 0) {
+        return { tracks: [], sourcePlaylists: { considered: 0, excluded: 0 } };
+      }
       // Co-occurrence counts only the user's own playlists (kind 'user') — the
       // curatorial signal. Smart and subscription playlists are machine- or
       // Apple-curated and would drown it out.
@@ -840,6 +848,43 @@ export function createQueries(db: Database) {
       // facts, not a similarity score.
       const seedList = seedIds.map((_, i) => `@seed${i}`).join(', ');
       const seedParams = Object.fromEntries(seedIds.map((id, i) => [`seed${i}`, id]));
+      const excludeIds = [...new Set(filters.excludePlaylistIds ?? [])];
+      const excludeList = excludeIds.map((_, i) => `@exclude${i}`).join(', ');
+      const excludeParams = Object.fromEntries(
+        excludeIds.map((id, i) => [`exclude${i}`, id]),
+      );
+      const exclusionChecks: string[] = [];
+      if (excludeIds.length > 0) exclusionChecks.push(`p.persistent_id IN (${excludeList})`);
+      if (filters.maxPlaylistTracks != null) {
+        exclusionChecks.push(
+          `(SELECT COUNT(*) FROM playlist_tracks size_pt
+            WHERE size_pt.playlist_persistent_id = p.persistent_id) > @maxPlaylistTracks`,
+        );
+      }
+      const exclusionSql = exclusionChecks.length > 0 ? exclusionChecks.join(' OR ') : '0';
+      const params = {
+        ...seedParams,
+        ...excludeParams,
+        ...(filters.maxPlaylistTracks != null
+          ? { maxPlaylistTracks: filters.maxPlaylistTracks }
+          : {}),
+      };
+
+      const sourcePlaylists = db
+        .prepare(
+          `SELECT COUNT(*) AS considered, COALESCE(SUM(source.excluded), 0) AS excluded
+           FROM (
+             SELECT p.persistent_id,
+                    CASE WHEN ${exclusionSql} THEN 1 ELSE 0 END AS excluded
+             FROM playlist_tracks pt1
+             JOIN playlists p ON p.persistent_id = pt1.playlist_persistent_id AND p.kind = 'user'
+             WHERE pt1.track_persistent_id IN (${seedList})
+             GROUP BY p.persistent_id
+           ) source`,
+        )
+        .get(params) as { considered: number; excluded: number };
+
+      const includedPlaylistSql = exclusionChecks.length > 0 ? `AND NOT (${exclusionSql})` : '';
       const rows = db
         .prepare(
           `SELECT ${TRACK_COLUMNS},
@@ -856,21 +901,25 @@ export function createQueries(db: Database) {
              JOIN playlist_tracks pt2 ON pt2.playlist_persistent_id = pt1.playlist_persistent_id
              WHERE pt1.track_persistent_id IN (${seedList})
                AND pt2.track_persistent_id NOT IN (${seedList})
+               ${includedPlaylistSql}
              GROUP BY pt2.track_persistent_id
            ) shared
            JOIN tracks t ON t.persistent_id = shared.tid
            ORDER BY shared.total DESC, shared.seeds DESC, t.play_count DESC
            LIMIT @limit`,
         )
-        .all({ ...seedParams, limit }) as (TrackRow & {
+        .all({ ...params, limit }) as (TrackRow & {
         totalSharedPlaylistCount: number;
         seedsMatched: number;
         namesRaw: string;
       })[];
-      return rows.map(({ namesRaw, ...row }) => ({
-        ...row,
-        sharedPlaylistNames: [...new Set(namesRaw.split(UNIT_SEPARATOR))].slice(0, 3),
-      }));
+      return {
+        tracks: rows.map(({ namesRaw, ...row }) => ({
+          ...row,
+          sharedPlaylistNames: [...new Set(namesRaw.split(UNIT_SEPARATOR))].slice(0, 3),
+        })),
+        sourcePlaylists,
+      };
     },
 
     rebuildFts(): void {
