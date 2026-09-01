@@ -11,6 +11,8 @@ import type {
 } from '../types/bridge.js';
 import type {
   AudioFeaturesRow,
+  CoOccurrenceFilters,
+  CoOccurrenceResult,
   CoOccurringTrack,
   OverviewStats,
   PendingTrack,
@@ -75,6 +77,59 @@ function toFtsQuery(query: string): string {
 // group_concat(DISTINCT …) cannot take a separator in SQLite, so names use the
 // unit separator and are deduped/capped in JS.
 const UNIT_SEPARATOR = '\u001f';
+
+function parsePlaylistRefs(raw: string): PlaylistRef[] {
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) throw new Error('invalid co-occurrence playlist JSON');
+
+  const refs = parsed.map((value): PlaylistRef => {
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      !('id' in value) ||
+      typeof value.id !== 'string' ||
+      !('name' in value) ||
+      typeof value.name !== 'string'
+    ) {
+      throw new Error('invalid co-occurrence playlist reference');
+    }
+    return { id: value.id, name: value.name };
+  });
+
+  return [...new Map(refs.map((ref) => [ref.id, ref])).values()].slice(0, 3);
+}
+
+function buildCoOccurrenceSourceFilter(filters: CoOccurrenceFilters): {
+  excludedSql: string;
+  includedSql: string;
+  params: Record<string, unknown>;
+} {
+  const excludeIds = [...new Set(filters.excludePlaylistIds ?? [])];
+  const excludeParams = Object.fromEntries(excludeIds.map((id, i) => [`exclude${i}`, id]));
+  const checks: string[] = [];
+  if (excludeIds.length > 0) {
+    const placeholders = excludeIds.map((_, i) => `@exclude${i}`).join(', ');
+    checks.push(`p.persistent_id IN (${placeholders})`);
+  }
+  if (filters.maxPlaylistTracks != null) {
+    checks.push(
+      `(SELECT COUNT(*) FROM playlist_tracks size_pt
+        WHERE size_pt.playlist_persistent_id = p.persistent_id) > @maxPlaylistTracks`,
+    );
+  }
+
+  const excludedSql = checks.length > 0 ? checks.join(' OR ') : '0';
+  return {
+    excludedSql,
+    includedSql: checks.length > 0 ? `AND NOT (${excludedSql})` : '',
+    params: {
+      ...excludeParams,
+      ...(filters.maxPlaylistTracks != null
+        ? { maxPlaylistTracks: filters.maxPlaylistTracks }
+        : {}),
+    },
+  };
+}
 
 // library_overview returns a fact, not a ranking, so the artist cap only exists
 // to bound tokens; artistsTotal carries the full breadth past it.
@@ -822,11 +877,17 @@ export function createQueries(db: Database) {
         .all(trackPersistentId) as PlaylistRef[];
     },
 
-    getCoOccurringTracks(seedIds: string[], limit = 50): CoOccurringTrack[] {
+    getCoOccurrence(
+      seedIds: string[],
+      filters: CoOccurrenceFilters = {},
+      limit = 50,
+    ): CoOccurrenceResult {
       // Clamp like getTracksPendingEnrichment: a negative LIMIT means
       // "unlimited" to SQLite. No seeds → no co-occurrence (and `IN ()` is a
       // syntax error), so answer the degenerate question directly.
-      if (seedIds.length === 0 || limit <= 0) return [];
+      if (seedIds.length === 0 || limit <= 0) {
+        return { tracks: [], sourcePlaylists: { considered: 0, excluded: 0 } };
+      }
       // Co-occurrence counts only the user's own playlists (kind 'user') — the
       // curatorial signal. Smart and subscription playlists are machine- or
       // Apple-curated and would drown it out.
@@ -836,37 +897,62 @@ export function createQueries(db: Database) {
       // facts, not a similarity score.
       const seedList = seedIds.map((_, i) => `@seed${i}`).join(', ');
       const seedParams = Object.fromEntries(seedIds.map((id, i) => [`seed${i}`, id]));
+      const sourceFilter = buildCoOccurrenceSourceFilter(filters);
+      const params = { ...seedParams, ...sourceFilter.params };
+
+      const sourcePlaylists = db
+        .prepare(
+          `SELECT COUNT(*) AS considered, COALESCE(SUM(source.excluded), 0) AS excluded
+           FROM (
+             SELECT p.persistent_id,
+                    CASE WHEN ${sourceFilter.excludedSql} THEN 1 ELSE 0 END AS excluded
+             FROM playlist_tracks pt1
+             JOIN playlists p ON p.persistent_id = pt1.playlist_persistent_id AND p.kind = 'user'
+             WHERE pt1.track_persistent_id IN (${seedList})
+             GROUP BY p.persistent_id
+           ) source`,
+        )
+        .get(params) as { considered: number; excluded: number };
+
       const rows = db
         .prepare(
           `SELECT ${TRACK_COLUMNS},
                   shared.total AS totalSharedPlaylistCount,
                   shared.seeds AS seedsMatched,
-                  shared.names AS namesRaw
+                  shared.names AS namesRaw,
+                  shared.playlists AS playlistsRaw
            FROM (
              SELECT pt2.track_persistent_id AS tid,
                     COUNT(DISTINCT pt1.track_persistent_id || '${UNIT_SEPARATOR}' || pt1.playlist_persistent_id) AS total,
                     COUNT(DISTINCT pt1.track_persistent_id) AS seeds,
-                    group_concat(p.name, '${UNIT_SEPARATOR}') AS names
+                    group_concat(p.name, '${UNIT_SEPARATOR}') AS names,
+                    json_group_array(json_object('id', p.persistent_id, 'name', p.name)) AS playlists
              FROM playlist_tracks pt1
              JOIN playlists p ON p.persistent_id = pt1.playlist_persistent_id AND p.kind = 'user'
              JOIN playlist_tracks pt2 ON pt2.playlist_persistent_id = pt1.playlist_persistent_id
              WHERE pt1.track_persistent_id IN (${seedList})
                AND pt2.track_persistent_id NOT IN (${seedList})
+               ${sourceFilter.includedSql}
              GROUP BY pt2.track_persistent_id
            ) shared
            JOIN tracks t ON t.persistent_id = shared.tid
            ORDER BY shared.total DESC, shared.seeds DESC, t.play_count DESC
            LIMIT @limit`,
         )
-        .all({ ...seedParams, limit }) as (TrackRow & {
+        .all({ ...params, limit }) as (TrackRow & {
         totalSharedPlaylistCount: number;
         seedsMatched: number;
         namesRaw: string;
+        playlistsRaw: string;
       })[];
-      return rows.map(({ namesRaw, ...row }) => ({
-        ...row,
-        sharedPlaylistNames: [...new Set(namesRaw.split(UNIT_SEPARATOR))].slice(0, 3),
-      }));
+      return {
+        tracks: rows.map(({ namesRaw, playlistsRaw, ...row }) => ({
+          ...row,
+          sharedPlaylistNames: [...new Set(namesRaw.split(UNIT_SEPARATOR))].slice(0, 3),
+          sharedPlaylists: parsePlaylistRefs(playlistsRaw),
+        })),
+        sourcePlaylists,
+      };
     },
 
     rebuildFts(): void {

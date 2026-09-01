@@ -243,13 +243,23 @@ describe('searchTracks guards', () => {
   });
 });
 
-describe('getCoOccurringTracks guards', () => {
-  it('answers empty seed sets and non-positive limits with [] (cache-as-library callers)', () => {
+describe('getCoOccurrence guards', () => {
+  it('answers empty seed sets and non-positive limits with an empty result', () => {
     // A negative LIMIT means "unlimited" to SQLite and `IN ()` is a syntax
     // error — neither should reach the engine.
     const cache = refreshed();
-    expect(cache.getCoOccurringTracks([], 10)).toEqual([]);
-    expect(cache.getCoOccurringTracks(['T-TEARDROP'], -1)).toEqual([]);
+    const empty = { tracks: [], sourcePlaylists: { considered: 0, excluded: 0 } };
+    expect(cache.getCoOccurrence([], {}, 10)).toEqual(empty);
+    expect(cache.getCoOccurrence(['T-TEARDROP'], {}, -1)).toEqual(empty);
+  });
+
+  it('returns capped shared playlist references with stable IDs and exact names', () => {
+    const result = refreshed().getCoOccurrence(['T-TEARDROP'], {}, 10);
+    const glory = result.tracks.find((track) => track.persistentId === 'T-GLORYBOX')!;
+    expect(glory.sharedPlaylists).toEqual([
+      { id: 'P-LATENIGHT', name: 'Late Night' },
+      { id: 'P-TRIPHOP', name: 'Trip Hop Essentials' },
+    ]);
   });
 });
 
