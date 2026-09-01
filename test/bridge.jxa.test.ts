@@ -133,6 +133,50 @@ describe('bridge result sentinel mapping', () => {
     );
   });
 
+  it('tells the model to rebuild a missing reserved slot instead of refreshing', async () => {
+    stubExecFile({ stdout: '{"playlistNotFound":true}' });
+    await expect(
+      (await editBridge()).clonePlaylist({
+        name: 'x',
+        sourcePlaylistId: 'P-STALE',
+        reservedSourceName: 'Selecta Preview',
+      }),
+    ).rejects.toMatchObject({
+      errorCode: 'playlist_not_found',
+      hint: expect.stringContaining('preview_playlist'),
+    });
+  });
+
+  it('maps an ambiguous reserved slot to validation_error naming every copy', async () => {
+    stubExecFile({
+      stdout: '{"ambiguousSource":{"name":"Selecta Preview","persistentIds":["P-ONE","P-TWO"]}}',
+    });
+    await expect(
+      (await editBridge()).clonePlaylist({
+        name: 'x',
+        sourcePlaylistId: 'P-STALE',
+        reservedSourceName: 'Selecta Preview',
+      }),
+    ).rejects.toMatchObject({
+      errorCode: 'validation_error',
+      hint: expect.stringContaining('Nothing was created'),
+      message: expect.stringContaining('P-ONE, P-TWO'),
+    });
+  });
+
+  it('returns whether replacePlaylist created the slot, rejecting a result without it', async () => {
+    stubExecFile({ stdout: '{"persistentId":"P-SLOT","trackCount":2,"created":true}' });
+    await expect(
+      (await editBridge()).replacePlaylist({ name: 'Selecta Preview', trackIds: ['T1', 'T2'] }),
+    ).resolves.toEqual({ persistentId: 'P-SLOT', trackCount: 2, created: true });
+
+    stubExecFile({ stdout: '{"persistentId":"P-SLOT","trackCount":2}' });
+    await expectErrorCode(
+      (await editBridge()).replacePlaylist({ name: 'Selecta Preview', trackIds: ['T1', 'T2'] }),
+      'jxa_error',
+    );
+  });
+
   it('rejects a non-user clone source as playlist_not_editable', async () => {
     stubExecFile({ stdout: '{"sourceNotUser":true,"sourceKind":"smart"}' });
     await expect(

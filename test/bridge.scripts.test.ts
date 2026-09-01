@@ -41,6 +41,19 @@ describe('JXA script builders interpolate args as JSON, never via shell quoting'
     expect(script).toContain('addTracksInOrder(pl, sourceTrackPersistentIds)');
   });
 
+  it('buildClonePlaylistScript recovers a reserved slot by name only after the ID lookup misses', () => {
+    const args = { name: 'Final', sourcePlaylistId: 'P-STALE', reservedSourceName: 'Selecta Preview' };
+    const script = buildClonePlaylistScript(args);
+    expect(script).toContain(JSON.stringify(args));
+    const idLookup = script.indexOf('whose({ persistentID: args.sourcePlaylistId })');
+    const nameLookup = script.indexOf('plainUserPlaylistsNamed(args.reservedSourceName, Infinity)');
+    expect(idLookup).toBeGreaterThan(-1);
+    expect(nameLookup).toBeGreaterThan(idLookup);
+    // Ambiguity and absence are decided before anything is created.
+    expect(script.indexOf('ambiguousSource')).toBeLessThan(script.indexOf('Music.make'));
+    expect(script.indexOf('playlistNotFound')).toBeLessThan(script.indexOf('Music.make'));
+  });
+
   it('buildReorderTracksScript embeds the JSON-stringified args', () => {
     const args = { playlistId: 'P1', order: [2, 0, 1], expectedTrackIds: ['T1', 'T2', 'T3'] };
     const script = buildReorderTracksScript(args);
