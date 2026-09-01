@@ -6,7 +6,12 @@
 import { z } from 'zod';
 import type { Bridge } from '../types/bridge.js';
 import type { PlaylistRow, SearchFilters, TrackRow } from '../types/cache.js';
-import { BridgeError, defaultHints, type SelectaError } from '../types/errors.js';
+import {
+  BridgeError,
+  defaultHints,
+  trackNotFoundError,
+  type SelectaError,
+} from '../types/errors.js';
 import type { SelectaCache } from '../cache/index.js';
 import type { EnrichDeps } from '../enrich/index.js';
 
@@ -107,12 +112,7 @@ export function parseInput<T>(
 export function missingTrackIdsError(cache: SelectaCache, trackIds: string[]): SelectaError | null {
   const missing = trackIds.filter((id) => cache.getTrack(id) === null);
   if (missing.length === 0) return null;
-  const shown = missing.slice(0, 5).join(', ');
-  const more = missing.length > 5 ? ` (+${missing.length - 5} more)` : '';
-  return {
-    error: 'track_not_found',
-    hint: `Not in the cache: ${shown}${more}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library.`,
-  };
+  return trackNotFoundError(missing);
 }
 
 /**
