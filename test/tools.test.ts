@@ -432,6 +432,20 @@ describe('get_track_context', () => {
     expect(out.co_occurring_tracks.map((t) => t.persistent_id)).toContain('T-BARE');
   });
 
+  it('keeps the source audit when every source playlist is excluded', async () => {
+    addUtilityPlaylists(deps);
+
+    const out = (await handleGetTrackContext(
+      {
+        track_id: 'T-MIDNIGHT',
+        exclude_playlist_ids: ['P-INTENTIONAL', 'P-UTILITY'],
+      },
+      deps,
+    )) as TrackContextOutput;
+    expect(out.co_occurring_tracks).toEqual([]);
+    expect(out.source_playlists).toEqual({ considered: 2, excluded: 2 });
+  });
+
   it('rejects unknown excluded playlist IDs and invalid size ranges', async () => {
     const unknown = asError(
       await handleGetTrackContext(
