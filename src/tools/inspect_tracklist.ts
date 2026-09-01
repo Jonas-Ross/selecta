@@ -87,7 +87,11 @@ export type InspectTracklistOutput = TracklistInspection & {
   cache_age_hours: number | null;
 };
 
-export const INSPECT_TRACKLIST_DESCRIPTION = `Inspect an ordered playlist draft using only Selecta's local cache, before preview_playlist or create_playlist. Returns the resolved tracks in the exact supplied order, known runtime (with any missing-duration IDs), exact repeated IDs, distinct owned copies of the same trimmed/case-insensitive title + artist where detectable, artist occurrence counts, raw play/skip/loved/rating signal, BPM/key/danceability coverage, grouped feature gaps naming affected track IDs once per missing-field combination, and a sha256 fingerprint of the ordered ID array. Duplicate positions are 0-based. The fingerprint matches only the identical ordered ID list. Unknown IDs fail with track_not_found and no partial inspection. Reports facts only — no transition score, variety judgment, quality flag, or recommendation. Never reads Music.app or the network.`;
+export const INSPECT_TRACKLIST_DESCRIPTION = `Inspect an ordered playlist draft using only Selecta's local cache, before preview_playlist or create_playlist. Returns the resolved tracks in the exact supplied order, known runtime (with any missing-duration IDs), exact repeated IDs, distinct owned copies of the same trimmed/case-insensitive title + artist where detectable, artist occurrence counts, raw play/skip/loved/rating signal, BPM/key/danceability coverage, grouped feature gaps naming affected track IDs once per missing-field combination, and a fingerprint. Duplicate positions are 0-based. fingerprint is SHA-256 over the UTF-8 JSON array of supplied IDs, including order and duplicates; to compare a later draft, inspect that later ordered ID list and compare fingerprints (write tools do not accept it). Unknown IDs fail with track_not_found and no partial inspection. Reports facts only — no transition score, variety judgment, quality flag, or recommendation. Never reads Music.app or the network.`;
+
+export function orderedTrackIdsFingerprint(trackIds: string[]): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(trackIds), 'utf8').digest('hex')}`;
+}
 
 function compactTrack(row: TrackRow): InspectedTrack {
   const api = toApiTrack(row);
@@ -222,7 +226,7 @@ export function buildTracklistInspection(rows: TrackRow[]): TracklistInspection 
   const { coverage, gaps } = featureFacts(rows);
 
   return {
-    fingerprint: `sha256:${createHash('sha256').update(JSON.stringify(trackIds)).digest('hex')}`,
+    fingerprint: orderedTrackIdsFingerprint(trackIds),
     track_count: rows.length,
     tracks: rows.map(compactTrack),
     runtime: {

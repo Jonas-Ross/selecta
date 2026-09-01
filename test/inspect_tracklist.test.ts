@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
 import {
   handleInspectTracklist,
+  orderedTrackIdsFingerprint,
   type InspectTracklistOutput,
 } from '../src/tools/inspect_tracklist.js';
 import type { ToolDeps } from '../src/tools/common.js';
@@ -149,7 +150,7 @@ describe('inspect_tracklist', () => {
     ]);
   });
 
-  it('fingerprints the ordered ID list stably and changes when order changes', async () => {
+  it('fingerprints the UTF-8 JSON ID array stably, including order and ID boundaries', async () => {
     const deps = makeDeps();
     const out = await inspect(deps);
     expect(out.fingerprint).toBe(
@@ -160,6 +161,9 @@ describe('inspect_tracklist', () => {
       deps,
     )) as InspectTracklistOutput;
     expect(reordered.fingerprint).not.toBe(out.fingerprint);
+    expect(orderedTrackIdsFingerprint(['ab', 'c'])).not.toBe(
+      orderedTrackIdsFingerprint(['a', 'bc']),
+    );
   });
 
   it('fails the whole inspection on unknown IDs before returning any draft facts', async () => {
