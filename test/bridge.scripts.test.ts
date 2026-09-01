@@ -32,6 +32,8 @@ describe('JXA script builders interpolate args as JSON, never via shell quoting'
     const script = buildClonePlaylistScript(args);
     expect(script).toContain(JSON.stringify(args));
     expect(script.indexOf('playlistNotFound')).toBeLessThan(script.indexOf("Music.make"));
+    expect(script.indexOf('sourceNotUser')).toBeLessThan(script.indexOf("Music.make"));
+    expect(script.indexOf('invalidSourceTrackCount')).toBeLessThan(script.indexOf("Music.make"));
     expect(script.indexOf('source.tracks.persistentID()')).toBeLessThan(
       script.indexOf("Music.make"),
     );

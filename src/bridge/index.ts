@@ -33,6 +33,7 @@ import { BridgeError } from '../types/errors.js';
 import {
   type Bridge,
   type LibrarySnapshot,
+  PLAYLIST_WRITE_TRACK_LIMIT,
   type PlaylistCloneResult,
   type PlaylistEditResult,
   type PlaylistWriteResult,
@@ -264,13 +265,34 @@ function parseCloneResult(result: unknown): PlaylistCloneResult {
         'The source playlist is not in the live library — run refresh_library and re-resolve it via list_playlists.',
       );
     }
-    throwIfMissingTracks(v);
+    if (v.sourceNotUser === true && typeof v.sourceKind === 'string') {
+      throw new BridgeError(
+        'playlist_not_editable',
+        `Source is a ${v.sourceKind} playlist, not a plain user playlist.`,
+        'Clone only a non-empty plain user playlist; generated, smart, subscription, special, and folder sources are intentionally rejected.',
+      );
+    }
+    if (typeof v.invalidSourceTrackCount === 'number') {
+      throw new BridgeError(
+        'validation_error',
+        `Source playlist has ${v.invalidSourceTrackCount} live entries; expected 1-${PLAYLIST_WRITE_TRACK_LIMIT}.`,
+        `Choose a non-empty plain user playlist with at most ${PLAYLIST_WRITE_TRACK_LIMIT} entries. Nothing was created.`,
+      );
+    }
+    if (isIdArray(v.missingTrackIds)) {
+      throw new BridgeError(
+        'track_not_found',
+        `Live source playlist contains unavailable track IDs: ${v.missingTrackIds.join(', ')}`,
+        'Remove or replace the unavailable entries in the source playlist before trying again. refresh_library cannot repair entries missing from the live library; do not retry the same source unchanged.',
+      );
+    }
     if (
       typeof v.persistentId === 'string' &&
       typeof v.trackCount === 'number' &&
       typeof v.sourcePersistentId === 'string' &&
       typeof v.sourceName === 'string' &&
-      isIdArray(v.sourceTrackPersistentIds)
+      isIdArray(v.sourceTrackPersistentIds) &&
+      v.trackCount === v.sourceTrackPersistentIds.length
     ) {
       return {
         persistentId: v.persistentId,

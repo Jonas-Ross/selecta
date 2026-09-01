@@ -7,6 +7,8 @@
 
 import { wrapJxaScript } from './wrap.js';
 import { RESOLVE_TRACKS, resolveTracks } from './resolve_tracks.js';
+import { PLAYLIST_KIND_FN } from './playlist_kind.js';
+import { PLAYLIST_WRITE_TRACK_LIMIT } from '../../types/bridge.js';
 
 const ADD_HELPER = `
   function addTracksInOrder(pl, trackIds) {
@@ -51,14 +53,29 @@ export function buildClonePlaylistScript(args: {
   return wrapJxaScript(
     args,
     `
+      ${PLAYLIST_KIND_FN}
       const sourceMatches = Music.playlists.whose({ persistentID: args.sourcePlaylistId })();
       if (sourceMatches.length === 0) {
         return JSON.stringify({ playlistNotFound: true });
       }
       const source = sourceMatches[0];
-      const sourceTrackPersistentIds = source.tracks.length > 0
-        ? source.tracks.persistentID()
-        : [];
+      const sourceKind = playlistKind(source);
+      if (sourceKind !== 'user') {
+        return JSON.stringify({ sourceNotUser: true, sourceKind: sourceKind });
+      }
+      const liveTrackCount = source.tracks.length;
+      if (liveTrackCount < 1 || liveTrackCount > ${PLAYLIST_WRITE_TRACK_LIMIT}) {
+        return JSON.stringify({ invalidSourceTrackCount: liveTrackCount });
+      }
+      const sourceTrackPersistentIds = source.tracks.persistentID();
+      // iCloud can change a playlist between Apple events. Recheck the
+      // materialized snapshot so the earlier length guard cannot be raced.
+      if (
+        sourceTrackPersistentIds.length < 1 ||
+        sourceTrackPersistentIds.length > ${PLAYLIST_WRITE_TRACK_LIMIT}
+      ) {
+        return JSON.stringify({ invalidSourceTrackCount: sourceTrackPersistentIds.length });
+      }
       const sourcePersistentId = source.persistentID();
       const sourceName = source.name();
 

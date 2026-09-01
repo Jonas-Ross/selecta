@@ -70,6 +70,8 @@ describe('bridge write paths against real Music.app', { tags: ['integration'] },
   const SCRATCH_NAMES = [
     'Selecta Integration Scratch',
     'Selecta Integration Clone Scratch',
+    'Selecta Integration Empty Source Scratch',
+    'Selecta Integration Rejected Clone Scratch',
     'Selecta Integration Preview Scratch',
   ];
   afterEach(async () => {
@@ -117,6 +119,24 @@ describe('bridge write paths against real Music.app', { tags: ['integration'] },
     expect(result.sourceTrackPersistentIds).toEqual(source.trackPersistentIds);
     const readBack = await bridge.readPlaylist(result.persistentId);
     expect(readBack.trackPersistentIds).toEqual(result.sourceTrackPersistentIds);
+  }, 60_000);
+
+  it('clonePlaylist rejects an empty live user source before creating a destination', async () => {
+    const source = await bridge.createPlaylist({
+      name: 'Selecta Integration Empty Source Scratch',
+      trackIds: [],
+    });
+    expect(source.trackCount).toBe(0);
+    const sourceId = await findPlaylistByName('Selecta Integration Empty Source Scratch');
+    expect(sourceId).toBeTruthy();
+
+    await expect(
+      bridge.clonePlaylist({
+        name: 'Selecta Integration Rejected Clone Scratch',
+        sourcePlaylistId: sourceId!,
+      }),
+    ).rejects.toMatchObject({ errorCode: 'validation_error' });
+    expect(await findPlaylistByName('Selecta Integration Rejected Clone Scratch')).toBeNull();
   }, 60_000);
 
   it('replacePlaylist reuses the slot by name: one playlist, contents replaced', async () => {
