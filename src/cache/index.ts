@@ -10,7 +10,8 @@ import type {
 } from '../types/bridge.js';
 import type {
   AudioFeaturesRow,
-  CoOccurringTrack,
+  CoOccurrenceFilters,
+  CoOccurrenceResult,
   PendingTrack,
   OverviewStats,
   PlayHistoryWindow,
@@ -183,8 +184,12 @@ export class SelectaCache {
   }
 
   /** Co-occurrence aggregated across the seed set; seeds are never candidates. */
-  getCoOccurringTracks(seedIds: string[], limit?: number): CoOccurringTrack[] {
-    return this.queries.getCoOccurringTracks(seedIds, limit);
+  getCoOccurrence(
+    seedIds: string[],
+    filters?: CoOccurrenceFilters,
+    limit?: number,
+  ): CoOccurrenceResult {
+    return this.queries.getCoOccurrence(seedIds, filters, limit);
   }
 
   /**

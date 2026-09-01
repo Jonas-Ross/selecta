@@ -6,7 +6,12 @@
 import { z } from 'zod';
 import type { Bridge } from '../types/bridge.js';
 import type { PlaylistRow, SearchFilters, TrackRow } from '../types/cache.js';
-import { BridgeError, defaultHints, type SelectaError } from '../types/errors.js';
+import {
+  BridgeError,
+  defaultHints,
+  trackNotFoundError,
+  type SelectaError,
+} from '../types/errors.js';
 import type { SelectaCache } from '../cache/index.js';
 import type { EnrichDeps } from '../enrich/index.js';
 
@@ -50,6 +55,51 @@ export type ApiTrack = {
   };
 };
 
+// One fixed field order removes repeated object keys from broad results while
+// retaining every comparison fact. Keep it explicit so compact output cannot
+// silently grow when ApiTrack gains another field.
+export const COMPACT_TRACK_FIELDS = [
+  'persistent_id',
+  'title',
+  'artist',
+  'album',
+  'year',
+  'genre',
+  'duration_seconds',
+  'bpm',
+  'musical_key',
+  'danceability',
+  'signal.play_count',
+  'signal.skip_count',
+  'signal.rating',
+  'signal.loved',
+  'signal.disliked',
+  'signal.last_played',
+  'signal.date_added',
+] as const;
+
+// Fixed row aligned with COMPACT_TRACK_FIELDS. Null marks an unavailable
+// optional fact; location_kind is the only full-track field not represented.
+export type CompactApiTrack = [
+  persistentId: string,
+  title: string | null,
+  artist: string | null,
+  album: string | null,
+  year: number | null,
+  genre: string | null,
+  durationSeconds: number | null,
+  bpm: number | null,
+  musicalKey: string | null,
+  danceability: number | null,
+  playCount: number,
+  skipCount: number,
+  rating: number | null,
+  loved: true | null,
+  disliked: true | null,
+  lastPlayed: string | null,
+  dateAdded: string | null,
+];
+
 export function toApiTrack(row: TrackRow): ApiTrack {
   return {
     persistent_id: row.persistentId,
@@ -75,6 +125,38 @@ export function toApiTrack(row: TrackRow): ApiTrack {
       date_added: row.dateAdded ?? undefined,
     },
   };
+}
+
+/** Reduce a full API track to the stable compact discovery contract. */
+export function toCompactApiTrack(track: ApiTrack): CompactApiTrack {
+  return [
+    track.persistent_id,
+    track.title ?? null,
+    track.artist ?? null,
+    track.album ?? null,
+    track.year ?? null,
+    track.genre ?? null,
+    track.duration_seconds ?? null,
+    track.bpm ?? null,
+    track.musical_key ?? null,
+    track.danceability ?? null,
+    track.signal.play_count,
+    track.signal.skip_count,
+    track.signal.rating ?? null,
+    track.signal.loved ?? null,
+    track.signal.disliked ?? null,
+    track.signal.last_played ?? null,
+    track.signal.date_added ?? null,
+  ];
+}
+
+/** Map one cache row through the requested full or compact wire projection. */
+export function projectApiTrack(row: TrackRow, compact: true): CompactApiTrack;
+export function projectApiTrack(row: TrackRow, compact: false): ApiTrack;
+export function projectApiTrack(row: TrackRow, compact: boolean): ApiTrack | CompactApiTrack;
+export function projectApiTrack(row: TrackRow, compact: boolean): ApiTrack | CompactApiTrack {
+  const track = toApiTrack(row);
+  return compact ? toCompactApiTrack(track) : track;
 }
 
 export function validationError(hint: string): SelectaError {
@@ -107,12 +189,7 @@ export function parseInput<T>(
 export function missingTrackIdsError(cache: SelectaCache, trackIds: string[]): SelectaError | null {
   const missing = trackIds.filter((id) => cache.getTrack(id) === null);
   if (missing.length === 0) return null;
-  const shown = missing.slice(0, 5).join(', ');
-  const more = missing.length > 5 ? ` (+${missing.length - 5} more)` : '';
-  return {
-    error: 'track_not_found',
-    hint: `Not in the cache: ${shown}${more}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library.`,
-  };
+  return trackNotFoundError(missing);
 }
 
 /** Resolve a model-supplied playlist ID through creation receipts and cache. */
