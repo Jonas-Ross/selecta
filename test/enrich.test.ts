@@ -262,6 +262,19 @@ describe('enrichPendingTracks', () => {
     expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
   });
 
+  it('defensively rejects duplicate targeted IDs before any external request', async () => {
+    const { fetchLike, calls } = fakeFetch(scenarioHandler);
+    await expect(
+      enrichPendingTracks(
+        cache,
+        { trackIds: ['T-TEARDROP', 'T-TEARDROP'] },
+        testDeps(fetchLike),
+      ),
+    ).rejects.toMatchObject({ errorCode: 'validation_error' });
+    expect(calls).toHaveLength(0);
+    expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
+  });
+
   it('narrates every source request through trace', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
     const lines: string[] = [];
@@ -528,6 +541,25 @@ describe('enrich_features tool', () => {
       ).error,
     ).toBe('validation_error');
     expect(calls).toHaveLength(0);
+  });
+
+  it('rejects duplicate target IDs at the parse boundary', async () => {
+    let cacheRead = false;
+    const result = await handleEnrichFeatures(
+      { track_ids: ['T-TEARDROP', 'T-TEARDROP'] },
+      {
+        cache: () => {
+          cacheRead = true;
+          throw new Error('cache should not be read');
+        },
+        bridge: makeBridge(),
+      },
+    );
+
+    const err = asError(result);
+    expect(err).toMatchObject({ error: 'validation_error' });
+    expect(err.hint).toContain('track_ids: must not contain duplicate IDs');
+    expect(cacheRead).toBe(false);
   });
 
   it('rejects an out-of-range limit', async () => {

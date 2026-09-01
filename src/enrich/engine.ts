@@ -170,7 +170,16 @@ function selectTargets(
     };
   }
 
+  // The MCP schema rejects duplicates. Keep this guard for direct library
+  // callers too, so defensive deduplication can never silently alter a run.
   const requestedIds = [...new Set(opts.trackIds)];
+  if (requestedIds.length !== opts.trackIds.length) {
+    throw new BridgeError(
+      'validation_error',
+      'Duplicate targeted-enrichment track IDs',
+      'trackIds must contain unique persistent IDs. No external requests were made.',
+    );
+  }
   const tracks = requestedIds.map((id) => cache.getTrack(id));
   const unknownIds = requestedIds.filter((_, i) => tracks[i] == null);
   if (unknownIds.length > 0) {
