@@ -50,6 +50,28 @@ export type ApiTrack = {
   };
 };
 
+// Broad discovery needs the facts used to identify and compare candidates,
+// without the secondary library metadata carried by the full track shape.
+// Keep this as an explicit contract so compact output cannot silently grow
+// when ApiTrack gains another field.
+export type CompactApiTrack = Pick<
+  ApiTrack,
+  | 'persistent_id'
+  | 'title'
+  | 'artist'
+  | 'album'
+  | 'year'
+  | 'duration_seconds'
+  | 'bpm'
+  | 'musical_key'
+  | 'danceability'
+> & {
+  signal: Pick<
+    ApiTrack['signal'],
+    'play_count' | 'skip_count' | 'rating' | 'loved' | 'disliked' | 'last_played'
+  >;
+};
+
 export function toApiTrack(row: TrackRow): ApiTrack {
   return {
     persistent_id: row.persistentId,
@@ -73,6 +95,29 @@ export function toApiTrack(row: TrackRow): ApiTrack {
       disliked: row.disliked === 1 ? true : undefined,
       last_played: row.lastPlayed ?? undefined,
       date_added: row.dateAdded ?? undefined,
+    },
+  };
+}
+
+/** Reduce a full API track to the stable compact discovery contract. */
+export function toCompactApiTrack(track: ApiTrack): CompactApiTrack {
+  return {
+    persistent_id: track.persistent_id,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    year: track.year,
+    duration_seconds: track.duration_seconds,
+    bpm: track.bpm,
+    musical_key: track.musical_key,
+    danceability: track.danceability,
+    signal: {
+      play_count: track.signal.play_count,
+      skip_count: track.signal.skip_count,
+      rating: track.signal.rating,
+      loved: track.signal.loved,
+      disliked: track.signal.disliked,
+      last_played: track.signal.last_played,
     },
   };
 }

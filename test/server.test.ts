@@ -52,7 +52,13 @@ describe('MCP server over in-memory transport', () => {
       'set_rating',
     ]);
     // Tool descriptions are first-class — they must survive the wire.
-    expect(tools.find((t) => t.name === 'search')!.description).toContain('refresh_library');
+    const search = tools.find((t) => t.name === 'search')!;
+    const context = tools.find((t) => t.name === 'get_track_context')!;
+    expect(search.description).toContain('refresh_library');
+    expect(search.description).toContain('compact true');
+    expect(context.description).toContain('compact true');
+    expect(search.inputSchema).toMatchObject({ properties: { compact: { type: 'boolean' } } });
+    expect(context.inputSchema).toMatchObject({ properties: { compact: { type: 'boolean' } } });
   });
 
   it('round-trips a search call as JSON text content', async () => {
