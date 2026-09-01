@@ -78,6 +78,27 @@ function toFtsQuery(query: string): string {
 // the dedupe key (DEDUPE_KEY below).
 const UNIT_SEPARATOR = '\u001f';
 
+function parsePlaylistRefs(raw: string): PlaylistRef[] {
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) throw new Error('invalid co-occurrence playlist JSON');
+
+  const refs = parsed.map((value): PlaylistRef => {
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      !('id' in value) ||
+      typeof value.id !== 'string' ||
+      !('name' in value) ||
+      typeof value.name !== 'string'
+    ) {
+      throw new Error('invalid co-occurrence playlist reference');
+    }
+    return { id: value.id, name: value.name };
+  });
+
+  return [...new Map(refs.map((ref) => [ref.id, ref])).values()].slice(0, 3);
+}
+
 function buildCoOccurrenceSourceFilter(filters: CoOccurrenceFilters): {
   excludedSql: string;
   includedSql: string;
@@ -902,12 +923,14 @@ export function createQueries(db: Database) {
           `SELECT ${TRACK_COLUMNS},
                   shared.total AS totalSharedPlaylistCount,
                   shared.seeds AS seedsMatched,
-                  shared.names AS namesRaw
+                  shared.names AS namesRaw,
+                  shared.playlists AS playlistsRaw
            FROM (
              SELECT pt2.track_persistent_id AS tid,
                     COUNT(DISTINCT pt1.track_persistent_id || '${UNIT_SEPARATOR}' || pt1.playlist_persistent_id) AS total,
                     COUNT(DISTINCT pt1.track_persistent_id) AS seeds,
-                    group_concat(p.name, '${UNIT_SEPARATOR}') AS names
+                    group_concat(p.name, '${UNIT_SEPARATOR}') AS names,
+                    json_group_array(json_object('id', p.persistent_id, 'name', p.name)) AS playlists
              FROM playlist_tracks pt1
              JOIN playlists p ON p.persistent_id = pt1.playlist_persistent_id AND p.kind = 'user'
              JOIN playlist_tracks pt2 ON pt2.playlist_persistent_id = pt1.playlist_persistent_id
@@ -924,11 +947,13 @@ export function createQueries(db: Database) {
         totalSharedPlaylistCount: number;
         seedsMatched: number;
         namesRaw: string;
+        playlistsRaw: string;
       })[];
       return {
-        tracks: rows.map(({ namesRaw, ...row }) => ({
+        tracks: rows.map(({ namesRaw, playlistsRaw, ...row }) => ({
           ...row,
           sharedPlaylistNames: [...new Set(namesRaw.split(UNIT_SEPARATOR))].slice(0, 3),
+          sharedPlaylists: parsePlaylistRefs(playlistsRaw),
         })),
         sourcePlaylists,
       };

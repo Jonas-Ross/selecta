@@ -52,7 +52,13 @@ describe('MCP server over in-memory transport', () => {
       'set_rating',
     ]);
     // Tool descriptions are first-class — they must survive the wire.
-    expect(tools.find((t) => t.name === 'search')!.description).toContain('refresh_library');
+    const search = tools.find((t) => t.name === 'search')!;
+    const context = tools.find((t) => t.name === 'get_track_context')!;
+    expect(search.description).toContain('refresh_library');
+    expect(search.description).toContain('compact true');
+    expect(context.description).toContain('compact true');
+    expect(search.inputSchema).toMatchObject({ properties: { compact: { type: 'boolean' } } });
+    expect(context.inputSchema).toMatchObject({ properties: { compact: { type: 'boolean' } } });
   });
 
   it('round-trips a search call as JSON text content', async () => {
@@ -65,6 +71,20 @@ describe('MCP server over in-memory transport', () => {
     const body = JSON.parse(textOf(result));
     expect(body.tracks[0].persistent_id).toBe('T-TEARDROP');
     expect(body.cache_age_hours).not.toBeNull();
+  });
+
+  it('round-trips the self-describing compact search rows', async () => {
+    const client = await connectedClient();
+    const result = await client.callTool({
+      name: 'search',
+      arguments: { query: 'teardrop', compact: true },
+    });
+    expect(result.isError).toBeFalsy();
+    const body = JSON.parse(textOf(result));
+    expect(body.track_fields[0]).toBe('persistent_id');
+    expect(body.track_fields).toContain('genre');
+    expect(body.track_fields).toContain('signal.date_added');
+    expect(body.tracks[0].track[0]).toBe('T-TEARDROP');
   });
 
   it('marks structured error envelopes with isError', async () => {

@@ -5,7 +5,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
-import { handleSearch, type SearchOutput } from '../src/tools/search.js';
+import {
+  handleSearch,
+  type CompactSearchOutput,
+  type SearchOutput,
+} from '../src/tools/search.js';
 import type { ToolDeps } from '../src/tools/common.js';
 import type { LibrarySnapshot, RawTrack } from '../src/types/bridge.js';
 import { makeBridge } from './helpers.js';
@@ -239,5 +243,14 @@ describe('search tool dedupe', () => {
     const out = (await handleSearch({ artist: 'Avicii' }, makeDeps())) as SearchOutput;
     expect(out.tracks).toHaveLength(4);
     for (const t of out.tracks) expect(t.alternate_ids).toBeUndefined();
+  });
+
+  it('preserves alternate_ids in compact mode', async () => {
+    const out = (await handleSearch(
+      { artist: 'Avicii', dedupe: true, compact: true },
+      makeDeps(),
+    )) as CompactSearchOutput;
+    const winner = out.tracks.find((t) => t.track[0] === 'T-LEVELS-TRUE');
+    expect(winner?.alternate_ids).toEqual(['T-LEVELS-FOREVER', 'T-LEVELS-NOW']);
   });
 });
