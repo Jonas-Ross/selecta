@@ -32,6 +32,16 @@ async function seedTrackId(): Promise<string> {
   return playlist.trackPersistentIds[0]!;
 }
 
+// Two track entries sourced from the fixture playlist. If it holds a single
+// track, use it twice — Music.app allows duplicate entries, and the write
+// paths must preserve them.
+async function testTrackIds(): Promise<string[]> {
+  const playlist = await bridge.readPlaylist(await requireFixturePlaylistId());
+  const ids = playlist.trackPersistentIds;
+  expect(ids.length).toBeGreaterThan(0);
+  return ids.length >= 2 ? ids.slice(0, 2) : [ids[0]!, ids[0]!];
+}
+
 describe('bridge readLibrary against real Music.app', { tags: ['integration'] }, () => {
   it('returns a full snapshot whose user playlists reference library tracks', async () => {
     const snapshot = await bridge.readLibrary();
@@ -79,16 +89,6 @@ describe('bridge write paths against real Music.app', { tags: ['integration'] },
       await deletePlaylistsByName(name);
     }
   });
-
-  // Two track entries sourced from the fixture playlist. If it holds a single
-  // track, use it twice — Music.app allows duplicate entries, and the write
-  // paths must preserve them.
-  async function testTrackIds(): Promise<string[]> {
-    const playlist = await bridge.readPlaylist(await requireFixturePlaylistId());
-    const ids = playlist.trackPersistentIds;
-    expect(ids.length).toBeGreaterThan(0);
-    return ids.length >= 2 ? ids.slice(0, 2) : [ids[0]!, ids[0]!];
-  }
 
   it('createPlaylist materializes tracks in order and sets the description', async () => {
     const trackIds = await testTrackIds();
@@ -145,9 +145,11 @@ describe('bridge write paths against real Music.app', { tags: ['integration'] },
 
     const first = await bridge.replacePlaylist({ name, trackIds });
     expect(first.trackCount).toBe(2);
+    expect(first.created).toBe(true);
 
     const second = await bridge.replacePlaylist({ name, trackIds: trackIds.slice(0, 1) });
     expect(second.trackCount).toBe(1);
+    expect(second.created).toBe(false);
 
     const readBack = await bridge.readPlaylist(second.persistentId);
     expect(readBack.trackPersistentIds).toEqual(trackIds.slice(0, 1));
@@ -165,6 +167,72 @@ describe('bridge write paths against real Music.app', { tags: ['integration'] },
     const leftover = await findPlaylistByName('Selecta Should Not Exist');
     expect(leftover).toBeNull();
   }, 60_000);
+});
+
+// Reserved-slot recovery (#44): a clone whose source ID is gone live may fall
+// back to the slot's exact name — one plain user playlist, or refuse. Runs
+// against scratch slots only; the real Selecta Preview is never touched.
+describe('bridge clonePlaylist reserved-slot recovery against real Music.app', { tags: ['integration'] }, () => {
+  // Unique per run: iCloud sync resurrects recently deleted playlists.
+  const RUN = Date.now();
+  const SLOT = `Selecta Integration Slot Scratch ${RUN}`;
+  const TWIN_SLOT = `Selecta Integration Twin Slot Scratch ${RUN}`;
+  const MISSING_SLOT = `Selecta Integration Missing Slot ${RUN}`;
+  const CLONE = `Selecta Integration Slot Clone Scratch ${RUN}`;
+  afterEach(async () => {
+    for (const name of [SLOT, TWIN_SLOT, CLONE]) await deletePlaylistsByName(name);
+  });
+
+  it('recovers the slot by name when the source ID is gone live, in the live order', async () => {
+    const trackIds = await testTrackIds();
+    await bridge.replacePlaylist({ name: SLOT, trackIds });
+
+    const result = await bridge.clonePlaylist({
+      name: CLONE,
+      sourcePlaylistId: 'NOT-A-REAL-PLAYLIST',
+      reservedSourceName: SLOT,
+    });
+    expect(result.sourceName).toBe(SLOT);
+    expect(result.sourceTrackPersistentIds).toEqual(trackIds);
+    expect(result.trackCount).toBe(trackIds.length);
+    const readBack = await bridge.readPlaylist(result.persistentId);
+    expect(readBack.trackPersistentIds).toEqual(trackIds);
+  }, 120_000);
+
+  it('a live source ID wins over the reserved name', async () => {
+    const source = await bridge.readPlaylist(await requireFixturePlaylistId());
+    const result = await bridge.clonePlaylist({
+      name: CLONE,
+      sourcePlaylistId: source.persistentId,
+      reservedSourceName: MISSING_SLOT,
+    });
+    expect(result.sourcePersistentId).toBe(source.persistentId);
+    expect(result.sourceTrackPersistentIds).toEqual(source.trackPersistentIds);
+  }, 120_000);
+
+  it('refuses a missing or ambiguous slot without creating anything', async () => {
+    await expect(
+      bridge.clonePlaylist({
+        name: CLONE,
+        sourcePlaylistId: 'NOT-A-REAL-PLAYLIST',
+        reservedSourceName: MISSING_SLOT,
+      }),
+    ).rejects.toMatchObject({ errorCode: 'playlist_not_found' });
+
+    // Two plain user playlists wearing the slot name: Music.app allows it.
+    const trackIds = await testTrackIds();
+    await bridge.createPlaylist({ name: TWIN_SLOT, trackIds });
+    await bridge.createPlaylist({ name: TWIN_SLOT, trackIds: trackIds.slice(0, 1) });
+    await expect(
+      bridge.clonePlaylist({
+        name: CLONE,
+        sourcePlaylistId: 'NOT-A-REAL-PLAYLIST',
+        reservedSourceName: TWIN_SLOT,
+      }),
+    ).rejects.toMatchObject({ errorCode: 'validation_error' });
+
+    expect(await findPlaylistByName(CLONE)).toBeNull();
+  }, 120_000);
 });
 
 // Runs BEFORE the edit-paths barrage below: the reorder drift guard is
