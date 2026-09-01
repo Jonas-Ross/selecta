@@ -41,11 +41,12 @@ export type InspectedTrack = Pick<
   signal: Pick<ApiTrack['signal'], 'play_count' | 'skip_count' | 'rating' | 'loved'>;
 };
 
-type MissingCoverage = {
+type FeatureCoverage = {
   present_count: number;
   missing_count: number;
-  missing_track_ids: string[];
 };
+
+type FeatureName = 'bpm' | 'musical_key' | 'danceability';
 
 export type TracklistInspection = {
   fingerprint: string;
@@ -75,17 +76,18 @@ export type TracklistInspection = {
   artist_counts: { artist: string; count: number }[];
   unknown_artist_count: number;
   feature_coverage: {
-    bpm: MissingCoverage;
-    musical_key: MissingCoverage;
-    danceability: MissingCoverage;
+    bpm: FeatureCoverage;
+    musical_key: FeatureCoverage;
+    danceability: FeatureCoverage;
   };
+  feature_gaps: { missing: FeatureName[]; track_ids: string[] }[];
 };
 
 export type InspectTracklistOutput = TracklistInspection & {
   cache_age_hours: number | null;
 };
 
-export const INSPECT_TRACKLIST_DESCRIPTION = `Inspect an ordered playlist draft using only Selecta's local cache, before preview_playlist or create_playlist. Returns the resolved tracks in the exact supplied order, known runtime (with any missing-duration IDs), exact repeated IDs, distinct owned copies of the same trimmed/case-insensitive title + artist where detectable, artist occurrence counts, raw play/skip/loved/rating signal, BPM/key/danceability coverage and missing IDs, and a sha256 fingerprint of the ordered ID array. Duplicate positions are 0-based. The fingerprint matches only the identical ordered ID list. Unknown IDs fail with track_not_found and no partial inspection. Reports facts only — no transition score, variety judgment, quality flag, or recommendation. Never reads Music.app or the network.`;
+export const INSPECT_TRACKLIST_DESCRIPTION = `Inspect an ordered playlist draft using only Selecta's local cache, before preview_playlist or create_playlist. Returns the resolved tracks in the exact supplied order, known runtime (with any missing-duration IDs), exact repeated IDs, distinct owned copies of the same trimmed/case-insensitive title + artist where detectable, artist occurrence counts, raw play/skip/loved/rating signal, BPM/key/danceability coverage, grouped feature gaps naming affected track IDs once per missing-field combination, and a sha256 fingerprint of the ordered ID array. Duplicate positions are 0-based. The fingerprint matches only the identical ordered ID list. Unknown IDs fail with track_not_found and no partial inspection. Reports facts only — no transition score, variety judgment, quality flag, or recommendation. Never reads Music.app or the network.`;
 
 function compactTrack(row: TrackRow): InspectedTrack {
   const api = toApiTrack(row);
@@ -169,15 +171,45 @@ function artistOccurrences(rows: TrackRow[]): {
   return { artistCounts: [...counts.values()], unknownArtistCount };
 }
 
-function featureCoverage<T>(
-  rows: TrackRow[],
-  valueOf: (row: TrackRow) => T | null,
-): MissingCoverage {
-  const missingRows = rows.filter((row) => valueOf(row) == null);
+function featureFacts(rows: TrackRow[]): {
+  coverage: TracklistInspection['feature_coverage'];
+  gaps: TracklistInspection['feature_gaps'];
+} {
+  const present = { bpm: 0, musical_key: 0, danceability: 0 };
+  const groups = new Map<string, { missing: FeatureName[]; trackIds: Set<string> }>();
+
+  for (const row of rows) {
+    const missing: FeatureName[] = [];
+    if (row.bpm == null) missing.push('bpm');
+    else present.bpm += 1;
+    if (row.musicalKey == null) missing.push('musical_key');
+    else present.musical_key += 1;
+    if (row.danceability == null) missing.push('danceability');
+    else present.danceability += 1;
+    if (missing.length === 0) continue;
+
+    const key = missing.join(',');
+    const group = groups.get(key);
+    if (group) group.trackIds.add(row.persistentId);
+    else groups.set(key, { missing, trackIds: new Set([row.persistentId]) });
+  }
+
   return {
-    present_count: rows.length - missingRows.length,
-    missing_count: missingRows.length,
-    missing_track_ids: [...new Set(missingRows.map((row) => row.persistentId))],
+    coverage: {
+      bpm: { present_count: present.bpm, missing_count: rows.length - present.bpm },
+      musical_key: {
+        present_count: present.musical_key,
+        missing_count: rows.length - present.musical_key,
+      },
+      danceability: {
+        present_count: present.danceability,
+        missing_count: rows.length - present.danceability,
+      },
+    },
+    gaps: [...groups.values()].map(({ missing, trackIds }) => ({
+      missing,
+      track_ids: [...trackIds],
+    })),
   };
 }
 
@@ -187,6 +219,7 @@ export function buildTracklistInspection(rows: TrackRow[]): TracklistInspection 
   const positions = positionsById(rows);
   const runtimeMissing = rows.filter((row) => row.durationSeconds == null);
   const { artistCounts, unknownArtistCount } = artistOccurrences(rows);
+  const { coverage, gaps } = featureFacts(rows);
 
   return {
     fingerprint: `sha256:${createHash('sha256').update(JSON.stringify(trackIds)).digest('hex')}`,
@@ -207,11 +240,8 @@ export function buildTracklistInspection(rows: TrackRow[]): TracklistInspection 
     duplicate_owned_copies: duplicateOwnedCopies(rows, positions),
     artist_counts: artistCounts,
     unknown_artist_count: unknownArtistCount,
-    feature_coverage: {
-      bpm: featureCoverage(rows, (row) => row.bpm),
-      musical_key: featureCoverage(rows, (row) => row.musicalKey),
-      danceability: featureCoverage(rows, (row) => row.danceability),
-    },
+    feature_coverage: coverage,
+    feature_gaps: gaps,
   };
 }
 

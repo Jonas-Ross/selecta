@@ -8,7 +8,7 @@ import {
   type InspectTracklistOutput,
 } from '../src/tools/inspect_tracklist.js';
 import type { ToolDeps } from '../src/tools/common.js';
-import type { LibrarySnapshot } from '../src/types/bridge.js';
+import type { LibrarySnapshot, RawTrack } from '../src/types/bridge.js';
 import type { AudioFeaturesRow } from '../src/types/cache.js';
 import { asError, makeBridge } from './helpers.js';
 import fixture from './fixtures/inspect-tracklist.json' with { type: 'json' };
@@ -24,6 +24,46 @@ function makeDeps(): ToolDeps {
   cache.refreshFromSnapshot(inspectFixture.snapshot, { durationMs: 1 });
   cache.saveAudioFeatures(inspectFixture.audioFeatures);
   return { cache: () => cache, bridge: makeBridge() };
+}
+
+function makeLargeDraft(): { deps: ToolDeps; trackIds: string[] } {
+  const tracks: RawTrack[] = Array.from({ length: 500 }, (_, index) => ({
+    persistentId: `T-LARGE-${String(index + 1).padStart(4, '0')}`,
+    title: `Track ${String(index + 1).padStart(3, '0')}`,
+    artist: `Artist ${String((index % 80) + 1).padStart(2, '0')}`,
+    albumArtist: `Artist ${String((index % 80) + 1).padStart(2, '0')}`,
+    album: `Album ${String(Math.floor(index / 10) + 1).padStart(2, '0')}`,
+    durationSeconds: 180 + (index % 120),
+    bpm: index % 4 === 0 ? undefined : 88 + (index % 70),
+    playCount: index % 100,
+    skipCount: index % 6,
+    rating: index % 9 === 0 ? 80 : undefined,
+    loved: index % 17 === 0,
+    locationKind: index % 3 === 0 ? 'local' : 'cloud',
+  }));
+  const features: AudioFeaturesRow[] = tracks
+    .filter((_, index) => index % 3 !== 0)
+    .map((track, index) => ({
+      trackPersistentId: track.persistentId,
+      bpm: null,
+      musicalKey: index % 5 === 0 ? null : ['C major', 'D minor', 'F# minor'][index % 3]!,
+      danceability: index % 7 === 0 ? null : 0.35 + (index % 50) / 100,
+      sources: { musicalKey: 'acousticbrainz', danceability: 'acousticbrainz' },
+      mbRecordingMbid: `mbid-large-${index}`,
+      deezerTrackId: null,
+      status: 'ok',
+      fetchedAt: '2026-08-02T00:00:00.000Z',
+    }));
+  const cache = SelectaCache.open(':memory:');
+  cache.refreshFromSnapshot(
+    { capturedAt: '2026-08-01T12:00:00.000Z', tracks, playlists: [] },
+    { durationMs: 1 },
+  );
+  cache.saveAudioFeatures(features);
+  return {
+    deps: { cache: () => cache, bridge: makeBridge() },
+    trackIds: tracks.map((track) => track.persistentId),
+  };
 }
 
 async function inspect(deps = makeDeps()): Promise<InspectTracklistOutput> {
@@ -75,22 +115,21 @@ describe('inspect_tracklist', () => {
     ]);
     expect(out.unknown_artist_count).toBe(1);
     expect(out.feature_coverage).toEqual({
-      bpm: {
-        present_count: 3,
-        missing_count: 2,
-        missing_track_ids: ['T-DREAM-B', 'T-BARE'],
-      },
-      musical_key: {
-        present_count: 3,
-        missing_count: 2,
-        missing_track_ids: ['T-TURN', 'T-BARE'],
-      },
-      danceability: {
-        present_count: 3,
-        missing_count: 2,
-        missing_track_ids: ['T-TURN', 'T-BARE'],
-      },
+      bpm: { present_count: 3, missing_count: 2 },
+      musical_key: { present_count: 3, missing_count: 2 },
+      danceability: { present_count: 3, missing_count: 2 },
     });
+    expect(out.feature_gaps).toEqual([
+      {
+        missing: ['musical_key', 'danceability'],
+        track_ids: ['T-TURN'],
+      },
+      { missing: ['bpm'], track_ids: ['T-DREAM-B'] },
+      {
+        missing: ['bpm', 'musical_key', 'danceability'],
+        track_ids: ['T-BARE'],
+      },
+    ]);
   });
 
   it('reports repeated IDs separately from distinct owned copies of one song', async () => {
@@ -145,13 +184,16 @@ describe('inspect_tracklist', () => {
     fetchSpy.mockRestore();
   });
 
-  it('stays compact at the 500-track input limit', async () => {
-    const deps = makeDeps();
+  it('stays below 150 KB for 500 distinct, realistically populated tracks', async () => {
+    const { deps, trackIds } = makeLargeDraft();
     const out = (await handleInspectTracklist(
-      { track_ids: Array.from({ length: 500 }, () => 'T-DREAM-A') },
+      { track_ids: trackIds },
       deps,
     )) as InspectTracklistOutput;
     expect(out.track_count).toBe(500);
+    expect(new Set(out.tracks.map((track) => track.persistent_id)).size).toBe(500);
+    expect(out.tracks[0]!.persistent_id).toBe('T-LARGE-0001');
+    expect(out.tracks.at(-1)!.persistent_id).toBe('T-LARGE-0500');
     expect(JSON.stringify(out).length).toBeLessThan(150_000);
   });
 });
