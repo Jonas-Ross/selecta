@@ -43,6 +43,20 @@ function makeDeps(overrides: Partial<Bridge> = {}): ToolDeps {
   return { cache: () => cache, bridge };
 }
 
+function addUtilityPlaylists(deps: ToolDeps): void {
+  const cache = deps.cache();
+  cache.upsertPlaylistAfterWrite(
+    { persistentId: 'P-INTENTIONAL', trackCount: 2 },
+    'Small Intentional Mix',
+    ['T-MIDNIGHT', 'T-BARE'],
+  );
+  cache.upsertPlaylistAfterWrite(
+    { persistentId: 'P-UTILITY', trackCount: 5 },
+    'Offline Utility Bucket',
+    ['T-MIDNIGHT', 'T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX', 'T-ROADS'],
+  );
+}
+
 describe('search', () => {
   let deps: ToolDeps;
   beforeEach(() => {
@@ -300,6 +314,7 @@ describe('get_track_context', () => {
     expect(cooc[0]!.shared_playlist_count).toBe(2);
     expect(cooc[0]!.shared_playlist_names.sort()).toEqual(['Late Night', 'Trip Hop Essentials']);
     expect(cooc.map((t) => t.persistent_id).sort()).toEqual(['T-ANGEL', 'T-GLORYBOX', 'T-ROADS']);
+    expect(out.source_playlists).toEqual({ considered: 2, excluded: 0 });
   });
 
   it('ignores smart-playlist co-occurrence (user playlists only)', async () => {
@@ -380,6 +395,117 @@ describe('get_track_context', () => {
       deps,
     )) as MultiSeedContextOutput;
     expect(out.co_occurring_tracks).toEqual([]);
+  });
+
+  it('explicitly excludes a giant utility playlist before single-seed aggregation', async () => {
+    addUtilityPlaylists(deps);
+
+    const unfiltered = (await handleGetTrackContext(
+      { track_id: 'T-MIDNIGHT' },
+      deps,
+    )) as TrackContextOutput;
+    expect(unfiltered.co_occurring_tracks[0]!.persistent_id).toBe('T-TEARDROP');
+    expect(unfiltered.source_playlists).toEqual({ considered: 2, excluded: 0 });
+
+    const filtered = (await handleGetTrackContext(
+      { track_id: 'T-MIDNIGHT', exclude_playlist_ids: ['P-UTILITY'] },
+      deps,
+    )) as TrackContextOutput;
+    expect(filtered.co_occurring_tracks.map((t) => t.persistent_id)).toEqual(['T-BARE']);
+    expect(filtered.co_occurring_tracks[0]!.shared_playlist_names).toEqual([
+      'Small Intentional Mix',
+    ]);
+    expect(filtered.source_playlists).toEqual({ considered: 2, excluded: 1 });
+  });
+
+  it('applies max_playlist_tracks to multi-seed aggregation and source names', async () => {
+    addUtilityPlaylists(deps);
+
+    const out = (await handleGetTrackContext(
+      { seed_ids: ['T-MIDNIGHT', 'T-TEARDROP'], max_playlist_tracks: 3 },
+      deps,
+    )) as MultiSeedContextOutput;
+    expect(out.source_playlists).toEqual({ considered: 4, excluded: 1 });
+    expect(out.co_occurring_tracks.flatMap((t) => t.shared_playlist_names)).not.toContain(
+      'Offline Utility Bucket',
+    );
+    expect(out.co_occurring_tracks.map((t) => t.persistent_id)).toContain('T-BARE');
+  });
+
+  it('keeps the source audit when every source playlist is excluded', async () => {
+    addUtilityPlaylists(deps);
+
+    const out = (await handleGetTrackContext(
+      {
+        track_id: 'T-MIDNIGHT',
+        exclude_playlist_ids: ['P-INTENTIONAL', 'P-UTILITY'],
+      },
+      deps,
+    )) as TrackContextOutput;
+    expect(out.co_occurring_tracks).toEqual([]);
+    expect(out.source_playlists).toEqual({ considered: 2, excluded: 2 });
+  });
+
+  it('rejects unknown excluded playlist IDs and invalid size ranges', async () => {
+    const unknown = asError(
+      await handleGetTrackContext(
+        { track_id: 'T-TEARDROP', exclude_playlist_ids: ['P-NOPE'] },
+        deps,
+      ),
+    );
+    expect(unknown.error).toBe('validation_error');
+    expect(unknown.hint).toContain('P-NOPE');
+
+    const emptyId = asError(
+      await handleGetTrackContext(
+        { track_id: 'T-TEARDROP', exclude_playlist_ids: [''] },
+        deps,
+      ),
+    );
+    expect(emptyId.error).toBe('validation_error');
+    expect(emptyId.hint).toContain('exclude_playlist_ids.0');
+
+    const smart = asError(
+      await handleGetTrackContext(
+        { track_id: 'T-TEARDROP', exclude_playlist_ids: ['P-RECENT'] },
+        deps,
+      ),
+    );
+    expect(smart.error).toBe('validation_error');
+    expect(smart.hint).toContain('user playlists');
+
+    const tooMany = asError(
+      await handleGetTrackContext(
+        {
+          track_id: 'T-TEARDROP',
+          exclude_playlist_ids: Array.from({ length: 501 }, (_, i) => `P-${i}`),
+        },
+        deps,
+      ),
+    );
+    expect(tooMany.error).toBe('validation_error');
+    expect(tooMany.hint).toContain('exclude_playlist_ids');
+    expect(tooMany.hint.length).toBeLessThan(200);
+
+    const atCap = asError(
+      await handleGetTrackContext(
+        {
+          track_id: 'T-TEARDROP',
+          exclude_playlist_ids: Array.from({ length: 500 }, (_, i) => `P-${i}`),
+        },
+        deps,
+      ),
+    );
+    expect(atCap.hint).toContain('(+495 more)');
+    expect(atCap.hint.length).toBeLessThan(250);
+
+    for (const max of [0, -1, 1.5]) {
+      const invalid = asError(
+        await handleGetTrackContext({ track_id: 'T-TEARDROP', max_playlist_tracks: max }, deps),
+      );
+      expect(invalid.error).toBe('validation_error');
+      expect(invalid.hint).toContain('max_playlist_tracks');
+    }
   });
 
   it('rejects neither / both of track_id and seed_ids', async () => {
