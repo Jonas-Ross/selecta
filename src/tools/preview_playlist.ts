@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { PLAYLIST_WRITE_TRACK_LIMIT } from '../types/bridge.js';
 import type { SelectaError } from '../types/errors.js';
 import {
+  apiNoteFromRow,
   missingTrackIdsError,
   parseInput,
-  toApiNote,
   toErrorEnvelope,
   type ApiNote,
   type ToolDeps,
@@ -53,7 +53,7 @@ export async function handlePreviewPlaylist(
     return {
       playlist_id: result.persistentId,
       track_count: result.trackCount,
-      note: toApiNote(cache.getPlaylist(result.persistentId)!),
+      note: apiNoteFromRow(cache.getNote('playlist', result.persistentId)),
     };
   } catch (err) {
     return toErrorEnvelope(err);

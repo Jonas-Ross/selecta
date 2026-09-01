@@ -488,20 +488,23 @@ export function createQueries(db: Database) {
 
   // One note per subject: an existing row keeps its created_at and takes the
   // new body and updated_at.
+  const NOTE_COLUMNS = `
+    subject_kind AS subjectKind, subject_id AS subjectId, body,
+    created_at AS createdAt, updated_at AS updatedAt
+  `;
   const upsertNoteStmt = db.prepare(`
     INSERT INTO notes (subject_kind, subject_id, body, created_at, updated_at)
     VALUES (@subjectKind, @subjectId, @body, @now, @now)
     ON CONFLICT (subject_kind, subject_id)
     DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at
+    RETURNING ${NOTE_COLUMNS}
   `);
   const deleteNoteStmt = db.prepare(
     'DELETE FROM notes WHERE subject_kind = ? AND subject_id = ?',
   );
-  const getNoteStmt = db.prepare(`
-    SELECT subject_kind AS subjectKind, subject_id AS subjectId, body,
-           created_at AS createdAt, updated_at AS updatedAt
-    FROM notes WHERE subject_kind = ? AND subject_id = ?
-  `);
+  const getNoteStmt = db.prepare(
+    `SELECT ${NOTE_COLUMNS} FROM notes WHERE subject_kind = ? AND subject_id = ?`,
+  );
   // OR REPLACE: if the destination somehow already carries a note, the moving
   // one wins — both describe the same playlist, and the alternative is a PK
   // failure mid-reconciliation.
@@ -734,13 +737,12 @@ export function createQueries(db: Database) {
       deleteNoteStmt.run('playlist', persistentId);
     },
 
-    upsertNote(subjectKind: NoteSubject, subjectId: string, body: string, now: string): void {
-      upsertNoteStmt.run({ subjectKind, subjectId, body, now });
+    upsertNote(subjectKind: NoteSubject, subjectId: string, body: string, now: string): NoteRow {
+      return upsertNoteStmt.get({ subjectKind, subjectId, body, now }) as NoteRow;
     },
 
-    /** True when a note existed and was removed. */
-    deleteNote(subjectKind: NoteSubject, subjectId: string): boolean {
-      return deleteNoteStmt.run(subjectKind, subjectId).changes > 0;
+    deleteNote(subjectKind: NoteSubject, subjectId: string): void {
+      deleteNoteStmt.run(subjectKind, subjectId);
     },
 
     getNote(subjectKind: NoteSubject, subjectId: string): NoteRow | null {

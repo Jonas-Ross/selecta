@@ -228,13 +228,12 @@ export class SelectaCache {
    * notes whose subject left the library.
    */
   setNote(subjectKind: NoteSubject, subjectId: string, body: string): NoteRow {
-    this.queries.upsertNote(subjectKind, subjectId, body, new Date().toISOString());
-    return this.queries.getNote(subjectKind, subjectId)!;
+    return this.queries.upsertNote(subjectKind, subjectId, body, new Date().toISOString());
   }
 
-  /** Remove a note; false when there was none. */
-  clearNote(subjectKind: NoteSubject, subjectId: string): boolean {
-    return this.queries.deleteNote(subjectKind, subjectId);
+  /** Remove a note; a no-op when there is none. */
+  clearNote(subjectKind: NoteSubject, subjectId: string): void {
+    this.queries.deleteNote(subjectKind, subjectId);
   }
 
   getNote(subjectKind: NoteSubject, subjectId: string): NoteRow | null {
@@ -389,10 +388,9 @@ export class SelectaCache {
    * Point a creation receipt at the playlist's current canonical ID, moving
    * the playlist's note with it so model memory survives an iCloud rekey.
    */
-  applyRekey(createdId: string, toId: string): void {
+  applyRekey(createdId: string, fromId: string, toId: string): void {
     const run = this.db.transaction(() => {
-      const fromId = this.queries.resolveCreatedPlaylistId(createdId);
-      if (fromId != null) this.queries.movePlaylistNote(fromId, toId);
+      this.queries.movePlaylistNote(fromId, toId);
       this.queries.setCreationCurrentId(createdId, toId);
     });
     run();
@@ -405,6 +403,7 @@ export class SelectaCache {
    */
   applyDuplicateRemoval(createdId: string, deletedId: string, keptId: string): void {
     const run = this.db.transaction(() => {
+      // Move before delete: deletePlaylistRow takes the note with the row.
       this.queries.movePlaylistNote(deletedId, keptId);
       this.queries.deletePlaylistRow(deletedId);
       this.queries.setCreationCurrentId(createdId, keptId);

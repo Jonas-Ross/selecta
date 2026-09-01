@@ -3,8 +3,7 @@
 // tool in full and compact shape. Bridge mocked, cache real.
 
 import { describe, it, expect, vi } from 'vitest';
-import { SelectaCache } from '../src/cache/index.js';
-import { handleSetNote, type SetNoteOutput } from '../src/tools/set_note.js';
+import { handleSetNote } from '../src/tools/set_note.js';
 import {
   handleCreatePlaylist,
   type CreatePlaylistOutput,
@@ -31,41 +30,46 @@ import {
   handleInspectTracklist,
   type InspectTracklistOutput,
 } from '../src/tools/inspect_tracklist.js';
-import { COMPACT_TRACK_FIELDS, NOTE_MAX_LENGTH, type ToolDeps } from '../src/tools/common.js';
-import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
-import { asError, makeBridge } from './helpers.js';
+import {
+  COMPACT_TRACK_FIELDS,
+  NOTE_MAX_LENGTH,
+  type ApiNote,
+  type ToolDeps,
+} from '../src/tools/common.js';
+import type { LibrarySnapshot } from '../src/types/bridge.js';
+import { ISO_TIMESTAMP, asError, makeToolDeps } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
-const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const makeDeps = makeToolDeps;
 
-function makeDeps(
-  bridgeOverrides: Partial<Bridge> = {},
-): ToolDeps & { cacheInstance: SelectaCache } {
-  const cache = SelectaCache.open(':memory:');
-  cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
-  return { cache: () => cache, bridge: makeBridge(bridgeOverrides), cacheInstance: cache };
-}
-
-async function setNote(deps: ToolDeps, subject: 'track' | 'playlist', id: string, body: string) {
+/** A successful non-clearing set_note call; returns the stored wire note. */
+async function setNote(
+  deps: ToolDeps,
+  subject: 'track' | 'playlist',
+  id: string,
+  body: string,
+): Promise<ApiNote & { id: string }> {
   const out = await handleSetNote({ subject, id, body }, deps);
-  expect(out).not.toHaveProperty('error');
-  return out as SetNoteOutput;
+  expect(out).toMatchObject({ subject, note: expect.any(Object) });
+  const stored = out as { id: string; note: ApiNote };
+  return { ...stored.note, id: stored.id };
 }
+
+const noteShape = (body: string) => ({
+  body,
+  created_at: expect.stringMatching(ISO_TIMESTAMP),
+  updated_at: expect.stringMatching(ISO_TIMESTAMP),
+});
 
 describe('set_note', () => {
   it('stores a track note and returns it with provenance', async () => {
     const deps = makeDeps();
-    const out = await setNote(deps, 'track', 'T-TEARDROP', 'great opener');
-    expect(out).toEqual({
-      subject: 'track',
-      id: 'T-TEARDROP',
-      note: {
-        body: 'great opener',
-        created_at: expect.stringMatching(ISO),
-        updated_at: expect.stringMatching(ISO),
-      },
-    });
+    const out = await handleSetNote(
+      { subject: 'track', id: 'T-TEARDROP', body: 'great opener' },
+      deps,
+    );
+    expect(out).toEqual({ subject: 'track', id: 'T-TEARDROP', note: noteShape('great opener') });
     expect(deps.cacheInstance.getNote('track', 'T-TEARDROP')!.body).toBe('great opener');
     // Cache-only: no Apple event fires.
     for (const fn of Object.values(deps.bridge)) expect(fn).not.toHaveBeenCalled();
@@ -75,26 +79,20 @@ describe('set_note', () => {
     const deps = makeDeps();
     const first = await setNote(deps, 'playlist', 'P-LATENIGHT', 'dinner set');
     const second = await setNote(deps, 'playlist', 'P-LATENIGHT', 'dinner set — skip track 2');
-    expect('note' in second && second.note.body).toBe('dinner set — skip track 2');
-    expect('note' in first && 'note' in second && second.note.created_at).toBe(
-      'note' in first ? first.note.created_at : undefined,
-    );
+    expect(second.body).toBe('dinner set — skip track 2');
+    expect(second.created_at).toBe(first.created_at);
   });
 
   it('trims the body and clears on empty or whitespace-only', async () => {
     const deps = makeDeps();
     const stored = await setNote(deps, 'track', 'T-ANGEL', '  too abrasive for dinner sets \n');
-    expect('note' in stored && stored.note.body).toBe('too abrasive for dinner sets');
+    expect(stored.body).toBe('too abrasive for dinner sets');
 
-    const cleared = await setNote(deps, 'track', 'T-ANGEL', '   ');
-    expect(cleared).toEqual({ subject: 'track', id: 'T-ANGEL', cleared: true });
+    const clear = (body: string) => handleSetNote({ subject: 'track', id: 'T-ANGEL', body }, deps);
+    expect(await clear('   ')).toEqual({ subject: 'track', id: 'T-ANGEL', cleared: true });
     expect(deps.cacheInstance.getNote('track', 'T-ANGEL')).toBeNull();
     // Clearing what isn't there is a no-op, not an error.
-    expect(await setNote(deps, 'track', 'T-ANGEL', '')).toEqual({
-      subject: 'track',
-      id: 'T-ANGEL',
-      cleared: true,
-    });
+    expect(await clear('')).toEqual({ subject: 'track', id: 'T-ANGEL', cleared: true });
   });
 
   it('keys playlist notes by the canonical ID after a rekey', async () => {
@@ -105,7 +103,7 @@ describe('set_note', () => {
       ['T-TEARDROP'],
     );
     deps.cacheInstance.recordPlaylistCreation('P-CREATED', 'Rearview', ['T-TEARDROP']);
-    deps.cacheInstance.applyRekey('P-CREATED', 'P-REKEYED');
+    deps.cacheInstance.applyRekey('P-CREATED', 'P-CREATED', 'P-REKEYED');
 
     const out = await setNote(deps, 'playlist', 'P-CREATED', 'arc approved');
     expect(out.id).toBe('P-REKEYED');
@@ -169,11 +167,9 @@ describe('create_playlist note', () => {
     )) as CreatePlaylistOutput;
 
     expect(out.playlist_id).toBe('P-NEW');
-    expect(out.note).toEqual({
-      body: 'User liked the arc; preferred this plain name over the poetic working title.',
-      created_at: expect.stringMatching(ISO),
-      updated_at: expect.stringMatching(ISO),
-    });
+    expect(out.note).toEqual(
+      noteShape('User liked the arc; preferred this plain name over the poetic working title.'),
+    );
     // The note is not a Music.app description — the bridge never sees it.
     expect(deps.bridge.createPlaylist).toHaveBeenCalledWith({
       name: 'The Long Way Home',
@@ -255,12 +251,6 @@ describe('note surfacing', () => {
     await setNote(deps, 'playlist', 'P-LATENIGHT', PLAYLIST_NOTE);
     return deps;
   }
-
-  const noteShape = (body: string) => ({
-    body,
-    created_at: expect.stringMatching(ISO),
-    updated_at: expect.stringMatching(ISO),
-  });
 
   it('search: full objects carry note, unannotated tracks omit it', async () => {
     const deps = await annotated();

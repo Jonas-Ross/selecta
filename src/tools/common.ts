@@ -48,8 +48,11 @@ export function toApiNote(row: {
   return { body: row.noteBody, created_at: row.noteCreatedAt!, updated_at: row.noteUpdatedAt! };
 }
 
-/** The wire note from a stored notes row (write responses). */
-export function apiNoteFromRow(note: NoteRow): ApiNote {
+/** The wire note from a stored notes row (write responses); undefined when there is none. */
+export function apiNoteFromRow(note: NoteRow): ApiNote;
+export function apiNoteFromRow(note: NoteRow | null): ApiNote | undefined;
+export function apiNoteFromRow(note: NoteRow | null): ApiNote | undefined {
+  if (note === null) return undefined;
   return { body: note.body, created_at: note.createdAt, updated_at: note.updatedAt };
 }
 

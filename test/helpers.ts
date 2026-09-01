@@ -3,9 +3,27 @@
 // (adding the #15 edit methods touched four copies before this existed).
 
 import { expect, vi } from 'vitest';
+import { SelectaCache } from '../src/cache/index.js';
+import type { ToolDeps } from '../src/tools/common.js';
 import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
 import type { AudioFeaturesRow } from '../src/types/cache.js';
 import type { SelectaError } from '../src/types/errors.js';
+import fixture from './fixtures/library.json' with { type: 'json' };
+
+export const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/**
+ * Tool deps over an in-memory cache seeded through the production refresh
+ * path from the fixture library, with an all-rejecting bridge unless
+ * overridden. cacheInstance exposes the cache for direct assertions.
+ */
+export function makeToolDeps(
+  bridgeOverrides: Partial<Bridge> = {},
+): ToolDeps & { cacheInstance: SelectaCache } {
+  const cache = SelectaCache.open(':memory:');
+  cache.refreshFromSnapshot(fixture as LibrarySnapshot, { durationMs: 1 });
+  return { cache: () => cache, bridge: makeBridge(bridgeOverrides), cacheInstance: cache };
+}
 
 /** The snapshot with per-track play/skip counters moved — the play-history stimulus. */
 export function bumpedSnapshot(

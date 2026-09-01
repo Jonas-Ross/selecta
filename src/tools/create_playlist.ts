@@ -74,9 +74,9 @@ function storeNote(
   cache: SelectaCache,
   playlistId: string,
   note: string | undefined,
-): { note?: ApiNote } {
-  if (note === undefined) return {};
-  return { note: apiNoteFromRow(cache.setNote('playlist', playlistId, note)) };
+): ApiNote | undefined {
+  if (note === undefined) return undefined;
+  return apiNoteFromRow(cache.setNote('playlist', playlistId, note));
 }
 
 export async function handleCreatePlaylist(
@@ -100,7 +100,7 @@ export async function handleCreatePlaylist(
         playlist_id: result.persistentId,
         name,
         track_count: result.trackCount,
-        ...storeNote(cache, result.persistentId, note),
+        note: storeNote(cache, result.persistentId, note),
       };
     }
 
@@ -137,7 +137,7 @@ export async function handleCreatePlaylist(
       playlist_id: result.persistentId,
       name,
       track_count: result.trackCount,
-      ...storeNote(cache, result.persistentId, note),
+      note: storeNote(cache, result.persistentId, note),
       source: {
         playlist_id: result.sourcePersistentId,
         name: result.sourceName,
