@@ -345,6 +345,65 @@ describe('create_playlist', () => {
       expect(deps.cacheInstance.resolvePlaylistId('P-PREVIEW')).toBe('P-PREVIEW');
     });
 
+    it('reports diverged twins as ambiguous instead of cloning the untouched one', async () => {
+      // iCloud twinned the first-ever preview under two new IDs; the user
+      // reordered only the copy they auditioned (P-AUDITIONED). The receipt
+      // must not alias to the untouched twin, so the clone reaches the name
+      // path and refuses with both IDs.
+      const twins: Record<string, string[]> = {
+        'P-TWIN': ['T-GLORYBOX', 'T-MIDNIGHT'],
+        'P-AUDITIONED': LIVE_ORDER,
+      };
+      const deps = await depsAfterFirstPreview(
+        vi.fn().mockImplementation(async (input: { sourcePlaylistId: string; reservedSourceName?: string }) => {
+          const live = twins[input.sourcePlaylistId];
+          if (live) {
+            return {
+              persistentId: 'P-FINAL',
+              trackCount: live.length,
+              sourcePersistentId: input.sourcePlaylistId,
+              sourceName: PREVIEW_PLAYLIST_NAME,
+              sourceTrackPersistentIds: live,
+            };
+          }
+          if (input.reservedSourceName === PREVIEW_PLAYLIST_NAME) {
+            throw new BridgeError('validation_error', 'two copies', 'ambiguous: P-TWIN, P-AUDITIONED');
+          }
+          throw new BridgeError('playlist_not_found', 'gone live');
+        }),
+      );
+      const cache = deps.cacheInstance;
+      cache.refreshFromSnapshot(
+        {
+          ...snapshot,
+          playlists: [
+            ...snapshot.playlists,
+            ...Object.entries(twins).map(([persistentId, trackPersistentIds]) => ({
+              persistentId,
+              name: PREVIEW_PLAYLIST_NAME,
+              kind: 'user' as const,
+              trackPersistentIds,
+            })),
+          ],
+        },
+        { durationMs: 1 },
+      );
+      expect(
+        cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [PREVIEW_PLAYLIST_NAME] }),
+      ).toEqual([]);
+      expect(cache.resolvePlaylistId('P-PREVIEW')).toBe('P-PREVIEW');
+
+      const err = asError(
+        await handleCreatePlaylist({ name: 'Approved', source_playlist_id: 'P-PREVIEW' }, deps),
+      );
+      expect(err.error).toBe('validation_error');
+      expect(err.hint).toContain('P-TWIN, P-AUDITIONED');
+      expect(deps.bridge.clonePlaylist).toHaveBeenCalledWith(
+        expect.objectContaining({ sourcePlaylistId: 'P-PREVIEW', reservedSourceName: PREVIEW_PLAYLIST_NAME }),
+      );
+      expect(cache.listPlaylists({ nameQuery: 'Approved' })).toEqual([]);
+    });
+
     it('never offers the reserved name for an arbitrary source ID', async () => {
       const deps = makeDeps();
       await handleCreatePlaylist({ name: 'Copy', source_playlist_id: 'P-LATENIGHT' }, deps);

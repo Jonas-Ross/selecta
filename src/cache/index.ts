@@ -343,8 +343,10 @@ export class SelectaCache {
    * `reservedSlotNames` are Selecta-owned slots whose identity is the name,
    * not the contents (the user may reorder the preview while auditioning):
    * for those, a lone same-name user playlist under a new ID is a rekey even
-   * when the sequence differs. Several same-name copies stay untouched —
-   * ambiguity is reported at clone time, never resolved by deletion here.
+   * when the sequence differs — and several same-name copies are never
+   * rekeyed, even if exactly one still matches the receipt's sequence: the
+   * untouched copy may be the iCloud twin, not the one the user auditioned.
+   * Ambiguity is reported at clone time; only identical twins are deduped.
    */
   planSyncReconciliation(opts: {
     windowMinutes: number;
@@ -373,15 +375,16 @@ export class SelectaCache {
         (id) => JSON.stringify(this.queries.getPlaylistTrackIds(id)) === wanted,
       );
       const currentId = creation.currentPersistentId;
-      // A reserved slot is the same-name list without the sequence filter.
-      const rekeyId =
-        matchIds.length === 1
+      // A reserved slot rekeys by name alone, so several same-name copies
+      // are ambiguous regardless of sequence; any other receipt rekeys to
+      // the single exact-sequence match.
+      const rekeyId = opts.reservedSlotNames?.includes(creation.name)
+        ? sameNameIds.length === 1
+          ? sameNameIds[0]!
+          : null
+        : matchIds.length === 1
           ? matchIds[0]!
-          : matchIds.length === 0 &&
-              sameNameIds.length === 1 &&
-              opts.reservedSlotNames?.includes(creation.name)
-            ? sameNameIds[0]!
-            : null;
+          : null;
       if (rekeyId !== null && rekeyId !== currentId) {
         actions.push({
           kind: 'rekey',

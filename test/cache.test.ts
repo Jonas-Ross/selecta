@@ -487,6 +487,24 @@ describe('sync reconciliation', () => {
     ]);
   });
 
+  it('never rekeys a reserved slot onto one of several copies, even the sequence match', () => {
+    // iCloud twinned the fresh preview; the user reordered only the copy they
+    // auditioned. The untouched twin still matches the receipt, but treating
+    // it as "the" slot would clone the stale order. A generic receipt keeps
+    // the exact-sequence rekey; the reserved name must stand down.
+    const cache = cacheAfterCreate();
+    cache.refreshFromSnapshot(
+      snapshotWith({ id: 'P-TWIN' }, { id: 'P-AUDITIONED', tracks: [...TRACKS].reverse() }),
+      { durationMs: 1 },
+    );
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
+      { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: CREATED_ID, toId: 'P-TWIN' },
+    ]);
+    expect(
+      cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] }),
+    ).toEqual([]);
+  });
+
   it('leaves a reserved slot alone when several same-name copies diverged', () => {
     const cache = cacheAfterCreate();
     cache.refreshFromSnapshot(
