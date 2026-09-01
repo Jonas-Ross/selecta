@@ -10,6 +10,7 @@ import {
   primaryArtist,
   stripFeat,
 } from '../src/enrich/match.js';
+import { USER_AGENT, withUserAgent } from '../src/enrich/sources.js';
 import { handleEnrichFeatures, type EnrichFeaturesOutput } from '../src/tools/enrich_features.js';
 import type { ToolDeps } from '../src/tools/common.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
@@ -44,6 +45,21 @@ describe('match heuristics', () => {
   it('escapes Lucene syntax in titles', () => {
     expect(luceneEscape('W.D.Y.W.F.M?')).toBe('W.D.Y.W.F.M\\?');
     expect(luceneEscape('AC/DC')).toBe('AC\\/DC');
+  });
+});
+
+describe('source request identity', () => {
+  it('sends the identifying Selecta User-Agent', async () => {
+    let requestInit: RequestInit | undefined;
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestInit = init;
+      return new Response('{}');
+    }) as typeof fetch;
+
+    await withUserAgent(fetchImpl)('https://example.test');
+
+    expect(new Headers(requestInit?.headers).get('User-Agent')).toBe(USER_AGENT);
+    expect(USER_AGENT).toContain('github.com/Jonas-Ross/selecta');
   });
 });
 
