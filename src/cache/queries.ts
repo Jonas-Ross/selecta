@@ -78,6 +78,38 @@ function toFtsQuery(query: string): string {
 // the dedupe key (DEDUPE_KEY below).
 const UNIT_SEPARATOR = '\u001f';
 
+function buildCoOccurrenceSourceFilter(filters: CoOccurrenceFilters): {
+  excludedSql: string;
+  includedSql: string;
+  params: Record<string, unknown>;
+} {
+  const excludeIds = [...new Set(filters.excludePlaylistIds ?? [])];
+  const excludeParams = Object.fromEntries(excludeIds.map((id, i) => [`exclude${i}`, id]));
+  const checks: string[] = [];
+  if (excludeIds.length > 0) {
+    const placeholders = excludeIds.map((_, i) => `@exclude${i}`).join(', ');
+    checks.push(`p.persistent_id IN (${placeholders})`);
+  }
+  if (filters.maxPlaylistTracks != null) {
+    checks.push(
+      `(SELECT COUNT(*) FROM playlist_tracks size_pt
+        WHERE size_pt.playlist_persistent_id = p.persistent_id) > @maxPlaylistTracks`,
+    );
+  }
+
+  const excludedSql = checks.length > 0 ? checks.join(' OR ') : '0';
+  return {
+    excludedSql,
+    includedSql: checks.length > 0 ? `AND NOT (${excludedSql})` : '',
+    params: {
+      ...excludeParams,
+      ...(filters.maxPlaylistTracks != null
+        ? { maxPlaylistTracks: filters.maxPlaylistTracks }
+        : {}),
+    },
+  };
+}
+
 // library_overview returns a fact, not a ranking, so the artist cap only exists
 // to bound tokens; artistsTotal carries the full breadth past it.
 const TOP_ARTISTS_LIMIT = 25;
@@ -848,34 +880,15 @@ export function createQueries(db: Database) {
       // facts, not a similarity score.
       const seedList = seedIds.map((_, i) => `@seed${i}`).join(', ');
       const seedParams = Object.fromEntries(seedIds.map((id, i) => [`seed${i}`, id]));
-      const excludeIds = [...new Set(filters.excludePlaylistIds ?? [])];
-      const excludeList = excludeIds.map((_, i) => `@exclude${i}`).join(', ');
-      const excludeParams = Object.fromEntries(
-        excludeIds.map((id, i) => [`exclude${i}`, id]),
-      );
-      const exclusionChecks: string[] = [];
-      if (excludeIds.length > 0) exclusionChecks.push(`p.persistent_id IN (${excludeList})`);
-      if (filters.maxPlaylistTracks != null) {
-        exclusionChecks.push(
-          `(SELECT COUNT(*) FROM playlist_tracks size_pt
-            WHERE size_pt.playlist_persistent_id = p.persistent_id) > @maxPlaylistTracks`,
-        );
-      }
-      const exclusionSql = exclusionChecks.length > 0 ? exclusionChecks.join(' OR ') : '0';
-      const params = {
-        ...seedParams,
-        ...excludeParams,
-        ...(filters.maxPlaylistTracks != null
-          ? { maxPlaylistTracks: filters.maxPlaylistTracks }
-          : {}),
-      };
+      const sourceFilter = buildCoOccurrenceSourceFilter(filters);
+      const params = { ...seedParams, ...sourceFilter.params };
 
       const sourcePlaylists = db
         .prepare(
           `SELECT COUNT(*) AS considered, COALESCE(SUM(source.excluded), 0) AS excluded
            FROM (
              SELECT p.persistent_id,
-                    CASE WHEN ${exclusionSql} THEN 1 ELSE 0 END AS excluded
+                    CASE WHEN ${sourceFilter.excludedSql} THEN 1 ELSE 0 END AS excluded
              FROM playlist_tracks pt1
              JOIN playlists p ON p.persistent_id = pt1.playlist_persistent_id AND p.kind = 'user'
              WHERE pt1.track_persistent_id IN (${seedList})
@@ -884,7 +897,6 @@ export function createQueries(db: Database) {
         )
         .get(params) as { considered: number; excluded: number };
 
-      const includedPlaylistSql = exclusionChecks.length > 0 ? `AND NOT (${exclusionSql})` : '';
       const rows = db
         .prepare(
           `SELECT ${TRACK_COLUMNS},
@@ -901,7 +913,7 @@ export function createQueries(db: Database) {
              JOIN playlist_tracks pt2 ON pt2.playlist_persistent_id = pt1.playlist_persistent_id
              WHERE pt1.track_persistent_id IN (${seedList})
                AND pt2.track_persistent_id NOT IN (${seedList})
-               ${includedPlaylistSql}
+               ${sourceFilter.includedSql}
              GROUP BY pt2.track_persistent_id
            ) shared
            JOIN tracks t ON t.persistent_id = shared.tid

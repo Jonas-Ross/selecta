@@ -23,6 +23,7 @@ import {
 } from './common.js';
 
 const MAX_SEEDS = 20;
+const MAX_EXCLUDED_PLAYLISTS = 500;
 
 export const getTrackContextInputShape = {
   track_id: z
@@ -40,9 +41,10 @@ export const getTrackContextInputShape = {
     ),
   exclude_playlist_ids: z
     .array(z.string().min(1))
+    .max(MAX_EXCLUDED_PLAYLISTS)
     .optional()
     .describe(
-      'Plain user-playlist IDs to omit from co-occurrence facts. No automatic utility detection or weighting.',
+      `Plain user-playlist IDs to omit from co-occurrence facts (max ${MAX_EXCLUDED_PLAYLISTS}). No automatic utility detection or weighting.`,
     ),
   max_playlist_tracks: z
     .number()
@@ -101,6 +103,11 @@ type ContextFiltersInput = {
   max_playlist_tracks?: number;
 };
 
+function summarizeIds(ids: string[]): string {
+  const more = ids.length > 5 ? ` (+${ids.length - 5} more)` : '';
+  return `${ids.slice(0, 5).join(', ')}${more}`;
+}
+
 function resolveCoOccurrenceFilters(
   input: ContextFiltersInput,
   deps: ToolDeps,
@@ -112,13 +119,13 @@ function resolveCoOccurrenceFilters(
   const missingIds = requestedIds.filter((_, i) => playlists[i] === null);
   if (missingIds.length > 0) {
     return validationError(
-      `exclude_playlist_ids not in the cache: ${missingIds.join(', ')}. Use IDs from list_playlists; if the library changed, run refresh_library.`,
+      `exclude_playlist_ids not in the cache: ${summarizeIds(missingIds)}. Use IDs from list_playlists; if the library changed, run refresh_library.`,
     );
   }
   const nonUserIds = requestedIds.filter((_, i) => playlists[i]!.kind !== 'user');
   if (nonUserIds.length > 0) {
     return validationError(
-      `exclude_playlist_ids must name user playlists: ${nonUserIds.join(', ')}. Smart, subscription, folder, and special playlists never contribute to co-occurrence.`,
+      `exclude_playlist_ids must name user playlists: ${summarizeIds(nonUserIds)}. Smart, subscription, folder, and special playlists never contribute to co-occurrence.`,
     );
   }
   return {
