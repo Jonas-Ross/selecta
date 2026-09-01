@@ -87,31 +87,27 @@ export type InspectTracklistOutput = TracklistInspection & {
   cache_age_hours: number | null;
 };
 
-export const INSPECT_TRACKLIST_DESCRIPTION = `Inspect an ordered playlist draft using only Selecta's local cache, before preview_playlist or create_playlist. Returns the resolved tracks in the exact supplied order, known runtime (with any missing-duration IDs), exact repeated IDs, distinct owned copies of the same trimmed/case-insensitive title + artist where detectable, artist occurrence counts, raw play/skip/loved/rating signal, BPM/key/danceability coverage, grouped feature gaps naming affected track IDs once per missing-field combination, and a fingerprint. Duplicate positions are 0-based. fingerprint is SHA-256 over the UTF-8 JSON array of supplied IDs, including order and duplicates; to compare a later draft, inspect that later ordered ID list and compare fingerprints (write tools do not accept it). Unknown IDs fail with track_not_found and no partial inspection. Reports facts only — no transition score, variety judgment, quality flag, or recommendation. Never reads Music.app or the network.`;
+export const INSPECT_TRACKLIST_DESCRIPTION = `Inspect an ordered playlist draft using only Selecta's local cache, before preview_playlist or create_playlist. Returns the resolved tracks in the exact supplied order, known runtime (with any missing-duration IDs), exact repeated IDs, distinct owned copies of the same trimmed/case-insensitive title + artist where detectable, artist occurrence counts, raw play/skip/loved/rating signal, BPM/key/danceability coverage, grouped feature gaps naming affected track IDs once per missing-field combination, and a fingerprint. Duplicate positions are 0-based. The fingerprint is SHA-256 over the UTF-8 JSON array of supplied IDs, including order and duplicates; to compare a later draft, inspect that later ordered ID list and compare fingerprints (write tools do not accept it). Unknown IDs fail with track_not_found and no partial inspection. Reports facts only — no transition score, variety judgment, quality flag, or recommendation. Never reads Music.app or the network.`;
 
 export function orderedTrackIdsFingerprint(trackIds: string[]): string {
   return `sha256:${createHash('sha256').update(JSON.stringify(trackIds), 'utf8').digest('hex')}`;
 }
 
 function compactTrack(row: TrackRow): InspectedTrack {
-  const api = toApiTrack(row);
-  const compact: InspectedTrack = {
-    persistent_id: api.persistent_id,
-    signal: {
-      play_count: api.signal.play_count,
-      skip_count: api.signal.skip_count,
-    },
-  };
-  if (api.title !== undefined) compact.title = api.title;
-  if (api.artist !== undefined) compact.artist = api.artist;
-  if (api.album !== undefined) compact.album = api.album;
-  if (api.duration_seconds !== undefined) compact.duration_seconds = api.duration_seconds;
-  if (api.bpm !== undefined) compact.bpm = api.bpm;
-  if (api.musical_key !== undefined) compact.musical_key = api.musical_key;
-  if (api.danceability !== undefined) compact.danceability = api.danceability;
-  if (api.signal.rating !== undefined) compact.signal.rating = api.signal.rating;
-  if (api.signal.loved !== undefined) compact.signal.loved = api.signal.loved;
-  return compact;
+  const {
+    year: _year,
+    genre: _genre,
+    location_kind: _locationKind,
+    signal,
+    ...track
+  } = toApiTrack(row);
+  const {
+    disliked: _disliked,
+    last_played: _lastPlayed,
+    date_added: _dateAdded,
+    ...compactSignal
+  } = signal;
+  return { ...track, signal: compactSignal };
 }
 
 function positionsById(rows: TrackRow[]): Map<string, number[]> {
