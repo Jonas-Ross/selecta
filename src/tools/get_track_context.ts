@@ -22,6 +22,7 @@ import {
 } from './common.js';
 
 const MAX_SEEDS = 20;
+const MAX_EXCLUDED_PLAYLISTS = 500;
 
 export const getTrackContextInputShape = {
   track_id: z
@@ -39,9 +40,10 @@ export const getTrackContextInputShape = {
     ),
   exclude_playlist_ids: z
     .array(z.string().min(1))
+    .max(MAX_EXCLUDED_PLAYLISTS)
     .optional()
     .describe(
-      'Plain user-playlist IDs to omit from co-occurrence facts. No automatic utility detection or weighting.',
+      `Plain user-playlist IDs to omit from co-occurrence facts (max ${MAX_EXCLUDED_PLAYLISTS}). No automatic utility detection or weighting.`,
     ),
   max_playlist_tracks: z
     .number()

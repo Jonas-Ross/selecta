@@ -460,6 +460,19 @@ describe('get_track_context', () => {
     expect(smart.error).toBe('validation_error');
     expect(smart.hint).toContain('user playlists');
 
+    const tooMany = asError(
+      await handleGetTrackContext(
+        {
+          track_id: 'T-TEARDROP',
+          exclude_playlist_ids: Array.from({ length: 501 }, (_, i) => `P-${i}`),
+        },
+        deps,
+      ),
+    );
+    expect(tooMany.error).toBe('validation_error');
+    expect(tooMany.hint).toContain('exclude_playlist_ids');
+    expect(tooMany.hint.length).toBeLessThan(200);
+
     for (const max of [0, -1, 1.5]) {
       const invalid = asError(
         await handleGetTrackContext({ track_id: 'T-TEARDROP', max_playlist_tracks: max }, deps),
