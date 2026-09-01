@@ -25,6 +25,20 @@ export type SelectaError = {
   hint: string; // model-facing; short, actionable
 };
 
+/** Build the one model-facing error format for cached track-ID misses. */
+export function trackNotFoundError(
+  missingIds: string[],
+  context: { label?: string; consequence?: string } = {},
+): SelectaError {
+  const shown = missingIds.slice(0, 5).join(', ');
+  const more = missingIds.length > 5 ? ` (+${missingIds.length - 5} more)` : '';
+  const consequence = context.consequence != null ? ` ${context.consequence}` : '';
+  return {
+    error: 'track_not_found',
+    hint: `${context.label ?? 'Not in the cache'}: ${shown}${more}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library.${consequence}`,
+  };
+}
+
 export class BridgeError extends Error {
   constructor(
     public readonly errorCode: ErrorCode,

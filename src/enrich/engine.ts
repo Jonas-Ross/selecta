@@ -17,7 +17,7 @@
 
 import type { SelectaCache } from '../cache/index.js';
 import type { AudioFeaturesRow, PendingTrack } from '../types/cache.js';
-import { BridgeError } from '../types/errors.js';
+import { BridgeError, trackNotFoundError } from '../types/errors.js';
 import { createSources, withUserAgent, type FetchLike, type Sources } from './sources.js';
 
 const CHUNK_SIZE = 25;
@@ -174,13 +174,11 @@ function selectTargets(
   const tracks = requestedIds.map((id) => cache.getTrack(id));
   const unknownIds = requestedIds.filter((_, i) => tracks[i] == null);
   if (unknownIds.length > 0) {
-    const shown = unknownIds.slice(0, 5).join(', ');
-    const more = unknownIds.length > 5 ? ` (+${unknownIds.length - 5} more)` : '';
-    throw new BridgeError(
-      'track_not_found',
-      `Unknown enrichment target(s): ${shown}${more}`,
-      `Not in the cache: ${shown}${more}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library. No external requests were made.`,
-    );
+    const error = trackNotFoundError(unknownIds, {
+      label: 'Unknown enrichment targets',
+      consequence: 'No external requests were made.',
+    });
+    throw new BridgeError(error.error, error.hint, error.hint);
   }
 
   const pending: PendingTrack[] = [];
