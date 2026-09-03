@@ -254,7 +254,7 @@ describe('bridge reorderPlaylistTracks against real Music.app', { tags: ['integr
   // distinct positions; null when the memberships differ.
   function permutationTo(live: string[], target: string[]): number[] | null {
     if (live.length !== target.length) return null;
-    const used = new Array<boolean>(live.length).fill(false);
+    const used: boolean[] = Array.from({ length: live.length }, () => false);
     const order: number[] = [];
     for (const id of target) {
       const j = live.findIndex((liveId, idx) => !used[idx] && liveId === id);

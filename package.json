@@ -17,9 +17,9 @@
     "smoke": "npm run build && node scripts/smoke.mjs",
     "verify:echo": "npm run build && node scripts/verify-echo.mjs",
     "dev": "node dist/index.js",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "check": "npm run build && npm test && npm run lint && npm run format:check"
   },
   "dependencies": {
@@ -29,15 +29,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.1",
-    "eslint": "^10.9.1",
-    "eslint-config-prettier": "^10.1.8",
-    "globals": "^17.12.0",
-    "prettier": "^3.9.6",
+    "oxfmt": "^0.66.0",
+    "oxlint": "^1.81.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.7"
   }
 }
