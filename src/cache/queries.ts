@@ -13,7 +13,6 @@ import type {
   AudioFeaturesRow,
   CoOccurrenceFilters,
   CoOccurrenceResult,
-  CoOccurringTrack,
   NoteRow,
   NoteSubject,
   OverviewStats,
