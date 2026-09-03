@@ -88,20 +88,14 @@ export async function handleEnrichFeatures(
       parsed.data.track_ids != null
         ? { trackIds: parsed.data.track_ids }
         : { limit: parsed.data.limit ?? DEFAULT_LIMIT };
-    const summary = await enrichPendingTracks(
-      deps.cache(),
-      options,
-      deps.enrich ?? {},
-    );
+    const summary = await enrichPendingTracks(deps.cache(), options, deps.enrich ?? {});
     return {
       processed: summary.processed,
       enriched: summary.enriched,
       no_data: summary.noData,
       no_match: summary.noMatch,
       pending_remaining: summary.pendingRemaining,
-      ...(summary.skipped > 0
-        ? { skipped: summary.skipped, source_errors: summary.errors }
-        : {}),
+      ...(summary.skipped > 0 ? { skipped: summary.skipped, source_errors: summary.errors } : {}),
       ...(summary.outcomes != null
         ? {
             already_attempted: summary.alreadyAttempted ?? 0,

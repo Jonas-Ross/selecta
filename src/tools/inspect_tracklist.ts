@@ -124,10 +124,7 @@ function duplicateOwnedCopies(
   rows: TrackRow[],
   positions: Map<string, number[]>,
 ): TracklistInspection['duplicate_owned_copies'] {
-  const groups = new Map<
-    string,
-    { title: string; artist: string; persistentIds: Set<string> }
-  >();
+  const groups = new Map<string, { title: string; artist: string; persistentIds: Set<string> }>();
 
   for (const row of rows) {
     const title = row.title?.trim();

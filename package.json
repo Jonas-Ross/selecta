@@ -16,7 +16,11 @@
     "test:integration": "vitest run --tags-filter=integration",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "verify:echo": "npm run build && node scripts/verify-echo.mjs",
-    "dev": "node dist/index.js"
+    "dev": "node dist/index.js",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "check": "npm run build && npm test && npm run lint && npm run format:check"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -27,6 +31,8 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.1",
+    "oxfmt": "^0.66.0",
+    "oxlint": "^1.81.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   }

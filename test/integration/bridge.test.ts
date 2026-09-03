@@ -172,68 +172,72 @@ describe('bridge write paths against real Music.app', { tags: ['integration'] },
 // Reserved-slot recovery (#44): a clone whose source ID is gone live may fall
 // back to the slot's exact name — one plain user playlist, or refuse. Runs
 // against scratch slots only; the real Selecta Preview is never touched.
-describe('bridge clonePlaylist reserved-slot recovery against real Music.app', { tags: ['integration'] }, () => {
-  // Unique per run: iCloud sync resurrects recently deleted playlists.
-  const RUN = Date.now();
-  const SLOT = `Selecta Integration Slot Scratch ${RUN}`;
-  const TWIN_SLOT = `Selecta Integration Twin Slot Scratch ${RUN}`;
-  const MISSING_SLOT = `Selecta Integration Missing Slot ${RUN}`;
-  const CLONE = `Selecta Integration Slot Clone Scratch ${RUN}`;
-  afterEach(async () => {
-    for (const name of [SLOT, TWIN_SLOT, CLONE]) await deletePlaylistsByName(name);
-  });
-
-  it('recovers the slot by name when the source ID is gone live, in the live order', async () => {
-    const trackIds = await testTrackIds();
-    await bridge.replacePlaylist({ name: SLOT, trackIds });
-
-    const result = await bridge.clonePlaylist({
-      name: CLONE,
-      sourcePlaylistId: 'NOT-A-REAL-PLAYLIST',
-      reservedSourceName: SLOT,
+describe(
+  'bridge clonePlaylist reserved-slot recovery against real Music.app',
+  { tags: ['integration'] },
+  () => {
+    // Unique per run: iCloud sync resurrects recently deleted playlists.
+    const RUN = Date.now();
+    const SLOT = `Selecta Integration Slot Scratch ${RUN}`;
+    const TWIN_SLOT = `Selecta Integration Twin Slot Scratch ${RUN}`;
+    const MISSING_SLOT = `Selecta Integration Missing Slot ${RUN}`;
+    const CLONE = `Selecta Integration Slot Clone Scratch ${RUN}`;
+    afterEach(async () => {
+      for (const name of [SLOT, TWIN_SLOT, CLONE]) await deletePlaylistsByName(name);
     });
-    expect(result.sourceName).toBe(SLOT);
-    expect(result.sourceTrackPersistentIds).toEqual(trackIds);
-    expect(result.trackCount).toBe(trackIds.length);
-    const readBack = await bridge.readPlaylist(result.persistentId);
-    expect(readBack.trackPersistentIds).toEqual(trackIds);
-  }, 120_000);
 
-  it('a live source ID wins over the reserved name', async () => {
-    const source = await bridge.readPlaylist(await requireFixturePlaylistId());
-    const result = await bridge.clonePlaylist({
-      name: CLONE,
-      sourcePlaylistId: source.persistentId,
-      reservedSourceName: MISSING_SLOT,
-    });
-    expect(result.sourcePersistentId).toBe(source.persistentId);
-    expect(result.sourceTrackPersistentIds).toEqual(source.trackPersistentIds);
-  }, 120_000);
+    it('recovers the slot by name when the source ID is gone live, in the live order', async () => {
+      const trackIds = await testTrackIds();
+      await bridge.replacePlaylist({ name: SLOT, trackIds });
 
-  it('refuses a missing or ambiguous slot without creating anything', async () => {
-    await expect(
-      bridge.clonePlaylist({
+      const result = await bridge.clonePlaylist({
         name: CLONE,
         sourcePlaylistId: 'NOT-A-REAL-PLAYLIST',
+        reservedSourceName: SLOT,
+      });
+      expect(result.sourceName).toBe(SLOT);
+      expect(result.sourceTrackPersistentIds).toEqual(trackIds);
+      expect(result.trackCount).toBe(trackIds.length);
+      const readBack = await bridge.readPlaylist(result.persistentId);
+      expect(readBack.trackPersistentIds).toEqual(trackIds);
+    }, 120_000);
+
+    it('a live source ID wins over the reserved name', async () => {
+      const source = await bridge.readPlaylist(await requireFixturePlaylistId());
+      const result = await bridge.clonePlaylist({
+        name: CLONE,
+        sourcePlaylistId: source.persistentId,
         reservedSourceName: MISSING_SLOT,
-      }),
-    ).rejects.toMatchObject({ errorCode: 'playlist_not_found' });
+      });
+      expect(result.sourcePersistentId).toBe(source.persistentId);
+      expect(result.sourceTrackPersistentIds).toEqual(source.trackPersistentIds);
+    }, 120_000);
 
-    // Two plain user playlists wearing the slot name: Music.app allows it.
-    const trackIds = await testTrackIds();
-    await bridge.createPlaylist({ name: TWIN_SLOT, trackIds });
-    await bridge.createPlaylist({ name: TWIN_SLOT, trackIds: trackIds.slice(0, 1) });
-    await expect(
-      bridge.clonePlaylist({
-        name: CLONE,
-        sourcePlaylistId: 'NOT-A-REAL-PLAYLIST',
-        reservedSourceName: TWIN_SLOT,
-      }),
-    ).rejects.toMatchObject({ errorCode: 'validation_error' });
+    it('refuses a missing or ambiguous slot without creating anything', async () => {
+      await expect(
+        bridge.clonePlaylist({
+          name: CLONE,
+          sourcePlaylistId: 'NOT-A-REAL-PLAYLIST',
+          reservedSourceName: MISSING_SLOT,
+        }),
+      ).rejects.toMatchObject({ errorCode: 'playlist_not_found' });
 
-    expect(await findPlaylistByName(CLONE)).toBeNull();
-  }, 120_000);
-});
+      // Two plain user playlists wearing the slot name: Music.app allows it.
+      const trackIds = await testTrackIds();
+      await bridge.createPlaylist({ name: TWIN_SLOT, trackIds });
+      await bridge.createPlaylist({ name: TWIN_SLOT, trackIds: trackIds.slice(0, 1) });
+      await expect(
+        bridge.clonePlaylist({
+          name: CLONE,
+          sourcePlaylistId: 'NOT-A-REAL-PLAYLIST',
+          reservedSourceName: TWIN_SLOT,
+        }),
+      ).rejects.toMatchObject({ errorCode: 'validation_error' });
+
+      expect(await findPlaylistByName(CLONE)).toBeNull();
+    }, 120_000);
+  },
+);
 
 // Runs BEFORE the edit-paths barrage below: the reorder drift guard is
 // churn-sensitive, and the edit sequence leaves iCloud sync settling in its
@@ -250,7 +254,7 @@ describe('bridge reorderPlaylistTracks against real Music.app', { tags: ['integr
   // distinct positions; null when the memberships differ.
   function permutationTo(live: string[], target: string[]): number[] | null {
     if (live.length !== target.length) return null;
-    const used = new Array<boolean>(live.length).fill(false);
+    const used: boolean[] = Array.from({ length: live.length }, () => false);
     const order: number[] = [];
     for (const id of target) {
       const j = live.findIndex((liveId, idx) => !used[idx] && liveId === id);
@@ -301,7 +305,11 @@ describe('bridge reorderPlaylistTracks against real Music.app', { tags: ['integr
       const back = permutationTo(live, original);
       if (back) {
         try {
-          await bridge.reorderPlaylistTracks({ playlistId: plId, order: back, expectedTrackIds: live });
+          await bridge.reorderPlaylistTracks({
+            playlistId: plId,
+            order: back,
+            expectedTrackIds: live,
+          });
         } catch (restoreErr) {
           // A drift trip here is the same weather; don't let it mask the
           // try block's real failure.
@@ -372,11 +380,7 @@ describe('bridge edit paths against real Music.app', { tags: ['integration'] }, 
     const settle = () => new Promise((r) => setTimeout(r, 3_000));
     try {
       const appended = await bridge.addPlaylistTracks({ playlistId: plId, trackIds: [x, y] });
-      expect(appended.trackPersistentIds).toEqual([
-        ...appended.preEditTrackPersistentIds,
-        x,
-        y,
-      ]);
+      expect(appended.trackPersistentIds).toEqual([...appended.preEditTrackPersistentIds, x, y]);
       await settle();
 
       // Insert y again at the front — a duplicate occurrence, made by an edit.
@@ -391,9 +395,7 @@ describe('bridge edit paths against real Music.app', { tags: ['integration'] }, 
       // Remove by position: exactly that occurrence goes, the twin survives.
       const byPosition = await bridge.removePlaylistTracks({ playlistId: plId, positions: [0] });
       expect(byPosition.removedCount).toBe(1);
-      expect(byPosition.trackPersistentIds).toEqual(
-        byPosition.preEditTrackPersistentIds.slice(1),
-      );
+      expect(byPosition.trackPersistentIds).toEqual(byPosition.preEditTrackPersistentIds.slice(1));
       await settle();
 
       // Remove by id: EVERY occurrence of each goes — this also restores.

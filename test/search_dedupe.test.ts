@@ -5,11 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
-import {
-  handleSearch,
-  type CompactSearchOutput,
-  type SearchOutput,
-} from '../src/tools/search.js';
+import { handleSearch, type CompactSearchOutput, type SearchOutput } from '../src/tools/search.js';
 import type { ToolDeps } from '../src/tools/common.js';
 import type { LibrarySnapshot, RawTrack } from '../src/types/bridge.js';
 import { makeBridge } from './helpers.js';

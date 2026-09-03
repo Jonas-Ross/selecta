@@ -3,11 +3,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
-import {
-  handleSearch,
-  type CompactSearchOutput,
-  type SearchOutput,
-} from '../src/tools/search.js';
+import { handleSearch, type CompactSearchOutput, type SearchOutput } from '../src/tools/search.js';
 import {
   handleGetTrackContext,
   type CompactMultiSeedContextOutput,
@@ -15,10 +11,7 @@ import {
   type MultiSeedContextOutput,
   type TrackContextOutput,
 } from '../src/tools/get_track_context.js';
-import {
-  handleListPlaylists,
-  type ListPlaylistsOutput,
-} from '../src/tools/list_playlists.js';
+import { handleListPlaylists, type ListPlaylistsOutput } from '../src/tools/list_playlists.js';
 import {
   handleLibraryOverview,
   shapeOverview,
@@ -26,10 +19,7 @@ import {
   type LibraryOverviewOutput,
 } from '../src/tools/library_overview.js';
 import type { OverviewStats } from '../src/types/cache.js';
-import {
-  handleRefreshLibrary,
-  type RefreshLibraryOutput,
-} from '../src/tools/refresh_library.js';
+import { handleRefreshLibrary, type RefreshLibraryOutput } from '../src/tools/refresh_library.js';
 import {
   COMPACT_TRACK_FIELDS,
   type ApiTrack,
@@ -152,9 +142,7 @@ describe('search', () => {
     expect(compact.total_matches).toBe(full.total_matches);
     expect(compact.cache_age_hours).toBe(full.cache_age_hours);
     expect(compact.track_fields).toEqual(COMPACT_TRACK_FIELDS);
-    expect(compact.tracks.map((t) => t.track[0])).toEqual(
-      full.tracks.map((t) => t.persistent_id),
-    );
+    expect(compact.tracks.map((t) => t.track[0])).toEqual(full.tracks.map((t) => t.persistent_id));
     for (let i = 0; i < full.tracks.length; i++) {
       expectCompactTrackParity(full.tracks[i]!, compact.tracks[i]!.track);
     }
@@ -231,11 +219,7 @@ describe('search', () => {
   it('last_played_before includes never-played tracks', async () => {
     const out = (await handleSearch({ last_played_before: '2026-01-01' }, deps)) as SearchOutput;
     // Played long ago: none. Never played: T-ANGEL, T-ROADS, T-BARE.
-    expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual([
-      'T-ANGEL',
-      'T-BARE',
-      'T-ROADS',
-    ]);
+    expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual(['T-ANGEL', 'T-BARE', 'T-ROADS']);
   });
 
   it('caps results at limit but reports the unbounded total', async () => {
@@ -315,11 +299,7 @@ describe('search', () => {
       { in_playlist: 'P-TRIPHOP', sort: 'playlist_order' },
       deps,
     )) as SearchOutput;
-    expect(out.tracks.map((t) => t.persistent_id)).toEqual([
-      'T-TEARDROP',
-      'T-ANGEL',
-      'T-GLORYBOX',
-    ]);
+    expect(out.tracks.map((t) => t.persistent_id)).toEqual(['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX']);
   });
 
   it('sort: playlist_order without in_playlist is a validation_error', async () => {
@@ -330,7 +310,10 @@ describe('search', () => {
 
   it('sort overrides relevance ordering even with a free-text query', async () => {
     // Both Dummy tracks match; least_played puts ROADS (7) ahead of GLORYBOX (30).
-    const out = (await handleSearch({ query: 'dummy', sort: 'least_played' }, deps)) as SearchOutput;
+    const out = (await handleSearch(
+      { query: 'dummy', sort: 'least_played' },
+      deps,
+    )) as SearchOutput;
     expect(out.tracks.map((t) => t.persistent_id)).toEqual(['T-ROADS', 'T-GLORYBOX']);
   });
 
@@ -424,10 +407,12 @@ describe('get_track_context', () => {
   });
 
   it('compacts every single-seed track without losing context facts', async () => {
-    deps.cache().saveAudioFeatures([
-      featuresRow(),
-      featuresRow({ trackPersistentId: 'T-GLORYBOX', bpm: 118.3, musicalKey: 'E minor' }),
-    ]);
+    deps
+      .cache()
+      .saveAudioFeatures([
+        featuresRow(),
+        featuresRow({ trackPersistentId: 'T-GLORYBOX', bpm: 118.3, musicalKey: 'E minor' }),
+      ]);
     const full = (await handleGetTrackContext(
       { track_id: 'T-TEARDROP' },
       deps,
@@ -451,9 +436,7 @@ describe('get_track_context', () => {
       const compactTrack = compact.co_occurring_tracks[i]!;
       expectCompactTrackParity(fullTrack, compactTrack.track);
       expect(compactTrack.shared_playlist_count).toBe(fullTrack.shared_playlist_count);
-      const playlists = compactTrack.playlist_refs.map(
-        (ref) => compact.playlist_legend[ref]!,
-      );
+      const playlists = compactTrack.playlist_refs.map((ref) => compact.playlist_legend[ref]!);
       expect(playlists.map((playlist) => playlist.name).sort()).toEqual(
         [...fullTrack.shared_playlist_names].sort(),
       );
@@ -479,10 +462,12 @@ describe('get_track_context', () => {
   });
 
   it('carries audio features on the seed and the surrounding tracks', async () => {
-    deps.cache().saveAudioFeatures([
-      featuresRow(),
-      featuresRow({ trackPersistentId: 'T-GLORYBOX', bpm: 118.3, musicalKey: 'E minor' }),
-    ]);
+    deps
+      .cache()
+      .saveAudioFeatures([
+        featuresRow(),
+        featuresRow({ trackPersistentId: 'T-GLORYBOX', bpm: 118.3, musicalKey: 'E minor' }),
+      ]);
     const out = (await handleGetTrackContext(
       { track_id: 'T-TEARDROP' },
       deps,
@@ -522,10 +507,12 @@ describe('get_track_context', () => {
   });
 
   it('compacts multi-seed tracks without losing counts, seed matches, names, or audit data', async () => {
-    deps.cache().saveAudioFeatures([
-      featuresRow(),
-      featuresRow({ trackPersistentId: 'T-GLORYBOX', bpm: 118.3, musicalKey: 'E minor' }),
-    ]);
+    deps
+      .cache()
+      .saveAudioFeatures([
+        featuresRow(),
+        featuresRow({ trackPersistentId: 'T-GLORYBOX', bpm: 118.3, musicalKey: 'E minor' }),
+      ]);
     const args = { seed_ids: ['T-TEARDROP', 'T-ANGEL'] };
     const full = (await handleGetTrackContext(args, deps)) as MultiSeedContextOutput;
     const compact = (await handleGetTrackContext(
@@ -542,13 +529,9 @@ describe('get_track_context', () => {
       const fullTrack = full.co_occurring_tracks[i]!;
       const compactTrack = compact.co_occurring_tracks[i]!;
       expectCompactTrackParity(fullTrack, compactTrack.track);
-      expect(compactTrack.total_shared_playlist_count).toBe(
-        fullTrack.total_shared_playlist_count,
-      );
+      expect(compactTrack.total_shared_playlist_count).toBe(fullTrack.total_shared_playlist_count);
       expect(compactTrack.seeds_matched).toBe(fullTrack.seeds_matched);
-      const playlists = compactTrack.playlist_refs.map(
-        (ref) => compact.playlist_legend[ref]!,
-      );
+      const playlists = compactTrack.playlist_refs.map((ref) => compact.playlist_legend[ref]!);
       expect(playlists.map((playlist) => playlist.name).sort()).toEqual(
         [...fullTrack.shared_playlist_names].sort(),
       );
@@ -663,10 +646,7 @@ describe('get_track_context', () => {
     expect(unknown.hint).toContain('P-NOPE');
 
     const emptyId = asError(
-      await handleGetTrackContext(
-        { track_id: 'T-TEARDROP', exclude_playlist_ids: [''] },
-        deps,
-      ),
+      await handleGetTrackContext({ track_id: 'T-TEARDROP', exclude_playlist_ids: [''] }, deps),
     );
     expect(emptyId.error).toBe('validation_error');
     expect(emptyId.hint).toContain('exclude_playlist_ids.0');
@@ -738,9 +718,7 @@ describe('get_track_context', () => {
   });
 
   it('names unknown seeds in a track_not_found envelope', async () => {
-    const err = asError(
-      await handleGetTrackContext({ seed_ids: ['T-TEARDROP', 'T-NOPE'] }, deps),
-    );
+    const err = asError(await handleGetTrackContext({ seed_ids: ['T-TEARDROP', 'T-NOPE'] }, deps));
     expect(err.error).toBe('track_not_found');
     expect(err.hint).toContain('T-NOPE');
   });
@@ -1006,7 +984,11 @@ describe('refresh_library sync reconciliation', () => {
   ): ToolDeps & { cacheInstance: SelectaCache } {
     const cache = SelectaCache.open(':memory:');
     cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
-    cache.upsertPlaylistAfterWrite({ persistentId: created.id, trackCount: 2 }, created.name, TRACKS);
+    cache.upsertPlaylistAfterWrite(
+      { persistentId: created.id, trackCount: 2 },
+      created.name,
+      TRACKS,
+    );
     cache.recordPlaylistCreation(created.id, created.name, TRACKS);
     const bridge = makeBridge({ deletePlaylistById: vi.fn().mockResolvedValue(1), ...overrides });
     return { cache: () => cache, bridge, cacheInstance: cache };
@@ -1049,7 +1031,9 @@ describe('refresh_library sync reconciliation', () => {
       {
         readLibrary: vi
           .fn()
-          .mockResolvedValue(echoSnapshot(['P-PREVIEW-2'], 'Selecta Preview', [...TRACKS].reverse())),
+          .mockResolvedValue(
+            echoSnapshot(['P-PREVIEW-2'], 'Selecta Preview', [...TRACKS].reverse()),
+          ),
       },
       { id: 'P-PREVIEW', name: 'Selecta Preview' },
     );
@@ -1104,10 +1088,12 @@ describe('play history surfaces', () => {
 
   it('library_overview: recent_activity reports the captured window, scoped by filters', async () => {
     const deps = makeDeps();
-    deps.cache().refreshFromSnapshot(
-      bumped({ 'T-TEARDROP': { plays: 3, skips: 1 }, 'T-ROADS': { plays: 2 } }),
-      { durationMs: 1 },
-    );
+    deps
+      .cache()
+      .refreshFromSnapshot(
+        bumped({ 'T-TEARDROP': { plays: 3, skips: 1 }, 'T-ROADS': { plays: 2 } }),
+        { durationMs: 1 },
+      );
 
     const out = (await handleLibraryOverview({}, deps)) as LibraryOverviewOutput;
     expect(out.recent_activity).toMatchObject({
@@ -1119,7 +1105,10 @@ describe('play history surfaces', () => {
     expect(Date.parse(out.recent_activity.since)).not.toBeNaN();
 
     const teardropArtist = snapshot.tracks.find((t) => t.persistentId === 'T-TEARDROP')!.artist!;
-    const scoped = (await handleLibraryOverview({ artist: teardropArtist }, deps)) as LibraryOverviewOutput;
+    const scoped = (await handleLibraryOverview(
+      { artist: teardropArtist },
+      deps,
+    )) as LibraryOverviewOutput;
     expect(scoped.recent_activity.total_plays).toBe(3);
   });
 

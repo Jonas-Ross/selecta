@@ -47,13 +47,12 @@ export const createPlaylistInputShape = {
     ),
 };
 
-const CreatePlaylistInput = z.strictObject(createPlaylistInputShape).refine(
-  (input) => (input.track_ids === undefined) !== (input.source_playlist_id === undefined),
-  {
+const CreatePlaylistInput = z
+  .strictObject(createPlaylistInputShape)
+  .refine((input) => (input.track_ids === undefined) !== (input.source_playlist_id === undefined), {
     path: ['track_ids'],
     message: 'Provide exactly one of track_ids or source_playlist_id.',
-  },
-);
+  });
 
 export type CreatePlaylistOutput = {
   playlist_id: string;

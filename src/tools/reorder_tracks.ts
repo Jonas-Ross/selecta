@@ -24,7 +24,7 @@ export const reorderTracksInputShape = {
     .min(1)
     .max(1000)
     .describe(
-      'Complete new order as a permutation of the playlist\'s current 0-based positions: position i of the result gets the entry currently at order[i]. Get the current order first via search with in_playlist + sort playlist_order.',
+      "Complete new order as a permutation of the playlist's current 0-based positions: position i of the result gets the entry currently at order[i]. Get the current order first via search with in_playlist + sort playlist_order.",
     ),
 };
 

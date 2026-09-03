@@ -44,7 +44,9 @@ step('library_overview: whole library, then a loved slice');
 const overview = await call(client, 'library_overview', {});
 // The unfiltered aggregate scan must agree with the snapshot just written.
 if (overview.total_tracks !== refresh.track_count) {
-  fail(`overview total_tracks ${overview.total_tracks} != refresh track_count ${refresh.track_count}`);
+  fail(
+    `overview total_tracks ${overview.total_tracks} != refresh track_count ${refresh.track_count}`,
+  );
 }
 console.log(
   `${overview.total_tracks} tracks, ${overview.total_runtime_human}, ${overview.artists_total} artists; ` +
@@ -55,7 +57,9 @@ console.log(
 );
 const lovedOverview = await call(client, 'library_overview', { loved: true });
 if (!lovedOverview.filtered || lovedOverview.total_tracks > overview.total_tracks) {
-  fail(`loved slice (${lovedOverview.total_tracks}, filtered=${lovedOverview.filtered}) inconsistent with whole library (${overview.total_tracks})`);
+  fail(
+    `loved slice (${lovedOverview.total_tracks}, filtered=${lovedOverview.filtered}) inconsistent with whole library (${overview.total_tracks})`,
+  );
 }
 console.log(`loved slice: ${lovedOverview.total_tracks} tracks`);
 

@@ -79,7 +79,9 @@ console.log(JSON.stringify(refresh.sync_reconciliation ?? { note: 'no reconcilia
 
 step('assert exactly one copy survives');
 const survivors = await listPlaylistsByName(PROBE);
-console.log(`${now()} copies=${survivors.length} [${survivors.map((c) => c.persistentId).join(', ')}]`);
+console.log(
+  `${now()} copies=${survivors.length} [${survivors.map((c) => c.persistentId).join(', ')}]`,
+);
 if (survivors.length !== 1) {
   fail(`expected exactly 1 copy of "${PROBE}", found ${survivors.length}`);
 }
@@ -89,7 +91,9 @@ try {
   await deletePlaylistsByName(PROBE);
 } catch (err) {
   // The verdict is already decided — a teardown hiccup must not obscure it.
-  console.error(`Warning: cleanup failed (${err.message}); probe "${PROBE}" may remain in Music.app`);
+  console.error(
+    `Warning: cleanup failed (${err.message}); probe "${PROBE}" may remain in Music.app`,
+  );
 }
 console.log(
   echoSeen

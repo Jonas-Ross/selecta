@@ -119,28 +119,32 @@ program
       // ETA extrapolates the run's own pace so far, so it absorbs real
       // source latency instead of guessing from the rate-limit floor.
       const startedAt = Date.now();
-      const summary = await enrichPendingTracks(cache, { limit: budget }, {
-        onProgress: (p) => {
-          // Skipped chunks count as covered ground for pace/ETA purposes —
-          // their tracks are this run's past, a later run's future.
-          const covered = p.processed + p.skipped;
-          const pct = Math.floor((covered / budget) * 100);
-          const remaining = budget - covered;
-          const eta =
-            remaining === 0
-              ? 'done'
-              : `~${formatEta(remaining * ((Date.now() - startedAt) / covered))} remaining`;
-          const skipped = p.skipped > 0 ? `, ${p.skipped} skipped` : '';
-          log.info(
-            `enriched ${p.enriched}/${p.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
-          );
+      const summary = await enrichPendingTracks(
+        cache,
+        { limit: budget },
+        {
+          onProgress: (p) => {
+            // Skipped chunks count as covered ground for pace/ETA purposes —
+            // their tracks are this run's past, a later run's future.
+            const covered = p.processed + p.skipped;
+            const pct = Math.floor((covered / budget) * 100);
+            const remaining = budget - covered;
+            const eta =
+              remaining === 0
+                ? 'done'
+                : `~${formatEta(remaining * ((Date.now() - startedAt) / covered))} remaining`;
+            const skipped = p.skipped > 0 ? `, ${p.skipped} skipped` : '';
+            log.info(
+              `enriched ${p.enriched}/${p.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
+            );
+          },
+          onChunkError: (message, trackCount) =>
+            log.error(`chunk skipped (${trackCount} tracks stay pending): ${message}`),
+          // Moment-to-moment narration: every request and its outcome, so a
+          // multi-hour backfill is never a silent cursor.
+          trace: (line) => log.info(line),
         },
-        onChunkError: (message, trackCount) =>
-          log.error(`chunk skipped (${trackCount} tracks stay pending): ${message}`),
-        // Moment-to-moment narration: every request and its outcome, so a
-        // multi-hour backfill is never a silent cursor.
-        trace: (line) => log.info(line),
-      });
+      );
       cache.close();
       process.stdout.write(
         JSON.stringify(

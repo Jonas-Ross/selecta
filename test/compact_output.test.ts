@@ -10,11 +10,7 @@ import {
   type MultiSeedContextOutput,
   type TrackContextOutput,
 } from '../src/tools/get_track_context.js';
-import {
-  handleSearch,
-  type CompactSearchOutput,
-  type SearchOutput,
-} from '../src/tools/search.js';
+import { handleSearch, type CompactSearchOutput, type SearchOutput } from '../src/tools/search.js';
 import type { ToolDeps } from '../src/tools/common.js';
 import type { LibrarySnapshot, RawTrack } from '../src/types/bridge.js';
 import { makeBridge } from './helpers.js';
@@ -63,7 +59,8 @@ function discoverySnapshot(): LibrarySnapshot {
   const memberships = PLAYLISTS.map(() => [...seedIds]);
   for (let index = 0; index < candidateIds.length; index++) {
     const playlistIndexes = [index % 6, (index + 1) % 6, (index + 3) % 6];
-    for (const playlistIndex of playlistIndexes) memberships[playlistIndex]!.push(candidateIds[index]!);
+    for (const playlistIndex of playlistIndexes)
+      memberships[playlistIndex]!.push(candidateIds[index]!);
   }
   const seedOne = {
     ...track(seedIds[0]!, 100),

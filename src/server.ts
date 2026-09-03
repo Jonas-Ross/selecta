@@ -32,7 +32,11 @@ import {
   previewPlaylistInputShape,
   PREVIEW_PLAYLIST_DESCRIPTION,
 } from './tools/preview_playlist.js';
-import { handleAddTracks, addTracksInputShape, ADD_TRACKS_DESCRIPTION } from './tools/add_tracks.js';
+import {
+  handleAddTracks,
+  addTracksInputShape,
+  ADD_TRACKS_DESCRIPTION,
+} from './tools/add_tracks.js';
 import {
   handleRemoveTracks,
   removeTracksInputShape,

@@ -103,8 +103,15 @@ Selecta only writes where you point it: it creates playlists, overwrites its own
 | `npm run test:integration` | Bridge tests against your real Music.app. Needs a user playlist named `Selecta Test` with at least two tracks. |
 | `npm run smoke` | End-to-end scenario over real MCP stdio: refresh → search → context → preview → create, then cleans up after itself. |
 | `npm run build` | TypeScript → `dist/` |
+| `npm run lint` | oxlint |
+| `npm run format:check` | oxfmt check (`npm run format` rewrites) |
+| `npm run check` | Everything CI runs: build, unit tests, lint, format check |
 
 ⚠️ Always use the npm scripts, never bare `vitest`. The bare runner ignores the tag filter and will launch Music.app from the unit suite.
+
+Run `npm run check` before pushing. GitHub Actions runs the same gates on every pull request and push to `main`; the integration and smoke suites need a real Music.app and stay local.
+
+The one-time formatting pass is listed in `.git-blame-ignore-revs`; run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once so local blame skips it (GitHub's blame view does so on its own).
 
 Architecture and working conventions are in [`CLAUDE.md`](CLAUDE.md); Music.app quirks in [`docs/music-app.md`](docs/music-app.md).
 

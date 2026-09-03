@@ -68,7 +68,8 @@ export type EnrichDeps = {
   trace?: (line: string) => void;
 };
 
-const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function enrichPendingTracks(
   cache: SelectaCache,
@@ -215,7 +216,9 @@ function selectTargets(
   return { pending, requestedIds, alreadyAttempted };
 }
 
-function matchTarget(track: PendingTrack): { artist: string; title: string; durationSeconds: number | null } | null {
+function matchTarget(
+  track: PendingTrack,
+): { artist: string; title: string; durationSeconds: number | null } | null {
   if (!track.title?.trim() || !track.artist?.trim()) return null;
   return { artist: track.artist, title: track.title, durationSeconds: track.durationSeconds };
 }

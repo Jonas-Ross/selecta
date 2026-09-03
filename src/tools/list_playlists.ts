@@ -15,7 +15,9 @@ export const listPlaylistsInputShape = {
   kind: z
     .enum(['user', 'smart', 'folder', 'subscription'])
     .optional()
-    .describe('user = hand-made; smart = rule-based; subscription = Apple Music playlists the user added; folder = grouping only.'),
+    .describe(
+      'user = hand-made; smart = rule-based; subscription = Apple Music playlists the user added; folder = grouping only.',
+    ),
   name_query: z.string().optional().describe('Case-insensitive substring match on the name.'),
 };
 

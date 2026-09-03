@@ -81,7 +81,11 @@ export async function handleRefreshLibrary(
     for (const action of actions) {
       if (action.kind === 'rekey') {
         cache.applyRekey(action.createdId, action.fromId, action.toId);
-        reconciliation.rekeys.push({ name: action.name, from_id: action.fromId, to_id: action.toId });
+        reconciliation.rekeys.push({
+          name: action.name,
+          from_id: action.fromId,
+          to_id: action.toId,
+        });
         log.info(`[sync-reconcile] rekey "${action.name}": ${action.fromId} -> ${action.toId}`);
         continue;
       }

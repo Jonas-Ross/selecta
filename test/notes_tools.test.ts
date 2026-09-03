@@ -4,21 +4,14 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { handleSetNote } from '../src/tools/set_note.js';
-import {
-  handleCreatePlaylist,
-  type CreatePlaylistOutput,
-} from '../src/tools/create_playlist.js';
+import { handleCreatePlaylist, type CreatePlaylistOutput } from '../src/tools/create_playlist.js';
 import {
   handlePreviewPlaylist,
   type PreviewPlaylistOutput,
 } from '../src/tools/preview_playlist.js';
 import { handleDeletePlaylist } from '../src/tools/delete_playlist.js';
 import { handleRefreshLibrary } from '../src/tools/refresh_library.js';
-import {
-  handleSearch,
-  type CompactSearchOutput,
-  type SearchOutput,
-} from '../src/tools/search.js';
+import { handleSearch, type CompactSearchOutput, type SearchOutput } from '../src/tools/search.js';
 import {
   handleGetTrackContext,
   type CompactTrackContextOutput,
@@ -85,7 +78,8 @@ describe('set_note', () => {
 
   it('stores the body byte-for-byte and clears on empty or whitespace-only', async () => {
     const deps = makeDeps();
-    const formatted = '  opener candidates:\n    - too abrasive for dinner sets\n  keep for late sets  \n';
+    const formatted =
+      '  opener candidates:\n    - too abrasive for dinner sets\n  keep for late sets  \n';
     const stored = await setNote(deps, 'track', 'T-ANGEL', formatted);
     expect(stored.body).toBe(formatted);
     expect(deps.cacheInstance.getNote('track', 'T-ANGEL')!.body).toBe(formatted);
@@ -117,13 +111,15 @@ describe('set_note', () => {
 
   it('rejects unknown subjects with structured errors, storing nothing', async () => {
     const deps = makeDeps();
-    expect(asError(await handleSetNote({ subject: 'track', id: 'T-NOPE', body: 'x' }, deps)).error).toBe(
-      'track_not_found',
-    );
+    expect(
+      asError(await handleSetNote({ subject: 'track', id: 'T-NOPE', body: 'x' }, deps)).error,
+    ).toBe('track_not_found');
     expect(
       asError(await handleSetNote({ subject: 'playlist', id: 'P-NOPE', body: 'x' }, deps)).error,
     ).toBe('playlist_not_found');
-    expect(deps.cacheInstance.db.prepare('SELECT COUNT(*) AS n FROM notes').get()).toEqual({ n: 0 });
+    expect(deps.cacheInstance.db.prepare('SELECT COUNT(*) AS n FROM notes').get()).toEqual({
+      n: 0,
+    });
   });
 
   it('rejects bad shapes and oversized bodies at the boundary', async () => {
@@ -180,7 +176,10 @@ describe('create_playlist note', () => {
       trackIds: ['T-TEARDROP', 'T-ROADS'],
       description: undefined,
     });
-    const listed = (await handleListPlaylists({ name_query: 'Long Way' }, deps)) as ListPlaylistsOutput;
+    const listed = (await handleListPlaylists(
+      { name_query: 'Long Way' },
+      deps,
+    )) as ListPlaylistsOutput;
     expect(listed.playlists[0]!.note).toEqual(out.note);
   });
 
@@ -246,7 +245,10 @@ describe('create_playlist note', () => {
 
     await handleRefreshLibrary({}, deps);
 
-    const listed = (await handleListPlaylists({ name_query: 'Rearview' }, deps)) as ListPlaylistsOutput;
+    const listed = (await handleListPlaylists(
+      { name_query: 'Rearview' },
+      deps,
+    )) as ListPlaylistsOutput;
     expect(listed.playlists).toHaveLength(1);
     expect(listed.playlists[0]!.id).toBe('P-REKEYED');
     expect(listed.playlists[0]!.note!.body).toBe('arc approved');
@@ -292,15 +294,20 @@ describe('note surfacing', () => {
     await setNote(deps, 'track', 'T-ANGEL', 'same-artist note');
     await setNote(deps, 'track', 'T-GLORYBOX', 'co-occurring note');
 
-    const full = (await handleGetTrackContext({ track_id: 'T-TEARDROP' }, deps)) as TrackContextOutput;
+    const full = (await handleGetTrackContext(
+      { track_id: 'T-TEARDROP' },
+      deps,
+    )) as TrackContextOutput;
     expect(full.seed.note).toEqual(noteShape(TRACK_NOTE));
     expect(full.same_artist.find((t) => t.persistent_id === 'T-ANGEL')!.note!.body).toBe(
       'same-artist note',
     );
+    expect(full.co_occurring_tracks.find((t) => t.persistent_id === 'T-GLORYBOX')!.note!.body).toBe(
+      'co-occurring note',
+    );
     expect(
-      full.co_occurring_tracks.find((t) => t.persistent_id === 'T-GLORYBOX')!.note!.body,
-    ).toBe('co-occurring note');
-    expect(full.co_occurring_tracks.find((t) => t.persistent_id === 'T-ROADS')!.note).toBeUndefined();
+      full.co_occurring_tracks.find((t) => t.persistent_id === 'T-ROADS')!.note,
+    ).toBeUndefined();
 
     const compact = (await handleGetTrackContext(
       { track_id: 'T-TEARDROP', compact: true },
@@ -316,9 +323,9 @@ describe('note surfacing', () => {
       deps,
     )) as MultiSeedContextOutput;
     expect(multi.seeds.find((t) => t.persistent_id === 'T-TEARDROP')!.note!.body).toBe(TRACK_NOTE);
-    expect(multi.co_occurring_tracks.find((t) => t.persistent_id === 'T-GLORYBOX')!.note!.body).toBe(
-      'co-occurring note',
-    );
+    expect(
+      multi.co_occurring_tracks.find((t) => t.persistent_id === 'T-GLORYBOX')!.note!.body,
+    ).toBe('co-occurring note');
   });
 
   it('inspect_tracklist: resolved draft tracks carry notes', async () => {
@@ -366,7 +373,12 @@ describe('note surfacing', () => {
   it('never affects search matching or ordering', async () => {
     const deps = await annotated();
     const before = (await handleSearch({ limit: 10 }, deps)) as SearchOutput;
-    await setNote(deps, 'track', 'T-BARE', 'Teardrop Massive Attack — a note that reads like a query');
+    await setNote(
+      deps,
+      'track',
+      'T-BARE',
+      'Teardrop Massive Attack — a note that reads like a query',
+    );
     const after = (await handleSearch({ limit: 10 }, deps)) as SearchOutput;
     expect(after.tracks.map((t) => t.persistent_id)).toEqual(
       before.tracks.map((t) => t.persistent_id),

@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.name }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: build
+            run: npm run build
+          # `npm test` filters out the `integration` tag; bare `vitest` would
+          # try to launch Music.app.
+          - name: test
+            run: npm test
+          - name: lint
+            run: npm run lint
+          - name: format
+            run: npm run format:check
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: ${{ matrix.run }}
