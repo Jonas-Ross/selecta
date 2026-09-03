@@ -53,7 +53,8 @@ export type TargetedEnrichmentOutcome =
     };
 
 export type EnrichOptions =
-  { limit: number; trackIds?: undefined } | { trackIds: string[]; limit?: undefined };
+  | { limit: number; trackIds?: undefined }
+  | { trackIds: string[]; limit?: undefined };
 
 // Injection points for tests plus the progress/failure hooks the CLI uses;
 // production defaults to the real fetch/clock/timer.

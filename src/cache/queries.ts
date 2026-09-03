@@ -644,7 +644,8 @@ export function createQueries(db: Database) {
 
     getAudioFeatures(trackPersistentId: string): AudioFeaturesRow | null {
       const row = getAudioFeaturesStmt.get(trackPersistentId) as
-        (Omit<AudioFeaturesRow, 'sources'> & { sources: string | null }) | undefined;
+        | (Omit<AudioFeaturesRow, 'sources'> & { sources: string | null })
+        | undefined;
       if (!row) return null;
       return {
         ...row,

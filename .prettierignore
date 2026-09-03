@@ -1,4 +1,0 @@
-package-lock.json
-.claude/
-# Hand-aligned tables and deliberate emphasis; Prettier reflows both.
-*.md
