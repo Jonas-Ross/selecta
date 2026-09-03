@@ -9,3 +9,4 @@ coverage/
 .env
 .env.local
 .idea/
+.claude/worktrees/
