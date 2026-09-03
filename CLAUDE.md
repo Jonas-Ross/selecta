@@ -23,8 +23,9 @@ Shared types live in `src/types/`; the cross-cutting error envelope in `src/type
 | `npm run build` | TypeScript compile to `dist/` |
 | `npm test` | Unit suite (fast, no Music.app) |
 | `npm run test:integration` | Bridge integration suite against real Music.app (slow, opt-in) |
-| `npm run lint` | ESLint (flat config, typescript-eslint recommended, no type-aware rules) |
-| `npm run format:check` | Prettier check; `npm run format` rewrites. Markdown is excluded on purpose |
+| `npm run lint` | ESLint |
+| `npm run format:check` | Prettier check; `npm run format` rewrites |
+| `npm run check` | Everything CI runs: build, unit tests, lint, format check |
 | `npm run smoke` | End-to-end smoke against the real library (builds first) |
 | `npm run verify:echo` | Live iCloud-echo reconciliation harness |
 | `npm run dev` | Run the MCP server over stdio |
@@ -42,7 +43,7 @@ Two tiers, cheapest first:
 
 - ⚠️ `npx vitest run` ignores the scripts' `--tags-filter` and runs *everything*, launching Music.app and firing the macOS Automation prompt. Use `npm test` / `npm run test:integration`.
 - The `integration` tag is the only gate (no env var).
-- CI (`.github/workflows/ci.yml`) runs build, `npm test`, lint, and format check on every PR and push to `main`, on macOS with Node 22. Integration and smoke never run hosted — they need a real Music.app.
+- CI runs `npm run check` on every PR and push to `main`. Integration and smoke never run hosted — they need a real Music.app.
 - **Integration prerequisites:** a user playlist named **`Selecta Test`** with a few tracks (at least two — reorder coverage needs a permutable order) in Music.app, plus Automation permission (macOS prompt on first run; re-enable under System Settings → Privacy & Security → Automation).
 
 ## Hard rules

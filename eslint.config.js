@@ -4,18 +4,19 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist/', 'node_modules/', 'coverage/', '.claude/'] },
+  { ignores: ['dist/', 'coverage/', '.claude/'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
     files: ['**/*.{ts,mjs,js}'],
     languageOptions: { globals: globals.node },
     rules: {
-      // Rest-sibling destructuring is how tools drop fields from a row; `_`
-      // prefixes mark the deliberately dropped names.
+      // Dropping columns via rest destructuring is the row-projection idiom
+      // (cache/queries.ts, tools/inspect_tracklist.ts); `_` args are unused
+      // callback parameters.
       '@typescript-eslint/no-unused-vars': [
         'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
+        { argsIgnorePattern: '^_', ignoreRestSiblings: true },
       ],
     },
   },

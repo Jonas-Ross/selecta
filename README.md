@@ -103,16 +103,13 @@ Selecta only writes where you point it: it creates playlists, overwrites its own
 | `npm run test:integration` | Bridge tests against your real Music.app. Needs a user playlist named `Selecta Test` with at least two tracks. |
 | `npm run smoke` | End-to-end scenario over real MCP stdio: refresh → search → context → preview → create, then cleans up after itself. |
 | `npm run build` | TypeScript → `dist/` |
-| `npm run lint` | ESLint over `src/`, `test/`, `scripts/` |
+| `npm run lint` | ESLint |
 | `npm run format:check` | Prettier check (`npm run format` rewrites) |
+| `npm run check` | Everything CI runs: build, unit tests, lint, format check |
 
 ⚠️ Always use the npm scripts, never bare `vitest`. The bare runner ignores the tag filter and will launch Music.app from the unit suite.
 
-CI runs the same four gates on every pull request and push to `main` (GitHub Actions, macOS, Node 22): build, `npm test`, lint, format check. The integration and smoke suites need a real Music.app and stay local. Before pushing:
-
-```bash
-npm run build && npm test && npm run lint && npm run format:check
-```
+Run `npm run check` before pushing. GitHub Actions runs the same gates on every pull request and push to `main`; the integration and smoke suites need a real Music.app and stay local.
 
 The one-time Prettier pass is listed in `.git-blame-ignore-revs`; run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once so local blame skips it (GitHub's blame view does so on its own).
 
