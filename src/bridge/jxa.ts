@@ -19,8 +19,7 @@ function mapJxaError(stderr: string): ErrorCode {
 
 // The bridge knows only the error code; the model-facing hint is resolved by
 // consumers via defaultHints, so no hint is attached here.
-const jxaError = (code: ErrorCode, message: string): BridgeError =>
-  new BridgeError(code, message);
+const jxaError = (code: ErrorCode, message: string): BridgeError => new BridgeError(code, message);
 
 /**
  * Run a JXA script via osascript and parse its stdout as JSON.

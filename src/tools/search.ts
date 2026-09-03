@@ -32,7 +32,7 @@ export const searchInputShape = {
     .boolean()
     .optional()
     .describe(
-      'Collapse copies of the same song (same title + artist, e.g. album vs compilation) to one row; the suppressed copies come back in that row\'s alternate_ids. Distinct titles (remix/live/edit) never collapse. Default off — duplicates stay visible.',
+      "Collapse copies of the same song (same title + artist, e.g. album vs compilation) to one row; the suppressed copies come back in that row's alternate_ids. Distinct titles (remix/live/edit) never collapse. Default off — duplicates stay visible.",
     ),
   sort: z
     .enum([

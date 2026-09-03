@@ -3,12 +3,7 @@
 // once per connection; the facade in index.ts owns transactions.
 
 import type { Database, Statement } from 'better-sqlite3';
-import type {
-  RawPlaylist,
-  RawTrack,
-  TrackLovedState,
-  TrackRatingState,
-} from '../types/bridge.js';
+import type { RawPlaylist, RawTrack, TrackLovedState, TrackRatingState } from '../types/bridge.js';
 import type {
   AudioFeaturesRow,
   CoOccurrenceFilters,
@@ -505,9 +500,7 @@ export function createQueries(db: Database) {
     DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at
     RETURNING ${NOTE_COLUMNS}
   `);
-  const deleteNoteStmt = db.prepare(
-    'DELETE FROM notes WHERE subject_kind = ? AND subject_id = ?',
-  );
+  const deleteNoteStmt = db.prepare('DELETE FROM notes WHERE subject_kind = ? AND subject_id = ?');
   const getNoteStmt = db.prepare(
     `SELECT ${NOTE_COLUMNS} FROM notes WHERE subject_kind = ? AND subject_id = ?`,
   );
@@ -651,8 +644,7 @@ export function createQueries(db: Database) {
 
     getAudioFeatures(trackPersistentId: string): AudioFeaturesRow | null {
       const row = getAudioFeaturesStmt.get(trackPersistentId) as
-        | (Omit<AudioFeaturesRow, 'sources'> & { sources: string | null })
-        | undefined;
+        (Omit<AudioFeaturesRow, 'sources'> & { sources: string | null }) | undefined;
       if (!row) return null;
       return {
         ...row,
@@ -797,9 +789,9 @@ export function createQueries(db: Database) {
       // plain rows. groupIds carries the whole group for alternate reporting.
       // The total is just the number of canonical groups — a flat aggregate.
       const total = (
-        db
-          .prepare(`SELECT COUNT(DISTINCT ${DEDUPE_KEY}) AS n ${from} ${whereSql}`)
-          .get(params) as { n: number }
+        db.prepare(`SELECT COUNT(DISTINCT ${DEDUPE_KEY}) AS n ${from} ${whereSql}`).get(params) as {
+          n: number;
+        }
       ).n;
       const winners = `
         SELECT t.persistent_id AS pid,
@@ -840,7 +832,8 @@ export function createQueries(db: Database) {
     // "activity captured since", never a per-day rate.
     overviewStats(filters: SearchFilters, recentSince: string): OverviewStats {
       const { from, whereSql, params } = buildTrackFilter(filters);
-      const and = (cond: string): string => (whereSql ? `${whereSql} AND ${cond}` : `WHERE ${cond}`);
+      const and = (cond: string): string =>
+        whereSql ? `${whereSql} AND ${cond}` : `WHERE ${cond}`;
 
       const totals = db
         .prepare(

@@ -296,16 +296,16 @@ export function roundedCacheAge(deps: ToolDeps): number | null {
 
 // Anchor the date portion: bare YYYY-MM-DD or a full ISO timestamp (…T…), but
 // not a date with a junk suffix like "2026-01-01nonsense".
-const isoDate = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}(?:$|T)/, 'expected an ISO date (YYYY-MM-DD…)');
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}(?:$|T)/, 'expected an ISO date (YYYY-MM-DD…)');
 
 export const libraryFilterShape = {
   query: z
     .string()
     .min(1)
     .optional()
-    .describe('Free text over title/artist/album, relevance-ranked. Multi-word terms AND together.'),
+    .describe(
+      'Free text over title/artist/album, relevance-ranked. Multi-word terms AND together.',
+    ),
   artist: z.string().optional().describe('Exact artist name, case-insensitive.'),
   genre: z.string().optional().describe('Exact genre name, case-insensitive.'),
   year_min: z.number().int().optional(),
@@ -316,7 +316,10 @@ export const libraryFilterShape = {
     .optional()
     .describe('Minimum tempo (BPM). Only tracks with a known tempo can match.'),
   bpm_max: z.number().positive().optional(),
-  loved: z.boolean().optional().describe('true → only favorited tracks; false → only non-favorited.'),
+  loved: z
+    .boolean()
+    .optional()
+    .describe('true → only favorited tracks; false → only non-favorited.'),
   disliked: z.boolean().optional(),
   rating_min: z.number().min(1).max(5).optional().describe('Minimum star rating, 1–5.'),
   min_plays: z.number().int().min(0).optional(),

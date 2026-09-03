@@ -14,7 +14,6 @@ import { asError, makeToolDeps } from './helpers.js';
 
 // P-TRIPHOP (user): [T-TEARDROP, T-ANGEL, T-GLORYBOX]; P-RECENT is smart.
 
-
 function editResult(
   ids: string[],
   extra: Pick<PlaylistEditResult, 'removedCount' | 'movedCount'> = {},
@@ -158,10 +157,7 @@ describe('remove_tracks', () => {
       deps,
     )) as RemoveTracksOutput;
     expect(out.removed_count).toBe(1);
-    expect(deps.cacheInstance.getPlaylistTrackIds('P-TRIPHOP')).toEqual([
-      'T-ANGEL',
-      'T-GLORYBOX',
-    ]);
+    expect(deps.cacheInstance.getPlaylistTrackIds('P-TRIPHOP')).toEqual(['T-ANGEL', 'T-GLORYBOX']);
   });
 
   it('requires track_ids and/or positions', async () => {
@@ -200,9 +196,7 @@ describe('remove_tracks', () => {
 
   it('rejects a non-user playlist as playlist_not_editable', async () => {
     const deps = makeToolDeps();
-    const err = asError(
-      await handleRemoveTracks({ playlist_id: 'P-MOODS', positions: [0] }, deps),
-    );
+    const err = asError(await handleRemoveTracks({ playlist_id: 'P-MOODS', positions: [0] }, deps));
     expect(err.error).toBe('playlist_not_editable');
     expect(deps.bridge.removePlaylistTracks).not.toHaveBeenCalled();
   });
@@ -303,9 +297,7 @@ describe('reorder_tracks', () => {
 
   it('rejects an unknown playlist before any bridge call', async () => {
     const deps = makeToolDeps();
-    const err = asError(
-      await handleReorderTracks({ playlist_id: 'P-NOPE', order: [0] }, deps),
-    );
+    const err = asError(await handleReorderTracks({ playlist_id: 'P-NOPE', order: [0] }, deps));
     expect(err.error).toBe('playlist_not_found');
     expect(err.hint).toContain('P-NOPE');
     expect(deps.bridge.reorderPlaylistTracks).not.toHaveBeenCalled();
@@ -313,9 +305,7 @@ describe('reorder_tracks', () => {
 
   it('rejects a smart playlist as playlist_not_editable', async () => {
     const deps = makeToolDeps();
-    const err = asError(
-      await handleReorderTracks({ playlist_id: 'P-RECENT', order: [0] }, deps),
-    );
+    const err = asError(await handleReorderTracks({ playlist_id: 'P-RECENT', order: [0] }, deps));
     expect(err.error).toBe('playlist_not_editable');
     expect(deps.bridge.reorderPlaylistTracks).not.toHaveBeenCalled();
   });

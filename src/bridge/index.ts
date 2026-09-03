@@ -6,10 +6,7 @@
 
 import { runJxa } from './jxa.js';
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
-import {
-  buildListLibraryTrackIdsScript,
-  buildReadLibraryScript,
-} from './scripts/read_library.js';
+import { buildListLibraryTrackIdsScript, buildReadLibraryScript } from './scripts/read_library.js';
 import {
   buildFindPlaylistByNameScript,
   buildListPlaylistsByNameScript,
@@ -97,7 +94,10 @@ export const bridge: Bridge = {
     return parseWriteResult(await runJxa(buildCreatePlaylistScript(input)));
   },
   async clonePlaylist(input): Promise<PlaylistCloneResult> {
-    return parseCloneResult(await runJxa(buildClonePlaylistScript(input)), input.reservedSourceName);
+    return parseCloneResult(
+      await runJxa(buildClonePlaylistScript(input)),
+      input.reservedSourceName,
+    );
   },
   async replacePlaylist(input): Promise<PlaylistReplaceResult> {
     const result = await runJxa(buildReplacePlaylistScript(input));
@@ -189,7 +189,9 @@ function isAmbiguousSource(value: unknown): value is { name: string; persistentI
   return typeof v.name === 'string' && isIdArray(v.persistentIds);
 }
 
-function isPlaylistEditResult(v: Record<string, unknown>): v is PlaylistEditResult & Record<string, unknown> {
+function isPlaylistEditResult(
+  v: Record<string, unknown>,
+): v is PlaylistEditResult & Record<string, unknown> {
   return (
     typeof v.persistentId === 'string' &&
     typeof v.trackCount === 'number' &&

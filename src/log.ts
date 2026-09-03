@@ -6,9 +6,7 @@
 // call sites are stable.
 
 function format(args: unknown[]): string {
-  return args
-    .map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
-    .join(' ');
+  return args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
 }
 
 export const log = {

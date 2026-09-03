@@ -117,7 +117,9 @@ export function createSources(deps: SourceDeps) {
     const data = (await getJson(url, 'MusicBrainz')) as MbSearchResponse;
     for (const rec of data.recordings ?? []) {
       if (rec.score < MB_MIN_SCORE) break;
-      if (durationCompatible(rec.length != null ? rec.length / 1000 : null, target.durationSeconds)) {
+      if (
+        durationCompatible(rec.length != null ? rec.length / 1000 : null, target.durationSeconds)
+      ) {
         trace(`  ↳ recording ${rec.id.slice(0, 8)} (score ${rec.score})`);
         return rec.id;
       }

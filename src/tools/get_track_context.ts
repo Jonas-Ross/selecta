@@ -5,11 +5,7 @@
 
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
-import type {
-  CoOccurrenceFilters,
-  PlaylistRef,
-  SourcePlaylistAudit,
-} from '../types/cache.js';
+import type { CoOccurrenceFilters, PlaylistRef, SourcePlaylistAudit } from '../types/cache.js';
 import {
   COMPACT_TRACK_FIELDS,
   missingTrackIdsError,
@@ -265,11 +261,7 @@ export async function handleGetTrackContext(
             .slice(0, SAME_ARTIST_CAP)
         : [];
 
-    const coOccurrence = cache.getCoOccurrence(
-      [seed.persistentId],
-      filters,
-      CO_OCCURRENCE_CAP,
-    );
+    const coOccurrence = cache.getCoOccurrence([seed.persistentId], filters, CO_OCCURRENCE_CAP);
     const common = {
       play_history: cache
         .getTrackPlayHistory(seed.persistentId, PLAY_HISTORY_CAP)

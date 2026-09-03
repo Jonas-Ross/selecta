@@ -4,10 +4,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
-import {
-  handleCreatePlaylist,
-  type CreatePlaylistOutput,
-} from '../src/tools/create_playlist.js';
+import { handleCreatePlaylist, type CreatePlaylistOutput } from '../src/tools/create_playlist.js';
 import {
   handlePreviewPlaylist,
   PREVIEW_PLAYLIST_NAME,
@@ -35,12 +32,10 @@ function makeDeps(
   cache.refreshFromSnapshot(library, { durationMs: 1 });
   let replaceCalls = 0;
   const bridge = makeBridge({
-    createPlaylist: vi
-      .fn()
-      .mockImplementation(async (input: { trackIds: string[] }) => ({
-        persistentId: 'P-NEW',
-        trackCount: input.trackIds.length,
-      })),
+    createPlaylist: vi.fn().mockImplementation(async (input: { trackIds: string[] }) => ({
+      persistentId: 'P-NEW',
+      trackCount: input.trackIds.length,
+    })),
     clonePlaylist: vi.fn().mockResolvedValue({
       persistentId: 'P-CLONE',
       trackCount: 3,
@@ -64,7 +59,10 @@ function makeDeps(
 function withSourcePlaylist(source: RawPlaylist): LibrarySnapshot {
   return {
     ...snapshot,
-    playlists: [...snapshot.playlists.filter((p) => p.persistentId !== source.persistentId), source],
+    playlists: [
+      ...snapshot.playlists.filter((p) => p.persistentId !== source.persistentId),
+      source,
+    ],
   };
 }
 
@@ -237,18 +235,25 @@ describe('create_playlist', () => {
     // The bridge as Music.app would answer after the rekey: the preview's
     // creation-time ID is gone, the slot lives on under P-PREVIEW-2.
     function rekeyedClone() {
-      return vi.fn().mockImplementation(async (input: { sourcePlaylistId: string; reservedSourceName?: string }) => {
-        if (input.sourcePlaylistId === 'P-PREVIEW-2' || input.reservedSourceName === PREVIEW_PLAYLIST_NAME) {
-          return {
-            persistentId: 'P-FINAL',
-            trackCount: LIVE_ORDER.length,
-            sourcePersistentId: 'P-PREVIEW-2',
-            sourceName: PREVIEW_PLAYLIST_NAME,
-            sourceTrackPersistentIds: LIVE_ORDER,
-          };
-        }
-        throw new BridgeError('playlist_not_found', 'gone live');
-      });
+      return vi
+        .fn()
+        .mockImplementation(
+          async (input: { sourcePlaylistId: string; reservedSourceName?: string }) => {
+            if (
+              input.sourcePlaylistId === 'P-PREVIEW-2' ||
+              input.reservedSourceName === PREVIEW_PLAYLIST_NAME
+            ) {
+              return {
+                persistentId: 'P-FINAL',
+                trackCount: LIVE_ORDER.length,
+                sourcePersistentId: 'P-PREVIEW-2',
+                sourceName: PREVIEW_PLAYLIST_NAME,
+                sourceTrackPersistentIds: LIVE_ORDER,
+              };
+            }
+            throw new BridgeError('playlist_not_found', 'gone live');
+          },
+        );
     }
 
     async function depsAfterFirstPreview(clonePlaylist = rekeyedClone()) {
@@ -355,22 +360,30 @@ describe('create_playlist', () => {
         'P-AUDITIONED': LIVE_ORDER,
       };
       const deps = await depsAfterFirstPreview(
-        vi.fn().mockImplementation(async (input: { sourcePlaylistId: string; reservedSourceName?: string }) => {
-          const live = twins[input.sourcePlaylistId];
-          if (live) {
-            return {
-              persistentId: 'P-FINAL',
-              trackCount: live.length,
-              sourcePersistentId: input.sourcePlaylistId,
-              sourceName: PREVIEW_PLAYLIST_NAME,
-              sourceTrackPersistentIds: live,
-            };
-          }
-          if (input.reservedSourceName === PREVIEW_PLAYLIST_NAME) {
-            throw new BridgeError('validation_error', 'two copies', 'ambiguous: P-TWIN, P-AUDITIONED');
-          }
-          throw new BridgeError('playlist_not_found', 'gone live');
-        }),
+        vi
+          .fn()
+          .mockImplementation(
+            async (input: { sourcePlaylistId: string; reservedSourceName?: string }) => {
+              const live = twins[input.sourcePlaylistId];
+              if (live) {
+                return {
+                  persistentId: 'P-FINAL',
+                  trackCount: live.length,
+                  sourcePersistentId: input.sourcePlaylistId,
+                  sourceName: PREVIEW_PLAYLIST_NAME,
+                  sourceTrackPersistentIds: live,
+                };
+              }
+              if (input.reservedSourceName === PREVIEW_PLAYLIST_NAME) {
+                throw new BridgeError(
+                  'validation_error',
+                  'two copies',
+                  'ambiguous: P-TWIN, P-AUDITIONED',
+                );
+              }
+              throw new BridgeError('playlist_not_found', 'gone live');
+            },
+          ),
       );
       const cache = deps.cacheInstance;
       cache.refreshFromSnapshot(
@@ -389,7 +402,10 @@ describe('create_playlist', () => {
         { durationMs: 1 },
       );
       expect(
-        cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [PREVIEW_PLAYLIST_NAME] }),
+        cache.planSyncReconciliation({
+          windowMinutes: 60,
+          reservedSlotNames: [PREVIEW_PLAYLIST_NAME],
+        }),
       ).toEqual([]);
       expect(cache.resolvePlaylistId('P-PREVIEW')).toBe('P-PREVIEW');
 
@@ -399,7 +415,10 @@ describe('create_playlist', () => {
       expect(err.error).toBe('validation_error');
       expect(err.hint).toContain('P-TWIN, P-AUDITIONED');
       expect(deps.bridge.clonePlaylist).toHaveBeenCalledWith(
-        expect.objectContaining({ sourcePlaylistId: 'P-PREVIEW', reservedSourceName: PREVIEW_PLAYLIST_NAME }),
+        expect.objectContaining({
+          sourcePlaylistId: 'P-PREVIEW',
+          reservedSourceName: PREVIEW_PLAYLIST_NAME,
+        }),
       );
       expect(cache.listPlaylists({ nameQuery: 'Approved' })).toEqual([]);
     });
@@ -494,9 +513,7 @@ describe('create_playlist', () => {
         .fn()
         .mockRejectedValue(new BridgeError('track_not_found', 'missing live', 'stale')),
     });
-    const err = asError(
-      await handleCreatePlaylist({ name: 'x', track_ids: ['T-TEARDROP'] }, deps),
-    );
+    const err = asError(await handleCreatePlaylist({ name: 'x', track_ids: ['T-TEARDROP'] }, deps));
     expect(err.error).toBe('track_not_found');
     expect(deps.cacheInstance.listPlaylists({ nameQuery: 'x' })).toEqual([]);
   });
@@ -538,9 +555,7 @@ describe('preview_playlist', () => {
 
   it('maps a not-running bridge failure to the envelope', async () => {
     const deps = makeDeps({
-      replacePlaylist: vi
-        .fn()
-        .mockRejectedValue(new BridgeError('music_app_not_running', 'down')),
+      replacePlaylist: vi.fn().mockRejectedValue(new BridgeError('music_app_not_running', 'down')),
     });
     const err = asError(await handlePreviewPlaylist({ track_ids: ['T-ANGEL'] }, deps));
     expect(err.error).toBe('music_app_not_running');

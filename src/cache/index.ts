@@ -118,7 +118,9 @@ export class SelectaCache {
       );
       q.rebuildFts();
       const resetNote =
-        playCountResets > 0 ? `${playCountResets} play-counter reset(s), baseline re-established` : null;
+        playCountResets > 0
+          ? `${playCountResets} play-counter reset(s), baseline re-established`
+          : null;
       q.appendRefreshLog({
         refreshedAt,
         durationMs: opts.durationMs,

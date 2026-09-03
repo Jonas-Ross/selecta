@@ -368,7 +368,11 @@ function snapshotWith(
 
 function cacheAfterCreate(): SelectaCache {
   const cache = refreshed();
-  cache.upsertPlaylistAfterWrite({ persistentId: CREATED_ID, trackCount: TRACKS.length }, NAME, TRACKS);
+  cache.upsertPlaylistAfterWrite(
+    { persistentId: CREATED_ID, trackCount: TRACKS.length },
+    NAME,
+    TRACKS,
+  );
   cache.recordPlaylistCreation(CREATED_ID, NAME, TRACKS);
   return cache;
 }
@@ -394,7 +398,13 @@ describe('sync reconciliation', () => {
       durationMs: 1,
     });
     expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
-      { kind: 'duplicate', createdId: CREATED_ID, name: NAME, keepId: 'P-ECHO', deleteIds: [CREATED_ID] },
+      {
+        kind: 'duplicate',
+        createdId: CREATED_ID,
+        name: NAME,
+        keepId: 'P-ECHO',
+        deleteIds: [CREATED_ID],
+      },
     ]);
   });
 
@@ -501,9 +511,9 @@ describe('sync reconciliation', () => {
     expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
       { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: CREATED_ID, toId: 'P-TWIN' },
     ]);
-    expect(
-      cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] }),
-    ).toEqual([]);
+    expect(cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] })).toEqual(
+      [],
+    );
   });
 
   it('leaves a reserved slot alone when several same-name copies diverged', () => {
@@ -515,9 +525,9 @@ describe('sync reconciliation', () => {
       ),
       { durationMs: 1 },
     );
-    expect(
-      cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] }),
-    ).toEqual([]);
+    expect(cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] })).toEqual(
+      [],
+    );
   });
 
   it('applyLiveRekey aliases a stale ID to the live playlist and mirrors its order', () => {
@@ -544,7 +554,9 @@ describe('sync reconciliation', () => {
     expect(cache.getPlaylist('P-MID')).toBeNull();
     expect(cache.searchTracks({ inPlaylist: CREATED_ID }).rows).toHaveLength(TRACKS.length);
     expect(cache.getRecentCreationNames(60)).toEqual([NAME]);
-    expect(cache.db.prepare('SELECT COUNT(*) AS n FROM playlist_creations').get()).toEqual({ n: 1 });
+    expect(cache.db.prepare('SELECT COUNT(*) AS n FROM playlist_creations').get()).toEqual({
+      n: 1,
+    });
   });
 
   it('getRecentCreationNames lists only in-window names', () => {
@@ -622,10 +634,9 @@ describe('play history', () => {
 
   it('prunes history with its track; surviving tracks keep theirs', () => {
     const cache = refreshed();
-    cache.refreshFromSnapshot(
-      bumped({ 'T-TEARDROP': { plays: 1 }, 'T-MIDNIGHT': { plays: 1 } }),
-      { durationMs: 1 },
-    );
+    cache.refreshFromSnapshot(bumped({ 'T-TEARDROP': { plays: 1 }, 'T-MIDNIGHT': { plays: 1 } }), {
+      durationMs: 1,
+    });
     const without: LibrarySnapshot = {
       ...snapshot,
       tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-MIDNIGHT'),
@@ -635,7 +646,13 @@ describe('play history', () => {
     expect(historyFor(cache, 'T-TEARDROP')).toHaveLength(1);
   });
 
-  function insertHistory(cache: SelectaCache, id: string, at: string, plays: number, skips: number) {
+  function insertHistory(
+    cache: SelectaCache,
+    id: string,
+    at: string,
+    plays: number,
+    skips: number,
+  ) {
     cache.db
       .prepare(
         'INSERT INTO play_history (track_persistent_id, refreshed_at, play_count_delta, skip_count_delta) VALUES (?, ?, ?, ?)',
@@ -693,10 +710,9 @@ describe('play history', () => {
   it('sort recent_plays orders by recent deltas, not lifetime count', () => {
     const cache = refreshed();
     // T-ROADS (lifetime 7) gets the most recent plays; T-MIDNIGHT (lifetime 55) none.
-    cache.refreshFromSnapshot(
-      bumped({ 'T-ROADS': { plays: 6 }, 'T-ANGEL': { plays: 1 } }),
-      { durationMs: 1 },
-    );
+    cache.refreshFromSnapshot(bumped({ 'T-ROADS': { plays: 6 }, 'T-ANGEL': { plays: 1 } }), {
+      durationMs: 1,
+    });
     const { rows } = cache.searchTracks({ sort: 'recent_plays' });
     expect(rows.slice(0, 2).map((t) => t.persistentId)).toEqual(['T-ROADS', 'T-ANGEL']);
     // The zero-delta tail is stable (ID order), so paging can't shuffle it.
@@ -754,9 +770,10 @@ describe('notes', () => {
     expect(cache.searchTracks({ query: 'teardrop' }).rows[0]!.noteBody).toBe(
       '  use this version, not the remaster  ',
     );
-    expect(cache.getCoOccurrence(['T-ROADS']).tracks.find((t) => t.persistentId === 'T-TEARDROP')!.noteBody).toBe(
-      '  use this version, not the remaster  ',
-    );
+    expect(
+      cache.getCoOccurrence(['T-ROADS']).tracks.find((t) => t.persistentId === 'T-TEARDROP')!
+        .noteBody,
+    ).toBe('  use this version, not the remaster  ');
     expect(cache.getPlaylist('P-LATENIGHT')!.noteBody).toBe('the arc works');
     expect(cache.listPlaylists({}).find((p) => p.persistentId === 'P-LATENIGHT')!.noteBody).toBe(
       'the arc works',

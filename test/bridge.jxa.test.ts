@@ -12,11 +12,7 @@ const mockExecFile = vi.mocked(execFile);
 // Drive the execFile callback the way Node does: (error, stdout, stderr).
 // On non-zero exit, `error` is an Error carrying the exit code; stdout/stderr
 // are still delivered.
-function stubExecFile(opts: {
-  error?: Error | null;
-  stdout?: string;
-  stderr?: string;
-}): void {
+function stubExecFile(opts: { error?: Error | null; stdout?: string; stderr?: string }): void {
   mockExecFile.mockImplementation(((
     _cmd: string,
     _args: readonly string[],

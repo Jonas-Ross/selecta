@@ -12,7 +12,8 @@ export default defineConfig({
     tags: [
       {
         name: 'integration',
-        description: 'Bridge tests against a real Music.app (opt-in; needs the test playlist set up).',
+        description:
+          'Bridge tests against a real Music.app (opt-in; needs the test playlist set up).',
       },
     ],
   },

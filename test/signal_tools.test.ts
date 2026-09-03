@@ -12,7 +12,6 @@ import { asError, makeToolDeps } from './helpers.js';
 
 // Fixture signal baselines: T-TEARDROP loved, rating 100; T-ANGEL neither.
 
-
 function signalResult<State>(tracks: State[], preWriteTracks: State[] = tracks) {
   return { tracks, preWriteTracks };
 }

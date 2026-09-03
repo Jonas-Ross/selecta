@@ -31,18 +31,22 @@ describe('JXA script builders interpolate args as JSON, never via shell quoting'
     const args = { name: 'Final', sourcePlaylistId: 'P-SOURCE', description: 'approved' };
     const script = buildClonePlaylistScript(args);
     expect(script).toContain(JSON.stringify(args));
-    expect(script.indexOf('playlistNotFound')).toBeLessThan(script.indexOf("Music.make"));
-    expect(script.indexOf('sourceNotUser')).toBeLessThan(script.indexOf("Music.make"));
-    expect(script.indexOf('invalidSourceTrackCount')).toBeLessThan(script.indexOf("Music.make"));
+    expect(script.indexOf('playlistNotFound')).toBeLessThan(script.indexOf('Music.make'));
+    expect(script.indexOf('sourceNotUser')).toBeLessThan(script.indexOf('Music.make'));
+    expect(script.indexOf('invalidSourceTrackCount')).toBeLessThan(script.indexOf('Music.make'));
     expect(script.indexOf('source.tracks.persistentID()')).toBeLessThan(
-      script.indexOf("Music.make"),
+      script.indexOf('Music.make'),
     );
-    expect(script.indexOf('missingTrackIds')).toBeLessThan(script.indexOf("Music.make"));
+    expect(script.indexOf('missingTrackIds')).toBeLessThan(script.indexOf('Music.make'));
     expect(script).toContain('addTracksInOrder(pl, sourceTrackPersistentIds)');
   });
 
   it('buildClonePlaylistScript recovers a reserved slot by name only after the ID lookup misses', () => {
-    const args = { name: 'Final', sourcePlaylistId: 'P-STALE', reservedSourceName: 'Selecta Preview' };
+    const args = {
+      name: 'Final',
+      sourcePlaylistId: 'P-STALE',
+      reservedSourceName: 'Selecta Preview',
+    };
     const script = buildClonePlaylistScript(args);
     expect(script).toContain(JSON.stringify(args));
     const idLookup = script.indexOf('whose({ persistentID: args.sourcePlaylistId })');
@@ -84,9 +88,7 @@ describe('JXA script builders interpolate args as JSON, never via shell quoting'
     const args = { trackIds: ['T1'], rating: 80 };
     const script = buildSetRatingScript(args);
     expect(script).toContain(JSON.stringify(args));
-    expect(script.indexOf('missingTrackIds')).toBeLessThan(
-      script.indexOf('.rating = args.rating'),
-    );
+    expect(script.indexOf('missingTrackIds')).toBeLessThan(script.indexOf('.rating = args.rating'));
     // Computed (album-derived) ratings must never read back as user signal —
     // the readback goes through the ratingKind guard.
     expect(script).toContain("t.ratingKind() === 'user'");
