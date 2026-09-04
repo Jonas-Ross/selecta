@@ -447,6 +447,11 @@ export function createQueries(db: Database) {
     INSERT OR REPLACE INTO refresh_log (refreshed_at, duration_ms, track_count, playlist_count, notes)
     VALUES (@refreshedAt, @durationMs, @trackCount, @playlistCount, @notes)
   `);
+  const appendRefreshNoteStmt = db.prepare(`
+    UPDATE refresh_log
+       SET notes = CASE WHEN notes IS NULL OR notes = '' THEN @note ELSE notes || '; ' || @note END
+     WHERE refreshed_at = @refreshedAt
+  `);
 
   const latestRefreshStmt = db.prepare(
     'SELECT refreshed_at AS refreshedAt FROM refresh_log ORDER BY refreshed_at DESC LIMIT 1',
@@ -676,6 +681,10 @@ export function createQueries(db: Database) {
         playlistCount: entry.playlistCount,
         notes: entry.notes ?? null,
       });
+    },
+
+    appendRefreshNote(refreshedAt: string, note: string): void {
+      appendRefreshNoteStmt.run({ refreshedAt, note });
     },
 
     recordPlaylistCreation(entry: {
