@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { RECONCILE_WINDOW_MINUTES } from '../cache/index.js';
+import { formatReconciliationSummary } from '../diagnostics/status.js';
 import { log } from '../log.js';
 import type { SelectaError } from '../types/errors.js';
 import { parseInput, toErrorEnvelope, type ToolDeps } from './common.js';
@@ -112,6 +113,15 @@ export async function handleRefreshLibrary(
         }
       }
     }
+
+    cache.appendRefreshNote(
+      result.refreshedAt,
+      formatReconciliationSummary({
+        rekeys: reconciliation.rekeys.length,
+        duplicates_removed: reconciliation.duplicates_removed.length,
+        failures: reconciliation.failures.length,
+      }),
+    );
 
     return {
       duration_ms: durationMs,

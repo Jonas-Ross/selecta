@@ -1063,6 +1063,13 @@ describe('refresh_library sync reconciliation', () => {
     const deps = makeDeps();
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
     expect(out.sync_reconciliation).toBeUndefined();
+    const row = deps
+      .cache()
+      .db.prepare('SELECT notes FROM refresh_log WHERE refreshed_at = ?')
+      .get(out.refreshed_at) as { notes: string };
+    expect(row.notes).toContain(
+      'sync_reconciliation={"rekeys":0,"duplicates_removed":0,"failures":0}',
+    );
   });
 });
 

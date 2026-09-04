@@ -37,6 +37,15 @@ node dist/index.js enrich -n 200 # or a batch at a time
 
 This looks tracks up on MusicBrainz/AcousticBrainz and Deezer (free, no API keys) at roughly 1–3 seconds per track, so a large library takes a while — it's safe to interrupt and resume. Coverage is partial by nature: many tracks, especially recent releases, simply have no data anywhere, and those are remembered so they aren't looked up twice. Refreshing the library never discards features already fetched.
 
+For a read-only health report, use `status`. It checks the database without creating, migrating, refreshing, enriching, or contacting Music.app. `doctor` adds one read-only Music.app availability and Automation probe. Both write one JSON result to stdout.
+
+```bash
+node dist/index.js status
+node dist/index.js doctor
+```
+
+Set `SELECTA_DEBUG=1` to mirror stderr logging to `~/Library/Logs/Selecta/selecta.log`. Failure to create or append that file is reported on stderr and never stops the MCP server.
+
 ## Register with Claude
 
 For Claude Desktop, add this to `~/Library/Application Support/Claude/claude_desktop_config.json` (create the `mcpServers` key if it isn't there) and restart the app:
@@ -117,6 +126,7 @@ Architecture and working conventions are in [`CLAUDE.md`](CLAUDE.md); Music.app 
 
 ## Troubleshooting
 
+- Start with `node dist/index.js status`; use `doctor` when the report points toward the Music.app boundary.
 - `automation_permission_denied`: System Settings → Privacy & Security → Automation → enable Music for your terminal (CLI use) and for Claude Desktop.
 - `music_app_not_running`: open Music.app and retry.
 - Tools return `cache_age_hours: null`: the cache was never populated. Run `refresh`.

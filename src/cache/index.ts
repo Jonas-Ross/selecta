@@ -143,6 +143,11 @@ export class SelectaCache {
     return this.queries.getCacheAgeHours();
   }
 
+  /** Add an observation to one completed refresh without rewriting its facts. */
+  appendRefreshNote(refreshedAt: string, note: string): void {
+    this.queries.appendRefreshNote(refreshedAt, note);
+  }
+
   /**
    * Canonicalize an externally supplied playlist ID. A creation-time ID may
    * have been rekeyed by iCloud sync or reconciled away as an echo duplicate;
