@@ -441,14 +441,16 @@ describe('sync reconciliation', () => {
     expect(cache.planSyncReconciliation({ windowMinutes: 60, now: later })).toEqual([]);
   });
 
-  it('ignores copies whose track sequence no longer matches the receipt', () => {
+  it('reports copies whose track sequence no longer matches the receipt', () => {
     const cache = cacheAfterCreate();
     // The "twin" was edited (extra track) — order/content mismatch, hands off.
     cache.refreshFromSnapshot(
       snapshotWith({ id: CREATED_ID }, { id: 'P-EDITED', tracks: [...TRACKS, 'T-ANGEL'] }),
       { durationMs: 1 },
     );
-    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
+      { kind: 'ambiguous', name: NAME, playlistIds: ['P-CREATED', 'P-EDITED'] },
+    ]);
   });
 
   it('applyDuplicateRemoval drops the deleted copy and remaps the receipt', () => {
@@ -501,17 +503,19 @@ describe('sync reconciliation', () => {
   it('never rekeys a reserved slot onto one of several copies, even the sequence match', () => {
     // iCloud twinned the fresh preview; the user reordered only the copy they
     // auditioned. The untouched twin still matches the receipt, but treating
-    // it as "the" slot would clone the stale order. A generic receipt keeps
-    // the exact-sequence rekey; the reserved name must stand down.
+    // it as "the" slot would clone the stale order. Both ordinary and reserved
+    // receipts report every candidate without choosing one.
     const cache = cacheAfterCreate();
     cache.refreshFromSnapshot(
       snapshotWith({ id: 'P-TWIN' }, { id: 'P-AUDITIONED', tracks: [...TRACKS].reverse() }),
       { durationMs: 1 },
     );
-    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
-    expect(cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] })).toEqual(
-      [],
-    );
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
+      { kind: 'ambiguous', name: NAME, playlistIds: ['P-AUDITIONED', 'P-TWIN'] },
+    ]);
+    expect(cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] })).toEqual([
+      { kind: 'ambiguous', name: NAME, playlistIds: ['P-AUDITIONED', 'P-TWIN'] },
+    ]);
   });
 
   it('leaves a reserved slot alone when several same-name copies diverged', () => {
@@ -523,9 +527,9 @@ describe('sync reconciliation', () => {
       ),
       { durationMs: 1 },
     );
-    expect(cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] })).toEqual(
-      [],
-    );
+    expect(cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] })).toEqual([
+      { kind: 'ambiguous', name: NAME, playlistIds: ['P-ONE', 'P-TWO'] },
+    ]);
   });
 
   it('applyLiveRekey aliases a stale ID to the live playlist and mirrors its order', () => {

@@ -30,6 +30,22 @@ const snapshot = (playlists = [pl('P')]) => ({
 });
 
 describe('state safety regressions', () => {
+  it('reports every same-name candidate even when only one retains the original sequence', () => {
+    const cache = SelectaCache.open(':memory:');
+    try {
+      cache.refreshFromSnapshot(snapshot(), { durationMs: 1 });
+      cache.recordPlaylistCreation('P', 'Mix', ['A', 'B']);
+      cache.refreshFromSnapshot(snapshot([pl('FIRST'), pl('SECOND', ['B', 'A'])]), {
+        durationMs: 1,
+      });
+      expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
+        { kind: 'ambiguous', name: 'Mix', playlistIds: ['FIRST', 'SECOND'] },
+      ]);
+    } finally {
+      cache.close();
+    }
+  });
+
   it('preserves intentional copies and their different notes', async () => {
     const c = SelectaCache.open(':memory:');
     try {
@@ -56,7 +72,9 @@ describe('state safety regressions', () => {
       c.refreshFromSnapshot(snapshot(), { durationMs: 1 });
       c.recordPlaylistCreation('P', 'Mix', ['A', 'B']);
       c.refreshFromSnapshot(snapshot([pl('P', ['B', 'A']), pl('OTHER')]), { durationMs: 1 });
-      expect(c.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+      expect(c.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
+        { kind: 'ambiguous', name: 'Mix', playlistIds: ['OTHER', 'P'] },
+      ]);
     } finally {
       c.close();
     }

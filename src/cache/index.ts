@@ -430,10 +430,10 @@ export class SelectaCache {
           toId: rekeyId,
         });
       } else if (
-        matchIds.length >= 2 &&
+        sameNameIds.length >= 2 &&
         !actions.some((a) => a.kind === 'ambiguous' && a.name === creation.name)
       ) {
-        actions.push({ kind: 'ambiguous', name: creation.name, playlistIds: matchIds });
+        actions.push({ kind: 'ambiguous', name: creation.name, playlistIds: sameNameIds });
       }
     }
     return actions;
