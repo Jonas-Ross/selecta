@@ -122,7 +122,7 @@ export type PlaylistCreationRow = {
 // delete the rest.
 export type ReconcileAction =
   | { kind: 'rekey'; createdId: string; name: string; fromId: string; toId: string }
-  | { kind: 'duplicate'; createdId: string; name: string; keepId: string; deleteIds: string[] };
+  | { kind: 'ambiguous'; name: string; playlistIds: string[] };
 
 // getCoOccurrence row, aggregated over the seed set (semantics in
 // cache/queries.ts). Counts are library facts, not a score.

@@ -45,7 +45,7 @@ export const searchInputShape = {
     ])
     .optional()
     .describe(
-      "Result order. Omit for relevance (with query) or most-played. Use random / least_played / recently_added to dig past the top tracks when building a varied playlist. recent_plays orders by plays recorded in the last 30 days of refreshes (current rotation, not lifetime count) — needs refresh history to exist; without it everything ties at zero. playlist_order (requires in_playlist) returns the playlist's own running order — use before positional add_tracks/remove_tracks.",
+      'Result order. Omit for relevance (with query) or most-played. Use random / least_played / recently_added to dig past the top tracks when building a varied playlist. recent_plays orders by plays recorded in the last 30 days of refreshes (current rotation, not lifetime count) — needs refresh history to exist; without it everything ties at zero. playlist_order (requires in_playlist) returns playlist_positions on each row: the actual zero-based entry positions, including repeated occurrences. Use these positions for edits, NEVER the result-array index; filters and unavailable tracks can leave gaps.',
     ),
 };
 
@@ -57,6 +57,7 @@ export type SearchTrack = ApiTrack & {
   // Persistent IDs of the duplicate copies this row collapsed (same song,
   // other albums). Only present on a dedupe search, on rows that collapsed.
   alternate_ids?: string[];
+  playlist_positions?: number[];
 };
 
 export type SearchOutput = {
@@ -67,7 +68,7 @@ export type SearchOutput = {
 
 export type CompactSearchOutput = {
   track_fields: typeof COMPACT_TRACK_FIELDS;
-  tracks: { track: CompactApiTrack; alternate_ids?: string[] }[];
+  tracks: { track: CompactApiTrack; alternate_ids?: string[]; playlist_positions?: number[] }[];
   total_matches: number;
   cache_age_hours: number | null;
 };
@@ -94,6 +95,25 @@ export async function handleSearch(
       sort: input.sort,
       dedupe: input.dedupe,
     });
+    const positions = new Map<string, number[]>();
+    if (input.sort === 'playlist_order' && input.in_playlist != null) {
+      const cache = deps.cache();
+      cache
+        .getPlaylistTrackIds(cache.resolvePlaylistId(input.in_playlist))
+        .forEach((id, position) => {
+          const list = positions.get(id) ?? [];
+          list.push(position);
+          positions.set(id, list);
+        });
+    }
+    const entryPositions = (id: string, alternates: string[] = []) =>
+      input.sort === 'playlist_order'
+        ? {
+            playlist_positions: [id, ...alternates]
+              .flatMap((key) => positions.get(key) ?? [])
+              .sort((a, b) => a - b),
+          }
+        : {};
     const common = { total_matches: total, cache_age_hours: roundedCacheAge(deps) };
     if (input.compact === true) {
       return {
@@ -101,6 +121,7 @@ export async function handleSearch(
         tracks: rows.map((row) => ({
           track: projectApiTrack(row, true),
           alternate_ids: row.alternateIds,
+          ...entryPositions(row.persistentId, row.alternateIds),
         })),
         ...common,
       };
@@ -109,6 +130,7 @@ export async function handleSearch(
       tracks: rows.map((row) => ({
         ...projectApiTrack(row, false),
         alternate_ids: row.alternateIds,
+        ...entryPositions(row.persistentId, row.alternateIds),
       })),
       ...common,
     };

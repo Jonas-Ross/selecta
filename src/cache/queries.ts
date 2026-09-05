@@ -930,8 +930,8 @@ export function createQueries(db: Database) {
         params.kind = filters.kind;
       }
       if (filters.nameQuery != null) {
-        where.push('p.name LIKE @nameQuery');
-        params.nameQuery = `%${filters.nameQuery}%`;
+        where.push("p.name LIKE @nameQuery ESCAPE '\\'");
+        params.nameQuery = `%${filters.nameQuery.replace(/[\\%_]/g, '\\$&')}%`;
       }
       const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
       return db

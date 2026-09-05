@@ -27,7 +27,7 @@ export const addTracksInputShape = {
     .min(0)
     .optional()
     .describe(
-      '0-based index to insert at (0 = start). Omitted or past the end = append. See current order via search with in_playlist + sort playlist_order.',
+      '0-based index to insert at (0 = start). Omitted or past the end = append. See current order via search with in_playlist + sort playlist_order; use its playlist_positions, never result-array indices.',
     ),
 };
 
@@ -60,6 +60,9 @@ export async function handleAddTracks(
       playlistId: target.playlist.persistentId,
       trackIds: track_ids,
       position,
+      ...(position != null
+        ? { expectedTrackIds: cache.getPlaylistTrackIds(target.playlist.persistentId) }
+        : {}),
     });
     cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
     return {

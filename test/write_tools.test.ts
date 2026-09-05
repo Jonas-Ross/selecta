@@ -406,7 +406,9 @@ describe('create_playlist', () => {
           windowMinutes: 60,
           reservedSlotNames: [PREVIEW_PLAYLIST_NAME],
         }),
-      ).toEqual([]);
+      ).toEqual([
+        { kind: 'ambiguous', name: PREVIEW_PLAYLIST_NAME, playlistIds: ['P-AUDITIONED', 'P-TWIN'] },
+      ]);
       expect(cache.resolvePlaylistId('P-PREVIEW')).toBe('P-PREVIEW');
 
       const err = asError(

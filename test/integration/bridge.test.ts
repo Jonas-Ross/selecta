@@ -388,12 +388,17 @@ describe('bridge edit paths against real Music.app', { tags: ['integration'] }, 
         playlistId: plId,
         trackIds: [y],
         position: 0,
+        expectedTrackIds: (await bridge.readPlaylist(plId)).trackPersistentIds,
       });
       expect(inserted.trackPersistentIds).toEqual([y, ...inserted.preEditTrackPersistentIds]);
       await settle();
 
       // Remove by position: exactly that occurrence goes, the twin survives.
-      const byPosition = await bridge.removePlaylistTracks({ playlistId: plId, positions: [0] });
+      const byPosition = await bridge.removePlaylistTracks({
+        playlistId: plId,
+        positions: [0],
+        expectedTrackIds: (await bridge.readPlaylist(plId)).trackPersistentIds,
+      });
       expect(byPosition.removedCount).toBe(1);
       expect(byPosition.trackPersistentIds).toEqual(byPosition.preEditTrackPersistentIds.slice(1));
       await settle();
@@ -460,6 +465,7 @@ describe('bridge edit paths against real Music.app', { tags: ['integration'] }, 
       bridge.removePlaylistTracks({
         playlistId: created.persistentId,
         positions: [base.length + 4],
+        expectedTrackIds: base,
       }),
     ).rejects.toMatchObject({ errorCode: 'validation_error' });
 

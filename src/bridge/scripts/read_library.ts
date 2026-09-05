@@ -32,12 +32,11 @@ export function buildReadLibraryScript(): string {
       const lib = Music.libraryPlaylists[0];
       const n = lib.tracks.length;
 
-      // One Apple event per property. A property that fails to bulk-read (e.g.
-      // missing from this macOS version's dictionary) degrades to absent-for-all
-      // rather than failing the snapshot.
+      // A failed column read invalidates the snapshot: missing signal must never
+      // become a zero counter baseline or a cleared favorite for the whole library.
       function bulk(prop) {
         if (n === 0) return [];
-        try { return lib.tracks[prop](); } catch (e) { return null; }
+        return lib.tracks[prop]();
       }
 
       const ids = bulk('persistentID');
@@ -49,7 +48,7 @@ export function buildReadLibraryScript(): string {
         trackNumber: bulk('trackNumber'), discNumber: bulk('discNumber'),
         dateAdded: bulk('dateAdded'), lastPlayed: bulk('playedDate'),
         playCount: bulk('playedCount'), skipCount: bulk('skippedCount'),
-        rating: bulk('rating'), loved: bulk('favorited'), disliked: bulk('disliked'),
+        rating: bulk('rating'), ratingKind: bulk('ratingKind'), loved: bulk('favorited'), disliked: bulk('disliked'),
         comments: bulk('comment'), cls: bulk('class'),
       };
 
@@ -63,10 +62,11 @@ export function buildReadLibraryScript(): string {
           if (v) t[k] = v;
         }
         // Numerics where 0 means unset.
-        for (const k of ['year', 'bpm', 'trackNumber', 'discNumber', 'rating']) {
+        for (const k of ['year', 'bpm', 'trackNumber', 'discNumber']) {
           const v = col(k, i);
           if (v) t[k] = v;
         }
+        if (String(col('ratingKind', i)) === 'user' && col('rating', i)) t.rating = col('rating', i);
         const dur = col('durationSeconds', i);
         if (dur) t.durationSeconds = dur;
         // Counts where 0 is meaningful.

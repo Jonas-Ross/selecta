@@ -24,7 +24,7 @@ export const reorderTracksInputShape = {
     .min(1)
     .max(1000)
     .describe(
-      "Complete new order as a permutation of the playlist's current 0-based positions: position i of the result gets the entry currently at order[i]. Get the current order first via search with in_playlist + sort playlist_order.",
+      "Complete new order as a permutation of the playlist's current 0-based positions: position i of the result gets the entry currently at order[i]. Get the current order first via search with in_playlist + sort playlist_order; use its playlist_positions, never result-array indices.",
     ),
 };
 
@@ -37,7 +37,7 @@ export type ReorderTracksOutput = {
   moved_count: number;
 };
 
-export const REORDER_TRACKS_DESCRIPTION = `Rearrange the entries of a user playlist in Music.app to a new order. \`order\` must be a complete permutation of the playlist's current 0-based positions — position i of the result gets the entry currently at order[i]. Get the current order first via search with in_playlist + sort playlist_order. CAVEAT: search returns one row per distinct track, so a playlist holding the same track more than once has more entries than search shows — its full entry order isn't discoverable and reordering it fails with validation_error naming the entry and distinct counts. Only plain user playlists are editable (playlist_not_editable otherwise). Selecta verifies the expected order against Music.app before moving anything and fails with validation_error if the playlist changed live — don't retry with the same input; refresh_library, re-read the order via search, and recompute the permutation. Moving entries toward the START of a large playlist is slow (one Music.app event per displaced entry) — reordering toward the tail is cheap. Max 1000 entries per call.`;
+export const REORDER_TRACKS_DESCRIPTION = `Rearrange the entries of a user playlist in Music.app to a new order. \`order\` must be a complete permutation of the playlist's current 0-based positions — position i of the result gets the entry currently at order[i]. Get the current order first via search with in_playlist + sort playlist_order; use its playlist_positions, never result-array indices. CAVEAT: search returns one row per distinct track, so a playlist holding the same track more than once has more entries than search shows — use the returned playlist_positions to account for every occurrence. Unavailable tracks leave gaps; do not guess missing IDs. Only plain user playlists are editable (playlist_not_editable otherwise). Selecta verifies the expected order against Music.app before moving anything and fails with validation_error if the playlist changed live — don't retry with the same input; refresh_library, re-read the order via search, and recompute the permutation. Moving entries toward the START of a large playlist is slow (one Music.app event per displaced entry) — reordering toward the tail is cheap. Max 1000 entries per call.`;
 
 // Every index 0..n-1 exactly once. Catches model mistakes (duplicates,
 // out-of-range values) before any Apple event.
@@ -81,7 +81,7 @@ export async function handleReorderTracks(
         );
       }
       return validationError(
-        `order has ${order.length} entries but "${target.playlist.name}" has ${cachedIds.length} tracks in the cache. Get the current order via search with in_playlist + sort playlist_order; if the count is stale, run refresh_library. A playlist over 1000 tracks can't be reordered in one call.`,
+        `order has ${order.length} entries but "${target.playlist.name}" has ${cachedIds.length} tracks in the cache. Get the current order via search with in_playlist + sort playlist_order; use its playlist_positions, never result-array indices; if the count is stale, run refresh_library. A playlist over 1000 tracks can't be reordered in one call.`,
       );
     }
 

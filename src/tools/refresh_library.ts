@@ -1,17 +1,11 @@
-// refresh_library — full Music.app reread into the cache. The only tool that
-// repopulates the cache; write tools patch it surgically instead. After the
-// reread it reconciles iCloud sync echoes of recently created playlists
-// (docs/music-app.md, iCloud sync): rekeys are remapped in the creation
-// receipt, echo duplicates are deleted in Music.app (keeping the iCloud-keyed
-// survivor) and reported in the response — never silently.
+// MCP input/output adapter for the shared refresh operation.
 
 import { z } from 'zod';
 import { RECONCILE_WINDOW_MINUTES } from '../cache/index.js';
-import { formatReconciliationSummary } from '../diagnostics/status.js';
-import { log } from '../log.js';
 import type { SelectaError } from '../types/errors.js';
 import { parseInput, toErrorEnvelope, type ToolDeps } from './common.js';
-import { PREVIEW_PLAYLIST_NAME } from './preview_playlist.js';
+import { refreshLibrary } from '../operations/refresh.js';
+export type { SyncReconciliation, RefreshLibraryOutput } from '../operations/refresh.js';
 
 export { RECONCILE_WINDOW_MINUTES };
 
@@ -19,122 +13,17 @@ export const refreshLibraryInputShape = {};
 
 const RefreshLibraryInput = z.strictObject(refreshLibraryInputShape);
 
-export type SyncReconciliation = {
-  rekeys: { name: string; from_id: string; to_id: string }[];
-  duplicates_removed: { name: string; deleted_id: string; kept_id: string }[];
-  failures: { name: string; playlist_id: string; error: string }[];
-};
-
-export type RefreshLibraryOutput = {
-  duration_ms: number;
-  track_count: number;
-  playlist_count: number;
-  refreshed_at: string;
-  // Tracks enrich_features has never attempted — newly added tracks land
-  // here, so the model can see when a top-up run is worthwhile.
-  audio_features_pending: number;
-  // Play-history capture (issue #31): tracks whose play/skip counters rose
-  // since the previous refresh (one history window each). play_count_resets
-  // appears only when a counter went DOWN (re-import/iCloud weirdness) — the
-  // baseline was re-established, nothing recorded.
-  play_deltas_recorded: number;
-  play_count_resets?: number;
-  sync_reconciliation?: SyncReconciliation;
-};
-
-export const REFRESH_LIBRARY_DESCRIPTION = `Reread the entire Music.app library into the local cache. Takes seconds to a minute depending on library size, and requires Music.app automation permission. Only call when the user asks for a refresh, when cache_age_hours is null (never populated), or when stale-cache errors (track_not_found) suggest the library changed. Also worth one call a few minutes after create_playlist: it reconciles iCloud sync echoes of recent creations (removes the duplicate copy, remaps rekeyed IDs) and reports what it did in sync_reconciliation. audio_features_pending in the response counts tracks enrich_features hasn't attempted yet (a refresh never wipes existing features). Each refresh also records per-track play/skip deltas since the previous one (play_deltas_recorded) — the play-history record behind recent_activity and the recent_plays sort; more regular refreshes give it finer grain. Never call it routinely before searches.`;
+export const REFRESH_LIBRARY_DESCRIPTION = `Reread the entire Music.app library into the local cache. Takes seconds to a minute depending on library size, and requires Music.app automation permission. Only call when the user asks for a refresh, when cache_age_hours is null (never populated), or when stale-cache errors (track_not_found) suggest the library changed. Also worth one call a few minutes after create_playlist: it reconciles unambiguous rekeys and reports identical copies under sync_reconciliation.ambiguous; refresh never deletes playlists. Ask the user which ambiguous copy to keep before calling delete_playlist and reports what it did in sync_reconciliation. audio_features_pending in the response counts tracks enrich_features hasn't attempted yet (a refresh never wipes existing features). Each refresh also records per-track play/skip deltas since the previous one (play_deltas_recorded) — the play-history record behind recent_activity and the recent_plays sort; more regular refreshes give it finer grain. Never call it routinely before searches.`;
 
 export async function handleRefreshLibrary(
   raw: unknown,
   deps: ToolDeps,
-): Promise<RefreshLibraryOutput | SelectaError> {
+): Promise<import('../operations/refresh.js').RefreshLibraryOutput | SelectaError> {
   const parsed = parseInput(RefreshLibraryInput, raw ?? {});
   if (!parsed.ok) return parsed.error;
 
   try {
-    const started = Date.now();
-    const snapshot = await deps.bridge.readLibrary();
-    const durationMs = Date.now() - started;
-    const cache = deps.cache();
-
-    // Observability for the iCloud-echo investigation: every playlist ID
-    // observed in this read at debug level; playlists matching a recent
-    // creation receipt at info level, so an echo's arrival is visible in the
-    // log without SELECTA_DEBUG.
-    const watched = new Set(cache.getRecentCreationNames(RECONCILE_WINDOW_MINUTES));
-    for (const p of snapshot.playlists) {
-      const line = `[library-read ${snapshot.capturedAt}] ${p.persistentId} "${p.name}" tracks=${p.trackPersistentIds.length}`;
-      if (watched.has(p.name)) log.info(line);
-      else log.debug(line);
-    }
-
-    const result = cache.refreshFromSnapshot(snapshot, { durationMs });
-
-    const actions = cache.planSyncReconciliation({
-      windowMinutes: RECONCILE_WINDOW_MINUTES,
-      reservedSlotNames: [PREVIEW_PLAYLIST_NAME],
-    });
-    const reconciliation: SyncReconciliation = {
-      rekeys: [],
-      duplicates_removed: [],
-      failures: [],
-    };
-    for (const action of actions) {
-      if (action.kind === 'rekey') {
-        cache.applyRekey(action.createdId, action.fromId, action.toId);
-        reconciliation.rekeys.push({
-          name: action.name,
-          from_id: action.fromId,
-          to_id: action.toId,
-        });
-        log.info(`[sync-reconcile] rekey "${action.name}": ${action.fromId} -> ${action.toId}`);
-        continue;
-      }
-      for (const deleteId of action.deleteIds) {
-        try {
-          const deleted = await deps.bridge.deletePlaylistById(deleteId);
-          cache.applyDuplicateRemoval(action.createdId, deleteId, action.keepId);
-          reconciliation.duplicates_removed.push({
-            name: action.name,
-            deleted_id: deleteId,
-            kept_id: action.keepId,
-          });
-          log.info(
-            `[sync-reconcile] duplicate "${action.name}": deleted ${deleteId} (${deleted} removed in Music.app), kept ${action.keepId}`,
-          );
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          reconciliation.failures.push({
-            name: action.name,
-            playlist_id: deleteId,
-            error: message,
-          });
-          log.error(`[sync-reconcile] failed to delete "${action.name}" ${deleteId}: ${message}`);
-        }
-      }
-    }
-
-    cache.appendRefreshNote(
-      result.refreshedAt,
-      formatReconciliationSummary({
-        rekeys: reconciliation.rekeys.length,
-        duplicates_removed: reconciliation.duplicates_removed.length,
-        failures: reconciliation.failures.length,
-      }),
-    );
-
-    return {
-      duration_ms: durationMs,
-      track_count: result.trackCount,
-      // The only thing that can change the count between snapshot and response
-      // is the deletes this very handler performed.
-      playlist_count: result.playlistCount - reconciliation.duplicates_removed.length,
-      refreshed_at: result.refreshedAt,
-      audio_features_pending: cache.countPendingEnrichment(),
-      play_deltas_recorded: result.playDeltasRecorded,
-      ...(result.playCountResets > 0 ? { play_count_resets: result.playCountResets } : {}),
-      ...(actions.length > 0 ? { sync_reconciliation: reconciliation } : {}),
-    };
+    return await refreshLibrary(deps.cache(), deps.bridge);
   } catch (err) {
     return toErrorEnvelope(err);
   }

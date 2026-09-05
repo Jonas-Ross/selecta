@@ -139,7 +139,7 @@ function parseEditResult(result: unknown, op: 'add' | 'remove' | 'reorder'): Pla
       throw new BridgeError(
         'validation_error',
         'Playlist order in Music.app differs from the expected order.',
-        `The live playlist has changed since the cache was built (has ${String(v.liveTrackCount)} tracks) — run refresh_library, re-read the order via search with in_playlist + sort playlist_order, and recompute the permutation.`,
+        `The live playlist has changed since the cache was built (has ${String(v.liveTrackCount)} tracks) — run refresh_library, re-read the order via search with in_playlist + sort playlist_order, and recompute the edit using playlist_positions.`,
       );
     }
     if (v.invalidOrder === true) {
@@ -266,7 +266,7 @@ function parseCloneResult(result: unknown, reservedSourceName?: string): Playlis
       throw new BridgeError(
         'validation_error',
         `Music.app has ${persistentIds.length} plain user playlists named "${name}": ${persistentIds.join(', ')}.`,
-        `The "${name}" slot is ambiguous — Selecta will not guess which copy the user auditioned. Run refresh_library (it removes an identical iCloud twin automatically) and clone the intended copy by its list_playlists ID, or delete the extra copy with delete_playlist and retry. Nothing was created.`,
+        `The "${name}" slot is ambiguous — Selecta will not guess which copy the user auditioned. Run refresh_library and clone the intended copy by its list_playlists ID, or delete the extra copy with delete_playlist and retry. Nothing was created.`,
       );
     }
     if (v.sourceNotUser === true && typeof v.sourceKind === 'string') {

@@ -994,19 +994,20 @@ describe('refresh_library sync reconciliation', () => {
     return { cache: () => cache, bridge, cacheInstance: cache };
   }
 
-  it('deletes the echo twin, keeps the iCloud copy, and reports it', async () => {
+  it('reports identical copies without deleting either one', async () => {
     const deps = depsAfterCreate({
       readLibrary: vi.fn().mockResolvedValue(echoSnapshot(['P-CREATED', 'P-ECHO'])),
     });
 
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
-    expect(deps.bridge.deletePlaylistById).toHaveBeenCalledWith('P-CREATED');
-    expect(out.sync_reconciliation!.duplicates_removed).toEqual([
-      { name: 'Rearview', deleted_id: 'P-CREATED', kept_id: 'P-ECHO' },
+    expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
+    expect(out.sync_reconciliation!.duplicates_removed).toEqual([]);
+    expect(out.sync_reconciliation!.ambiguous).toEqual([
+      { name: 'Rearview', playlist_ids: ['P-CREATED', 'P-ECHO'] },
     ]);
-    expect(out.playlist_count).toBe(5); // 4 fixture + 1 survivor
+    expect(out.playlist_count).toBe(6); // Both copies preserved.
     const rows = deps.cacheInstance.listPlaylists({ nameQuery: 'Rearview' });
-    expect(rows.map((p) => p.persistentId)).toEqual(['P-ECHO']);
+    expect(rows.map((p) => p.persistentId)).toEqual(['P-CREATED', 'P-ECHO']);
   });
 
   it('reports a rekey without touching Music.app', async () => {
@@ -1045,16 +1046,15 @@ describe('refresh_library sync reconciliation', () => {
     expect(deps.cacheInstance.resolvePlaylistId('P-PREVIEW')).toBe('P-PREVIEW-2');
   });
 
-  it('surfaces a failed delete as a reconciliation failure, refresh still succeeds', async () => {
+  it('never invokes deletion even when a delete dependency would fail', async () => {
     const deps = depsAfterCreate({
       readLibrary: vi.fn().mockResolvedValue(echoSnapshot(['P-CREATED', 'P-ECHO'])),
       deletePlaylistById: vi.fn().mockRejectedValue(new BridgeError('jxa_error', 'boom')),
     });
 
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
-    expect(out.sync_reconciliation!.failures).toEqual([
-      { name: 'Rearview', playlist_id: 'P-CREATED', error: expect.stringContaining('boom') },
-    ]);
+    expect(out.sync_reconciliation!.failures).toEqual([]);
+    expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
     // Cache untouched for the failed delete: both copies still visible.
     expect(deps.cacheInstance.listPlaylists({ nameQuery: 'Rearview' })).toHaveLength(2);
   });

@@ -4,6 +4,7 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Command, InvalidArgumentError } from 'commander';
+import { refreshLibrary } from './operations/refresh.js';
 import { bridge as defaultBridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
 import { runDoctor } from './diagnostics/doctor.js';
@@ -104,22 +105,12 @@ export function createCliProgram(options: CliOptions = {}): Command {
     .description('Full library reread from Music.app into the local SQLite cache')
     .action(async () => {
       try {
-        const started = Date.now();
-        logger.info('Reading library from Music.app (this can take a while)…');
-        const snapshot = await bridge.readLibrary();
-        const durationMs = Date.now() - started;
         const cache = SelectaCache.open(dbPath);
-        const result = cache.refreshFromSnapshot(snapshot, { durationMs });
-        cache.close();
-        writeJson({
-          duration_ms: durationMs,
-          track_count: result.trackCount,
-          playlist_count: result.playlistCount,
-          refreshed_at: result.refreshedAt,
-          play_deltas_recorded: result.playDeltasRecorded,
-          ...(result.playCountResets > 0 ? { play_count_resets: result.playCountResets } : {}),
-          db_path: dbPath,
-        });
+        try {
+          writeJson({ ...(await refreshLibrary(cache, bridge)), db_path: dbPath });
+        } finally {
+          cache.close();
+        }
       } catch (err) {
         reportError(err);
         setExitCode(1);

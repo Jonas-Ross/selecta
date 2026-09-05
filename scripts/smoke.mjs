@@ -34,7 +34,22 @@ await client.connect(
 step('tools/list');
 const { tools } = await client.listTools();
 console.log(tools.map((t) => t.name).join(', '));
-if (tools.length !== 7) fail(`expected 7 tools, got ${tools.length}`);
+const required = [
+  'refresh_library',
+  'library_overview',
+  'search',
+  'get_track_context',
+  'preview_playlist',
+  'create_playlist',
+  'list_playlists',
+];
+const missing = required.filter((name) => !tools.some((tool) => tool.name === name));
+if (missing.length) fail(`missing tools: ${missing.join(', ')}`);
+if (process.argv.includes('--check-tools')) {
+  await client.close();
+  console.log('SMOKE PASSED — tool discovery');
+  process.exit(0);
+}
 
 step('refresh_library (full reread — takes a moment)');
 const refresh = await call(client, 'refresh_library', {});

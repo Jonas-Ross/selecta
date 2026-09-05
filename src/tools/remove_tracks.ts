@@ -41,7 +41,7 @@ export type RemoveTracksOutput = {
   removed_count: number;
 };
 
-export const REMOVE_TRACKS_DESCRIPTION = `Remove entries from a user playlist in Music.app, by track persistent ID (removes EVERY occurrence) and/or by 0-based position (removes that occurrence only — see current order via search with in_playlist + sort playlist_order). The tracks stay in the library; only the playlist entries go. IRREVERSIBLE — Selecta cannot restore removed entries, so confirm with the user before calling. Only plain user playlists are editable (playlist_not_editable otherwise). Fails with playlist_not_found / track_not_found / validation_error (position out of range) without removing anything — don't retry with the same input; re-check the playlist via search, or refresh_library if the cache is stale.`;
+export const REMOVE_TRACKS_DESCRIPTION = `Remove entries from a user playlist in Music.app, by track persistent ID (removes EVERY occurrence) and/or by 0-based position (removes that occurrence only — see current order via search with in_playlist + sort playlist_order; use its playlist_positions, never result-array indices). The tracks stay in the library; only the playlist entries go. IRREVERSIBLE — Selecta cannot restore removed entries, so confirm with the user before calling. Only plain user playlists are editable (playlist_not_editable otherwise). Fails with playlist_not_found / track_not_found / validation_error (position out of range) without removing anything — don't retry with the same input; re-check the playlist via search, or refresh_library if the cache is stale.`;
 
 export async function handleRemoveTracks(
   raw: unknown,
@@ -81,6 +81,7 @@ export async function handleRemoveTracks(
       playlistId: target.playlist.persistentId,
       trackIds: track_ids,
       positions,
+      ...(positions?.length ? { expectedTrackIds: cachedIds } : {}),
     });
     cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
     return {
