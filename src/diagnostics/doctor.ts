@@ -1,3 +1,5 @@
+import { diagnostic } from '../bridge/schemas.js';
+import { parsePayload } from '../types/validation.js';
 import { runJxa } from '../bridge/jxa.js';
 import { buildMusicAppDiagnosticScript } from '../bridge/scripts/diagnostics.js';
 import { BridgeError, defaultHints } from '../types/errors.js';
@@ -15,14 +17,7 @@ export type DoctorReport = StatusReport & { music_app: MusicAppStatus };
 
 export async function checkMusicApp(): Promise<void> {
   const result = await runJxa(buildMusicAppDiagnosticScript());
-  const diagnostic = result as Record<string, unknown> | null;
-  if (
-    diagnostic === null ||
-    diagnostic.running !== true ||
-    diagnostic.automationAuthorized !== true
-  ) {
-    throw new BridgeError('jxa_error', 'JXA returned an unexpected diagnostic result.');
-  }
+  parsePayload(diagnostic, result, 'Music.app diagnostic', 'jxa_error');
 }
 
 function failureStatus(err: unknown): MusicAppStatus {
