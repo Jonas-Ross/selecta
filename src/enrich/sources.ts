@@ -51,6 +51,7 @@ export type SourceDeps = {
   fetchLike: FetchLike;
   sleep: (ms: number) => Promise<void>;
   nowMs: () => number;
+  cooldown?: { get(host: string): number | null; set(host: string, until: number): void };
   // Moment-to-moment narration ("MusicBrainz "Red Lights" — Tiësto …", then
   // the outcome). The CLI wires this to stderr; the MCP tool leaves it unset.
   trace?: (line: string) => void;
@@ -83,8 +84,23 @@ export function createSources(deps: SourceDeps) {
   const paceAb = makeThrottle(AB_SPACING_MS, deps);
   const paceDz = makeThrottle(DZ_SPACING_MS, deps);
   const trace = deps.trace ?? (() => {});
+  const localCooldowns = new Map<string, number>();
+  const cooldown = deps.cooldown ?? {
+    get: (host: string) => localCooldowns.get(host) ?? null,
+    set: (host: string, until: number) => {
+      localCooldowns.set(host, until);
+    },
+  };
 
   async function getJson<T>(url: string, source: string, schema: z.ZodType<T>): Promise<T> {
+    const host = new URL(url).host;
+    const cooldownUntil = cooldown.get(host);
+    if (cooldownUntil != null && cooldownUntil > deps.nowMs()) {
+      throw new BridgeError(
+        'enrichment_error',
+        `${source} is cooling down until ${new Date(cooldownUntil).toISOString()}; request skipped`,
+      );
+    }
     let res: Awaited<ReturnType<FetchLike>>;
     try {
       res = await deps.fetchLike(url);
@@ -100,14 +116,18 @@ export function createSources(deps: SourceDeps) {
         const until = /^\d+$/.test(header.trim())
           ? deps.nowMs() + Number(header) * 1000
           : Date.parse(header);
-        let remaining = until - deps.nowMs();
-        if (Number.isFinite(remaining) && remaining > 0) {
-          trace(`${source} requested a ${Math.ceil(remaining / 1000)}s cooldown; no retry`);
-          // Hold the run lock through cooldown, including at the last chunk/run boundary.
-          while (remaining > 0) {
-            const delay = Math.min(remaining, 2_147_483_647);
-            await deps.sleep(delay);
-            remaining -= delay;
+        if (until > deps.nowMs()) {
+          // Keep even excessive delays without holding an operation open for hours.
+          const deadline = Math.min(until, 8.64e15);
+          cooldown.set(host, deadline);
+          const remaining = deadline - deps.nowMs();
+          if (remaining <= 60_000) {
+            trace(`${source} requested a ${Math.ceil(remaining / 1000)}s cooldown; no retry`);
+            await deps.sleep(remaining);
+          } else {
+            trace(
+              `${source} paused until ${new Date(deadline).toISOString()}; remaining requests to this host will be skipped`,
+            );
           }
         }
       }

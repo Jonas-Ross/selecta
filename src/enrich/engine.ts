@@ -86,6 +86,10 @@ export async function enrichPendingTracks(
       sleep: deps.sleep ?? defaultSleep,
       nowMs: () => now().getTime(),
       trace: deps.trace,
+      cooldown: {
+        get: (host) => cache.getSourceCooldown(host),
+        set: (host, until) => cache.setSourceCooldown(host, until),
+      },
     });
 
     const pending = selection.pending;

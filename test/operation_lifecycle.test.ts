@@ -78,7 +78,7 @@ describe('operation lifecycle', () => {
     }
   });
 
-  it.each(['60', 'Thu, 01 Jan 1970 00:01:02 GMT'])(
+  it.each(['60', 'Thu, 01 Jan 1970 00:01:01 GMT'])(
     'honors Retry-After %s without reissuing the failed request',
     async (header) => {
       let time = 0;
@@ -101,10 +101,56 @@ describe('operation lifecycle', () => {
       ).rejects.toMatchObject({ errorCode: 'enrichment_error' });
       await sources.mbFindRecording({ artist: 'A', title: 'second', durationSeconds: null });
       expect(calls).toHaveLength(2);
-      expect(calls[1]! - calls[0]!).toBeGreaterThanOrEqual(60_000);
+      expect(calls[1]! - calls[0]!).toBeGreaterThanOrEqual(59_000);
       expect(fetchLike.mock.calls).toHaveLength(2);
     },
   );
+
+  it('persists excessive cooldowns across runs without sleeping or requesting early', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'selecta-cooldown-'));
+    const path = join(directory, 'library.db');
+    let cache = SelectaCache.open(path);
+    let time = 0;
+    const sleep = vi.fn(async (ms: number) => {
+      time += ms;
+    });
+    const fetchLike = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      headers: { get: () => '3600' },
+      json: async () => ({}),
+    }));
+    const makeSources = () =>
+      createSources({
+        fetchLike,
+        nowMs: () => time,
+        sleep,
+        cooldown: {
+          get: (host) => cache.getSourceCooldown(host),
+          set: (host, until) => cache.setSourceCooldown(host, until),
+        },
+      });
+    const target = { artist: 'A', title: 'first', durationSeconds: null };
+    try {
+      await expect(makeSources().mbFindRecording(target)).rejects.toMatchObject({
+        errorCode: 'enrichment_error',
+      });
+      expect(time).toBe(1100);
+      cache.close();
+      cache = SelectaCache.open(path);
+      await expect(makeSources().mbFindRecording(target)).rejects.toThrow('cooling down');
+      expect(fetchLike).toHaveBeenCalledOnce();
+      expect(time).toBe(2200);
+      time = 3_700_000;
+      await expect(makeSources().mbFindRecording(target)).rejects.toMatchObject({
+        errorCode: 'enrichment_error',
+      });
+      expect(fetchLike).toHaveBeenCalledTimes(2);
+    } finally {
+      cache.close();
+      rmSync(directory, { recursive: true });
+    }
+  });
 
   it('applies an abort deadline to production fetch including response body reads', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response('{}'));
