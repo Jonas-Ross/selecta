@@ -23,6 +23,7 @@ export type ErrorCode =
 
 export type SelectaError = {
   error: ErrorCode;
+  partial_write?: { playlist_id: string; observed_track_ids?: string[] };
   hint: string; // model-facing; short, actionable
 };
 
@@ -45,6 +46,7 @@ export class BridgeError extends Error {
     public readonly errorCode: ErrorCode,
     message: string,
     public readonly hint?: string,
+    public readonly partialWrite?: SelectaError['partial_write'],
   ) {
     super(message);
     this.name = 'BridgeError';

@@ -273,7 +273,11 @@ export function resolveEditablePlaylist(
 /** Convert a thrown BridgeError to the wire envelope; rethrow anything else. */
 export function toErrorEnvelope(err: unknown): SelectaError {
   if (err instanceof BridgeError) {
-    return { error: err.errorCode, hint: err.hint ?? defaultHints[err.errorCode] };
+    return {
+      error: err.errorCode,
+      hint: err.hint ?? defaultHints[err.errorCode],
+      ...(err.partialWrite ? { partial_write: err.partialWrite } : {}),
+    };
   }
   throw err;
 }

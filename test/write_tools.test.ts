@@ -35,12 +35,14 @@ function makeDeps(
     createPlaylist: vi.fn().mockImplementation(async (input: { trackIds: string[] }) => ({
       persistentId: 'P-NEW',
       trackCount: input.trackIds.length,
+      trackPersistentIds: input.trackIds,
     })),
     clonePlaylist: vi.fn().mockResolvedValue({
       persistentId: 'P-CLONE',
       trackCount: 3,
       sourcePersistentId: 'P-LATENIGHT',
       sourceName: 'Late Night',
+      trackPersistentIds: ['T-ROADS', 'T-TEARDROP', 'T-GLORYBOX'],
       sourceTrackPersistentIds: ['T-ROADS', 'T-TEARDROP', 'T-GLORYBOX'],
     }),
     // The slot is created on the first call and found by name after that —
@@ -48,6 +50,7 @@ function makeDeps(
     replacePlaylist: vi.fn().mockImplementation(async (input: { trackIds: string[] }) => ({
       persistentId: 'P-PREVIEW',
       trackCount: input.trackIds.length,
+      trackPersistentIds: input.trackIds,
       created: ++replaceCalls === 1,
     })),
     deletePlaylistById: vi.fn().mockResolvedValue(1),
@@ -187,6 +190,7 @@ describe('create_playlist', () => {
           trackCount: trackIds.length,
           sourcePersistentId: 'P-LIMIT',
           sourceName: 'At Limit',
+          trackPersistentIds: trackIds,
           sourceTrackPersistentIds: trackIds,
         }),
       },
@@ -248,6 +252,7 @@ describe('create_playlist', () => {
                 trackCount: LIVE_ORDER.length,
                 sourcePersistentId: 'P-PREVIEW-2',
                 sourceName: PREVIEW_PLAYLIST_NAME,
+                trackPersistentIds: LIVE_ORDER,
                 sourceTrackPersistentIds: LIVE_ORDER,
               };
             }
@@ -371,6 +376,7 @@ describe('create_playlist', () => {
                   trackCount: live.length,
                   sourcePersistentId: input.sourcePlaylistId,
                   sourceName: PREVIEW_PLAYLIST_NAME,
+                  trackPersistentIds: live,
                   sourceTrackPersistentIds: live,
                 };
               }

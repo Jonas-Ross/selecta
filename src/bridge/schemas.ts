@@ -44,10 +44,29 @@ export const snapshot = z.object({
 const missing = z.object({ missingTrackIds: ids.min(1) });
 const notFound = z.object({ playlistNotFound: z.literal(true) });
 const notEditable = z.object({ notEditable: z.literal(true) });
-export const writeSuccess = z.object({ persistentId: id, trackCount: count });
-export const write = z.union([missing, writeSuccess]);
-export const replace = z.union([missing, writeSuccess.extend({ created: z.boolean() })]);
+export const partialWriteResult = z.object({
+  partialWrite: z.object({ persistentId: id, trackPersistentIds: ids.optional() }),
+});
+export const writeSuccess = z.object({
+  persistentId: id,
+  trackCount: count,
+  trackPersistentIds: ids,
+});
+const consistentCount = (v: z.infer<typeof writeSuccess>) =>
+  v.trackCount === v.trackPersistentIds.length;
+export const write = z.union([
+  missing,
+  partialWriteResult,
+  writeSuccess.refine(consistentCount, { path: ['trackCount'] }),
+]);
+export const replace = z.union([
+  missing,
+  partialWriteResult,
+  z.object({ ambiguousPreview: z.literal(true) }),
+  writeSuccess.extend({ created: z.boolean() }).refine(consistentCount, { path: ['trackCount'] }),
+]);
 export const clone = z.union([
+  partialWriteResult,
   missing,
   notFound,
   z.object({ ambiguousSource: z.object({ name: z.string(), persistentIds: ids.min(2) }) }),
@@ -55,7 +74,7 @@ export const clone = z.union([
   z.object({ invalidSourceTrackCount: count }),
   writeSuccess
     .extend({ sourcePersistentId: id, sourceName: z.string(), sourceTrackPersistentIds: ids })
-    .refine((v) => v.trackCount === v.sourceTrackPersistentIds.length, { path: ['trackCount'] }),
+    .refine(consistentCount, { path: ['trackCount'] }),
 ]);
 export const edit = z.union([
   missing,

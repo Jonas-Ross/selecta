@@ -291,7 +291,11 @@ export class SelectaCache {
    * upsert the playlist row and replace its membership so the cache doesn't
    * desync — WITHOUT a full reread. Tracks are untouched, so no FTS work.
    */
-  upsertPlaylistAfterWrite(result: PlaylistWriteResult, name: string, trackIds: string[]): void {
+  upsertPlaylistAfterWrite(
+    result: Pick<PlaylistWriteResult, 'persistentId' | 'trackCount'>,
+    name: string,
+    trackIds: string[],
+  ): void {
     const run = this.db.transaction(() => {
       this.queries.upsertPlaylist({
         persistentId: result.persistentId,

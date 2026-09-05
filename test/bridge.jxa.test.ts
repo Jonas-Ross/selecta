@@ -173,10 +173,18 @@ describe('bridge result sentinel mapping', () => {
   });
 
   it('returns whether replacePlaylist created the slot, rejecting a result without it', async () => {
-    stubExecFile({ stdout: '{"persistentId":"P-SLOT","trackCount":2,"created":true}' });
+    stubExecFile({
+      stdout:
+        '{"persistentId":"P-SLOT","trackCount":2,"trackPersistentIds":["T1","T2"],"created":true}',
+    });
     await expect(
       (await editBridge()).replacePlaylist({ name: 'Selecta Preview', trackIds: ['T1', 'T2'] }),
-    ).resolves.toEqual({ persistentId: 'P-SLOT', trackCount: 2, created: true });
+    ).resolves.toEqual({
+      persistentId: 'P-SLOT',
+      trackCount: 2,
+      trackPersistentIds: ['T1', 'T2'],
+      created: true,
+    });
 
     stubExecFile({ stdout: '{"persistentId":"P-SLOT","trackCount":2}' });
     await expectErrorCode(
@@ -228,7 +236,7 @@ describe('bridge result sentinel mapping', () => {
   it('returns a clone result with the exact source order', async () => {
     stubExecFile({
       stdout:
-        '{"persistentId":"P-NEW","trackCount":3,"sourcePersistentId":"P-SOURCE","sourceName":"Preview","sourceTrackPersistentIds":["T3","T1","T2"]}',
+        '{"persistentId":"P-NEW","trackCount":3,"sourcePersistentId":"P-SOURCE","sourceName":"Preview","trackPersistentIds":["T3","T1","T2"],"sourceTrackPersistentIds":["T3","T1","T2"]}',
     });
     await expect(
       (await editBridge()).clonePlaylist({ name: 'Final', sourcePlaylistId: 'P-SOURCE' }),
@@ -237,6 +245,7 @@ describe('bridge result sentinel mapping', () => {
       trackCount: 3,
       sourcePersistentId: 'P-SOURCE',
       sourceName: 'Preview',
+      trackPersistentIds: ['T3', 'T1', 'T2'],
       sourceTrackPersistentIds: ['T3', 'T1', 'T2'],
     });
   });
@@ -244,7 +253,7 @@ describe('bridge result sentinel mapping', () => {
   it('rejects a clone result whose destination count differs from the source snapshot', async () => {
     stubExecFile({
       stdout:
-        '{"persistentId":"P-NEW","trackCount":2,"sourcePersistentId":"P-SOURCE","sourceName":"Preview","sourceTrackPersistentIds":["T3","T1","T2"]}',
+        '{"persistentId":"P-NEW","trackCount":2,"sourcePersistentId":"P-SOURCE","sourceName":"Preview","trackPersistentIds":["T3","T1","T2"],"sourceTrackPersistentIds":["T3","T1","T2"]}',
     });
     await expectErrorCode(
       (await editBridge()).clonePlaylist({ name: 'Final', sourcePlaylistId: 'P-SOURCE' }),

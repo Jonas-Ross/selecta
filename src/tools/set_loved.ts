@@ -19,10 +19,11 @@ const SetLovedInput = z.strictObject(setLovedInputShape);
 
 export type SetLovedOutput = {
   updated: number;
+  mismatches?: { track_id: string; loved: boolean }[];
   loved: boolean;
 };
 
-export const SET_LOVED_DESCRIPTION = `Favorite ("love") or unfavorite tracks in the user's Music.app library — the write-back for the loved flag search returns. Applies ONE value to every track_id; split calls to mix values. This writes to the user's library; reversible (call again with the opposite value). Fails with track_not_found (nothing written) on unknown IDs — use persistent IDs exactly as returned by search, or run refresh_library if the library changed.`;
+export const SET_LOVED_DESCRIPTION = `Favorite ("love") or unfavorite tracks in the user's Music.app library — the write-back for the loved flag search returns. Applies ONE value to every track_id; split calls to mix values. This writes to the user's library; reversible (call again with the opposite value). updated counts only tracks whose readback matches the requested value; mismatches reports actual values for the rest. Inspect mismatches before deciding whether to retry. Fails with track_not_found (nothing written) on unknown IDs — use persistent IDs exactly as returned by search, or run refresh_library if the library changed.`;
 
 export async function handleSetLoved(
   raw: unknown,
@@ -40,7 +41,14 @@ export async function handleSetLoved(
 
       const result = await deps.bridge.setTrackLoved({ trackIds: track_ids, loved });
       cache.patchTrackLoved(result.tracks);
-      return { updated: result.tracks.length, loved };
+      const mismatches = result.tracks
+        .filter((row) => !(row.loved === loved))
+        .map((row) => ({ track_id: row.persistentId, loved: row.loved }));
+      return {
+        updated: result.tracks.length - mismatches.length,
+        loved,
+        ...(mismatches.length ? { mismatches } : {}),
+      };
     });
   } catch (err) {
     return toErrorEnvelope(err);

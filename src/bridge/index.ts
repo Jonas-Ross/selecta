@@ -10,7 +10,21 @@ import * as schemas from './schemas.js';
 import { parsePayload } from '../types/validation.js';
 
 async function runJxa<T>(script: string, schema: z.ZodType<T>): Promise<T> {
-  return parsePayload(schema, await runUncheckedJxa(script), 'Music.app', 'jxa_error');
+  const result = parsePayload(schema, await runUncheckedJxa(script), 'Music.app', 'jxa_error');
+  const partial = schemas.partialWriteResult.safeParse(result);
+  if (partial.success) {
+    const receipt = partial.data.partialWrite;
+    throw new BridgeError(
+      'jxa_error',
+      'Playlist write or readback failed after selecting the target',
+      `Playlist ${receipt.persistentId} may be partially written. Do not repeat the create or overwrite blindly. Inspect Music.app and run refresh_library before deciding how to recover.`,
+      {
+        playlist_id: receipt.persistentId,
+        ...(receipt.trackPersistentIds ? { observed_track_ids: receipt.trackPersistentIds } : {}),
+      },
+    );
+  }
+  return result;
 }
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
 import { buildListLibraryTrackIdsScript, buildReadLibraryScript } from './scripts/read_library.js';
@@ -68,11 +82,18 @@ export const bridge: Bridge = {
   },
   async replacePlaylist(input): Promise<PlaylistReplaceResult> {
     const result = await runJxa(buildReplacePlaylistScript(input), schemas.replace);
+    if ('ambiguousPreview' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Preview slot is ambiguous',
+        'Multiple Selecta Preview playlists exist. Ask the user which copy to keep before overwriting a preview.',
+      );
+    const written = parseWriteResult(result);
     const created = (result as Record<string, unknown> | null)?.created;
     if (typeof created !== 'boolean') {
       throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistReplaceResult shape.');
     }
-    return { ...parseWriteResult(result), created };
+    return { ...written, created };
   },
   async deletePlaylistById(persistentId): Promise<number> {
     return parseDeleteResult(
@@ -92,12 +113,14 @@ export const bridge: Bridge = {
     return parseSignalResult(
       await runJxa(buildSetLovedScript(input), schemas.lovedResult),
       isLovedState,
+      input.trackIds,
     );
   },
   async setTrackRating(input): Promise<TrackSignalResult<TrackRatingState>> {
     return parseSignalResult(
       await runJxa(buildSetRatingScript(input), schemas.ratingResult),
       isRatingState,
+      input.trackIds,
     );
   },
 };
@@ -191,9 +214,10 @@ function throwIfMissingTracks(v: Record<string, unknown>): void {
   }
 }
 
-function parseSignalResult<State>(
+function parseSignalResult<State extends { persistentId: string }>(
   result: unknown,
   isState: (t: unknown) => t is State,
+  requestedIds: string[],
 ): TrackSignalResult<State> {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
@@ -204,6 +228,20 @@ function parseSignalResult<State>(
       Array.isArray(v.preWriteTracks) &&
       v.preWriteTracks.every(isState)
     ) {
+      const expected = [...new Set(requestedIds)];
+      for (const rows of [v.tracks, v.preWriteTracks]) {
+        if (
+          rows.length !== expected.length ||
+          new Set(rows.map((row) => row.persistentId)).size !== expected.length ||
+          rows.some((row) => !expected.includes(row.persistentId))
+        ) {
+          throw new BridgeError(
+            'jxa_error',
+            'Signal readback IDs differ from requested IDs',
+            'Signal write outcome is incomplete or unexpected. Inspect the tracks and refresh_library before retrying.',
+          );
+        }
+      }
       return { tracks: v.tracks, preWriteTracks: v.preWriteTracks };
     }
   }
@@ -237,8 +275,16 @@ function parseWriteResult(result: unknown): PlaylistWriteResult {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
     throwIfMissingTracks(v);
-    if (typeof v.persistentId === 'string' && typeof v.trackCount === 'number') {
-      return { persistentId: v.persistentId, trackCount: v.trackCount };
+    if (
+      typeof v.persistentId === 'string' &&
+      typeof v.trackCount === 'number' &&
+      isIdArray(v.trackPersistentIds)
+    ) {
+      return {
+        persistentId: v.persistentId,
+        trackCount: v.trackCount,
+        trackPersistentIds: v.trackPersistentIds,
+      };
     }
   }
   throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistWriteResult shape.');
@@ -296,11 +342,12 @@ function parseCloneResult(result: unknown, reservedSourceName?: string): Playlis
       typeof v.sourcePersistentId === 'string' &&
       typeof v.sourceName === 'string' &&
       isIdArray(v.sourceTrackPersistentIds) &&
-      v.trackCount === v.sourceTrackPersistentIds.length
+      isIdArray(v.trackPersistentIds)
     ) {
       return {
         persistentId: v.persistentId,
         trackCount: v.trackCount,
+        trackPersistentIds: v.trackPersistentIds,
         sourcePersistentId: v.sourcePersistentId,
         sourceName: v.sourceName,
         sourceTrackPersistentIds: v.sourceTrackPersistentIds,

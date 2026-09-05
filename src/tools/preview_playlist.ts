@@ -29,10 +29,11 @@ const PreviewPlaylistInput = z.strictObject(previewPlaylistInputShape);
 export type PreviewPlaylistOutput = {
   playlist_id: string;
   track_count: number;
+  order_matches_request?: boolean;
   note?: ApiNote;
 };
 
-export const PREVIEW_PLAYLIST_DESCRIPTION = `Overwrite the single "${PREVIEW_PLAYLIST_NAME}" playlist in Music.app with these tracks so the user can audition a draft before committing. The slot is reused on every call (stable playlist, contents replaced) — previous preview contents are discarded without warning. When the user approves, pass this result's playlist_id to create_playlist as source_playlist_id; it clones the current live preview order without resending track IDs. That playlist_id stays valid even if iCloud rekeys a first-ever slot while the user auditions — create_playlist re-resolves the slot by its reserved name. Same track ID rules as create_playlist: unknown IDs fail with track_not_found and nothing is written. iCloud sync occasionally twins the slot right after its first-ever creation — harmless and not a failed call; later previews keep overwriting one copy, and refresh_library reports ambiguous copies without deleting them; ask the user which copy to keep. Any set_note memory on the preview slot comes back as note.`;
+export const PREVIEW_PLAYLIST_DESCRIPTION = `Overwrite the single "${PREVIEW_PLAYLIST_NAME}" playlist in Music.app with these tracks so the user can audition a draft before committing. The slot is reused on every call (stable playlist, contents replaced) — previous preview contents are discarded without warning. When the user approves, pass this result's playlist_id to create_playlist as source_playlist_id; it clones the current live preview order without resending track IDs. That playlist_id stays valid even if iCloud rekeys a first-ever slot while the user auditions — create_playlist re-resolves the slot by its reserved name. Same track ID rules as create_playlist: unknown IDs fail with track_not_found and nothing is written. iCloud sync occasionally twins the slot after creation; this is not a failed call. Multiple slots produce validation_error before any overwrite; refresh_library reports the copies without deleting them, so ask the user which copy to keep. order_matches_request: false means observed destination entries differ from the request; inspect before another edit. partial_write on an error preserves the target ID when population/readback failed; refresh and inspect before retrying. Any set_note memory on the preview slot comes back as note.`;
 
 export async function handlePreviewPlaylist(
   raw: unknown,
@@ -52,16 +53,23 @@ export async function handlePreviewPlaylist(
         name: PREVIEW_PLAYLIST_NAME,
         trackIds: track_ids,
       });
-      cache.upsertPlaylistAfterWrite(result, PREVIEW_PLAYLIST_NAME, track_ids);
+      cache.upsertPlaylistAfterWrite(result, PREVIEW_PLAYLIST_NAME, result.trackPersistentIds);
       // A first-ever slot is a fresh playlist, so iCloud may rekey it: the same
       // receipt create_playlist records keeps this playlist_id resolvable
       // (docs/music-app.md, iCloud sync). An overwrite created nothing.
       if (result.created) {
-        cache.recordPlaylistCreation(result.persistentId, PREVIEW_PLAYLIST_NAME, track_ids);
+        cache.recordPlaylistCreation(
+          result.persistentId,
+          PREVIEW_PLAYLIST_NAME,
+          result.trackPersistentIds,
+        );
       }
       return {
         playlist_id: result.persistentId,
         track_count: result.trackCount,
+        ...(JSON.stringify(result.trackPersistentIds) !== JSON.stringify(track_ids)
+          ? { order_matches_request: false }
+          : {}),
         note: apiNoteFromRow(cache.getNote('playlist', result.persistentId)),
       };
     });
