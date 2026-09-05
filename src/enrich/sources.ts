@@ -1,3 +1,6 @@
+import type { z } from 'zod';
+import * as schemas from './schemas.js';
+import { parsePayload } from '../types/validation.js';
 // External metadata sources, one thin fetch adapter each: build the request,
 // gate the response through match.ts, return plain data. Every failure —
 // non-OK status, in-body error, unreachable host, unparseable JSON — is
@@ -79,7 +82,7 @@ export function createSources(deps: SourceDeps) {
   const paceDz = makeThrottle(DZ_SPACING_MS, deps);
   const trace = deps.trace ?? (() => {});
 
-  async function getJson(url: string, source: string): Promise<unknown> {
+  async function getJson<T>(url: string, source: string, schema: z.ZodType<T>): Promise<T> {
     let res: Awaited<ReturnType<FetchLike>>;
     try {
       res = await deps.fetchLike(url);
@@ -92,11 +95,13 @@ export function createSources(deps: SourceDeps) {
     if (!res.ok) {
       throw new BridgeError('enrichment_error', `${source} responded ${res.status} for ${url}`);
     }
+    let body: unknown;
     try {
-      return await res.json();
+      body = await res.json();
     } catch {
       throw new BridgeError('enrichment_error', `${source} returned unparseable JSON for ${url}`);
     }
+    return parsePayload(schema, body, source, 'enrichment_error');
   }
 
   // ── MusicBrainz: artist+title → recording MBID ──────────────────────────
@@ -105,17 +110,13 @@ export function createSources(deps: SourceDeps) {
   // song. Results are score-ordered, so the scan stops at the first sub-gate.
   const MB_MIN_SCORE = 85;
 
-  type MbSearchResponse = {
-    recordings?: { id: string; score: number; length?: number }[];
-  };
-
   async function mbFindRecording(target: MatchTarget): Promise<string | null> {
     const query = `recording:"${luceneEscape(stripFeat(target.title))}" AND artist:"${luceneEscape(primaryArtist(target.artist))}"`;
     const url = `https://musicbrainz.org/ws/2/recording?query=${encodeURIComponent(query)}&fmt=json&limit=5`;
     await paceMb();
     trace(`MusicBrainz "${target.title}" — ${target.artist} …`);
-    const data = (await getJson(url, 'MusicBrainz')) as MbSearchResponse;
-    for (const rec of data.recordings ?? []) {
+    const data = await getJson(url, 'MusicBrainz', schemas.mbSearch);
+    for (const rec of data.recordings) {
       if (rec.score < MB_MIN_SCORE) break;
       if (
         durationCompatible(rec.length != null ? rec.length / 1000 : null, target.durationSeconds)
@@ -137,32 +138,29 @@ export function createSources(deps: SourceDeps) {
 
   const AB_BULK_MAX = 25;
 
-  type AbLowLevel = { rhythm?: { bpm?: number }; tonal?: { key_key?: string; key_scale?: string } };
-  type AbHighLevel = { highlevel?: { danceability?: { all?: { danceable?: number } } } };
-  // Bulk responses key by MBID, then by submission offset — "0" is the first.
-  type AbBulk<T> = Record<string, Record<string, T>>;
-
   async function abLookupFeatures(mbids: string[]): Promise<Map<string, AbFeatures>> {
     const found = new Map<string, AbFeatures>();
     for (let i = 0; i < mbids.length; i += AB_BULK_MAX) {
       const batch = mbids.slice(i, i + AB_BULK_MAX);
-      const ids = batch.join(';');
+      const ids = encodeURIComponent(batch.join(';'));
       await paceAb();
       trace(`AcousticBrainz bulk low-level: ${batch.length} recordings …`);
-      const low = (await getJson(
+      const low = await getJson(
         `https://acousticbrainz.org/api/v1/low-level?recording_ids=${ids}`,
         'AcousticBrainz',
-      )) as AbBulk<AbLowLevel>;
+        schemas.abLow,
+      );
       trace(`  ↳ data for ${Object.keys(low).length}/${batch.length}`);
       // High-level is derived from low-level: nothing low, nothing high.
-      let high: AbBulk<AbHighLevel> = {};
+      let high: z.infer<typeof schemas.abHigh> = {};
       if (Object.keys(low).length > 0) {
         await paceAb();
         trace(`AcousticBrainz bulk high-level: ${batch.length} recordings …`);
-        high = (await getJson(
+        high = await getJson(
           `https://acousticbrainz.org/api/v1/high-level?recording_ids=${ids}`,
           'AcousticBrainz',
-        )) as AbBulk<AbHighLevel>;
+          schemas.abHigh,
+        );
         trace(`  ↳ data for ${Object.keys(high).length}/${batch.length}`);
       }
       for (const mbid of batch) {
@@ -184,15 +182,11 @@ export function createSources(deps: SourceDeps) {
   // Public API, no key. Signals errors as 200 + {error} body; bpm 0 means
   // "unknown". The bpm lives on the track detail, not the search hit.
 
-  type DzErrorBody = { error?: { message?: string } };
-  type DzSearchResponse = DzErrorBody & { data?: { id: number; duration: number }[] };
-  type DzTrackResponse = DzErrorBody & { bpm?: number };
-
-  function dzChecked<T extends DzErrorBody>(data: T): T {
-    if (data.error != null) {
+  function dzChecked<T>(data: T | { error: { message?: string } }): T {
+    if (typeof data === 'object' && data !== null && 'error' in data) {
       throw new BridgeError('enrichment_error', `Deezer error: ${data.error.message ?? 'unknown'}`);
     }
-    return data;
+    return data as T;
   }
 
   // Deezer documents no escape for quotes inside artist:"…"/track:"…" — an
@@ -207,17 +201,15 @@ export function createSources(deps: SourceDeps) {
     const url = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=5`;
     await paceDz();
     trace(`Deezer "${target.title}" — ${target.artist} …`);
-    const search = dzChecked((await getJson(url, 'Deezer')) as DzSearchResponse);
-    const hit = (search.data ?? []).find((h) =>
-      durationCompatible(h.duration, target.durationSeconds),
-    );
+    const search = dzChecked(await getJson(url, 'Deezer', schemas.dzSearch));
+    const hit = search.data.find((h) => durationCompatible(h.duration, target.durationSeconds));
     if (!hit) {
       trace('  ↳ no match');
       return null;
     }
     await paceDz();
     const detail = dzChecked(
-      (await getJson(`https://api.deezer.com/track/${hit.id}`, 'Deezer')) as DzTrackResponse,
+      await getJson(`https://api.deezer.com/track/${hit.id}`, 'Deezer', schemas.dzTrack),
     );
     trace(detail.bpm ? `  ↳ bpm ${detail.bpm}` : '  ↳ matched, bpm unknown');
     return { trackId: hit.id, bpm: detail.bpm ? detail.bpm : null };
