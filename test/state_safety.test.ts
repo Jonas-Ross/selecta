@@ -46,6 +46,35 @@ describe('state safety regressions', () => {
     }
   });
 
+  it.each([false, true])(
+    'includes alternate-ID positions in deduped playlist results (compact=%s)',
+    async (compact) => {
+      const cache = SelectaCache.open(':memory:');
+      try {
+        cache.refreshFromSnapshot(
+          {
+            capturedAt: new Date().toISOString(),
+            tracks: [
+              { persistentId: 'A', title: 'Same', artist: 'Artist', year: 2000 },
+              { persistentId: 'B', title: 'Same', artist: 'Artist', year: 2001 },
+            ],
+            playlists: [pl('P', ['B', 'A', 'B'])],
+          },
+          { durationMs: 1 },
+        );
+        const result = await handleSearch(
+          { in_playlist: 'P', sort: 'playlist_order', dedupe: true, compact },
+          { cache: () => cache, bridge: makeBridge() },
+        );
+        expect(result).toMatchObject({
+          tracks: [{ alternate_ids: ['B'], playlist_positions: [0, 1, 2] }],
+        });
+      } finally {
+        cache.close();
+      }
+    },
+  );
+
   it('preserves intentional copies and their different notes', async () => {
     const c = SelectaCache.open(':memory:');
     try {

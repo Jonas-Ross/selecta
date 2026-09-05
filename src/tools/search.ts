@@ -106,8 +106,14 @@ export async function handleSearch(
           positions.set(id, list);
         });
     }
-    const entryPositions = (id: string) =>
-      input.sort === 'playlist_order' ? { playlist_positions: positions.get(id) ?? [] } : {};
+    const entryPositions = (id: string, alternates: string[] = []) =>
+      input.sort === 'playlist_order'
+        ? {
+            playlist_positions: [id, ...alternates]
+              .flatMap((key) => positions.get(key) ?? [])
+              .sort((a, b) => a - b),
+          }
+        : {};
     const common = { total_matches: total, cache_age_hours: roundedCacheAge(deps) };
     if (input.compact === true) {
       return {
@@ -115,7 +121,7 @@ export async function handleSearch(
         tracks: rows.map((row) => ({
           track: projectApiTrack(row, true),
           alternate_ids: row.alternateIds,
-          ...entryPositions(row.persistentId),
+          ...entryPositions(row.persistentId, row.alternateIds),
         })),
         ...common,
       };
@@ -124,7 +130,7 @@ export async function handleSearch(
       tracks: rows.map((row) => ({
         ...projectApiTrack(row, false),
         alternate_ids: row.alternateIds,
-        ...entryPositions(row.persistentId),
+        ...entryPositions(row.persistentId, row.alternateIds),
       })),
       ...common,
     };
