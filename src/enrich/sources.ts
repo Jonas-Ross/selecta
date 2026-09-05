@@ -31,11 +31,13 @@ const DZ_SPACING_MS = 250;
 export type FetchLike = (url: string) => Promise<{
   ok: boolean;
   status: number;
+  headers?: { get(name: string): string | null };
   json(): Promise<unknown>;
 }>;
 
 export function withUserAgent(fetchImpl: typeof fetch): FetchLike {
-  return (url) => fetchImpl(url, { headers: { 'User-Agent': USER_AGENT } });
+  return (url) =>
+    fetchImpl(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(30_000) });
 }
 
 /** The track fields matching needs; a subset of TrackRow. */
@@ -93,6 +95,22 @@ export function createSources(deps: SourceDeps) {
       );
     }
     if (!res.ok) {
+      const header = res.headers?.get('Retry-After');
+      if ((res.status === 429 || res.status === 503) && header) {
+        const until = /^\d+$/.test(header.trim())
+          ? deps.nowMs() + Number(header) * 1000
+          : Date.parse(header);
+        let remaining = until - deps.nowMs();
+        if (Number.isFinite(remaining) && remaining > 0) {
+          trace(`${source} requested a ${Math.ceil(remaining / 1000)}s cooldown; no retry`);
+          // Hold the run lock through cooldown, including at the last chunk/run boundary.
+          while (remaining > 0) {
+            const delay = Math.min(remaining, 2_147_483_647);
+            await deps.sleep(delay);
+            remaining -= delay;
+          }
+        }
+      }
       throw new BridgeError('enrichment_error', `${source} responded ${res.status} for ${url}`);
     }
     let body: unknown;

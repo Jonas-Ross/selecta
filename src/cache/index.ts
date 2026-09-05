@@ -229,7 +229,10 @@ export class SelectaCache {
    */
   saveAudioFeatures(rows: AudioFeaturesRow[]): void {
     const run = this.db.transaction(() => {
-      for (const row of rows) this.queries.upsertAudioFeatures(row);
+      for (const row of rows) {
+        // A concurrent refresh may have removed a track while its lookup was in flight.
+        if (this.getTrack(row.trackPersistentId)) this.queries.upsertAudioFeatures(row);
+      }
     });
     run();
   }

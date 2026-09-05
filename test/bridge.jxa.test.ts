@@ -39,6 +39,18 @@ describe('runJxa', () => {
     await expect(runJxa('noop')).resolves.toEqual({ persistentId: 'ABC', name: 'x' });
   });
 
+  it('bounds osascript and reports an interrupted write as an unknown outcome', async () => {
+    stubExecFile({ error: Object.assign(new Error('killed'), { killed: true }) });
+    await expect(runJxa('write')).rejects.toMatchObject({
+      errorCode: 'jxa_error',
+      hint: expect.stringContaining('outcome is unknown'),
+    });
+    expect(mockExecFile.mock.calls[0]![2]).toMatchObject({
+      timeout: 180_000,
+      killSignal: 'SIGKILL',
+    });
+  });
+
   it('throws jxa_error when stdout is not valid JSON', async () => {
     stubExecFile({ stdout: 'not json at all' });
     await expectErrorCode(runJxa('noop'), 'jxa_error');

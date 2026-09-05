@@ -1,3 +1,4 @@
+import { withOperation } from '../operations/lock.js';
 // set_rating — set or clear a star rating on tracks in Music.app and patch
 // the cached signal from the post-write values the bridge reads back. Public
 // unit is 0–5 stars (halves allowed); Music.app stores stars × 20 (0–100).
@@ -39,13 +40,15 @@ export async function handleSetRating(
 
   try {
     const cache = deps.cache();
-    const cacheMiss = missingTrackIdsError(cache, track_ids);
-    if (cacheMiss) return cacheMiss;
+    return await withOperation(cache, 'music', async () => {
+      const cacheMiss = missingTrackIdsError(cache, track_ids);
+      if (cacheMiss) return cacheMiss;
 
-    // Stars (0–5) → Music.app's 0–100 scale at the boundary.
-    const result = await deps.bridge.setTrackRating({ trackIds: track_ids, rating: rating * 20 });
-    cache.patchTrackRating(result.tracks);
-    return { updated: result.tracks.length, rating };
+      // Stars (0–5) → Music.app's 0–100 scale at the boundary.
+      const result = await deps.bridge.setTrackRating({ trackIds: track_ids, rating: rating * 20 });
+      cache.patchTrackRating(result.tracks);
+      return { updated: result.tracks.length, rating };
+    });
   } catch (err) {
     return toErrorEnvelope(err);
   }

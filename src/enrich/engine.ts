@@ -1,3 +1,4 @@
+import { withOperation } from '../operations/lock.js';
 // The incremental enrichment pass (issues #19 and #37). One call = one
 // bounded backlog or targeted run, processed in chunks of 25 tracks
 // (AcousticBrainz's bulk-lookup max): per
@@ -76,80 +77,84 @@ export async function enrichPendingTracks(
   opts: EnrichOptions,
   deps: EnrichDeps = {},
 ): Promise<EnrichmentSummary> {
-  const selection = selectTargets(cache, opts);
-  const now = deps.now ?? (() => new Date());
-  const trace = deps.trace ?? (() => {});
-  const sources = createSources({
-    fetchLike: deps.fetchLike ?? withUserAgent(fetch),
-    sleep: deps.sleep ?? defaultSleep,
-    nowMs: () => now().getTime(),
-    trace: deps.trace,
-  });
+  return withOperation(cache, 'enrich', async () => {
+    const selection = selectTargets(cache, opts);
+    const now = deps.now ?? (() => new Date());
+    const trace = deps.trace ?? (() => {});
+    const sources = createSources({
+      fetchLike: deps.fetchLike ?? withUserAgent(fetch),
+      sleep: deps.sleep ?? defaultSleep,
+      nowMs: () => now().getTime(),
+      trace: deps.trace,
+    });
 
-  const pending = selection.pending;
-  const totalChunks = Math.ceil(pending.length / CHUNK_SIZE);
-  const progress: EnrichmentProgress = {
-    processed: 0,
-    enriched: 0,
-    noData: 0,
-    noMatch: 0,
-    skipped: 0,
-  };
-  const errors: string[] = [];
-  const outcomes = new Map<string, TargetedEnrichmentOutcome>(
-    selection.alreadyAttempted.map(({ trackPersistentId, existingResult }) => [
-      trackPersistentId,
-      { trackPersistentId, outcome: 'already_attempted', existingResult },
-    ]),
-  );
-  for (let i = 0; i < pending.length; i += CHUNK_SIZE) {
-    const chunk = pending.slice(i, i + CHUNK_SIZE);
-    trace(`— chunk ${i / CHUNK_SIZE + 1}/${totalChunks}: ${chunk.length} tracks —`);
-    let rows: AudioFeaturesRow[];
-    try {
-      rows = await resolveChunk(sources, chunk, now().toISOString());
-    } catch (err) {
-      // Only source failures are skippable; anything else is a bug and rethrows.
-      if (!(err instanceof BridgeError) || err.errorCode !== 'enrichment_error') throw err;
-      progress.skipped += chunk.length;
-      for (const track of chunk) {
-        outcomes.set(track.persistentId, {
-          trackPersistentId: track.persistentId,
-          outcome: 'skipped',
-        });
-      }
-      if (!errors.includes(err.message)) errors.push(err.message);
-      deps.onChunkError?.(err.message, chunk.length);
-      deps.onProgress?.({ ...progress });
-      continue;
-    }
-    cache.saveAudioFeatures(rows);
-    const counts = { ok: 0, no_data: 0, no_match: 0 };
-    for (const row of rows) {
-      progress.processed += 1;
-      counts[row.status] += 1;
-      outcomes.set(row.trackPersistentId, {
-        trackPersistentId: row.trackPersistentId,
-        outcome: resultForStatus(row.status),
-      });
-      if (row.status === 'ok') progress.enriched += 1;
-      else if (row.status === 'no_data') progress.noData += 1;
-      else progress.noMatch += 1;
-    }
-    trace(`chunk saved — ${counts.ok} ok, ${counts.no_data} no_data, ${counts.no_match} no_match`);
-    deps.onProgress?.({ ...progress });
-  }
-  return {
-    ...progress,
-    pendingRemaining: cache.countPendingEnrichment(),
-    errors,
-    ...(selection.requestedIds != null
-      ? {
-          alreadyAttempted: selection.alreadyAttempted.length,
-          outcomes: selection.requestedIds.map((id) => outcomes.get(id)!),
+    const pending = selection.pending;
+    const totalChunks = Math.ceil(pending.length / CHUNK_SIZE);
+    const progress: EnrichmentProgress = {
+      processed: 0,
+      enriched: 0,
+      noData: 0,
+      noMatch: 0,
+      skipped: 0,
+    };
+    const errors: string[] = [];
+    const outcomes = new Map<string, TargetedEnrichmentOutcome>(
+      selection.alreadyAttempted.map(({ trackPersistentId, existingResult }) => [
+        trackPersistentId,
+        { trackPersistentId, outcome: 'already_attempted', existingResult },
+      ]),
+    );
+    for (let i = 0; i < pending.length; i += CHUNK_SIZE) {
+      const chunk = pending.slice(i, i + CHUNK_SIZE);
+      trace(`— chunk ${i / CHUNK_SIZE + 1}/${totalChunks}: ${chunk.length} tracks —`);
+      let rows: AudioFeaturesRow[];
+      try {
+        rows = await resolveChunk(sources, chunk, now().toISOString());
+      } catch (err) {
+        // Only source failures are skippable; anything else is a bug and rethrows.
+        if (!(err instanceof BridgeError) || err.errorCode !== 'enrichment_error') throw err;
+        progress.skipped += chunk.length;
+        for (const track of chunk) {
+          outcomes.set(track.persistentId, {
+            trackPersistentId: track.persistentId,
+            outcome: 'skipped',
+          });
         }
-      : {}),
-  };
+        if (!errors.includes(err.message)) errors.push(err.message);
+        deps.onChunkError?.(err.message, chunk.length);
+        deps.onProgress?.({ ...progress });
+        continue;
+      }
+      cache.saveAudioFeatures(rows);
+      const counts = { ok: 0, no_data: 0, no_match: 0 };
+      for (const row of rows) {
+        progress.processed += 1;
+        counts[row.status] += 1;
+        outcomes.set(row.trackPersistentId, {
+          trackPersistentId: row.trackPersistentId,
+          outcome: resultForStatus(row.status),
+        });
+        if (row.status === 'ok') progress.enriched += 1;
+        else if (row.status === 'no_data') progress.noData += 1;
+        else progress.noMatch += 1;
+      }
+      trace(
+        `chunk saved — ${counts.ok} ok, ${counts.no_data} no_data, ${counts.no_match} no_match`,
+      );
+      deps.onProgress?.({ ...progress });
+    }
+    return {
+      ...progress,
+      pendingRemaining: cache.countPendingEnrichment(),
+      errors,
+      ...(selection.requestedIds != null
+        ? {
+            alreadyAttempted: selection.alreadyAttempted.length,
+            outcomes: selection.requestedIds.map((id) => outcomes.get(id)!),
+          }
+        : {}),
+    };
+  });
 }
 
 function resultForStatus(status: AudioFeaturesRow['status']): EnrichmentResult {

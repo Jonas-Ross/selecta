@@ -35,8 +35,18 @@ export function runJxa(script: string): Promise<unknown> {
     execFile(
       'osascript',
       ['-l', 'JavaScript', '-e', script],
-      { maxBuffer: MAX_STDOUT_BYTES },
+      { maxBuffer: MAX_STDOUT_BYTES, timeout: 180_000, killSignal: 'SIGKILL' },
       (error, stdout, stderr) => {
+        if (error?.killed) {
+          reject(
+            new BridgeError(
+              'jxa_error',
+              'osascript exceeded its deadline or output limit',
+              'The Music.app operation was interrupted; its outcome is unknown and writes may be partial. Inspect Music.app and run refresh_library before deciding what to do. Do not repeat the write blindly.',
+            ),
+          );
+          return;
+        }
         if (error) {
           reject(
             jxaError(mapJxaError(stderr), `osascript failed: ${stderr.trim() || error.message}`),

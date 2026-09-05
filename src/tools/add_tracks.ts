@@ -1,3 +1,4 @@
+import { withOperation } from '../operations/lock.js';
 // add_tracks — append/insert tracks into an existing user playlist and patch
 // the cache surgically from the post-edit order the bridge reads back.
 
@@ -51,25 +52,27 @@ export async function handleAddTracks(
 
   try {
     const cache = deps.cache();
-    const target = resolveEditablePlaylist(cache, playlist_id);
-    if (!target.ok) return target.error;
-    const cacheMiss = missingTrackIdsError(cache, track_ids);
-    if (cacheMiss) return cacheMiss;
+    return await withOperation(cache, 'music', async () => {
+      const target = resolveEditablePlaylist(cache, playlist_id);
+      if (!target.ok) return target.error;
+      const cacheMiss = missingTrackIdsError(cache, track_ids);
+      if (cacheMiss) return cacheMiss;
 
-    const result = await deps.bridge.addPlaylistTracks({
-      playlistId: target.playlist.persistentId,
-      trackIds: track_ids,
-      position,
-      ...(position != null
-        ? { expectedTrackIds: cache.getPlaylistTrackIds(target.playlist.persistentId) }
-        : {}),
+      const result = await deps.bridge.addPlaylistTracks({
+        playlistId: target.playlist.persistentId,
+        trackIds: track_ids,
+        position,
+        ...(position != null
+          ? { expectedTrackIds: cache.getPlaylistTrackIds(target.playlist.persistentId) }
+          : {}),
+      });
+      cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
+      return {
+        playlist_id: result.persistentId,
+        name: target.playlist.name,
+        track_count: result.trackCount,
+      };
     });
-    cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
-    return {
-      playlist_id: result.persistentId,
-      name: target.playlist.name,
-      track_count: result.trackCount,
-    };
   } catch (err) {
     return toErrorEnvelope(err);
   }

@@ -1,3 +1,4 @@
+import { withOperation } from '../operations/lock.js';
 // preview_playlist — overwrite the single dedicated audition slot in Music.app.
 
 import { z } from 'zod';
@@ -43,25 +44,27 @@ export async function handlePreviewPlaylist(
 
   try {
     const cache = deps.cache();
-    const cacheMiss = missingTrackIdsError(cache, track_ids);
-    if (cacheMiss) return cacheMiss;
+    return await withOperation(cache, 'music', async () => {
+      const cacheMiss = missingTrackIdsError(cache, track_ids);
+      if (cacheMiss) return cacheMiss;
 
-    const result = await deps.bridge.replacePlaylist({
-      name: PREVIEW_PLAYLIST_NAME,
-      trackIds: track_ids,
+      const result = await deps.bridge.replacePlaylist({
+        name: PREVIEW_PLAYLIST_NAME,
+        trackIds: track_ids,
+      });
+      cache.upsertPlaylistAfterWrite(result, PREVIEW_PLAYLIST_NAME, track_ids);
+      // A first-ever slot is a fresh playlist, so iCloud may rekey it: the same
+      // receipt create_playlist records keeps this playlist_id resolvable
+      // (docs/music-app.md, iCloud sync). An overwrite created nothing.
+      if (result.created) {
+        cache.recordPlaylistCreation(result.persistentId, PREVIEW_PLAYLIST_NAME, track_ids);
+      }
+      return {
+        playlist_id: result.persistentId,
+        track_count: result.trackCount,
+        note: apiNoteFromRow(cache.getNote('playlist', result.persistentId)),
+      };
     });
-    cache.upsertPlaylistAfterWrite(result, PREVIEW_PLAYLIST_NAME, track_ids);
-    // A first-ever slot is a fresh playlist, so iCloud may rekey it: the same
-    // receipt create_playlist records keeps this playlist_id resolvable
-    // (docs/music-app.md, iCloud sync). An overwrite created nothing.
-    if (result.created) {
-      cache.recordPlaylistCreation(result.persistentId, PREVIEW_PLAYLIST_NAME, track_ids);
-    }
-    return {
-      playlist_id: result.persistentId,
-      track_count: result.trackCount,
-      note: apiNoteFromRow(cache.getNote('playlist', result.persistentId)),
-    };
   } catch (err) {
     return toErrorEnvelope(err);
   }

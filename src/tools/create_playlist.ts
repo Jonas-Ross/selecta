@@ -1,3 +1,4 @@
+import { withOperation } from '../operations/lock.js';
 // create_playlist — materialize the final playlist in Music.app and patch the
 // cache surgically (no full reread).
 
@@ -92,64 +93,66 @@ export async function handleCreatePlaylist(
 
   try {
     const cache = deps.cache();
-    if (track_ids !== undefined) {
-      const cacheMiss = missingTrackIdsError(cache, track_ids);
-      if (cacheMiss) return cacheMiss;
+    return await withOperation(cache, 'music', async () => {
+      if (track_ids !== undefined) {
+        const cacheMiss = missingTrackIdsError(cache, track_ids);
+        if (cacheMiss) return cacheMiss;
 
-      const result = await deps.bridge.createPlaylist({ name, trackIds: track_ids, description });
-      cache.upsertPlaylistAfterWrite(result, name, track_ids);
-      cache.recordPlaylistCreation(result.persistentId, name, track_ids);
+        const result = await deps.bridge.createPlaylist({ name, trackIds: track_ids, description });
+        cache.upsertPlaylistAfterWrite(result, name, track_ids);
+        cache.recordPlaylistCreation(result.persistentId, name, track_ids);
+        return {
+          playlist_id: result.persistentId,
+          name,
+          track_count: result.trackCount,
+          note: storeNote(cache, result.persistentId, note),
+        };
+      }
+
+      const requestedId = source_playlist_id!;
+      const source = resolvePlaylist(cache, requestedId);
+      const cached = source.ok ? source.playlist : null;
+      const reservedPreview = isReservedPreview(cache, requestedId, cached);
+      if (!source.ok && !reservedPreview) return source.error;
+      if (cached !== null) {
+        const preflight = cachedSourceError(cached);
+        if (preflight) return preflight;
+      }
+      const cachedId = cached?.persistentId ?? cache.resolvePlaylistId(requestedId);
+
+      const result = await deps.bridge.clonePlaylist({
+        name,
+        sourcePlaylistId: cachedId,
+        description,
+        ...(reservedPreview ? { reservedSourceName: PREVIEW_PLAYLIST_NAME } : {}),
+      });
+      const trackIds = result.sourceTrackPersistentIds;
+      cache.upsertPlaylistAfterWrite(result, name, trackIds);
+      // Creation receipt: lets the next refresh recognize iCloud rekeys and echo
+      // duplicates of this exact playlist (docs/music-app.md, iCloud sync).
+      cache.recordPlaylistCreation(result.persistentId, name, trackIds);
+      // The cached ID was gone live and the reserved slot was recovered by name:
+      // alias the stale ID so the model's receipt keeps resolving.
+      if (result.sourcePersistentId !== cachedId) {
+        cache.applyLiveRekey(cachedId, {
+          persistentId: result.sourcePersistentId,
+          name: result.sourceName,
+          trackIds,
+        });
+      }
       return {
         playlist_id: result.persistentId,
         name,
         track_count: result.trackCount,
         note: storeNote(cache, result.persistentId, note),
+        source: {
+          playlist_id: result.sourcePersistentId,
+          name: result.sourceName,
+          track_count: trackIds.length,
+          ...(result.sourcePersistentId !== requestedId ? { rekeyed_from: requestedId } : {}),
+        },
       };
-    }
-
-    const requestedId = source_playlist_id!;
-    const source = resolvePlaylist(cache, requestedId);
-    const cached = source.ok ? source.playlist : null;
-    const reservedPreview = isReservedPreview(cache, requestedId, cached);
-    if (!source.ok && !reservedPreview) return source.error;
-    if (cached !== null) {
-      const preflight = cachedSourceError(cached);
-      if (preflight) return preflight;
-    }
-    const cachedId = cached?.persistentId ?? cache.resolvePlaylistId(requestedId);
-
-    const result = await deps.bridge.clonePlaylist({
-      name,
-      sourcePlaylistId: cachedId,
-      description,
-      ...(reservedPreview ? { reservedSourceName: PREVIEW_PLAYLIST_NAME } : {}),
     });
-    const trackIds = result.sourceTrackPersistentIds;
-    cache.upsertPlaylistAfterWrite(result, name, trackIds);
-    // Creation receipt: lets the next refresh recognize iCloud rekeys and echo
-    // duplicates of this exact playlist (docs/music-app.md, iCloud sync).
-    cache.recordPlaylistCreation(result.persistentId, name, trackIds);
-    // The cached ID was gone live and the reserved slot was recovered by name:
-    // alias the stale ID so the model's receipt keeps resolving.
-    if (result.sourcePersistentId !== cachedId) {
-      cache.applyLiveRekey(cachedId, {
-        persistentId: result.sourcePersistentId,
-        name: result.sourceName,
-        trackIds,
-      });
-    }
-    return {
-      playlist_id: result.persistentId,
-      name,
-      track_count: result.trackCount,
-      note: storeNote(cache, result.persistentId, note),
-      source: {
-        playlist_id: result.sourcePersistentId,
-        name: result.sourceName,
-        track_count: trackIds.length,
-        ...(result.sourcePersistentId !== requestedId ? { rekeyed_from: requestedId } : {}),
-      },
-    };
   } catch (err) {
     return toErrorEnvelope(err);
   }

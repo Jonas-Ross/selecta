@@ -1,3 +1,4 @@
+import { withOperation } from '../operations/lock.js';
 // delete_playlist — remove an entire user playlist from Music.app and drop its
 // cache rows. The heaviest irreversible operation in the tool surface: the
 // playlist, its ordering, and its co-occurrence contribution are gone for
@@ -34,23 +35,25 @@ export async function handleDeletePlaylist(
 
   try {
     const cache = deps.cache();
-    const target = resolveEditablePlaylist(cache, parsed.data.playlist_id);
-    if (!target.ok) return target.error;
+    return await withOperation(cache, 'music', async () => {
+      const target = resolveEditablePlaylist(cache, parsed.data.playlist_id);
+      if (!target.ok) return target.error;
 
-    const deleted = await deps.bridge.deletePlaylistById(target.playlist.persistentId);
-    if (deleted === 0) {
+      const deleted = await deps.bridge.deletePlaylistById(target.playlist.persistentId);
+      if (deleted === 0) {
+        return {
+          error: 'playlist_not_found',
+          hint: `"${target.playlist.name}" is in the cache but not the live library — the cache is stale. Run refresh_library; the playlist may already be gone.`,
+        };
+      }
+      cache.deletePlaylistRow(target.playlist.persistentId);
       return {
-        error: 'playlist_not_found',
-        hint: `"${target.playlist.name}" is in the cache but not the live library — the cache is stale. Run refresh_library; the playlist may already be gone.`,
+        playlist_id: target.playlist.persistentId,
+        name: target.playlist.name,
+        deleted: true,
+        track_count: target.playlist.trackCount,
       };
-    }
-    cache.deletePlaylistRow(target.playlist.persistentId);
-    return {
-      playlist_id: target.playlist.persistentId,
-      name: target.playlist.name,
-      deleted: true,
-      track_count: target.playlist.trackCount,
-    };
+    });
   } catch (err) {
     return toErrorEnvelope(err);
   }

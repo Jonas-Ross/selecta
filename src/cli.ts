@@ -136,45 +136,48 @@ export function createCliProgram(options: CliOptions = {}): Command {
     .action(async ({ limit }: { limit?: number }) => {
       try {
         const cache = SelectaCache.open(dbPath);
-        const pending = cache.countPendingEnrichment();
-        const budget = Math.min(limit ?? pending, pending);
-        logger.info(
-          `${pending} tracks pending enrichment; attempting ${budget} at ~1-2s each (source rate limits)`,
-        );
-        const startedAt = Date.now();
-        const summary = await enrichPendingTracks(
-          cache,
-          { limit: budget },
-          {
-            onProgress: (progress) => {
-              const covered = progress.processed + progress.skipped;
-              const pct = Math.floor((covered / budget) * 100);
-              const remaining = budget - covered;
-              const eta =
-                remaining === 0
-                  ? 'done'
-                  : `~${formatEta(remaining * ((Date.now() - startedAt) / covered))} remaining`;
-              const skipped = progress.skipped > 0 ? `, ${progress.skipped} skipped` : '';
-              logger.info(
-                `enriched ${progress.enriched}/${progress.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
-              );
+        try {
+          const pending = cache.countPendingEnrichment();
+          const budget = Math.min(limit ?? pending, pending);
+          logger.info(
+            `${pending} tracks pending enrichment; attempting ${budget} at ~1-2s each (source rate limits)`,
+          );
+          const startedAt = Date.now();
+          const summary = await enrichPendingTracks(
+            cache,
+            { limit: budget },
+            {
+              onProgress: (progress) => {
+                const covered = progress.processed + progress.skipped;
+                const pct = Math.floor((covered / budget) * 100);
+                const remaining = budget - covered;
+                const eta =
+                  remaining === 0
+                    ? 'done'
+                    : `~${formatEta(remaining * ((Date.now() - startedAt) / covered))} remaining`;
+                const skipped = progress.skipped > 0 ? `, ${progress.skipped} skipped` : '';
+                logger.info(
+                  `enriched ${progress.enriched}/${progress.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
+                );
+              },
+              onChunkError: (message, trackCount) =>
+                logger.error(`chunk skipped (${trackCount} tracks stay pending): ${message}`),
+              trace: (line) => logger.info(line),
             },
-            onChunkError: (message, trackCount) =>
-              logger.error(`chunk skipped (${trackCount} tracks stay pending): ${message}`),
-            trace: (line) => logger.info(line),
-          },
-        );
-        cache.close();
-        writeJson({
-          processed: summary.processed,
-          enriched: summary.enriched,
-          no_data: summary.noData,
-          no_match: summary.noMatch,
-          skipped: summary.skipped,
-          source_errors: summary.errors,
-          pending_remaining: summary.pendingRemaining,
-          db_path: dbPath,
-        });
+          );
+          writeJson({
+            processed: summary.processed,
+            enriched: summary.enriched,
+            no_data: summary.noData,
+            no_match: summary.noMatch,
+            skipped: summary.skipped,
+            source_errors: summary.errors,
+            pending_remaining: summary.pendingRemaining,
+            db_path: dbPath,
+          });
+        } finally {
+          cache.close();
+        }
       } catch (err) {
         reportError(err);
         setExitCode(1);

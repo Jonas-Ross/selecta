@@ -1,3 +1,4 @@
+import { withOperation } from '../operations/lock.js';
 // set_loved — favorite/unfavorite tracks in Music.app and patch the cached
 // signal from the post-write values the bridge reads back.
 
@@ -33,12 +34,14 @@ export async function handleSetLoved(
 
   try {
     const cache = deps.cache();
-    const cacheMiss = missingTrackIdsError(cache, track_ids);
-    if (cacheMiss) return cacheMiss;
+    return await withOperation(cache, 'music', async () => {
+      const cacheMiss = missingTrackIdsError(cache, track_ids);
+      if (cacheMiss) return cacheMiss;
 
-    const result = await deps.bridge.setTrackLoved({ trackIds: track_ids, loved });
-    cache.patchTrackLoved(result.tracks);
-    return { updated: result.tracks.length, loved };
+      const result = await deps.bridge.setTrackLoved({ trackIds: track_ids, loved });
+      cache.patchTrackLoved(result.tracks);
+      return { updated: result.tracks.length, loved };
+    });
   } catch (err) {
     return toErrorEnvelope(err);
   }

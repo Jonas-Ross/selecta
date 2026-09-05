@@ -1,3 +1,4 @@
+import { withOperation } from '../operations/lock.js';
 // reorder_tracks — rearrange an existing user playlist to a new order and
 // patch the cache surgically from the post-edit order the bridge reads back.
 // `order` is a complete permutation of the playlist's current positions, so
@@ -66,47 +67,49 @@ export async function handleReorderTracks(
 
   try {
     const cache = deps.cache();
-    const target = resolveEditablePlaylist(cache, playlist_id);
-    if (!target.ok) return target.error;
+    return await withOperation(cache, 'music', async () => {
+      const target = resolveEditablePlaylist(cache, playlist_id);
+      if (!target.ok) return target.error;
 
-    const cachedIds = cache.getPlaylistTrackIds(target.playlist.persistentId);
-    if (order.length !== cachedIds.length) {
-      // A count mismatch on a duplicated playlist isn't the model's fault:
-      // search shows one row per distinct track, so the true entry order is
-      // undiscoverable. Name that instead of sending it to refresh_library.
-      const distinct = new Set(cachedIds).size;
-      if (distinct !== cachedIds.length) {
+      const cachedIds = cache.getPlaylistTrackIds(target.playlist.persistentId);
+      if (order.length !== cachedIds.length) {
+        // A count mismatch on a duplicated playlist isn't the model's fault:
+        // search shows one row per distinct track, so the true entry order is
+        // undiscoverable. Name that instead of sending it to refresh_library.
+        const distinct = new Set(cachedIds).size;
+        if (distinct !== cachedIds.length) {
+          return validationError(
+            `"${target.playlist.name}" holds the same track more than once (${cachedIds.length} entries, ${distinct} distinct tracks), and search shows only distinct tracks — its full entry order isn't discoverable, so it can't be reordered. Remove the duplicate entries first (remove_tracks by position) if a reorder is needed.`,
+          );
+        }
         return validationError(
-          `"${target.playlist.name}" holds the same track more than once (${cachedIds.length} entries, ${distinct} distinct tracks), and search shows only distinct tracks — its full entry order isn't discoverable, so it can't be reordered. Remove the duplicate entries first (remove_tracks by position) if a reorder is needed.`,
+          `order has ${order.length} entries but "${target.playlist.name}" has ${cachedIds.length} tracks in the cache. Get the current order via search with in_playlist + sort playlist_order; use its playlist_positions, never result-array indices; if the count is stale, run refresh_library. A playlist over 1000 tracks can't be reordered in one call.`,
         );
       }
-      return validationError(
-        `order has ${order.length} entries but "${target.playlist.name}" has ${cachedIds.length} tracks in the cache. Get the current order via search with in_playlist + sort playlist_order; use its playlist_positions, never result-array indices; if the count is stale, run refresh_library. A playlist over 1000 tracks can't be reordered in one call.`,
-      );
-    }
 
-    const { duplicated, outOfRange } = permutationDefects(order);
-    if (duplicated.length > 0 || outOfRange.length > 0) {
-      const parts: string[] = [];
-      if (duplicated.length > 0) parts.push(`duplicated: ${duplicated.join(', ')}`);
-      if (outOfRange.length > 0) parts.push(`out of range: ${outOfRange.join(', ')}`);
-      return validationError(
-        `order must be a permutation of 0..${order.length - 1}, each value exactly once (${parts.join('; ')}).`,
-      );
-    }
+      const { duplicated, outOfRange } = permutationDefects(order);
+      if (duplicated.length > 0 || outOfRange.length > 0) {
+        const parts: string[] = [];
+        if (duplicated.length > 0) parts.push(`duplicated: ${duplicated.join(', ')}`);
+        if (outOfRange.length > 0) parts.push(`out of range: ${outOfRange.join(', ')}`);
+        return validationError(
+          `order must be a permutation of 0..${order.length - 1}, each value exactly once (${parts.join('; ')}).`,
+        );
+      }
 
-    const result = await deps.bridge.reorderPlaylistTracks({
-      playlistId: target.playlist.persistentId,
-      order,
-      expectedTrackIds: cachedIds,
+      const result = await deps.bridge.reorderPlaylistTracks({
+        playlistId: target.playlist.persistentId,
+        order,
+        expectedTrackIds: cachedIds,
+      });
+      cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
+      return {
+        playlist_id: result.persistentId,
+        name: target.playlist.name,
+        track_count: result.trackCount,
+        moved_count: result.movedCount ?? 0,
+      };
     });
-    cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
-    return {
-      playlist_id: result.persistentId,
-      name: target.playlist.name,
-      track_count: result.trackCount,
-      moved_count: result.movedCount ?? 0,
-    };
   } catch (err) {
     return toErrorEnvelope(err);
   }
