@@ -2,12 +2,28 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { bridge } from '../src/bridge/index.js';
 import { runJxa } from '../src/bridge/jxa.js';
 import { SelectaCache } from '../src/cache/index.js';
+import { createSources } from '../src/enrich/sources.js';
 import { enrichPendingTracks } from '../src/enrich/engine.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 vi.mock('../src/bridge/jxa.js', () => ({ runJxa: vi.fn() }));
 afterEach(() => vi.clearAllMocks());
 
 describe('external payload boundaries', () => {
+  it('accepts an unknown MusicBrainz recording duration without losing the match', async () => {
+    const sources = createSources({
+      fetchLike: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ recordings: [{ id: 'recording', score: 100, length: null }] }),
+      }),
+      sleep: async () => {},
+      nowMs: () => 0,
+    });
+    await expect(
+      sources.mbFindRecording({ artist: 'Artist', title: 'Song', durationSeconds: 180 }),
+    ).resolves.toBe('recording');
+  });
+
   it.each([
     { playCount: '42' },
     { loved: 1 },
