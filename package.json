@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "vitest run --tags-filter='!integration'",
+    "test": "npm run build && vitest run --tags-filter='!integration'",
     "test:integration": "vitest run --tags-filter=integration",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "verify:echo": "npm run build && node scripts/verify-echo.mjs",
@@ -20,7 +20,7 @@
     "lint": "oxlint",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "check": "npm run build && npm test && npm run lint && npm run format:check"
+    "check": "npm test && npm run lint && npm run format:check"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
