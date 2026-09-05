@@ -190,6 +190,46 @@ describe('observed write outcomes', () => {
     },
   );
 
+  it.each([false, true])(
+    'reads a known empty destination without the failing bulk getter (mutation failed=%s)',
+    (failed) => {
+      const bulkRead = vi.fn(() => {
+        throw Error('empty collection');
+      });
+      const playlist = {
+        persistentID: () => 'EMPTY',
+        tracks: { length: 0, persistentID: bulkRead },
+      };
+      const music = {
+        make: () => playlist,
+        libraryPlaylists: [
+          {
+            tracks: {
+              whose: () => () => [
+                {
+                  duplicate: () => {
+                    if (failed) throw Error('first add failed');
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      const raw = JSON.parse(
+        runInNewContext(buildCreatePlaylistScript({ name: 'Mix', trackIds: [A] }), {
+          Application: () => music,
+        }),
+      );
+      expect(raw).toEqual(
+        failed
+          ? { partialWrite: { persistentId: 'EMPTY', trackPersistentIds: [] } }
+          : { persistentId: 'EMPTY', trackCount: 0, trackPersistentIds: [] },
+      );
+      expect(bulkRead).not.toHaveBeenCalled();
+    },
+  );
+
   it('refuses ambiguous preview slots before clearing either playlist', async () => {
     const slot = { smart: () => false, class: () => 'userPlaylist' };
     const music = {

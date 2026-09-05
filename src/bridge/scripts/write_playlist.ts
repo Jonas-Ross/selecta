@@ -24,7 +24,7 @@ const WRITE_RESULT_HELPER = `
     try { mutate(); } catch (e) { failed = true; }
     let trackPersistentIds;
     // Exactly one readback attempt, even when population failed.
-    try { trackPersistentIds = pl.tracks.persistentID(); } catch (e) { failed = true; }
+    try { trackPersistentIds = pl.tracks.length === 0 ? [] : pl.tracks.persistentID(); } catch (e) { failed = true; }
     if (failed) {
       return JSON.stringify({ partialWrite: {
         persistentId: persistentId, trackPersistentIds: trackPersistentIds,
