@@ -5,6 +5,7 @@
 // on the bridge package.
 
 export type ErrorCode =
+  | 'operation_busy'
   | 'not_implemented' // bridge method not yet built in the current milestone
   | 'automation_permission_denied' // macOS denied Music.app automation
   | 'music_app_not_running' // Music.app isn't open
@@ -55,6 +56,7 @@ export class BridgeError extends Error {
 // resolve the hint as `err.hint ?? defaultHints[err.errorCode]`, so a per-call
 // `hint` is reserved for overrides "when more context is available."
 export const defaultHints: Record<ErrorCode, string> = {
+  operation_busy: 'Another operation is active. Wait for it to finish before trying again.',
   not_implemented: 'This bridge method is not implemented yet in the current milestone.',
   automation_permission_denied:
     'macOS has not granted Music.app automation access. Ask the user to enable it in System Settings → Privacy & Security → Automation.',

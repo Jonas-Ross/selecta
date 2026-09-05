@@ -1,3 +1,4 @@
+import { withOperation } from '../operations/lock.js';
 // remove_tracks — delete entries from an existing user playlist and patch the
 // cache surgically from the post-edit order the bridge reads back. The first
 // irreversible operation in the tool surface: removed entries can't be
@@ -56,40 +57,42 @@ export async function handleRemoveTracks(
 
   try {
     const cache = deps.cache();
-    const target = resolveEditablePlaylist(cache, playlist_id);
-    if (!target.ok) return target.error;
+    return await withOperation(cache, 'music', async () => {
+      const target = resolveEditablePlaylist(cache, playlist_id);
+      if (!target.ok) return target.error;
 
-    // Pre-flight against the cached membership so model mistakes surface
-    // before any Apple event; the bridge re-checks against the live playlist.
-    const cachedIds = cache.getPlaylistTrackIds(target.playlist.persistentId);
-    const inPlaylist = new Set(cachedIds);
-    const absent = (track_ids ?? []).filter((id) => !inPlaylist.has(id));
-    if (absent.length > 0) {
+      // Pre-flight against the cached membership so model mistakes surface
+      // before any Apple event; the bridge re-checks against the live playlist.
+      const cachedIds = cache.getPlaylistTrackIds(target.playlist.persistentId);
+      const inPlaylist = new Set(cachedIds);
+      const absent = (track_ids ?? []).filter((id) => !inPlaylist.has(id));
+      if (absent.length > 0) {
+        return {
+          error: 'track_not_found',
+          hint: `Not in playlist "${target.playlist.name}": ${absent.join(', ')}. Check its contents via search with in_playlist; if the library changed, run refresh_library.`,
+        };
+      }
+      const outOfRange = (positions ?? []).filter((p) => p >= cachedIds.length);
+      if (outOfRange.length > 0) {
+        return validationError(
+          `Positions out of range: ${outOfRange.join(', ')} — "${target.playlist.name}" has ${cachedIds.length} tracks.`,
+        );
+      }
+
+      const result = await deps.bridge.removePlaylistTracks({
+        playlistId: target.playlist.persistentId,
+        trackIds: track_ids,
+        positions,
+        ...(positions?.length ? { expectedTrackIds: cachedIds } : {}),
+      });
+      cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
       return {
-        error: 'track_not_found',
-        hint: `Not in playlist "${target.playlist.name}": ${absent.join(', ')}. Check its contents via search with in_playlist; if the library changed, run refresh_library.`,
+        playlist_id: result.persistentId,
+        name: target.playlist.name,
+        track_count: result.trackCount,
+        removed_count: result.removedCount ?? 0,
       };
-    }
-    const outOfRange = (positions ?? []).filter((p) => p >= cachedIds.length);
-    if (outOfRange.length > 0) {
-      return validationError(
-        `Positions out of range: ${outOfRange.join(', ')} — "${target.playlist.name}" has ${cachedIds.length} tracks.`,
-      );
-    }
-
-    const result = await deps.bridge.removePlaylistTracks({
-      playlistId: target.playlist.persistentId,
-      trackIds: track_ids,
-      positions,
-      ...(positions?.length ? { expectedTrackIds: cachedIds } : {}),
     });
-    cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
-    return {
-      playlist_id: result.persistentId,
-      name: target.playlist.name,
-      track_count: result.trackCount,
-      removed_count: result.removedCount ?? 0,
-    };
   } catch (err) {
     return toErrorEnvelope(err);
   }

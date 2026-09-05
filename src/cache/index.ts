@@ -227,9 +227,27 @@ export class SelectaCache {
    * refresh cycle (see schema.ts) — a refresh never rewrites them, only prunes
    * rows whose track left the library.
    */
+  getSourceCooldown(host: string): number | null {
+    const row = this.db
+      .prepare('SELECT until_ms FROM enrichment_cooldowns WHERE host = ?')
+      .get(host) as { until_ms: number } | undefined;
+    return row?.until_ms ?? null;
+  }
+
+  setSourceCooldown(host: string, until: number): void {
+    this.db
+      .prepare(
+        'INSERT INTO enrichment_cooldowns (host, until_ms) VALUES (?, ?) ON CONFLICT(host) DO UPDATE SET until_ms = MAX(until_ms, excluded.until_ms)',
+      )
+      .run(host, until);
+  }
+
   saveAudioFeatures(rows: AudioFeaturesRow[]): void {
     const run = this.db.transaction(() => {
-      for (const row of rows) this.queries.upsertAudioFeatures(row);
+      for (const row of rows) {
+        // A concurrent refresh may have removed a track while its lookup was in flight.
+        if (this.getTrack(row.trackPersistentId)) this.queries.upsertAudioFeatures(row);
+      }
     });
     run();
   }

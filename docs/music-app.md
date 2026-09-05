@@ -47,3 +47,9 @@ What the code does about it: the add script does a best-effort verify-and-trim (
 - Bulk getters are also the reason refresh is fast: one Apple event per property, not per track. A 3.6k-track library reads in ~12s.
 - Error mapping from `osascript` stderr: `errAEPrivilegeError` / `-1743` / `Not authorized` means automation permission was denied; app-not-running / event-not-handled patterns mean Music.app isn't open; anything else is a generic JXA error.
 - Each JXA call is a fresh `osascript` process. No shared state between invocations, no long-lived bridge.
+
+### Operation ownership and interrupted calls
+
+Refresh and Music.app writes hold a per-database `library.db.music.lock` directory across preflight, scripting, and cache updates. Enrichment independently holds `library.db.enrich.lock` across its whole run. Server-requested cooldowns of up to one minute are waited out; longer cooldowns are saved per host in SQLite, and requests to that host are skipped until expiry, including across process restarts. A competing CLI/MCP call fails with `operation_busy`; cached reads remain available. These locks coordinate Selecta processes using the same database, not edits made by Music.app or other applications.
+
+Locks deliberately survive a process crash: stop all Selecta processes, inspect Music.app for partial writes, then remove the named lock directory before restarting. Never remove a live owner's lock. An MCP client timeout does not establish that the server operation stopped. `osascript` has a three-minute deadline; terminating it cannot undo Apple events already delivered. A timeout reports an unknown outcome, not permission to repeat a write. Metadata HTTP requests have a 30-second deadline, including body reads; 429/503 `Retry-After` delays are honored without retrying the failed request.

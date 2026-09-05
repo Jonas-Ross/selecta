@@ -50,6 +50,11 @@ CREATE TABLE IF NOT EXISTS playlist_creations (
 -- are pruned on refresh. status is terminal: 'ok' (has data), 'no_data'
 -- (matched, sources had nothing), 'no_match' (unmatchable) — enrichment never
 -- retries a track that has a row.
+CREATE TABLE IF NOT EXISTS enrichment_cooldowns (
+  host TEXT PRIMARY KEY,
+  until_ms REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS audio_features (
   track_persistent_id TEXT PRIMARY KEY,
   bpm REAL,
