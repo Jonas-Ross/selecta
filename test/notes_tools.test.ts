@@ -144,12 +144,14 @@ describe('create_playlist note', () => {
       createPlaylist: vi.fn().mockImplementation(async (input: { trackIds: string[] }) => ({
         persistentId: 'P-NEW',
         trackCount: input.trackIds.length,
+        trackPersistentIds: input.trackIds,
       })),
       clonePlaylist: vi.fn().mockResolvedValue({
         persistentId: 'P-CLONE',
         trackCount: 3,
         sourcePersistentId: 'P-LATENIGHT',
         sourceName: 'Late Night',
+        trackPersistentIds: ['T-TEARDROP', 'T-GLORYBOX', 'T-ROADS'],
         sourceTrackPersistentIds: ['T-TEARDROP', 'T-GLORYBOX', 'T-ROADS'],
       }),
     });
@@ -261,7 +263,12 @@ describe('note surfacing', () => {
 
   async function annotated() {
     const deps = makeDeps({
-      replacePlaylist: vi.fn().mockResolvedValue({ persistentId: 'P-PREVIEW', trackCount: 1 }),
+      replacePlaylist: vi.fn().mockResolvedValue({
+        persistentId: 'P-PREVIEW',
+        trackCount: 1,
+        trackPersistentIds: ['T-TEARDROP'],
+        created: true,
+      }),
       deletePlaylistById: vi.fn().mockResolvedValue(1),
     });
     await setNote(deps, 'track', 'T-TEARDROP', TRACK_NOTE);

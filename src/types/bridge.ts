@@ -45,6 +45,7 @@ export type LibrarySnapshot = {
 export type PlaylistWriteResult = {
   persistentId: string;
   trackCount: number;
+  trackPersistentIds: string[];
 };
 
 // Slot overwrite: `created` says whether the script had to make the playlist
@@ -55,7 +56,7 @@ export const PLAYLIST_WRITE_TRACK_LIMIT = 500;
 
 // A source clone captures the live source identity and exact ordered entries
 // in the same JXA execution that creates the destination. The tool uses that
-// snapshot for its cache patch, creation receipt, and user-facing receipt.
+// snapshot for the source receipt; destination readback drives the cache patch.
 export type PlaylistCloneResult = PlaylistWriteResult & {
   sourcePersistentId: string;
   sourceName: string;
@@ -125,10 +126,7 @@ export interface Bridge {
     trackIds: string[];
   }): Promise<PlaylistReplaceResult>;
 
-  // Delete one specific playlist. Used only by refresh-time iCloud-echo
-  // reconciliation, where the ID comes from the snapshot just read — never
-  // from a stale creation-time receipt. Resolves to the number deleted (0 if
-  // the ID is already gone, which reconciliation treats as benign).
+  // Delete one explicitly selected plain user playlist; 0 if already gone.
   deletePlaylistById(persistentId: string): Promise<number>;
 
   // Append tracks to a user playlist, or insert at a 0-based position

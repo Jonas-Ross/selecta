@@ -53,3 +53,12 @@ What the code does about it: the add script does a best-effort verify-and-trim (
 Refresh and Music.app writes hold a per-database `library.db.music.lock` directory across preflight, scripting, and cache updates. Enrichment independently holds `library.db.enrich.lock` across its whole run. Server-requested cooldowns of up to one minute are waited out; longer cooldowns are saved per host in SQLite, and requests to that host are skipped until expiry, including across process restarts. A competing CLI/MCP call fails with `operation_busy`; cached reads remain available. These locks coordinate Selecta processes using the same database, not edits made by Music.app or other applications.
 
 Locks deliberately survive a process crash: stop all Selecta processes, inspect Music.app for partial writes, then remove the named lock directory before restarting. Never remove a live owner's lock. An MCP client timeout does not establish that the server operation stopped. `osascript` has a three-minute deadline; terminating it cannot undo Apple events already delivered. A timeout reports an unknown outcome, not permission to repeat a write. Metadata HTTP requests have a 30-second deadline, including body reads; 429/503 `Retry-After` delays are honored without retrying the failed request.
+
+
+### Observed and partial playlist writes
+
+Create, clone, and preview read the destination's ordered IDs after population; that snapshot supplies both membership and count in the cache. A clone keeps its source snapshot separate. `order_matches_request: false` exposes any difference instead of claiming the requested sequence was installed.
+
+If population or destination readback throws after the playlist ID is captured, the error includes `partial_write.playlist_id` and, if readable, `observed_track_ids`. No rollback or repeat creation is attempted: either could compound iCloud churn. Refresh and inspect that playlist before choosing recovery. A killed subprocess cannot return this receipt, so its outcome remains explicitly unknown. Multiple plain user playlists named Selecta Preview now block overwrite before deletion; the user must choose which copy to retain.
+
+Favorite/rating responses count only confirmed readbacks as `updated`; `mismatches` contains actual values for the remaining tracks. Clearing a rating and reading back null is a confirmed clear.

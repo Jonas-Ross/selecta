@@ -19,8 +19,19 @@ const ADD_HELPER = `
 `;
 
 const WRITE_RESULT_HELPER = `
-  function writeResult(pl) {
-    return JSON.stringify({ persistentId: pl.persistentID(), trackCount: pl.tracks.length });
+  function writeResult(pl, persistentId, extra, mutate) {
+    let failed = false;
+    try { mutate(); } catch (e) { failed = true; }
+    let trackPersistentIds;
+    // Exactly one readback attempt, even when population failed.
+    try { trackPersistentIds = pl.tracks.length === 0 ? [] : pl.tracks.persistentID(); } catch (e) { failed = true; }
+    if (failed) {
+      return JSON.stringify({ partialWrite: {
+        persistentId: persistentId, trackPersistentIds: trackPersistentIds,
+      } });
+    }
+    return JSON.stringify(Object.assign({ persistentId: persistentId,
+      trackCount: trackPersistentIds.length, trackPersistentIds: trackPersistentIds }, extra));
   }
 `;
 
@@ -57,8 +68,8 @@ export function buildCreatePlaylistScript(args: {
       if (args.description) {
         try { pl.description = args.description; } catch (e) {}
       }
-      addTracksInOrder(pl, args.trackIds);
-      return writeResult(pl);
+      const persistentId = pl.persistentID();
+      return writeResult(pl, persistentId, {}, () => addTracksInOrder(pl, args.trackIds));
     `,
   );
 }
@@ -115,18 +126,17 @@ export function buildClonePlaylistScript(args: {
 
       ${resolveTracks('sourceTrackPersistentIds')}
       ${ADD_HELPER}
+      ${WRITE_RESULT_HELPER}
       const pl = Music.make({ new: 'playlist', withProperties: { name: args.name } });
       if (args.description) {
         try { pl.description = args.description; } catch (e) {}
       }
-      addTracksInOrder(pl, sourceTrackPersistentIds);
-      return JSON.stringify({
-        persistentId: pl.persistentID(),
-        trackCount: pl.tracks.length,
+      const persistentId = pl.persistentID();
+      return writeResult(pl, persistentId, {
         sourcePersistentId: sourcePersistentId,
         sourceName: sourceName,
         sourceTrackPersistentIds: sourceTrackPersistentIds,
-      });
+      }, () => addTracksInOrder(pl, sourceTrackPersistentIds));
     `,
   );
 }
@@ -139,18 +149,17 @@ export function buildReplacePlaylistScript(args: { name: string; trackIds: strin
       ${PLAIN_USER_PLAYLISTS_NAMED}
       // Find-or-create by name, so the preview slot keeps a stable persistent
       // ID across overwrites.
-      const slots = plainUserPlaylistsNamed(args.name, 1);
+      const slots = plainUserPlaylistsNamed(args.name, 2);
+      if (slots.length > 1) return JSON.stringify({ ambiguousPreview: true });
       const created = slots.length === 0;
       const pl = created
         ? Music.make({ new: 'playlist', withProperties: { name: args.name } })
         : slots[0];
-      // Reverse order so positions stay valid while deleting.
-      for (let i = pl.tracks.length - 1; i >= 0; i--) Music.delete(pl.tracks[i]);
-      addTracksInOrder(pl, args.trackIds);
-      return JSON.stringify({
-        persistentId: pl.persistentID(),
-        trackCount: pl.tracks.length,
-        created: created,
+      const persistentId = pl.persistentID();
+      return writeResult(pl, persistentId, { created: created }, () => {
+        // Reverse order so positions stay valid while deleting.
+        for (let i = pl.tracks.length - 1; i >= 0; i--) Music.delete(pl.tracks[i]);
+        addTracksInOrder(pl, args.trackIds);
       });
     `,
   );

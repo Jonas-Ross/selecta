@@ -59,6 +59,7 @@ export type CreatePlaylistOutput = {
   playlist_id: string;
   name: string;
   track_count: number;
+  order_matches_request?: boolean;
   note?: ApiNote;
   source?: {
     playlist_id: string;
@@ -70,7 +71,7 @@ export type CreatePlaylistOutput = {
   };
 };
 
-export const CREATE_PLAYLIST_DESCRIPTION = `Create a real playlist in the user's Music.app, preserving order. Provide exactly one source: ordered track_ids, or source_playlist_id to clone an approved preview/existing playlist from its current live order without resending IDs. This writes to the user's library — only call once the user has approved the final tracklist (use preview_playlist for auditioning). Clone sources must be non-empty plain user playlists with at most ${PLAYLIST_WRITE_TRACK_LIMIT} entries; generated, smart, subscription, special, and folder playlists fail with playlist_not_editable before creation because their external curation is not stable user signal. A clone reads and resolves every live source entry before creating anything. Clone-path track_not_found means the live source contains unavailable/dangling entries: remove or replace those entries in the source before trying again; refresh_library cannot repair the live source, and do not retry it unchanged. Explicit track_ids still fail before creation if an ID is unknown; re-resolve those IDs via search, or refresh_library if that cache is stale. A preview_playlist playlist_id keeps working after iCloud rekeys a first-ever "${PREVIEW_PLAYLIST_NAME}": only that reserved slot is re-resolved by name when its ID is gone live (source.rekeyed_from reports it); every other source is a strict live-ID lookup. Preview-slot playlist_not_found means no "${PREVIEW_PLAYLIST_NAME}" exists any more — call preview_playlist again rather than retrying; a validation_error naming several copies means the slot is ambiguous — run refresh_library to inspect the copies and ask the user which one to keep; never guess. Duplicate names are allowed by Music.app, so reuse of an existing name creates a second playlist rather than editing the first. The returned playlist_id may be reassigned by iCloud sync later — re-resolve via list_playlists if you need it in a much later turn. iCloud sync occasionally duplicates a just-created playlist (same tracks, different ID) within ~3 minutes — the create did not fail or run twice, so never retry; running refresh_library a few minutes after creation reports ambiguous copies in sync_reconciliation.ambiguous without deleting anything as long as it runs within an hour of the create. Pass note to record playlist-level memory (the user's verdict on the arc, the name they preferred) at creation — it follows the playlist through later iCloud rekeys and comes back on list_playlists.`;
+export const CREATE_PLAYLIST_DESCRIPTION = `Create a real playlist in the user's Music.app, preserving order. Provide exactly one source: ordered track_ids, or source_playlist_id to clone an approved preview/existing playlist from its current live order without resending IDs. This writes to the user's library — only call once the user has approved the final tracklist (use preview_playlist for auditioning). Clone sources must be non-empty plain user playlists with at most ${PLAYLIST_WRITE_TRACK_LIMIT} entries; generated, smart, subscription, special, and folder playlists fail with playlist_not_editable before creation because their external curation is not stable user signal. A clone reads and resolves every live source entry before creating anything. Clone-path track_not_found means the live source contains unavailable/dangling entries: remove or replace those entries in the source before trying again; refresh_library cannot repair the live source, and do not retry it unchanged. Explicit track_ids still fail before creation if an ID is unknown; re-resolve those IDs via search, or refresh_library if that cache is stale. A preview_playlist playlist_id keeps working after iCloud rekeys a first-ever "${PREVIEW_PLAYLIST_NAME}": only that reserved slot is re-resolved by name when its ID is gone live (source.rekeyed_from reports it); every other source is a strict live-ID lookup. Preview-slot playlist_not_found means no "${PREVIEW_PLAYLIST_NAME}" exists any more — call preview_playlist again rather than retrying; a validation_error naming several copies means the slot is ambiguous — run refresh_library to inspect the copies and ask the user which one to keep; never guess. Duplicate names are allowed by Music.app, so reuse of an existing name creates a second playlist rather than editing the first. The returned playlist_id may be reassigned by iCloud sync later — re-resolve via list_playlists if you need it in a much later turn. iCloud sync occasionally duplicates a just-created playlist (same tracks, different ID) within ~3 minutes — the create did not fail or run twice, so never retry; running refresh_library a few minutes after creation reports ambiguous copies in sync_reconciliation.ambiguous without deleting anything as long as it runs within an hour of the create. order_matches_request: false means the observed destination differs from the requested list or live source; the cache contains the observed destination. partial_write on an error preserves a target ID after population/readback failure; inspect and refresh before retrying. Pass note to record playlist-level memory (the user's verdict on the arc, the name they preferred) at creation — it follows the playlist through later iCloud rekeys and comes back on list_playlists.`;
 
 // The creation-time note lands on the ID Music.app just returned — the same
 // ID the receipt names, so reconciliation carries it through a later rekey.
@@ -99,12 +100,15 @@ export async function handleCreatePlaylist(
         if (cacheMiss) return cacheMiss;
 
         const result = await deps.bridge.createPlaylist({ name, trackIds: track_ids, description });
-        cache.upsertPlaylistAfterWrite(result, name, track_ids);
-        cache.recordPlaylistCreation(result.persistentId, name, track_ids);
+        cache.upsertPlaylistAfterWrite(result, name, result.trackPersistentIds);
+        cache.recordPlaylistCreation(result.persistentId, name, result.trackPersistentIds);
         return {
           playlist_id: result.persistentId,
           name,
           track_count: result.trackCount,
+          ...(JSON.stringify(result.trackPersistentIds) !== JSON.stringify(track_ids)
+            ? { order_matches_request: false }
+            : {}),
           note: storeNote(cache, result.persistentId, note),
         };
       }
@@ -126,7 +130,7 @@ export async function handleCreatePlaylist(
         description,
         ...(reservedPreview ? { reservedSourceName: PREVIEW_PLAYLIST_NAME } : {}),
       });
-      const trackIds = result.sourceTrackPersistentIds;
+      const trackIds = result.trackPersistentIds;
       cache.upsertPlaylistAfterWrite(result, name, trackIds);
       // Creation receipt: lets the next refresh recognize iCloud rekeys and echo
       // duplicates of this exact playlist (docs/music-app.md, iCloud sync).
@@ -137,18 +141,22 @@ export async function handleCreatePlaylist(
         cache.applyLiveRekey(cachedId, {
           persistentId: result.sourcePersistentId,
           name: result.sourceName,
-          trackIds,
+          trackIds: result.sourceTrackPersistentIds,
         });
       }
       return {
         playlist_id: result.persistentId,
         name,
         track_count: result.trackCount,
+        ...(JSON.stringify(result.trackPersistentIds) !==
+        JSON.stringify(result.sourceTrackPersistentIds)
+          ? { order_matches_request: false }
+          : {}),
         note: storeNote(cache, result.persistentId, note),
         source: {
           playlist_id: result.sourcePersistentId,
           name: result.sourceName,
-          track_count: trackIds.length,
+          track_count: result.sourceTrackPersistentIds.length,
           ...(result.sourcePersistentId !== requestedId ? { rekeyed_from: requestedId } : {}),
         },
       };
