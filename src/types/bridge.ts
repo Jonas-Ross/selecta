@@ -139,6 +139,7 @@ export interface Bridge {
     playlistId: string;
     trackIds: string[];
     position?: number;
+    expectedTrackIds?: string[];
   }): Promise<PlaylistEditResult>;
 
   // Remove playlist entries by track persistent ID (EVERY occurrence of each)
@@ -149,6 +150,7 @@ export interface Bridge {
     playlistId: string;
     trackIds?: string[];
     positions?: number[];
+    expectedTrackIds?: string[];
   }): Promise<PlaylistEditResult>;
 
   // Reorder a user playlist to `order`, a complete permutation of its current

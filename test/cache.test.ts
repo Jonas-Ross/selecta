@@ -392,18 +392,16 @@ describe('sync reconciliation', () => {
     ]);
   });
 
-  it('plans deleting the created copy, keeping the iCloud twin (REARVIEW case)', () => {
+  it('reports identical copies without planning a deletion', () => {
     const cache = cacheAfterCreate();
     cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-ECHO' }), {
       durationMs: 1,
     });
     expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
       {
-        kind: 'duplicate',
-        createdId: CREATED_ID,
+        kind: 'ambiguous',
         name: NAME,
-        keepId: 'P-ECHO',
-        deleteIds: [CREATED_ID],
+        playlistIds: [CREATED_ID, 'P-ECHO'],
       },
     ]);
   });
@@ -420,7 +418,9 @@ describe('sync reconciliation', () => {
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-FIRST' }, { id: 'P-SECOND' }), {
       durationMs: 1,
     });
-    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
+      { kind: 'ambiguous', name: NAME, playlistIds: ['P-FIRST', 'P-SECOND'] },
+    ]);
   });
 
   it('never touches same-name twins with no creation receipt (legacy Relax/Workout dupes)', () => {
@@ -508,9 +508,7 @@ describe('sync reconciliation', () => {
       snapshotWith({ id: 'P-TWIN' }, { id: 'P-AUDITIONED', tracks: [...TRACKS].reverse() }),
       { durationMs: 1 },
     );
-    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
-      { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: CREATED_ID, toId: 'P-TWIN' },
-    ]);
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
     expect(cache.planSyncReconciliation({ windowMinutes: 60, reservedSlotNames: [NAME] })).toEqual(
       [],
     );

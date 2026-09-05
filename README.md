@@ -98,7 +98,7 @@ Sixteen tools, in three groups. The first group answers from the local cache and
 
 | Tool | What it does |
 |---|---|
-| `refresh_library` | Full reread of Music.app into the cache. Manual by design. Also records play and skip deltas since the previous refresh, and cleans up iCloud echo copies of playlists created in the last hour. |
+| `refresh_library` | Full reread of Music.app into the cache. Manual by design. Also records play and skip deltas since the previous refresh, and remaps unambiguous recent playlist rekeys and reports ambiguous copies without deleting them. |
 | `set_note` | Save Claude's own note on a track or playlist ("great opener", "user preferred the plain name") so it's there next session. Cache-only, never written to Music.app. Notes come back verbatim on reads; Selecta never filters or ranks on them. |
 | `enrich_features` | Fetch BPM, key and danceability for tracks not yet attempted, from MusicBrainz/AcousticBrainz and Deezer. Works through the most-played backlog, or targets specific track IDs (up to 50). The only tool that uses the network. For a whole-library backfill, prefer the `enrich` CLI command above. |
 
@@ -118,6 +118,8 @@ Selecta only writes where you point it: it creates playlists, overwrites its own
 
 ⚠️ Always use the npm scripts, never bare `vitest`. The bare runner ignores the tag filter and will launch Music.app from the unit suite.
 
+For tool discovery without library writes, run `node scripts/smoke.mjs --check-tools` after building. Positional edits use the explicit `playlist_positions` returned by playlist-order searches, never the search result index.
+
 Run `npm run check` before pushing. GitHub Actions runs the same gates on every pull request and push to `main`; the integration and smoke suites need a real Music.app and stay local.
 
 The one-time formatting pass is listed in `.git-blame-ignore-revs`; run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once so local blame skips it (GitHub's blame view does so on its own).
@@ -131,4 +133,4 @@ Architecture and working conventions are in [`CLAUDE.md`](CLAUDE.md); Music.app 
 - `music_app_not_running`: open Music.app and retry.
 - Tools return `cache_age_hours: null`: the cache was never populated. Run `refresh`.
 - `track_not_found` on writes: the cache is stale. Refresh and re-resolve track IDs.
-- A created playlist appears twice in Music.app: iCloud Sync Library sometimes duplicates a fresh playlist as sync settles (it does this to Apple's own playlists too — not a Selecta bug, and the create only ran once). Run `refresh` within an hour of creating it and Selecta removes the echo copy automatically. It only touches exact twins of playlists it just created, so same-name playlists you made on purpose are safe. For older duplicates, delete either copy in Music.app and refresh.
+- A created playlist appears twice in Music.app: run `refresh` to inspect recent rekeys and ambiguous copies. Identical tracks and names cannot distinguish an iCloud echo from an intentional copy, so refresh never deletes playlists. Choose which copy to keep before deleting the other.

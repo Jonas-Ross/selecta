@@ -88,10 +88,19 @@ const EDIT_RESULT = `
   }
 `;
 
+// Positional mutations require the caller's full baseline, including duplicates.
+const POSITION_GUARD = `
+  if (!Array.isArray(args.expectedTrackIds) ||
+      JSON.stringify(args.expectedTrackIds) !== JSON.stringify(baselineIds)) {
+    return JSON.stringify({orderDrifted: true, liveTrackCount: baselineIds.length});
+  }
+`;
+
 export function buildAddTracksScript(args: {
   playlistId: string;
   trackIds: string[];
   position?: number;
+  expectedTrackIds?: string[];
 }): string {
   return wrapJxaScript(
     args,
@@ -100,6 +109,8 @@ export function buildAddTracksScript(args: {
       ${EDIT_RESULT}
       ${RESOLVE_TRACKS}
       const preEditIds = readTrackIds();
+      const baselineIds = preEditIds;
+      if (args.position != null) { ${POSITION_GUARD} }
       const originalCount = preEditIds.length;
 
       // Expected post-add occurrence count for each added id: occurrences in
@@ -154,6 +165,7 @@ export function buildRemoveTracksScript(args: {
   playlistId: string;
   trackIds?: string[];
   positions?: number[];
+  expectedTrackIds?: string[];
 }): string {
   return wrapJxaScript(
     args,
@@ -161,6 +173,8 @@ export function buildRemoveTracksScript(args: {
       ${FIND_EDITABLE_PLAYLIST}
       ${EDIT_RESULT}
       const liveIds = readTrackIds();
+      const baselineIds = liveIds;
+      if (args.positions && args.positions.length > 0) { ${POSITION_GUARD} }
       const doomed = {};
       const wantedIds = args.trackIds || [];
       const missing = [];

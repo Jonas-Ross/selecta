@@ -65,6 +65,7 @@ Settled calls — don't re-litigate without the user:
 - Genres surface raw; normalization is an opinion the model owns.
 - Co-occurrence counts hand-made (`kind = 'user'`) playlists only. Smart/subscription playlists are read-only snapshots.
 - Playlist cloning accepts non-empty plain user sources only (max 500 entries). Generated, smart, subscription, special, and folder sources must never feed externally shifting curation back into user co-occurrence signal.
+- Refresh never deletes playlists based on name/content similarity; ambiguous copies require explicit user choice. CLI and MCP refresh share orchestration. Positional edits use explicit playlist_positions and verify the full expected order live.
 - Cache refresh is manual-only (`refresh_library`). Persistent IDs are trusted per library — re-import means the user re-runs refresh; no migration logic.
 - The model names playlists. Names are half the point.
 - Tool descriptions are first-class model interface: terse, contractual, with failure-mode hints ("if no match, returns empty array — don't retry with the same query").

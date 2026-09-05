@@ -31,7 +31,7 @@ export { defaultDbPath } from './db.js';
 
 // How long after creation a receipt can drive iCloud-sync reconciliation
 // (docs/music-app.md, iCloud sync). Echo twins arrive ~10s–3min after
-// creation; the window bounds how long a receipt can trigger a delete, so a
+// creation; the window bounds receipt-based rekey inference, so a
 // later intentional copy of the same playlist is never touched. Generous vs.
 // the observed echo latency to cover slow refresh habits, small vs.
 // "intentional duplicate" timescales. Lives here because the refresh prune
@@ -92,8 +92,8 @@ export class SelectaCache {
           // First sighting (no prev) establishes baseline silently. A counter
           // that went down resets its baseline — no negative deltas; the other
           // counter still records if it rose.
-          const playDelta = (track.playCount ?? 0) - prev.playCount;
-          const skipDelta = (track.skipCount ?? 0) - prev.skipCount;
+          const playDelta = (track.playCount ?? prev.playCount) - prev.playCount;
+          const skipDelta = (track.skipCount ?? prev.skipCount) - prev.skipCount;
           if (playDelta < 0 || skipDelta < 0) playCountResets += 1;
           if (playDelta > 0 || skipDelta > 0) {
             q.insertPlayHistory({
@@ -105,7 +105,12 @@ export class SelectaCache {
             playDeltasRecorded += 1;
           }
         }
-        q.upsertTrack(track);
+        const previous = prior.get(track.persistentId);
+        q.upsertTrack({
+          ...track,
+          playCount: track.playCount ?? previous?.playCount,
+          skipCount: track.skipCount ?? previous?.skipCount,
+        });
       }
       for (const playlist of snapshot.playlists) {
         q.upsertPlaylist(playlist);
@@ -380,21 +385,10 @@ export class SelectaCache {
   }
 
   /**
-   * Compare the just-refreshed cache against recent creation receipts and plan
-   * iCloud-sync reconciliation (docs/music-app.md, iCloud sync). Pure
-   * read — applying the plan is the caller's job (deletes go through the
-   * bridge first). Matching is deliberately conservative: same name, kind
-   * 'user', and the EXACT ordered track sequence we created — so intentional
-   * same-name playlists and user-edited copies are never touched. Only
-   * creations within `windowMinutes` are considered.
-   *
-   * `reservedSlotNames` are Selecta-owned slots whose identity is the name,
-   * not the contents (the user may reorder the preview while auditioning):
-   * for those, a lone same-name user playlist under a new ID is a rekey even
-   * when the sequence differs — and several same-name copies are never
-   * rekeyed, even if exactly one still matches the receipt's sequence: the
-   * untouched copy may be the iCloud twin, not the one the user auditioned.
-   * Ambiguity is reported at clone time; only identical twins are deduped.
+   * Match recent receipts after refresh. Rekey only when the current ID is gone
+   * and exactly one same-name playlist remains. Several copies are ambiguous:
+   * identical contents cannot establish that an intentional copy is an echo.
+   * Reserved slots identify by name; ordinary rekeys also require exact order.
    */
   planSyncReconciliation(opts: {
     windowMinutes: number;
@@ -404,17 +398,6 @@ export class SelectaCache {
     const now = opts.now ?? new Date();
     const since = new Date(now.getTime() - opts.windowMinutes * 60_000).toISOString();
     const creations = this.queries.getCreationsSince(since);
-    // Two in-window receipts with the same name + sequence are mutually
-    // indistinguishable from each other's echo — each would plan to delete the
-    // other's playlist (reciprocal data loss). Ambiguous groups get no
-    // destructive actions; rekey remapping below is unaffected.
-    const receiptKey = (name: string, trackIdsJson: string): string =>
-      JSON.stringify([name, trackIdsJson]);
-    const receiptsPerKey = new Map<string, number>();
-    for (const c of creations) {
-      const key = receiptKey(c.name, JSON.stringify(c.trackIds));
-      receiptsPerKey.set(key, (receiptsPerKey.get(key) ?? 0) + 1);
-    }
     const actions: ReconcileAction[] = [];
     for (const creation of creations) {
       const wanted = JSON.stringify(creation.trackIds);
@@ -433,7 +416,12 @@ export class SelectaCache {
         : matchIds.length === 1
           ? matchIds[0]!
           : null;
-      if (rekeyId !== null && rekeyId !== currentId) {
+      if (
+        rekeyId !== null &&
+        rekeyId !== currentId &&
+        sameNameIds.length === 1 &&
+        !this.queries.playlistExists(currentId)
+      ) {
         actions.push({
           kind: 'rekey',
           createdId: creation.createdPersistentId,
@@ -443,18 +431,9 @@ export class SelectaCache {
         });
       } else if (
         matchIds.length >= 2 &&
-        receiptsPerKey.get(receiptKey(creation.name, wanted)) === 1
+        !actions.some((a) => a.kind === 'ambiguous' && a.name === creation.name)
       ) {
-        // Keep the iCloud-keyed twin (observed canonical: rekeys survive under
-        // the NEW id), i.e. prefer a copy whose ID is not the one we created.
-        const keepId = matchIds.find((id) => id !== currentId) ?? matchIds[0]!;
-        actions.push({
-          kind: 'duplicate',
-          createdId: creation.createdPersistentId,
-          name: creation.name,
-          keepId,
-          deleteIds: matchIds.filter((id) => id !== keepId),
-        });
+        actions.push({ kind: 'ambiguous', name: creation.name, playlistIds: matchIds });
       }
     }
     return actions;

@@ -65,6 +65,7 @@ describe('add_tracks', () => {
       playlistId: 'P-TRIPHOP',
       trackIds: ['T-ROADS'],
       position: 1,
+      expectedTrackIds: ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX'],
     });
     expect(deps.cacheInstance.getPlaylistTrackIds('P-TRIPHOP')).toEqual(finalIds);
   });
