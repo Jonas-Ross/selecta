@@ -20,6 +20,7 @@ export async function handleRefreshLibrary(
   deps: ToolDeps,
 ): Promise<import('../operations/refresh.js').RefreshLibraryOutput | SelectaError> {
   const parsed = parseInput(RefreshLibraryInput, raw ?? {});
+
   if (!parsed.ok) return parsed.error;
 
   try {

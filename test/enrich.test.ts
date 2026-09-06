@@ -48,6 +48,7 @@ describe('source request identity', () => {
     let requestInit: RequestInit | undefined;
     const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
       requestInit = init;
+
       return new Response('{}');
     }) as typeof fetch;
 
@@ -71,19 +72,26 @@ describe('source request identity', () => {
 
 function scenarioHandler(url: string): [number, unknown] {
   const u = decodeURIComponent(url);
+
   if (u.includes('musicbrainz.org')) {
     if (u.includes('Midnight City'))
       return [200, { recordings: [{ id: 'mb-midnight', score: 100, length: 244000 }] }];
+
     if (u.includes('Teardrop'))
       return [200, { recordings: [{ id: 'mb-teardrop', score: 100, length: 331000 }] }];
+
     if (u.includes('Angel'))
       return [200, { recordings: [{ id: 'mb-angel', score: 97, length: 379000 }] }];
+
     if (u.includes('Roads'))
       return [200, { recordings: [{ id: 'mb-wrong-roads', score: 60, length: 304000 }] }];
+
     return [200, { recordings: [] }];
   }
+
   if (u.includes('acousticbrainz.org')) {
     if (!u.includes('recording_ids=')) throw new Error(`non-bulk AB url: ${url}`);
+
     if (u.includes('low-level'))
       return [
         200,
@@ -93,19 +101,27 @@ function scenarioHandler(url: string): [number, unknown] {
           },
         },
       ];
+
     return [
       200,
       { 'mb-teardrop': { '0': { highlevel: { danceability: { all: { danceable: 0.618 } } } } } },
     ];
   }
+
   if (u.includes('api.deezer.com/search')) {
     if (u.includes('Midnight City')) return [200, { data: [{ id: 901, duration: 246 }] }];
+
     if (u.includes('Angel')) return [200, { data: [{ id: 77, duration: 379 }] }];
+
     if (u.includes('Roads')) return [200, { data: [{ id: 55, duration: 500 }] }]; // duration gate rejects
+
     return [200, { data: [] }];
   }
+
   if (u.includes('api.deezer.com/track/901')) return [200, { bpm: 105 }];
+
   if (u.includes('api.deezer.com/track/77')) return [200, { bpm: 0 }]; // Deezer's "unknown"
+
   throw new Error(`unrouted url: ${url}`);
 }
 
@@ -117,8 +133,10 @@ function fakeFetch(handler: (url: string) => [number, unknown]): {
   const fetchLike: FetchLike = async (url) => {
     calls.push(url);
     const [status, body] = handler(url);
+
     return { ok: status >= 200 && status < 300, status, json: async () => body };
   };
+
   return { fetchLike, calls };
 }
 
@@ -130,6 +148,7 @@ const testDeps = (fetchLike: FetchLike) => ({
 
 describe('enrichPendingTracks', () => {
   let cache: SelectaCache;
+
   beforeEach(() => {
     cache = SelectaCache.open(':memory:');
     cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
@@ -200,6 +219,7 @@ describe('enrichPendingTracks', () => {
     expect(cache.getTracksPendingEnrichment(-1)).toEqual([]);
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
     const summary = await enrichPendingTracks(cache, { limit: -1 }, testDeps(fetchLike));
+
     expect(summary.processed).toBe(0);
     expect(calls).toHaveLength(0);
   });
@@ -207,6 +227,7 @@ describe('enrichPendingTracks', () => {
   it('respects the batch limit and reports the rest as pending', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
     const summary = await enrichPendingTracks(cache, { limit: 2 }, testDeps(fetchLike));
+
     expect(summary.processed).toBe(2);
     expect(summary.pendingRemaining).toBe(4);
     expect(cache.getAudioFeatures('T-MIDNIGHT')).not.toBeNull();
@@ -239,6 +260,7 @@ describe('enrichPendingTracks', () => {
     expect(cache.getAudioFeatures('T-MIDNIGHT')).toBeNull();
 
     const requestLog = calls.map(decodeURIComponent).join('\n');
+
     expect(requestLog).toContain('Roads');
     expect(requestLog).toContain('Teardrop');
     expect(requestLog).not.toContain('Midnight City');
@@ -270,6 +292,7 @@ describe('enrichPendingTracks', () => {
 
   it('rejects unknown targeted IDs before any external request', async () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
+
     await expect(
       enrichPendingTracks(cache, { trackIds: ['T-TEARDROP', 'T-UNKNOWN'] }, testDeps(fetchLike)),
     ).rejects.toMatchObject({ errorCode: 'track_not_found' });
@@ -279,6 +302,7 @@ describe('enrichPendingTracks', () => {
 
   it('defensively rejects duplicate targeted IDs before any external request', async () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
+
     await expect(
       enrichPendingTracks(cache, { trackIds: ['T-TEARDROP', 'T-TEARDROP'] }, testDeps(fetchLike)),
     ).rejects.toMatchObject({ errorCode: 'validation_error' });
@@ -289,6 +313,7 @@ describe('enrichPendingTracks', () => {
   it('narrates every source request through trace', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
     const lines: string[] = [];
+
     await enrichPendingTracks(
       cache,
       { limit: 10 },
@@ -298,6 +323,7 @@ describe('enrichPendingTracks', () => {
       },
     );
     const text = lines.join('\n');
+
     expect(text).toContain('chunk 1/1');
     expect(text).toContain('MusicBrainz "Teardrop" — Massive Attack …');
     expect(text).toContain('AcousticBrainz bulk low-level');
@@ -309,6 +335,7 @@ describe('enrichPendingTracks', () => {
   it('reports progress after each saved chunk', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
     const ticks: number[] = [];
+
     await enrichPendingTracks(
       cache,
       { limit: 3 },
@@ -327,6 +354,7 @@ describe('enrichPendingTracks', () => {
     // the chunk, then Midnight City's 2 Deezer calls for the bpm gap.
     const { fetchLike } = fakeFetch(scenarioHandler);
     const sleeps: number[] = [];
+
     await enrichPendingTracks(
       cache,
       { limit: 2 },
@@ -341,15 +369,18 @@ describe('enrichPendingTracks', () => {
     // 2 MusicBrainz + 2 AcousticBrainz waits at ≥1s, 2 Deezer waits at ≥200ms.
     expect(sleeps.filter((ms) => ms >= 1000)).toHaveLength(4);
     expect(sleeps).toHaveLength(6);
+
     for (const ms of sleeps) expect(ms).toBeGreaterThanOrEqual(200);
   });
 
   it('never re-attempts a track with a row — all statuses are terminal', async () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
+
     await enrichPendingTracks(cache, { limit: 10 }, testDeps(fetchLike));
     const callsAfterFirstRun = calls.length;
 
     const summary = await enrichPendingTracks(cache, { limit: 10 }, testDeps(fetchLike));
+
     expect(summary.processed).toBe(0);
     expect(calls.length).toBe(callsAfterFirstRun);
   });
@@ -357,6 +388,7 @@ describe('enrichPendingTracks', () => {
   it('skips the chunk on a source failure — nothing half-written, tracks stay pending', async () => {
     const { fetchLike } = fakeFetch((url) => {
       if (decodeURIComponent(url).includes('Teardrop')) return [503, { error: 'rate limited' }];
+
       return scenarioHandler(url);
     });
     const chunkErrors: [string, number][] = [];
@@ -368,6 +400,7 @@ describe('enrichPendingTracks', () => {
         onChunkError: (message, trackCount) => chunkErrors.push([message, trackCount]),
       },
     );
+
     expect(summary.processed).toBe(0);
     expect(summary.skipped).toBe(6); // the whole (single) chunk
     expect(summary.pendingRemaining).toBe(6);
@@ -380,6 +413,7 @@ describe('enrichPendingTracks', () => {
     // 30 targeted tracks → two chunks (25 + 5), requested order T-01…T-30.
     // Chunk 1 dies on Song 10's MusicBrainz call; chunk 2 must still land.
     const big = SelectaCache.open(':memory:');
+
     big.refreshFromSnapshot(
       {
         capturedAt: '2026-07-04T00:00:00.000Z',
@@ -396,13 +430,18 @@ describe('enrichPendingTracks', () => {
     );
     const { fetchLike } = fakeFetch((url) => {
       const u = decodeURIComponent(url);
+
       if (u.includes('Song 10')) return [503, { error: 'gateway' }];
+
       if (u.includes('musicbrainz.org')) return [200, { recordings: [] }];
+
       if (u.includes('api.deezer.com/search')) return [200, { data: [] }];
+
       throw new Error(`unrouted url: ${url}`);
     });
     const targetIds = Array.from({ length: 30 }, (_, i) => `T-${String(i + 1).padStart(2, '0')}`);
     const summary = await enrichPendingTracks(big, { trackIds: targetIds }, testDeps(fetchLike));
+
     expect(summary.skipped).toBe(25); // chunk 1 lost to the 503
     expect(summary.processed).toBe(5); // chunk 2 completed (all no_match)
     expect(summary.noMatch).toBe(5);
@@ -427,6 +466,7 @@ describe('enrichPendingTracks', () => {
     // Regression (PR #29 review): an embedded " ends the artist:/track: field
     // early on Deezer's side and fabricates a terminal no_match.
     const quoted = SelectaCache.open(':memory:');
+
     quoted.refreshFromSnapshot(
       {
         capturedAt: '2026-07-04T00:00:00.000Z',
@@ -445,12 +485,17 @@ describe('enrichPendingTracks', () => {
     );
     const { fetchLike, calls } = fakeFetch((url) => {
       const u = decodeURIComponent(url);
+
       if (u.includes('musicbrainz.org')) return [200, { recordings: [] }];
+
       if (u.includes('api.deezer.com/search')) return [200, { data: [] }];
+
       throw new Error(`unrouted url: ${url}`);
     });
+
     await enrichPendingTracks(quoted, { limit: 1 }, testDeps(fetchLike));
     const dzCall = decodeURIComponent(calls.find((c) => c.includes('deezer'))!);
+
     expect(dzCall).toContain('artist:"The Q Band" track:"Say Boom Again"');
   });
 
@@ -459,6 +504,7 @@ describe('enrichPendingTracks', () => {
       throw new Error('getaddrinfo ENOTFOUND musicbrainz.org');
     };
     const summary = await enrichPendingTracks(cache, { limit: 6 }, testDeps(fetchLike));
+
     expect(summary.skipped).toBe(6);
     expect(summary.errors).toEqual([
       expect.stringContaining('MusicBrainz unreachable: getaddrinfo ENOTFOUND'),
@@ -468,11 +514,14 @@ describe('enrichPendingTracks', () => {
   it('treats a Deezer in-body error as a chunk skip, never as data', async () => {
     const { fetchLike } = fakeFetch((url) => {
       const u = decodeURIComponent(url);
+
       if (u.includes('api.deezer.com/search'))
         return [200, { error: { message: 'Quota limit exceeded' } }];
+
       return scenarioHandler(url);
     });
     const summary = await enrichPendingTracks(cache, { limit: 1 }, testDeps(fetchLike));
+
     expect(summary.skipped).toBe(1);
     expect(summary.errors).toEqual([expect.stringContaining('Quota limit exceeded')]);
     expect(cache.getAudioFeatures('T-MIDNIGHT')).toBeNull();
@@ -482,7 +531,9 @@ describe('enrichPendingTracks', () => {
 describe('enrich_features tool', () => {
   function makeDeps(fetchLike: FetchLike): ToolDeps {
     const cache = SelectaCache.open(':memory:');
+
     cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+
     return { cache: () => cache, bridge: makeBridge(), enrich: testDeps(fetchLike) };
   }
 
@@ -492,6 +543,7 @@ describe('enrich_features tool', () => {
       { limit: 10 },
       makeDeps(fetchLike),
     )) as EnrichFeaturesOutput;
+
     expect(out).toEqual({
       processed: 6,
       enriched: 2,
@@ -504,6 +556,7 @@ describe('enrich_features tool', () => {
   it('runs targeted mode and reports per-ID outcomes', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
     const deps = makeDeps(fetchLike);
+
     deps.cache().saveAudioFeatures([
       featuresRow({
         trackPersistentId: 'T-GLORYBOX',
@@ -521,6 +574,7 @@ describe('enrich_features tool', () => {
       { track_ids: ['T-GLORYBOX', 'T-MIDNIGHT'] },
       deps,
     )) as EnrichFeaturesOutput;
+
     expect(out).toEqual({
       processed: 1,
       enriched: 1,
@@ -544,6 +598,7 @@ describe('enrich_features tool', () => {
     const err = asError(
       await handleEnrichFeatures({ track_ids: ['T-TEARDROP', 'T-UNKNOWN'] }, makeDeps(fetchLike)),
     );
+
     expect(err).toMatchObject({ error: 'track_not_found' });
     expect(err.hint).toContain('T-UNKNOWN');
     expect(calls).toHaveLength(0);
@@ -577,6 +632,7 @@ describe('enrich_features tool', () => {
     );
 
     const err = asError(result);
+
     expect(err).toMatchObject({ error: 'validation_error' });
     expect(err.hint).toContain('track_ids: must not contain duplicate IDs');
     expect(cacheRead).toBe(false);
@@ -585,6 +641,7 @@ describe('enrich_features tool', () => {
   it('rejects an out-of-range limit', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
     const err = asError(await handleEnrichFeatures({ limit: 0 }, makeDeps(fetchLike)));
+
     expect(err.error).toBe('validation_error');
   });
 
@@ -593,6 +650,7 @@ describe('enrich_features tool', () => {
       throw new Error('network down');
     };
     const out = (await handleEnrichFeatures({}, makeDeps(fetchLike))) as EnrichFeaturesOutput;
+
     expect(out.processed).toBe(0);
     expect(out.skipped).toBe(6);
     expect(out.pending_remaining).toBe(6);

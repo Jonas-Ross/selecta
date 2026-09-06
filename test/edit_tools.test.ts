@@ -75,6 +75,7 @@ describe('add_tracks', () => {
     const err = asError(
       await handleAddTracks({ playlist_id: 'P-NOPE', track_ids: ['T-ROADS'] }, deps),
     );
+
     expect(err.error).toBe('playlist_not_found');
     expect(err.hint).toContain('P-NOPE');
     expect(deps.bridge.addPlaylistTracks).not.toHaveBeenCalled();
@@ -85,6 +86,7 @@ describe('add_tracks', () => {
     const err = asError(
       await handleAddTracks({ playlist_id: 'P-RECENT', track_ids: ['T-ROADS'] }, deps),
     );
+
     expect(err.error).toBe('playlist_not_editable');
     expect(err.hint).toContain('smart');
     expect(deps.bridge.addPlaylistTracks).not.toHaveBeenCalled();
@@ -95,6 +97,7 @@ describe('add_tracks', () => {
     const err = asError(
       await handleAddTracks({ playlist_id: 'P-TRIPHOP', track_ids: ['T-FAKE'] }, deps),
     );
+
     expect(err.error).toBe('track_not_found');
     expect(err.hint).toContain('T-FAKE');
     expect(deps.bridge.addPlaylistTracks).not.toHaveBeenCalled();
@@ -109,6 +112,7 @@ describe('add_tracks', () => {
     const err = asError(
       await handleAddTracks({ playlist_id: 'P-TRIPHOP', track_ids: ['T-ROADS'] }, deps),
     );
+
     expect(err.error).toBe('playlist_not_found');
     expect(deps.cacheInstance.getPlaylistTrackIds('P-TRIPHOP')).toEqual([
       'T-TEARDROP',
@@ -157,12 +161,14 @@ describe('remove_tracks', () => {
       { playlist_id: 'P-TRIPHOP', positions: [0] },
       deps,
     )) as RemoveTracksOutput;
+
     expect(out.removed_count).toBe(1);
     expect(deps.cacheInstance.getPlaylistTrackIds('P-TRIPHOP')).toEqual(['T-ANGEL', 'T-GLORYBOX']);
   });
 
   it('requires track_ids and/or positions', async () => {
     const deps = makeToolDeps();
+
     expect(asError(await handleRemoveTracks({ playlist_id: 'P-TRIPHOP' }, deps)).error).toBe(
       'validation_error',
     );
@@ -180,6 +186,7 @@ describe('remove_tracks', () => {
     const err = asError(
       await handleRemoveTracks({ playlist_id: 'P-TRIPHOP', track_ids: ['T-MIDNIGHT'] }, deps),
     );
+
     expect(err.error).toBe('track_not_found');
     expect(err.hint).toContain('Trip Hop Essentials');
     expect(deps.bridge.removePlaylistTracks).not.toHaveBeenCalled();
@@ -190,6 +197,7 @@ describe('remove_tracks', () => {
     const err = asError(
       await handleRemoveTracks({ playlist_id: 'P-TRIPHOP', positions: [3] }, deps),
     );
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain('3');
     expect(deps.bridge.removePlaylistTracks).not.toHaveBeenCalled();
@@ -198,6 +206,7 @@ describe('remove_tracks', () => {
   it('rejects a non-user playlist as playlist_not_editable', async () => {
     const deps = makeToolDeps();
     const err = asError(await handleRemoveTracks({ playlist_id: 'P-MOODS', positions: [0] }, deps));
+
     expect(err.error).toBe('playlist_not_editable');
     expect(deps.bridge.removePlaylistTracks).not.toHaveBeenCalled();
   });
@@ -211,6 +220,7 @@ describe('remove_tracks', () => {
     const err = asError(
       await handleRemoveTracks({ playlist_id: 'P-TRIPHOP', track_ids: ['T-ANGEL'] }, deps),
     );
+
     expect(err.error).toBe('track_not_found');
     expect(deps.cacheInstance.getPlaylistTrackIds('P-TRIPHOP')).toEqual([
       'T-TEARDROP',
@@ -250,6 +260,7 @@ describe('reorder_tracks', () => {
     const err = asError(
       await handleReorderTracks({ playlist_id: 'P-TRIPHOP', order: [0, 1] }, deps),
     );
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain('2');
     expect(err.hint).toContain('3');
@@ -262,6 +273,7 @@ describe('reorder_tracks', () => {
     const err = asError(
       await handleReorderTracks({ playlist_id: 'P-TRIPHOP', order: [0, 0, 1] }, deps),
     );
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain('duplicated: 0');
     expect(deps.bridge.reorderPlaylistTracks).not.toHaveBeenCalled();
@@ -272,6 +284,7 @@ describe('reorder_tracks', () => {
     // advertised workflow sends a 2-entry order for this 3-entry playlist —
     // the hint must name the real problem, not send it to refresh_library.
     const deps = makeToolDeps();
+
     deps.cacheInstance.patchPlaylistMembership('P-TRIPHOP', [
       'T-TEARDROP',
       'T-ANGEL',
@@ -280,6 +293,7 @@ describe('reorder_tracks', () => {
     const err = asError(
       await handleReorderTracks({ playlist_id: 'P-TRIPHOP', order: [0, 1] }, deps),
     );
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain('3 entries, 2 distinct tracks');
     expect(err.hint).not.toContain('refresh_library');
@@ -291,6 +305,7 @@ describe('reorder_tracks', () => {
     const err = asError(
       await handleReorderTracks({ playlist_id: 'P-TRIPHOP', order: [0, 1, 3] }, deps),
     );
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain('3');
     expect(deps.bridge.reorderPlaylistTracks).not.toHaveBeenCalled();
@@ -299,6 +314,7 @@ describe('reorder_tracks', () => {
   it('rejects an unknown playlist before any bridge call', async () => {
     const deps = makeToolDeps();
     const err = asError(await handleReorderTracks({ playlist_id: 'P-NOPE', order: [0] }, deps));
+
     expect(err.error).toBe('playlist_not_found');
     expect(err.hint).toContain('P-NOPE');
     expect(deps.bridge.reorderPlaylistTracks).not.toHaveBeenCalled();
@@ -307,6 +323,7 @@ describe('reorder_tracks', () => {
   it('rejects a smart playlist as playlist_not_editable', async () => {
     const deps = makeToolDeps();
     const err = asError(await handleReorderTracks({ playlist_id: 'P-RECENT', order: [0] }, deps));
+
     expect(err.error).toBe('playlist_not_editable');
     expect(deps.bridge.reorderPlaylistTracks).not.toHaveBeenCalled();
   });
@@ -338,6 +355,7 @@ describe('reorder_tracks', () => {
     const err = asError(
       await handleReorderTracks({ playlist_id: 'P-TRIPHOP', order: [2, 0, 1] }, deps),
     );
+
     expect(err.error).toBe('validation_error');
     expect(deps.cacheInstance.getPlaylistTrackIds('P-TRIPHOP')).toEqual([
       'T-TEARDROP',
@@ -372,6 +390,7 @@ describe('delete_playlist', () => {
 
   it('retires the creation receipt so a later refresh cannot rekey it onto a resurrected copy', async () => {
     const deps = makeToolDeps({ deletePlaylistById: vi.fn().mockResolvedValue(1) });
+
     deps.cacheInstance.recordPlaylistCreation('P-TRIPHOP', 'Trip Hop Essentials', [
       'T-TEARDROP',
       'T-ANGEL',
@@ -390,6 +409,7 @@ describe('delete_playlist', () => {
   it('rejects an unknown playlist before any bridge call', async () => {
     const deps = makeToolDeps();
     const err = asError(await handleDeletePlaylist({ playlist_id: 'P-NOPE' }, deps));
+
     expect(err.error).toBe('playlist_not_found');
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
   });
@@ -397,6 +417,7 @@ describe('delete_playlist', () => {
   it('rejects a smart playlist as playlist_not_editable before any bridge call', async () => {
     const deps = makeToolDeps();
     const err = asError(await handleDeletePlaylist({ playlist_id: 'P-RECENT' }, deps));
+
     expect(err.error).toBe('playlist_not_editable');
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
   });
@@ -404,6 +425,7 @@ describe('delete_playlist', () => {
   it('maps a live miss (deleted: 0) to playlist_not_found and keeps the cache row', async () => {
     const deps = makeToolDeps({ deletePlaylistById: vi.fn().mockResolvedValue(0) });
     const err = asError(await handleDeletePlaylist({ playlist_id: 'P-TRIPHOP' }, deps));
+
     expect(err.error).toBe('playlist_not_found');
     expect(err.hint).toContain('refresh_library');
     expect(deps.cacheInstance.getPlaylist('P-TRIPHOP')).not.toBeNull();
@@ -416,6 +438,7 @@ describe('delete_playlist', () => {
         .mockRejectedValue(new BridgeError('playlist_not_editable', 'not a user playlist')),
     });
     const err = asError(await handleDeletePlaylist({ playlist_id: 'P-TRIPHOP' }, deps));
+
     expect(err.error).toBe('playlist_not_editable');
     expect(deps.cacheInstance.getPlaylist('P-TRIPHOP')).not.toBeNull();
   });

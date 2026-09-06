@@ -49,16 +49,21 @@ export async function handleRemoveTracks(
   deps: ToolDeps,
 ): Promise<RemoveTracksOutput | SelectaError> {
   const parsed = parseInput(RemoveTracksInput, raw);
+
   if (!parsed.ok) return parsed.error;
+
   const { playlist_id, track_ids, positions } = parsed.data;
+
   if ((track_ids?.length ?? 0) === 0 && (positions?.length ?? 0) === 0) {
     return validationError('Provide track_ids and/or positions — at least one, non-empty.');
   }
 
   try {
     const cache = deps.cache();
+
     return await withOperation(cache, 'music', async () => {
       const target = resolveEditablePlaylist(cache, playlist_id);
+
       if (!target.ok) return target.error;
 
       // Pre-flight against the cached membership so model mistakes surface
@@ -66,13 +71,16 @@ export async function handleRemoveTracks(
       const cachedIds = cache.getPlaylistTrackIds(target.playlist.persistentId);
       const inPlaylist = new Set(cachedIds);
       const absent = (track_ids ?? []).filter((id) => !inPlaylist.has(id));
+
       if (absent.length > 0) {
         return {
           error: 'track_not_found',
           hint: `Not in playlist "${target.playlist.name}": ${absent.join(', ')}. Check its contents via search with in_playlist; if the library changed, run refresh_library.`,
         };
       }
+
       const outOfRange = (positions ?? []).filter((p) => p >= cachedIds.length);
+
       if (outOfRange.length > 0) {
         return validationError(
           `Positions out of range: ${outOfRange.join(', ')} — "${target.playlist.name}" has ${cachedIds.length} tracks.`,
@@ -85,7 +93,9 @@ export async function handleRemoveTracks(
         positions,
         ...(positions?.length ? { expectedTrackIds: cachedIds } : {}),
       });
+
       cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
+
       return {
         playlist_id: result.persistentId,
         name: target.playlist.name,

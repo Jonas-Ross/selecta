@@ -132,6 +132,7 @@ type ContextFiltersInput = {
 
 function summarizeIds(ids: string[]): string {
   const more = ids.length > 5 ? ` (+${ids.length - 5} more)` : '';
+
   return `${ids.slice(0, 5).join(', ')}${more}`;
 }
 
@@ -144,17 +145,21 @@ function resolveCoOccurrenceFilters(
   const resolvedIds = requestedIds.map((id) => cache.resolvePlaylistId(id));
   const playlists = resolvedIds.map((id) => cache.getPlaylist(id));
   const missingIds = requestedIds.filter((_, i) => playlists[i] === null);
+
   if (missingIds.length > 0) {
     return validationError(
       `exclude_playlist_ids not in the cache: ${summarizeIds(missingIds)}. Use IDs from list_playlists; if the library changed, run refresh_library.`,
     );
   }
+
   const nonUserIds = requestedIds.filter((_, i) => playlists[i]!.kind !== 'user');
+
   if (nonUserIds.length > 0) {
     return validationError(
       `exclude_playlist_ids must name user playlists: ${summarizeIds(nonUserIds)}. Smart, subscription, folder, and special playlists never contribute to co-occurrence.`,
     );
   }
+
   return {
     excludePlaylistIds: [...new Set(resolvedIds)],
     maxPlaylistTracks: input.max_playlist_tracks,
@@ -166,11 +171,14 @@ function playlistLegend(tracks: { sharedPlaylists: PlaylistRef[] }[]): {
   refs: number[][];
 } {
   const byId = new Map<string, PlaylistRef>();
+
   for (const track of tracks) {
     for (const playlist of track.sharedPlaylists) byId.set(playlist.id, playlist);
   }
+
   const entries = [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
   const indexById = new Map(entries.map((playlist, index) => [playlist.id, index]));
+
   return {
     entries,
     refs: tracks.map((track) =>
@@ -188,14 +196,18 @@ function multiSeedContext(
   const cache = deps.cache();
   const seedIds = [...new Set(seed_ids)];
   const seedRows = seedIds.map((id) => cache.getTrack(id));
+
   if (seedRows.includes(null)) return missingTrackIdsError(cache, seedIds)!;
+
   const coOccurrence = cache.getCoOccurrence(seedIds, filters, MULTI_CO_OCCURRENCE_CAP);
   const common = {
     source_playlists: coOccurrence.sourcePlaylists,
     cache_age_hours: roundedCacheAge(deps),
   };
+
   if (compact) {
     const legend = playlistLegend(coOccurrence.tracks);
+
     return {
       ...common,
       track_fields: COMPACT_TRACK_FIELDS,
@@ -209,6 +221,7 @@ function multiSeedContext(
       playlist_legend: legend.entries,
     };
   }
+
   return {
     ...common,
     seeds: seedRows.map((row) => projectApiTrack(row!, false)),
@@ -232,20 +245,27 @@ export async function handleGetTrackContext(
   | SelectaError
 > {
   const parsed = parseInput(GetTrackContextInput, raw);
+
   if (!parsed.ok) return parsed.error;
+
   const { track_id, seed_ids } = parsed.data;
+
   if ((track_id == null) === (seed_ids == null)) {
     return validationError('provide exactly one of track_id / seed_ids');
   }
 
   try {
     const filters = resolveCoOccurrenceFilters(parsed.data, deps);
+
     if ('error' in filters) return filters;
+
     const compact = parsed.data.compact === true;
+
     if (seed_ids != null) return multiSeedContext(seed_ids, filters, compact, deps);
 
     const cache = deps.cache();
     const seed = cache.getTrack(track_id!);
+
     if (!seed) {
       return {
         error: 'track_not_found',
@@ -270,8 +290,10 @@ export async function handleGetTrackContext(
       source_playlists: coOccurrence.sourcePlaylists,
       cache_age_hours: roundedCacheAge(deps),
     };
+
     if (compact) {
       const legend = playlistLegend(coOccurrence.tracks);
+
       return {
         ...common,
         track_fields: COMPACT_TRACK_FIELDS,
@@ -285,6 +307,7 @@ export async function handleGetTrackContext(
         playlist_legend: legend.entries,
       };
     }
+
     return {
       ...common,
       seed: projectApiTrack(seed, false),

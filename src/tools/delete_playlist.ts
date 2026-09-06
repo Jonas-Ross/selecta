@@ -31,22 +31,28 @@ export async function handleDeletePlaylist(
   deps: ToolDeps,
 ): Promise<DeletePlaylistOutput | SelectaError> {
   const parsed = parseInput(DeletePlaylistInput, raw);
+
   if (!parsed.ok) return parsed.error;
 
   try {
     const cache = deps.cache();
+
     return await withOperation(cache, 'music', async () => {
       const target = resolveEditablePlaylist(cache, parsed.data.playlist_id);
+
       if (!target.ok) return target.error;
 
       const deleted = await deps.bridge.deletePlaylistById(target.playlist.persistentId);
+
       if (deleted === 0) {
         return {
           error: 'playlist_not_found',
           hint: `"${target.playlist.name}" is in the cache but not the live library — the cache is stale. Run refresh_library; the playlist may already be gone.`,
         };
       }
+
       cache.deletePlaylistRow(target.playlist.persistentId);
+
       return {
         playlist_id: target.playlist.persistentId,
         name: target.playlist.name,

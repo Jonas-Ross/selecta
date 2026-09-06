@@ -138,7 +138,9 @@ const snapshot: LibrarySnapshot = {
 
 function freshCache(): SelectaCache {
   const cache = SelectaCache.open(':memory:');
+
   cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+
   return cache;
 }
 
@@ -149,12 +151,14 @@ function ids(rows: { persistentId: string }[]): string[] {
 describe('cache searchTracks dedupe', () => {
   it('is off by default: every copy is a row', () => {
     const { rows, total } = freshCache().searchTracks({ artist: 'Avicii' });
+
     expect(total).toBe(4);
     expect(ids(rows)).toHaveLength(4);
   });
 
   it('collapses same-song copies to one winner and reports total as group count', () => {
     const { rows, total } = freshCache().searchTracks({ artist: 'Avicii', dedupe: true });
+
     // "Levels" collapses to one; "Levels (Radio Edit)" is a distinct version.
     expect(total).toBe(2);
     expect(ids(rows)).toContain('T-LEVELS-TRUE');
@@ -164,6 +168,7 @@ describe('cache searchTracks dedupe', () => {
   it('winner tiebreak: studio album beats Various Artists compilation, then earliest year', () => {
     const { rows } = freshCache().searchTracks({ query: 'levels', dedupe: true });
     const levels = rows.find((r) => r.persistentId.startsWith('T-LEVELS') && r.title === 'Levels');
+
     // Not T-LEVELS-NOW (VA compilation, despite earliest year), not
     // T-LEVELS-FOREVER (2023 > 2013).
     expect(levels?.persistentId).toBe('T-LEVELS-TRUE');
@@ -171,19 +176,23 @@ describe('cache searchTracks dedupe', () => {
 
   it('winner tiebreak: loved beats an earlier release', () => {
     const { rows } = freshCache().searchTracks({ query: 'dark paradise', dedupe: true });
+
     expect(ids(rows)).toEqual(['T-DARK-PARADISE-ED']);
   });
 
   it('reports suppressed copies as sorted alternateIds on the winner only', () => {
     const { rows } = freshCache().searchTracks({ artist: 'Avicii', dedupe: true });
     const winner = rows.find((r) => r.persistentId === 'T-LEVELS-TRUE');
+
     expect(winner?.alternateIds).toEqual(['T-LEVELS-FOREVER', 'T-LEVELS-NOW']);
     const radio = rows.find((r) => r.persistentId === 'T-LEVELS-RADIO');
+
     expect(radio?.alternateIds).toBeUndefined();
   });
 
   it('collapses case- and whitespace-variant titles/artists', () => {
     const { rows, total } = freshCache().searchTracks({ query: 'summertime', dedupe: true });
+
     expect(total).toBe(1);
     expect(ids(rows)).toEqual(['T-SUMMER-A']);
     expect(rows[0]?.alternateIds).toEqual(['T-SUMMER-B']);
@@ -192,17 +201,20 @@ describe('cache searchTracks dedupe', () => {
   it('collapses non-ASCII case variants with the shared Unicode-aware key', () => {
     const { rows } = freshCache().searchTracks({ dedupe: true });
     const winner = rows.find((row) => row.persistentId === 'T-ETE-A');
+
     expect(winner?.alternateIds).toEqual(['T-ETE-B']);
   });
 
   it('keeps version variants: live/radio-edit titles are different songs', () => {
     const { rows, total } = freshCache().searchTracks({ query: 'one more time', dedupe: true });
+
     expect(total).toBe(2);
     expect(ids(rows).sort()).toEqual(['T-ONEMORE', 'T-ONEMORE-LIVE']);
   });
 
   it('never collapses rows missing a title or artist', () => {
     const { total } = freshCache().searchTracks({ dedupe: true });
+
     // 15 tracks − 2 Levels dupes − 1 Dark Paradise dupe − 1 Summertime dupe
     // − 1 Été Noir dupe;
     // the two artist-less "Untitled Demo" rows and T-BARE all survive.
@@ -215,6 +227,7 @@ describe('cache searchTracks dedupe', () => {
       dedupe: true,
       sort: 'least_played',
     });
+
     // Winners are T-LEVELS-TRUE (10 plays) and T-LEVELS-RADIO (55 plays) —
     // ordered by THEIR play counts, not the suppressed copies'.
     expect(ids(rows)).toEqual(['T-LEVELS-TRUE', 'T-LEVELS-RADIO']);
@@ -226,6 +239,7 @@ describe('cache searchTracks dedupe', () => {
       dedupe: true,
       sort: 'playlist_order',
     });
+
     // The playlist holds two Levels copies; the group winner (T-LEVELS-TRUE)
     // represents them, sorted at ITS first occurrence (position 1).
     expect(ids(rows)).toEqual(['T-LEVELS-TRUE', 'T-ONEMORE']);
@@ -233,6 +247,7 @@ describe('cache searchTracks dedupe', () => {
 
   it('respects the limit after collapsing, not before', () => {
     const { rows, total } = freshCache().searchTracks({ artist: 'Avicii', dedupe: true, limit: 1 });
+
     expect(total).toBe(2);
     expect(rows).toHaveLength(1);
   });
@@ -241,6 +256,7 @@ describe('cache searchTracks dedupe', () => {
 describe('search tool dedupe', () => {
   function makeDeps(): ToolDeps {
     const cache = freshCache();
+
     return { cache: () => cache, bridge: makeBridge() };
   }
 
@@ -249,17 +265,22 @@ describe('search tool dedupe', () => {
       { artist: 'Avicii', dedupe: true },
       makeDeps(),
     )) as SearchOutput;
+
     expect(out.total_matches).toBe(2);
     const winner = out.tracks.find((t) => t.persistent_id === 'T-LEVELS-TRUE');
+
     expect(winner?.alternate_ids).toEqual(['T-LEVELS-FOREVER', 'T-LEVELS-NOW']);
     const radio = out.tracks.find((t) => t.persistent_id === 'T-LEVELS-RADIO');
+
     expect(radio).toBeDefined();
     expect(radio?.alternate_ids).toBeUndefined();
   });
 
   it('omits alternate_ids entirely when dedupe is off', async () => {
     const out = (await handleSearch({ artist: 'Avicii' }, makeDeps())) as SearchOutput;
+
     expect(out.tracks).toHaveLength(4);
+
     for (const t of out.tracks) expect(t.alternate_ids).toBeUndefined();
   });
 
@@ -269,6 +290,7 @@ describe('search tool dedupe', () => {
       makeDeps(),
     )) as CompactSearchOutput;
     const winner = out.tracks.find((t) => t.track[0] === 'T-LEVELS-TRUE');
+
     expect(winner?.alternate_ids).toEqual(['T-LEVELS-FOREVER', 'T-LEVELS-NOW']);
   });
 });

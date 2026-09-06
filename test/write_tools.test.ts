@@ -29,6 +29,7 @@ function makeDeps(
   library: LibrarySnapshot = snapshot,
 ): ToolDeps & { cacheInstance: SelectaCache } {
   const cache = SelectaCache.open(':memory:');
+
   cache.refreshFromSnapshot(library, { durationMs: 1 });
   let replaceCalls = 0;
   const bridge = makeBridge({
@@ -56,6 +57,7 @@ function makeDeps(
     deletePlaylistById: vi.fn().mockResolvedValue(1),
     ...bridgeOverrides,
   });
+
   return { cache: () => cache, bridge, cacheInstance: cache };
 }
 
@@ -87,16 +89,19 @@ describe('create_playlist', () => {
     // Cache patched: playlist visible, membership ordered, counted as a user
     // playlist in co-occurrence — without any readLibrary call.
     const row = deps.cacheInstance.listPlaylists({ nameQuery: 'late night teardrop' })[0]!;
+
     expect(row.kind).toBe('user');
     expect(row.trackCount).toBe(2);
     const ctx = (await handleGetTrackContext({ track_id: 'T-ROADS' }, deps)) as TrackContextOutput;
     const cooc = ctx.co_occurring_tracks.find((t) => t.persistent_id === 'T-TEARDROP');
+
     expect(cooc!.shared_playlist_count).toBe(2); // Late Night + the new one
     expect(deps.bridge.readLibrary).not.toHaveBeenCalled();
   });
 
   it('records a creation receipt for refresh-time echo reconciliation', async () => {
     const deps = makeDeps();
+
     await handleCreatePlaylist({ name: 'Rearview', track_ids: ['T-TEARDROP'] }, deps);
     expect(deps.cacheInstance.getRecentCreationNames(60)).toContain('Rearview');
   });
@@ -157,6 +162,7 @@ describe('create_playlist', () => {
     const err = asError(
       await handleCreatePlaylist({ name: 'x', source_playlist_id: sourceId }, deps),
     );
+
     expect(err.error).toBe('playlist_not_editable');
     expect(err.hint).toContain(kind);
     expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
@@ -176,6 +182,7 @@ describe('create_playlist', () => {
     const err = asError(
       await handleCreatePlaylist({ name: 'x', source_playlist_id: 'P-EMPTY' }, deps),
     );
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain('empty');
     expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
@@ -206,6 +213,7 @@ describe('create_playlist', () => {
       { name: 'Limit Clone', source_playlist_id: 'P-LIMIT' },
       deps,
     )) as CreatePlaylistOutput;
+
     expect(out.track_count).toBe(PLAYLIST_WRITE_TRACK_LIMIT);
     expect(deps.bridge.clonePlaylist).toHaveBeenCalledOnce();
   });
@@ -225,6 +233,7 @@ describe('create_playlist', () => {
     const err = asError(
       await handleCreatePlaylist({ name: 'x', source_playlist_id: 'P-TOO-LARGE' }, deps),
     );
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain(String(PLAYLIST_WRITE_TRACK_LIMIT));
     expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
@@ -256,6 +265,7 @@ describe('create_playlist', () => {
                 sourceTrackPersistentIds: LIVE_ORDER,
               };
             }
+
             throw new BridgeError('playlist_not_found', 'gone live');
           },
         );
@@ -267,7 +277,9 @@ describe('create_playlist', () => {
         { track_ids: ['T-GLORYBOX', 'T-MIDNIGHT'] },
         deps,
       )) as PreviewPlaylistOutput;
+
       expect(preview.playlist_id).toBe('P-PREVIEW');
+
       return deps;
     }
 
@@ -301,20 +313,25 @@ describe('create_playlist', () => {
 
     it('aliases the stale ID to the live slot and mirrors the live order', async () => {
       const deps = await depsAfterFirstPreview();
+
       await handleCreatePlaylist({ name: 'Approved', source_playlist_id: 'P-PREVIEW' }, deps);
 
       const cache = deps.cacheInstance;
+
       expect(cache.resolvePlaylistId('P-PREVIEW')).toBe('P-PREVIEW-2');
       const rows = cache.listPlaylists({ nameQuery: PREVIEW_PLAYLIST_NAME });
+
       expect(rows.map((p) => p.persistentId)).toEqual(['P-PREVIEW-2']);
       expect(cache.getPlaylistTrackIds('P-PREVIEW-2')).toEqual(LIVE_ORDER);
       // The original receipt ID keeps working for reads too.
       const { rows: tracks } = cache.searchTracks({ inPlaylist: 'P-PREVIEW' });
+
       expect(tracks.map((t) => t.persistentId).sort()).toEqual([...LIVE_ORDER].sort());
     });
 
     it('still resolves the receipt ID after a refresh pruned the stale row', async () => {
       const deps = await depsAfterFirstPreview();
+
       // A refresh that saw the rekeyed slot with a different sequence: the
       // exact-sequence reconciler stands down, the stale row is pruned, and
       // only the preview receipt remembers P-PREVIEW.
@@ -333,6 +350,7 @@ describe('create_playlist', () => {
         { name: 'Approved', source_playlist_id: 'P-PREVIEW' },
         deps,
       )) as CreatePlaylistOutput;
+
       expect(out.source).toMatchObject({ playlist_id: 'P-PREVIEW-2', rekeyed_from: 'P-PREVIEW' });
       expect(deps.bridge.clonePlaylist).toHaveBeenCalledWith(
         expect.objectContaining({ reservedSourceName: PREVIEW_PLAYLIST_NAME }),
@@ -349,6 +367,7 @@ describe('create_playlist', () => {
       const err = asError(
         await handleCreatePlaylist({ name: 'Approved', source_playlist_id: 'P-PREVIEW' }, deps),
       );
+
       expect(err).toEqual({ error: code, hint });
       expect(deps.cacheInstance.listPlaylists({ nameQuery: 'Approved' })).toEqual([]);
       // No hidden aliasing on failure: the cache still says what it said.
@@ -370,6 +389,7 @@ describe('create_playlist', () => {
           .mockImplementation(
             async (input: { sourcePlaylistId: string; reservedSourceName?: string }) => {
               const live = twins[input.sourcePlaylistId];
+
               if (live) {
                 return {
                   persistentId: 'P-FINAL',
@@ -380,6 +400,7 @@ describe('create_playlist', () => {
                   sourceTrackPersistentIds: live,
                 };
               }
+
               if (input.reservedSourceName === PREVIEW_PLAYLIST_NAME) {
                 throw new BridgeError(
                   'validation_error',
@@ -387,11 +408,13 @@ describe('create_playlist', () => {
                   'ambiguous: P-TWIN, P-AUDITIONED',
                 );
               }
+
               throw new BridgeError('playlist_not_found', 'gone live');
             },
           ),
       );
       const cache = deps.cacheInstance;
+
       cache.refreshFromSnapshot(
         {
           ...snapshot,
@@ -420,6 +443,7 @@ describe('create_playlist', () => {
       const err = asError(
         await handleCreatePlaylist({ name: 'Approved', source_playlist_id: 'P-PREVIEW' }, deps),
       );
+
       expect(err.error).toBe('validation_error');
       expect(err.hint).toContain('P-TWIN, P-AUDITIONED');
       expect(deps.bridge.clonePlaylist).toHaveBeenCalledWith(
@@ -433,6 +457,7 @@ describe('create_playlist', () => {
 
     it('never offers the reserved name for an arbitrary source ID', async () => {
       const deps = makeDeps();
+
       await handleCreatePlaylist({ name: 'Copy', source_playlist_id: 'P-LATENIGHT' }, deps);
       expect(deps.bridge.clonePlaylist).toHaveBeenCalledWith(
         expect.not.objectContaining({ reservedSourceName: expect.anything() }),
@@ -453,6 +478,7 @@ describe('create_playlist', () => {
       const err = asError(
         await handleCreatePlaylist({ name: 'x', source_playlist_id: 'P-SMART-PREVIEW' }, deps),
       );
+
       expect(err.error).toBe('playlist_not_editable');
       expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
     });
@@ -466,9 +492,11 @@ describe('create_playlist', () => {
       { name: 'Both', track_ids: ['T-TEARDROP'], source_playlist_id: 'P-LATENIGHT' },
     ]) {
       const err = asError(await handleCreatePlaylist(input, deps));
+
       expect(err.error).toBe('validation_error');
       expect(err.hint).toContain('exactly one');
     }
+
     expect(deps.bridge.createPlaylist).not.toHaveBeenCalled();
     expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
   });
@@ -478,6 +506,7 @@ describe('create_playlist', () => {
     const err = asError(
       await handleCreatePlaylist({ name: 'x', source_playlist_id: 'P-NOPE' }, deps),
     );
+
     expect(err.error).toBe('playlist_not_found');
     expect(err.hint).toContain('P-NOPE');
     expect(deps.bridge.clonePlaylist).not.toHaveBeenCalled();
@@ -495,6 +524,7 @@ describe('create_playlist', () => {
         deps,
       ),
     );
+
     expect(err.error).toBe('playlist_not_found');
     expect(deps.cacheInstance.listPlaylists({ nameQuery: 'Should Not Exist' })).toEqual([]);
   });
@@ -504,6 +534,7 @@ describe('create_playlist', () => {
     const err = asError(
       await handleCreatePlaylist({ name: 'x', track_ids: ['T-TEARDROP', 'T-FAKE'] }, deps),
     );
+
     expect(err.error).toBe('track_not_found');
     expect(err.hint).toContain('T-FAKE');
     expect(deps.bridge.createPlaylist).not.toHaveBeenCalled();
@@ -512,6 +543,7 @@ describe('create_playlist', () => {
   it('rejects an empty track list as validation_error', async () => {
     const deps = makeDeps();
     const err = asError(await handleCreatePlaylist({ name: 'x', track_ids: [] }, deps));
+
     expect(err.error).toBe('validation_error');
   });
 
@@ -522,6 +554,7 @@ describe('create_playlist', () => {
         .mockRejectedValue(new BridgeError('track_not_found', 'missing live', 'stale')),
     });
     const err = asError(await handleCreatePlaylist({ name: 'x', track_ids: ['T-TEARDROP'] }, deps));
+
     expect(err.error).toBe('track_not_found');
     expect(deps.cacheInstance.listPlaylists({ nameQuery: 'x' })).toEqual([]);
   });
@@ -534,6 +567,7 @@ describe('preview_playlist', () => {
       { track_ids: ['T-GLORYBOX', 'T-MIDNIGHT'] },
       deps,
     )) as PreviewPlaylistOutput;
+
     expect(out).toEqual({ playlist_id: 'P-PREVIEW', track_count: 2 });
     expect(deps.bridge.replacePlaylist).toHaveBeenCalledWith({
       name: PREVIEW_PLAYLIST_NAME,
@@ -543,12 +577,14 @@ describe('preview_playlist', () => {
     // Second preview replaces the membership of the SAME cached playlist.
     await handlePreviewPlaylist({ track_ids: ['T-ANGEL'] }, deps);
     const rows = deps.cacheInstance.listPlaylists({ nameQuery: PREVIEW_PLAYLIST_NAME });
+
     expect(rows).toHaveLength(1);
     expect(rows[0]!.trackCount).toBe(1);
   });
 
   it('records a creation receipt only when the slot was actually created', async () => {
     const deps = makeDeps();
+
     await handlePreviewPlaylist({ track_ids: ['T-ANGEL'] }, deps);
     expect(deps.cacheInstance.getCreationName('P-PREVIEW')).toBe(PREVIEW_PLAYLIST_NAME);
 
@@ -558,6 +594,7 @@ describe('preview_playlist', () => {
     const receipts = deps.cacheInstance.db
       .prepare('SELECT track_ids_json AS t FROM playlist_creations')
       .all() as { t: string }[];
+
     expect(receipts).toEqual([{ t: JSON.stringify(['T-ANGEL']) }]);
   });
 
@@ -566,6 +603,7 @@ describe('preview_playlist', () => {
       replacePlaylist: vi.fn().mockRejectedValue(new BridgeError('music_app_not_running', 'down')),
     });
     const err = asError(await handlePreviewPlaylist({ track_ids: ['T-ANGEL'] }, deps));
+
     expect(err.error).toBe('music_app_not_running');
     expect(err.hint).toContain('open it');
   });

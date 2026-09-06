@@ -35,6 +35,7 @@ export function trackNotFoundError(
   const shown = missingIds.slice(0, 5).join(', ');
   const more = missingIds.length > 5 ? ` (+${missingIds.length - 5} more)` : '';
   const consequence = context.consequence != null ? ` ${context.consequence}` : '';
+
   return {
     error: 'track_not_found',
     hint: `${context.label ?? 'Not in the cache'}: ${shown}${more}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library.${consequence}`,

@@ -64,6 +64,7 @@ export const LIBRARY_OVERVIEW_DESCRIPTION = `Aggregate shape of the owned librar
 // 100 → "5", 90 → "4.5". Music stores half-stars as multiples of 10.
 function formatStars(rating: number): string {
   const stars = rating / 20;
+
   return Number.isInteger(stars) ? String(stars) : stars.toFixed(1);
 }
 
@@ -73,8 +74,11 @@ function humanizeDuration(totalSeconds: number): string {
   const days = Math.floor(totalSeconds / 86_400);
   const hours = Math.floor((totalSeconds % 86_400) / 3_600);
   const minutes = Math.floor((totalSeconds % 3_600) / 60);
+
   if (days > 0) return `${days}d ${hours}h`;
+
   if (hours > 0) return `${hours}h ${minutes}m`;
+
   return `${minutes}m`;
 }
 
@@ -91,12 +95,15 @@ export function shapeOverview(
   const overflow = stats.genres.slice(GENRE_CAP);
 
   const ratingHistogram: Record<string, number> = {};
+
   for (const { rating, count } of stats.ratingHistogram) {
     ratingHistogram[formatStars(rating)] = count;
   }
 
   const location: LibraryOverviewOutput['location'] = { local: stats.local, cloud: stats.cloud };
+
   if (stats.missing > 0) location.missing = stats.missing;
+
   if (stats.unknownLocation > 0) location.unknown = stats.unknownLocation;
 
   return {
@@ -146,13 +153,17 @@ export async function handleLibraryOverview(
   deps: ToolDeps,
 ): Promise<LibraryOverviewOutput | SelectaError> {
   const parsed = parseInput(LibraryFilters, raw);
+
   if (!parsed.ok) return parsed.error;
+
   const input = parsed.data;
   const rangeError = validateFilterRanges(input);
+
   if (rangeError) return rangeError;
 
   try {
     const recentSince = recentSinceIso();
+
     return shapeOverview(deps.cache().getOverview(toSearchFilters(input), recentSince), {
       filtered: Object.keys(input).length > 0,
       cacheAgeHours: roundedCacheAge(deps),

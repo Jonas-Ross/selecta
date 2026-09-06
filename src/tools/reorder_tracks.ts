@@ -46,14 +46,18 @@ function permutationDefects(order: number[]): { duplicated: number[]; outOfRange
   const seen = new Set<number>();
   const duplicated = new Set<number>();
   const outOfRange: number[] = [];
+
   for (const value of order) {
     if (value >= order.length) {
       outOfRange.push(value);
       continue;
     }
+
     if (seen.has(value)) duplicated.add(value);
+
     seen.add(value);
   }
+
   return { duplicated: [...duplicated], outOfRange };
 }
 
@@ -62,36 +66,47 @@ export async function handleReorderTracks(
   deps: ToolDeps,
 ): Promise<ReorderTracksOutput | SelectaError> {
   const parsed = parseInput(ReorderTracksInput, raw);
+
   if (!parsed.ok) return parsed.error;
+
   const { playlist_id, order } = parsed.data;
 
   try {
     const cache = deps.cache();
+
     return await withOperation(cache, 'music', async () => {
       const target = resolveEditablePlaylist(cache, playlist_id);
+
       if (!target.ok) return target.error;
 
       const cachedIds = cache.getPlaylistTrackIds(target.playlist.persistentId);
+
       if (order.length !== cachedIds.length) {
         // A count mismatch on a duplicated playlist isn't the model's fault:
         // search shows one row per distinct track, so the true entry order is
         // undiscoverable. Name that instead of sending it to refresh_library.
         const distinct = new Set(cachedIds).size;
+
         if (distinct !== cachedIds.length) {
           return validationError(
             `"${target.playlist.name}" holds the same track more than once (${cachedIds.length} entries, ${distinct} distinct tracks), and search shows only distinct tracks — its full entry order isn't discoverable, so it can't be reordered. Remove the duplicate entries first (remove_tracks by position) if a reorder is needed.`,
           );
         }
+
         return validationError(
           `order has ${order.length} entries but "${target.playlist.name}" has ${cachedIds.length} tracks in the cache. Get the current order via search with in_playlist + sort playlist_order; use its playlist_positions, never result-array indices; if the count is stale, run refresh_library. A playlist over 1000 tracks can't be reordered in one call.`,
         );
       }
 
       const { duplicated, outOfRange } = permutationDefects(order);
+
       if (duplicated.length > 0 || outOfRange.length > 0) {
         const parts: string[] = [];
+
         if (duplicated.length > 0) parts.push(`duplicated: ${duplicated.join(', ')}`);
+
         if (outOfRange.length > 0) parts.push(`out of range: ${outOfRange.join(', ')}`);
+
         return validationError(
           `order must be a permutation of 0..${order.length - 1}, each value exactly once (${parts.join('; ')}).`,
         );
@@ -102,7 +117,9 @@ export async function handleReorderTracks(
         order,
         expectedTrackIds: cachedIds,
       });
+
       cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
+
       return {
         playlist_id: result.persistentId,
         name: target.playlist.name,

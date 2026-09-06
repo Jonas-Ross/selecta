@@ -17,12 +17,14 @@ export type DoctorReport = StatusReport & { music_app: MusicAppStatus };
 
 export async function checkMusicApp(): Promise<void> {
   const result = await runJxa(buildMusicAppDiagnosticScript());
+
   parsePayload(diagnostic, result, 'Music.app diagnostic', 'jxa_error');
 }
 
 function failureStatus(err: unknown): MusicAppStatus {
   const error = err instanceof BridgeError ? err : new BridgeError('jxa_error', String(err));
   const code = error.errorCode;
+
   if (
     code !== 'music_app_not_running' &&
     code !== 'automation_permission_denied' &&
@@ -36,6 +38,7 @@ function failureStatus(err: unknown): MusicAppStatus {
       hint: defaultHints.jxa_error,
     };
   }
+
   return {
     status: code,
     running:
@@ -57,11 +60,13 @@ export async function runDoctor(
 ): Promise<DoctorReport> {
   const status = readStatus(dbPath, now);
   let musicApp: MusicAppStatus;
+
   try {
     await musicCheck();
     musicApp = { status: 'ok', running: true, automation_authorized: true };
   } catch (err) {
     musicApp = failureStatus(err);
   }
+
   return { ...status, ok: status.ok && musicApp.status === 'ok', music_app: musicApp };
 }

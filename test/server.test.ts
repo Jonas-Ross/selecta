@@ -17,17 +17,22 @@ const unusedBridge = makeBridge();
 
 async function connectedClient(): Promise<Client> {
   const cache = SelectaCache.open(':memory:');
+
   cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
   const server = createServer({ cache: () => cache, bridge: unusedBridge });
   const client = new Client({ name: 'test-client', version: '0.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
   return client;
 }
 
 function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
   const content = result.content as { type: string; text: string }[];
+
   expect(content[0]!.type).toBe('text');
+
   return content[0]!.text;
 }
 
@@ -35,6 +40,7 @@ describe('MCP server over in-memory transport', () => {
   it('exposes the sixteen tools', async () => {
     const client = await connectedClient();
     const { tools } = await client.listTools();
+
     expect(tools.map((t) => t.name).sort()).toEqual([
       'add_tracks',
       'create_playlist',
@@ -56,6 +62,7 @@ describe('MCP server over in-memory transport', () => {
     // Tool descriptions are first-class — they must survive the wire.
     const search = tools.find((t) => t.name === 'search')!;
     const context = tools.find((t) => t.name === 'get_track_context')!;
+
     expect(search.description).toContain('refresh_library');
     expect(search.description).toContain('compact true');
     expect(context.description).toContain('compact true');
@@ -69,8 +76,10 @@ describe('MCP server over in-memory transport', () => {
       name: 'search',
       arguments: { query: 'teardrop' },
     });
+
     expect(result.isError).toBeFalsy();
     const body = JSON.parse(textOf(result));
+
     expect(body.tracks[0].persistent_id).toBe('T-TEARDROP');
     expect(body.cache_age_hours).not.toBeNull();
   });
@@ -81,8 +90,10 @@ describe('MCP server over in-memory transport', () => {
       name: 'search',
       arguments: { query: 'teardrop', compact: true },
     });
+
     expect(result.isError).toBeFalsy();
     const body = JSON.parse(textOf(result));
+
     expect(body.track_fields[0]).toBe('persistent_id');
     expect(body.track_fields).toContain('genre');
     expect(body.track_fields).toContain('signal.date_added');
@@ -95,8 +106,10 @@ describe('MCP server over in-memory transport', () => {
       name: 'get_track_context',
       arguments: { track_id: 'T-NOPE' },
     });
+
     expect(result.isError).toBe(true);
     const body = JSON.parse(textOf(result));
+
     expect(body.error).toBe('track_not_found');
     expect(body.hint).toBeTruthy();
   });

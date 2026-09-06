@@ -30,20 +30,26 @@ export async function handleSetLoved(
   deps: ToolDeps,
 ): Promise<SetLovedOutput | SelectaError> {
   const parsed = parseInput(SetLovedInput, raw);
+
   if (!parsed.ok) return parsed.error;
+
   const { track_ids, loved } = parsed.data;
 
   try {
     const cache = deps.cache();
+
     return await withOperation(cache, 'music', async () => {
       const cacheMiss = missingTrackIdsError(cache, track_ids);
+
       if (cacheMiss) return cacheMiss;
 
       const result = await deps.bridge.setTrackLoved({ trackIds: track_ids, loved });
+
       cache.patchTrackLoved(result.tracks);
       const mismatches = result.tracks
         .filter((row) => !(row.loved === loved))
         .map((row) => ({ track_id: row.persistentId, loved: row.loved }));
+
       return {
         updated: result.tracks.length - mismatches.length,
         loved,

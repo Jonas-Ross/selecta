@@ -43,8 +43,10 @@ export async function refreshLibrary(
     // creation receipt at info level, so an echo's arrival is visible in the
     // log without SELECTA_DEBUG.
     const watched = new Set(cache.getRecentCreationNames(RECONCILE_WINDOW_MINUTES));
+
     for (const p of snapshot.playlists) {
       const line = `[library-read ${snapshot.capturedAt}] ${p.persistentId} "${p.name}" tracks=${p.trackPersistentIds.length}`;
+
       if (watched.has(p.name)) log.info(line);
       else log.debug(line);
     }
@@ -61,6 +63,7 @@ export async function refreshLibrary(
       failures: [],
       ambiguous: [],
     };
+
     for (const action of actions) {
       if (action.kind === 'rekey') {
         cache.applyRekey(action.createdId, action.fromId, action.toId);
@@ -72,6 +75,7 @@ export async function refreshLibrary(
         log.info(`[sync-reconcile] rekey "${action.name}": ${action.fromId} -> ${action.toId}`);
         continue;
       }
+
       reconciliation.ambiguous.push({ name: action.name, playlist_ids: action.playlistIds });
     }
 

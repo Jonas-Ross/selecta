@@ -21,7 +21,9 @@ export function makeToolDeps(
   bridgeOverrides: Partial<Bridge> = {},
 ): ToolDeps & { cacheInstance: SelectaCache } {
   const cache = SelectaCache.open(':memory:');
+
   cache.refreshFromSnapshot(fixture as LibrarySnapshot, { durationMs: 1 });
+
   return { cache: () => cache, bridge: makeBridge(bridgeOverrides), cacheInstance: cache };
 }
 
@@ -34,7 +36,9 @@ export function bumpedSnapshot(
     ...snapshot,
     tracks: snapshot.tracks.map((t) => {
       const d = deltas[t.persistentId];
+
       if (!d) return t;
+
       return {
         ...t,
         playCount: (t.playCount ?? 0) + (d.plays ?? 0),
@@ -63,6 +67,7 @@ export function makeBridge(overrides: Partial<Bridge> = {}): Bridge {
 
 export function asError(result: object): SelectaError {
   expect(result).toHaveProperty('error');
+
   return result as SelectaError;
 }
 

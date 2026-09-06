@@ -57,11 +57,14 @@ function discoverySnapshot(): LibrarySnapshot {
     (_, index) => `T-CANDIDATE-${String(index + 1).padStart(3, '0')}`,
   );
   const memberships = PLAYLISTS.map(() => [...seedIds]);
+
   for (let index = 0; index < candidateIds.length; index++) {
     const playlistIndexes = [index % 6, (index + 1) % 6, (index + 3) % 6];
+
     for (const playlistIndex of playlistIndexes)
       memberships[playlistIndex]!.push(candidateIds[index]!);
   }
+
   const seedOne = {
     ...track(seedIds[0]!, 100),
     artist: 'Seed Artist One',
@@ -87,7 +90,9 @@ function discoverySnapshot(): LibrarySnapshot {
 
 function deps(): ToolDeps {
   const cache = SelectaCache.open(':memory:');
+
   cache.refreshFromSnapshot(discoverySnapshot(), { durationMs: 1 });
+
   return { cache: () => cache, bridge: makeBridge() };
 }
 
@@ -100,11 +105,14 @@ function expectLegendIsComplete(
 ): void {
   expect(compact.playlist_legend).toHaveLength(PLAYLISTS.length);
   const expectedById = new Map(PLAYLISTS);
+
   for (const playlist of compact.playlist_legend) {
     expect(playlist.name).toBe(expectedById.get(playlist.id));
   }
+
   for (const candidate of compact.co_occurring_tracks) {
     expect(candidate.playlist_refs).toHaveLength(3);
+
     for (const ref of candidate.playlist_refs) {
       expect(compact.playlist_legend[ref]).toBeDefined();
     }

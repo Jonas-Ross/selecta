@@ -1,5 +1,6 @@
 import { z } from 'zod';
 const id = z.string().min(1);
+
 export const mbSearch = z.object({
   recordings: z.array(
     z.object({
@@ -10,6 +11,7 @@ export const mbSearch = z.object({
   ),
 });
 const bulk = <T extends z.ZodType>(schema: T) => z.record(id, z.record(z.string(), schema));
+
 export const abLow = bulk(
   z.object({
     rhythm: z.object({ bpm: z.number().positive().optional() }).optional(),
@@ -33,6 +35,7 @@ export const abHigh = bulk(
   }),
 );
 const error = z.object({ error: z.object({ message: z.string().optional() }) });
+
 export const dzSearch = z.union([
   error,
   z.object({

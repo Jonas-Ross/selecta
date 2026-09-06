@@ -80,10 +80,14 @@ export function formatReconciliationSummary(summary: ReconciliationSummary): str
 
 function parseReconciliationSummary(notes: string): ReconciliationSummary | null {
   const start = notes.indexOf(RECONCILIATION_PREFIX);
+
   if (start < 0) return null;
+
   const json = notes.slice(start + RECONCILIATION_PREFIX.length).split(';', 1)[0]!;
+
   try {
     const value = JSON.parse(json) as Partial<ReconciliationSummary>;
+
     if (
       Number.isInteger(value.rekeys) &&
       Number.isInteger(value.duplicates_removed) &&
@@ -94,6 +98,7 @@ function parseReconciliationSummary(notes: string): ReconciliationSummary | null
   } catch {
     // A malformed historical note is reported as absent, never repaired here.
   }
+
   return null;
 }
 
@@ -122,10 +127,13 @@ function lastReconciliation(
         WHERE notes LIKE ? ORDER BY refreshed_at DESC`,
     )
     .all(`%${RECONCILIATION_PREFIX}%`) as { refreshedAt: string; notes: string }[];
+
   for (const row of rows) {
     const summary = parseReconciliationSummary(row.notes);
+
     if (summary) return { refreshedAt: row.refreshedAt, summary };
   }
+
   return null;
 }
 
@@ -145,16 +153,20 @@ export function readStatus(dbPath: string, now = new Date()): StatusReport {
 
   if (!database.exists) {
     database.errors.push('Cache database does not exist.');
+
     return unavailable();
   }
 
   let db: Database.Database | undefined;
+
   try {
     db = new Database(dbPath, { readonly: true, fileMustExist: true });
     db.pragma('query_only = ON');
     const checks = db.pragma('quick_check') as { quick_check: string }[];
+
     database.errors = checks.map((row) => row.quick_check).filter((message) => message !== 'ok');
     database.integrity = database.errors.length === 0 ? 'ok' : 'failed';
+
     if (database.integrity === 'failed') return unavailable();
 
     const counts = db
@@ -230,6 +242,7 @@ export function readStatus(dbPath: string, now = new Date()): StatusReport {
     };
   } catch (err) {
     database.errors.push(err instanceof Error ? err.message : String(err));
+
     return unavailable();
   } finally {
     db?.close();

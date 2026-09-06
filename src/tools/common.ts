@@ -45,14 +45,17 @@ export function toApiNote(row: {
   noteUpdatedAt: string | null;
 }): ApiNote | undefined {
   if (row.noteBody == null) return undefined;
+
   return { body: row.noteBody, created_at: row.noteCreatedAt!, updated_at: row.noteUpdatedAt! };
 }
 
 /** The wire note from a stored notes row (write responses); undefined when there is none. */
 export function apiNoteFromRow(note: NoteRow): ApiNote;
 export function apiNoteFromRow(note: NoteRow | null): ApiNote | undefined;
+
 export function apiNoteFromRow(note: NoteRow | null): ApiNote | undefined {
   if (note === null) return undefined;
+
   return { body: note.body, created_at: note.createdAt, updated_at: note.updatedAt };
 }
 
@@ -191,8 +194,10 @@ export function toCompactApiTrack(track: ApiTrack): CompactApiTrack {
 export function projectApiTrack(row: TrackRow, compact: true): CompactApiTrack;
 export function projectApiTrack(row: TrackRow, compact: false): ApiTrack;
 export function projectApiTrack(row: TrackRow, compact: boolean): ApiTrack | CompactApiTrack;
+
 export function projectApiTrack(row: TrackRow, compact: boolean): ApiTrack | CompactApiTrack {
   const track = toApiTrack(row);
+
   return compact ? toCompactApiTrack(track) : track;
 }
 
@@ -206,6 +211,7 @@ export function parseInput<T>(
   raw: unknown,
 ): { ok: true; data: T } | { ok: false; error: SelectaError } {
   const parsed = schema.safeParse(raw);
+
   if (!parsed.success) {
     return {
       ok: false,
@@ -214,6 +220,7 @@ export function parseInput<T>(
       ),
     };
   }
+
   return { ok: true, data: parsed.data };
 }
 
@@ -225,7 +232,9 @@ export function parseInput<T>(
  */
 export function missingTrackIdsError(cache: SelectaCache, trackIds: string[]): SelectaError | null {
   const missing = trackIds.filter((id) => cache.getTrack(id) === null);
+
   if (missing.length === 0) return null;
+
   return trackNotFoundError(missing);
 }
 
@@ -235,6 +244,7 @@ export function resolvePlaylist(
   playlistId: string,
 ): { ok: true; playlist: PlaylistRow } | { ok: false; error: SelectaError } {
   const playlist = cache.getPlaylist(cache.resolvePlaylistId(playlistId));
+
   if (playlist === null) {
     return {
       ok: false,
@@ -244,6 +254,7 @@ export function resolvePlaylist(
       },
     };
   }
+
   return { ok: true, playlist };
 }
 
@@ -256,8 +267,11 @@ export function resolveEditablePlaylist(
   playlistId: string,
 ): { ok: true; playlist: PlaylistRow } | { ok: false; error: SelectaError } {
   const resolved = resolvePlaylist(cache, playlistId);
+
   if (!resolved.ok) return resolved;
+
   const { playlist } = resolved;
+
   if (playlist.kind !== 'user') {
     return {
       ok: false,
@@ -267,6 +281,7 @@ export function resolveEditablePlaylist(
       },
     };
   }
+
   return { ok: true, playlist };
 }
 
@@ -279,6 +294,7 @@ export function toErrorEnvelope(err: unknown): SelectaError {
       ...(err.partialWrite ? { partial_write: err.partialWrite } : {}),
     };
   }
+
   throw err;
 }
 
@@ -289,6 +305,7 @@ export function isSelectaError(value: object): value is SelectaError {
 /** Round cache age for the wire — sub-minute precision is token noise. */
 export function roundedCacheAge(deps: ToolDeps): number | null {
   const age = deps.cache().getCacheAgeHours();
+
   return age == null ? null : Math.round(age * 100) / 100;
 }
 

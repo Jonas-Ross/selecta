@@ -12,8 +12,10 @@ import { parsePayload } from '../types/validation.js';
 async function runJxa<T>(script: string, schema: z.ZodType<T>): Promise<T> {
   const result = parsePayload(schema, await runUncheckedJxa(script), 'Music.app', 'jxa_error');
   const partial = schemas.partialWriteResult.safeParse(result);
+
   if (partial.success) {
     const receipt = partial.data.partialWrite;
+
     throw new BridgeError(
       'jxa_error',
       'Playlist write or readback failed after selecting the target',
@@ -24,8 +26,10 @@ async function runJxa<T>(script: string, schema: z.ZodType<T>): Promise<T> {
       },
     );
   }
+
   return result;
 }
+
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
 import { buildListLibraryTrackIdsScript, buildReadLibraryScript } from './scripts/read_library.js';
 import {
@@ -65,10 +69,12 @@ import {
 export const bridge: Bridge = {
   async readPlaylist(persistentId: string): Promise<RawPlaylist> {
     const result = await runJxa(buildReadPlaylistScript({ persistentId }), schemas.playlist);
+
     return result;
   },
   async readLibrary(): Promise<LibrarySnapshot> {
     const result = await runJxa(buildReadLibraryScript(), schemas.snapshot);
+
     return result;
   },
   async createPlaylist(input): Promise<PlaylistWriteResult> {
@@ -82,17 +88,21 @@ export const bridge: Bridge = {
   },
   async replacePlaylist(input): Promise<PlaylistReplaceResult> {
     const result = await runJxa(buildReplacePlaylistScript(input), schemas.replace);
+
     if ('ambiguousPreview' in result)
       throw new BridgeError(
         'validation_error',
         'Preview slot is ambiguous',
         'Multiple Selecta Preview playlists exist. Ask the user which copy to keep before overwriting a preview.',
       );
+
     const written = parseWriteResult(result);
     const created = (result as Record<string, unknown> | null)?.created;
+
     if (typeof created !== 'boolean') {
       throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistReplaceResult shape.');
     }
+
     return { ...written, created };
   },
   async deletePlaylistById(persistentId): Promise<number> {
@@ -131,6 +141,7 @@ export const bridge: Bridge = {
 function parseEditResult(result: unknown, op: 'add' | 'remove' | 'reorder'): PlaylistEditResult {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
+
     if (v.playlistNotFound === true) {
       throw new BridgeError(
         'playlist_not_found',
@@ -138,11 +149,14 @@ function parseEditResult(result: unknown, op: 'add' | 'remove' | 'reorder'): Pla
         'The playlist is in the cache but not the live library — the cache is stale. Run refresh_library and re-resolve the playlist.',
       );
     }
+
     if (v.notEditable === true) {
       throw new BridgeError('playlist_not_editable', 'Target is not a plain user playlist.');
     }
+
     if (Array.isArray(v.missingTrackIds)) {
       const missing = v.missingTrackIds as string[];
+
       throw new BridgeError(
         'track_not_found',
         `Music.app: ${missing.join(', ')} — ${op === 'add' ? 'not in the live library' : 'no occurrence in the live playlist'}.`,
@@ -151,6 +165,7 @@ function parseEditResult(result: unknown, op: 'add' | 'remove' | 'reorder'): Pla
           : 'These tracks are not in the playlist in Music.app — the cache is stale. Run refresh_library and re-check the playlist contents.',
       );
     }
+
     if (Array.isArray(v.invalidPositions)) {
       throw new BridgeError(
         'validation_error',
@@ -158,6 +173,7 @@ function parseEditResult(result: unknown, op: 'add' | 'remove' | 'reorder'): Pla
         `The playlist has ${String(v.liveTrackCount)} tracks in Music.app — the cache is stale. Run refresh_library and re-check positions.`,
       );
     }
+
     if (v.orderDrifted === true) {
       throw new BridgeError(
         'validation_error',
@@ -165,6 +181,7 @@ function parseEditResult(result: unknown, op: 'add' | 'remove' | 'reorder'): Pla
         `The live playlist has changed since the cache was built (has ${String(v.liveTrackCount)} tracks) — run refresh_library, re-read the order via search with in_playlist + sort playlist_order, and recompute the edit using playlist_positions.`,
       );
     }
+
     if (v.invalidOrder === true) {
       throw new BridgeError(
         'validation_error',
@@ -172,8 +189,10 @@ function parseEditResult(result: unknown, op: 'add' | 'remove' | 'reorder'): Pla
         `The playlist has ${String(v.liveTrackCount)} tracks in Music.app — recompute a permutation covering every index exactly once.`,
       );
     }
+
     if (isPlaylistEditResult(v)) return v;
   }
+
   throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistEditResult shape.');
 }
 
@@ -183,7 +202,9 @@ function isIdArray(value: unknown): value is string[] {
 
 function isAmbiguousSource(value: unknown): value is { name: string; persistentIds: string[] } {
   if (typeof value !== 'object' || value === null) return false;
+
   const v = value as Record<string, unknown>;
+
   return typeof v.name === 'string' && isIdArray(v.persistentIds);
 }
 
@@ -206,6 +227,7 @@ function isPlaylistEditResult(
 function throwIfMissingTracks(v: Record<string, unknown>): void {
   if (Array.isArray(v.missingTrackIds)) {
     const missing = v.missingTrackIds as string[];
+
     throw new BridgeError(
       'track_not_found',
       `Music.app has no tracks with persistent IDs: ${missing.join(', ')}`,
@@ -221,7 +243,9 @@ function parseSignalResult<State extends { persistentId: string }>(
 ): TrackSignalResult<State> {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
+
     throwIfMissingTracks(v);
+
     if (
       Array.isArray(v.tracks) &&
       v.tracks.every(isState) &&
@@ -229,6 +253,7 @@ function parseSignalResult<State extends { persistentId: string }>(
       v.preWriteTracks.every(isState)
     ) {
       const expected = [...new Set(requestedIds)];
+
       for (const rows of [v.tracks, v.preWriteTracks]) {
         if (
           rows.length !== expected.length ||
@@ -242,39 +267,50 @@ function parseSignalResult<State extends { persistentId: string }>(
           );
         }
       }
+
       return { tracks: v.tracks, preWriteTracks: v.preWriteTracks };
     }
   }
+
   throw new BridgeError('jxa_error', 'JXA returned an unexpected TrackSignalResult shape.');
 }
 
 function isLovedState(t: unknown): t is TrackLovedState {
   if (typeof t !== 'object' || t === null) return false;
+
   const s = t as Record<string, unknown>;
+
   return typeof s.persistentId === 'string' && typeof s.loved === 'boolean';
 }
 
 function isRatingState(t: unknown): t is TrackRatingState {
   if (typeof t !== 'object' || t === null) return false;
+
   const s = t as Record<string, unknown>;
+
   return typeof s.persistentId === 'string' && (typeof s.rating === 'number' || s.rating === null);
 }
 
 function parseDeleteResult(result: unknown): number {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
+
     if (v.notEditable === true) {
       throw new BridgeError('playlist_not_editable', 'Target is not a plain user playlist.');
     }
+
     if (typeof v.deleted === 'number') return v.deleted;
   }
+
   throw new BridgeError('jxa_error', 'JXA returned an unexpected delete result shape.');
 }
 
 function parseWriteResult(result: unknown): PlaylistWriteResult {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
+
     throwIfMissingTracks(v);
+
     if (
       typeof v.persistentId === 'string' &&
       typeof v.trackCount === 'number' &&
@@ -287,12 +323,14 @@ function parseWriteResult(result: unknown): PlaylistWriteResult {
       };
     }
   }
+
   throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistWriteResult shape.');
 }
 
 function parseCloneResult(result: unknown, reservedSourceName?: string): PlaylistCloneResult {
   if (typeof result === 'object' && result !== null) {
     const v = result as Record<string, unknown>;
+
     if (v.playlistNotFound === true && reservedSourceName !== undefined) {
       throw new BridgeError(
         'playlist_not_found',
@@ -300,6 +338,7 @@ function parseCloneResult(result: unknown, reservedSourceName?: string): Playlis
         `The "${reservedSourceName}" slot no longer exists in Music.app. Call preview_playlist again to rebuild it, then clone that result. Nothing was created.`,
       );
     }
+
     if (v.playlistNotFound === true) {
       throw new BridgeError(
         'playlist_not_found',
@@ -307,14 +346,17 @@ function parseCloneResult(result: unknown, reservedSourceName?: string): Playlis
         'The source playlist is not in the live library — run refresh_library and re-resolve it via list_playlists.',
       );
     }
+
     if (isAmbiguousSource(v.ambiguousSource)) {
       const { name, persistentIds } = v.ambiguousSource;
+
       throw new BridgeError(
         'validation_error',
         `Music.app has ${persistentIds.length} plain user playlists named "${name}": ${persistentIds.join(', ')}.`,
         `The "${name}" slot is ambiguous — Selecta will not guess which copy the user auditioned. Run refresh_library and clone the intended copy by its list_playlists ID, or delete the extra copy with delete_playlist and retry. Nothing was created.`,
       );
     }
+
     if (v.sourceNotUser === true && typeof v.sourceKind === 'string') {
       throw new BridgeError(
         'playlist_not_editable',
@@ -322,6 +364,7 @@ function parseCloneResult(result: unknown, reservedSourceName?: string): Playlis
         'Clone only a non-empty plain user playlist; generated, smart, subscription, special, and folder sources are intentionally rejected.',
       );
     }
+
     if (typeof v.invalidSourceTrackCount === 'number') {
       throw new BridgeError(
         'validation_error',
@@ -329,6 +372,7 @@ function parseCloneResult(result: unknown, reservedSourceName?: string): Playlis
         `Choose a non-empty plain user playlist with at most ${PLAYLIST_WRITE_TRACK_LIMIT} entries. Nothing was created.`,
       );
     }
+
     if (isIdArray(v.missingTrackIds)) {
       throw new BridgeError(
         'track_not_found',
@@ -336,6 +380,7 @@ function parseCloneResult(result: unknown, reservedSourceName?: string): Playlis
         'Remove or replace the unavailable entries in the source playlist before trying again. refresh_library cannot repair entries missing from the live library; do not retry the same source unchanged.',
       );
     }
+
     if (
       typeof v.persistentId === 'string' &&
       typeof v.trackCount === 'number' &&
@@ -354,6 +399,7 @@ function parseCloneResult(result: unknown, reservedSourceName?: string): Playlis
       };
     }
   }
+
   throw new BridgeError('jxa_error', 'JXA returned an unexpected PlaylistCloneResult shape.');
 }
 
@@ -362,9 +408,11 @@ function parseCloneResult(result: unknown, reservedSourceName?: string): Playlis
 // full readLibrary snapshot.
 export async function listLibraryTrackIds(): Promise<string[]> {
   const result = await runJxa(buildListLibraryTrackIdsScript(), schemas.ids);
+
   if (!Array.isArray(result) || !result.every((id) => typeof id === 'string')) {
     throw new BridgeError('jxa_error', 'JXA returned an unexpected track-id list shape.');
   }
+
   return result;
 }
 

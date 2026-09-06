@@ -108,29 +108,38 @@ export async function enrichPendingTracks(
         { trackPersistentId, outcome: 'already_attempted', existingResult },
       ]),
     );
+
     for (let i = 0; i < pending.length; i += CHUNK_SIZE) {
       const chunk = pending.slice(i, i + CHUNK_SIZE);
+
       trace(`— chunk ${i / CHUNK_SIZE + 1}/${totalChunks}: ${chunk.length} tracks —`);
       let rows: AudioFeaturesRow[];
+
       try {
         rows = await resolveChunk(sources, chunk, now().toISOString());
       } catch (err) {
         // Only source failures are skippable; anything else is a bug and rethrows.
         if (!(err instanceof BridgeError) || err.errorCode !== 'enrichment_error') throw err;
+
         progress.skipped += chunk.length;
+
         for (const track of chunk) {
           outcomes.set(track.persistentId, {
             trackPersistentId: track.persistentId,
             outcome: 'skipped',
           });
         }
+
         if (!errors.includes(err.message)) errors.push(err.message);
+
         deps.onChunkError?.(err.message, chunk.length);
         deps.onProgress?.({ ...progress });
         continue;
       }
+
       cache.saveAudioFeatures(rows);
       const counts = { ok: 0, no_data: 0, no_match: 0 };
+
       for (const row of rows) {
         progress.processed += 1;
         counts[row.status] += 1;
@@ -138,15 +147,18 @@ export async function enrichPendingTracks(
           trackPersistentId: row.trackPersistentId,
           outcome: resultForStatus(row.status),
         });
+
         if (row.status === 'ok') progress.enriched += 1;
         else if (row.status === 'no_data') progress.noData += 1;
         else progress.noMatch += 1;
       }
+
       trace(
         `chunk saved — ${counts.ok} ok, ${counts.no_data} no_data, ${counts.no_match} no_match`,
       );
       deps.onProgress?.({ ...progress });
     }
+
     return {
       ...progress,
       pendingRemaining: cache.countPendingEnrichment(),
@@ -183,6 +195,7 @@ function selectTargets(
   // The MCP schema rejects duplicates. Keep this guard for direct library
   // callers too, so defensive deduplication can never silently alter a run.
   const requestedIds = [...new Set(opts.trackIds)];
+
   if (requestedIds.length !== opts.trackIds.length) {
     throw new BridgeError(
       'validation_error',
@@ -190,13 +203,16 @@ function selectTargets(
       'trackIds must contain unique persistent IDs. No external requests were made.',
     );
   }
+
   const tracks = requestedIds.map((id) => cache.getTrack(id));
   const unknownIds = requestedIds.filter((_, i) => tracks[i] == null);
+
   if (unknownIds.length > 0) {
     const error = trackNotFoundError(unknownIds, {
       label: 'Unknown enrichment targets',
       consequence: 'No external requests were made.',
     });
+
     throw new BridgeError(error.error, error.hint, error.hint);
   }
 
@@ -205,9 +221,11 @@ function selectTargets(
     trackPersistentId: string;
     existingResult: EnrichmentResult;
   }[] = [];
+
   for (const [i, track] of tracks.entries()) {
     const id = requestedIds[i]!;
     const existing = cache.getAudioFeatures(id);
+
     if (existing != null) {
       alreadyAttempted.push({
         trackPersistentId: id,
@@ -215,6 +233,7 @@ function selectTargets(
       });
       continue;
     }
+
     pending.push({
       persistentId: id,
       title: track!.title,
@@ -222,6 +241,7 @@ function selectTargets(
       durationSeconds: track!.durationSeconds,
     });
   }
+
   return { pending, requestedIds, alreadyAttempted };
 }
 
@@ -229,6 +249,7 @@ function matchTarget(
   track: PendingTrack,
 ): { artist: string; title: string; durationSeconds: number | null } | null {
   if (!track.title?.trim() || !track.artist?.trim()) return null;
+
   return { artist: track.artist, title: track.title, durationSeconds: track.durationSeconds };
 }
 
@@ -263,6 +284,7 @@ async function resolveChunk(
   await applyAcousticBrainzFeatures(sources, rows, provenance);
   await fillDeezerBpm(sources, chunk, rows, provenance);
   finalizeRows(rows, provenance);
+
   return rows;
 }
 
@@ -273,6 +295,7 @@ async function matchViaMusicBrainz(
 ): Promise<void> {
   for (const [i, track] of chunk.entries()) {
     const target = matchTarget(track);
+
     if (target) rows[i]!.mbRecordingMbid = await sources.mbFindRecording(target);
   }
 }
@@ -285,19 +308,26 @@ async function applyAcousticBrainzFeatures(
   const mbids = [
     ...new Set(rows.flatMap((r) => (r.mbRecordingMbid != null ? [r.mbRecordingMbid] : []))),
   ];
+
   if (mbids.length === 0) return;
+
   const abFeatures = await sources.abLookupFeatures(mbids);
+
   for (const [i, row] of rows.entries()) {
     const ab = row.mbRecordingMbid != null ? abFeatures.get(row.mbRecordingMbid) : undefined;
+
     if (!ab) continue;
+
     if (ab.bpm != null) {
       row.bpm = ab.bpm;
       provenance[i]!.bpm = 'acousticbrainz';
     }
+
     if (ab.musicalKey != null) {
       row.musicalKey = ab.musicalKey;
       provenance[i]!.musicalKey = 'acousticbrainz';
     }
+
     if (ab.danceability != null) {
       row.danceability = ab.danceability;
       provenance[i]!.danceability = 'acousticbrainz';
@@ -314,10 +344,14 @@ async function fillDeezerBpm(
   for (const [i, track] of chunk.entries()) {
     const row = rows[i]!;
     const target = matchTarget(track);
+
     if (row.bpm != null || !target) continue;
+
     const dz = await sources.dzFindTrack(target);
+
     if (dz != null) {
       row.deezerTrackId = dz.trackId;
+
       if (dz.bpm != null) {
         row.bpm = dz.bpm;
         provenance[i]!.bpm = 'deezer';
@@ -330,6 +364,7 @@ async function fillDeezerBpm(
 function finalizeRows(rows: AudioFeaturesRow[], provenance: Provenance[]): void {
   for (const [i, row] of rows.entries()) {
     const hasData = row.bpm != null || row.musicalKey != null || row.danceability != null;
+
     row.status = hasData
       ? 'ok'
       : row.mbRecordingMbid != null || row.deezerTrackId != null
