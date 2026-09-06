@@ -47,15 +47,21 @@ export async function handleAddTracks(
   deps: ToolDeps,
 ): Promise<AddTracksOutput | SelectaError> {
   const parsed = parseInput(AddTracksInput, raw);
+
   if (!parsed.ok) return parsed.error;
+
   const { playlist_id, track_ids, position } = parsed.data;
 
   try {
     const cache = deps.cache();
+
     return await withOperation(cache, 'music', async () => {
       const target = resolveEditablePlaylist(cache, playlist_id);
+
       if (!target.ok) return target.error;
+
       const cacheMiss = missingTrackIdsError(cache, track_ids);
+
       if (cacheMiss) return cacheMiss;
 
       const result = await deps.bridge.addPlaylistTracks({
@@ -66,7 +72,9 @@ export async function handleAddTracks(
           ? { expectedTrackIds: cache.getPlaylistTrackIds(target.playlist.persistentId) }
           : {}),
       });
+
       cache.patchPlaylistMembership(result.persistentId, result.trackPersistentIds);
+
       return {
         playlist_id: result.persistentId,
         name: target.playlist.name,

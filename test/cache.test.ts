@@ -17,13 +17,16 @@ function freshCache(): SelectaCache {
 
 function refreshed(): SelectaCache {
   const cache = freshCache();
+
   cache.refreshFromSnapshot(snapshot, { durationMs: 1234 });
+
   return cache;
 }
 
 describe('openDatabase', () => {
   it('throws cache_unavailable when the path cannot be created', () => {
     expect(() => openDatabase('/dev/null/selecta/library.db')).toThrow(BridgeError);
+
     try {
       openDatabase('/dev/null/selecta/library.db');
     } catch (err) {
@@ -34,12 +37,14 @@ describe('openDatabase', () => {
 
 describe('refreshFromSnapshot', () => {
   let cache: SelectaCache;
+
   beforeEach(() => {
     cache = refreshed();
   });
 
   it('reports snapshot counts', () => {
     const result = cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+
     expect(result.trackCount).toBe(6);
     expect(result.playlistCount).toBe(4);
   });
@@ -48,6 +53,7 @@ describe('refreshFromSnapshot', () => {
     const row = cache.db
       .prepare('SELECT * FROM tracks WHERE persistent_id = ?')
       .get('T-TEARDROP') as Record<string, unknown>;
+
     expect(row.title).toBe('Teardrop');
     expect(row.loved).toBe(1);
     expect(row.disliked).toBe(0);
@@ -61,6 +67,7 @@ describe('refreshFromSnapshot', () => {
     const row = cache.db
       .prepare('SELECT * FROM tracks WHERE persistent_id = ?')
       .get('T-BARE') as Record<string, unknown>;
+
     expect(row.play_count).toBe(0);
     expect(row.skip_count).toBe(0);
     expect(row.loved).toBe(0);
@@ -74,6 +81,7 @@ describe('refreshFromSnapshot', () => {
         'SELECT track_persistent_id AS id FROM playlist_tracks WHERE playlist_persistent_id = ? ORDER BY position',
       )
       .all('P-LATENIGHT') as { id: string }[];
+
     expect(rows.map((r) => r.id)).toEqual(['T-TEARDROP', 'T-GLORYBOX', 'T-ROADS']);
   });
 
@@ -81,6 +89,7 @@ describe('refreshFromSnapshot', () => {
     const row = cache.db
       .prepare('SELECT * FROM playlists WHERE persistent_id = ?')
       .get('P-LATENIGHT') as Record<string, unknown>;
+
     expect(row.name).toBe('Late Night');
     expect(row.kind).toBe('user');
     expect(row.parent_persistent_id).toBe('P-MOODS');
@@ -92,6 +101,7 @@ describe('refreshFromSnapshot', () => {
         'SELECT t.persistent_id AS id FROM tracks_fts f JOIN tracks t ON t.rowid = f.rowid WHERE tracks_fts MATCH ?',
       )
       .all('teardrop') as { id: string }[];
+
     expect(rows.map((r) => r.id)).toEqual(['T-TEARDROP']);
   });
 
@@ -102,10 +112,12 @@ describe('refreshFromSnapshot', () => {
         t.persistentId === 'T-TEARDROP' ? { ...t, playCount: 43 } : t,
       ),
     };
+
     cache.refreshFromSnapshot(changed, { durationMs: 1 });
     const rows = cache.db
       .prepare('SELECT play_count AS plays FROM tracks WHERE persistent_id = ?')
       .all('T-TEARDROP') as { plays: number }[];
+
     expect(rows).toEqual([{ plays: 43 }]);
   });
 
@@ -115,27 +127,32 @@ describe('refreshFromSnapshot', () => {
       tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-MIDNIGHT'),
       playlists: snapshot.playlists.filter((p) => p.persistentId !== 'P-RECENT'),
     };
+
     cache.refreshFromSnapshot(smaller, { durationMs: 1 });
 
     const track = cache.db
       .prepare('SELECT 1 FROM tracks WHERE persistent_id = ?')
       .get('T-MIDNIGHT');
+
     expect(track).toBeUndefined();
 
     const playlist = cache.db
       .prepare('SELECT 1 FROM playlists WHERE persistent_id = ?')
       .get('P-RECENT');
+
     expect(playlist).toBeUndefined();
 
     const memberships = cache.db
       .prepare('SELECT 1 FROM playlist_tracks WHERE playlist_persistent_id = ?')
       .all('P-RECENT');
+
     expect(memberships).toEqual([]);
 
     // FTS no longer matches the pruned track.
     const fts = cache.db
       .prepare('SELECT rowid FROM tracks_fts WHERE tracks_fts MATCH ?')
       .all('midnight');
+
     expect(fts).toEqual([]);
   });
 
@@ -144,6 +161,7 @@ describe('refreshFromSnapshot', () => {
     const row = cache.db
       .prepare('SELECT refreshed_at AS at FROM refresh_log ORDER BY refreshed_at DESC LIMIT 1')
       .get() as { at: string };
+
     expect(row.at).toBe(result.refreshedAt);
   });
 
@@ -153,18 +171,21 @@ describe('refreshFromSnapshot', () => {
         'SELECT duration_ms AS ms, track_count AS tracks, playlist_count AS playlists FROM refresh_log ORDER BY refreshed_at DESC LIMIT 1',
       )
       .get() as { ms: number; tracks: number; playlists: number };
+
     expect(row).toEqual({ ms: 1234, tracks: 6, playlists: 4 });
   });
 });
 
 describe('audio features', () => {
   let cache: SelectaCache;
+
   beforeEach(() => {
     cache = refreshed();
   });
 
   it('round-trips a row, including the JSON sources map', () => {
     const row = featuresRow();
+
     cache.saveAudioFeatures([row]);
     expect(cache.getAudioFeatures('T-TEARDROP')).toEqual(row);
     expect(cache.getAudioFeatures('T-ANGEL')).toBeNull();
@@ -173,6 +194,7 @@ describe('audio features', () => {
   it('rides every track projection, enriched bpm shadowing the native tag', () => {
     cache.saveAudioFeatures([featuresRow()]);
     const track = cache.getTrack('T-TEARDROP')!;
+
     expect(track.bpm).toBe(78.42);
     expect(track.musicalKey).toBe('A minor');
     expect(track.danceability).toBe(0.618);
@@ -194,6 +216,7 @@ describe('audio features', () => {
       ...snapshot,
       tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-TEARDROP'),
     };
+
     cache.refreshFromSnapshot(without, { durationMs: 1 });
     expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
   });
@@ -201,6 +224,7 @@ describe('audio features', () => {
   it('filters search by effective bpm: enriched wins over native, unknown never matches', () => {
     // T-GLORYBOX carries a native tag of 95 from the fixture.
     let { rows } = cache.searchTracks({ bpmMin: 90, bpmMax: 100 });
+
     expect(rows.map((r) => r.persistentId)).toEqual(['T-GLORYBOX']);
 
     // An enriched value overrides the native tag...
@@ -229,6 +253,7 @@ describe('getCacheAgeHours', () => {
 
   it('returns ~0 right after a refresh', () => {
     const age = refreshed().getCacheAgeHours();
+
     expect(age).not.toBeNull();
     expect(age!).toBeGreaterThanOrEqual(0);
     expect(age!).toBeLessThan(0.01);
@@ -249,6 +274,7 @@ describe('getCoOccurrence guards', () => {
     // error — neither should reach the engine.
     const cache = refreshed();
     const empty = { tracks: [], sourcePlaylists: { considered: 0, excluded: 0 } };
+
     expect(cache.getCoOccurrence([], {}, 10)).toEqual(empty);
     expect(cache.getCoOccurrence(['T-TEARDROP'], {}, -1)).toEqual(empty);
   });
@@ -256,6 +282,7 @@ describe('getCoOccurrence guards', () => {
   it('returns capped shared playlist references with stable IDs and exact names', () => {
     const result = refreshed().getCoOccurrence(['T-TEARDROP'], {}, 10);
     const glory = result.tracks.find((track) => track.persistentId === 'T-GLORYBOX')!;
+
     expect(glory.sharedPlaylists).toEqual([
       { id: 'P-LATENIGHT', name: 'Late Night' },
       { id: 'P-TRIPHOP', name: 'Trip Hop Essentials' },
@@ -266,6 +293,7 @@ describe('getCoOccurrence guards', () => {
 describe('overviewStats', () => {
   it('aggregates the whole library', () => {
     const stats = refreshed().getOverview({});
+
     expect(stats.totalTracks).toBe(6);
     expect(stats.totalRuntimeSeconds).toBe(1563); // 331+379+305+304+244, T-BARE null → 0
     expect(stats.artistsTotal).toBe(3);
@@ -312,6 +340,7 @@ describe('overviewStats', () => {
 
   it('scopes every aggregate to a filtered slice', () => {
     const stats = refreshed().getOverview({ artist: 'Portishead' });
+
     expect(stats.totalTracks).toBe(2);
     expect(stats.totalRuntimeSeconds).toBe(609);
     expect(stats.artistsTotal).toBe(1);
@@ -327,6 +356,7 @@ describe('overviewStats', () => {
 
   it('returns zeros and empty groups on a never-refreshed cache', () => {
     const stats = freshCache().getOverview({});
+
     expect(stats.totalTracks).toBe(0);
     expect(stats.totalRuntimeSeconds).toBe(0);
     expect(stats.artistsTotal).toBe(0);
@@ -368,24 +398,28 @@ function snapshotWith(
 
 function cacheAfterCreate(): SelectaCache {
   const cache = refreshed();
+
   cache.upsertPlaylistAfterWrite(
     { persistentId: CREATED_ID, trackCount: TRACKS.length },
     NAME,
     TRACKS,
   );
   cache.recordPlaylistCreation(CREATED_ID, NAME, TRACKS);
+
   return cache;
 }
 
 describe('sync reconciliation', () => {
   it('plans nothing when the created playlist survives cleanly (LOW BEAMS case)', () => {
     const cache = cacheAfterCreate();
+
     cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }), { durationMs: 1 });
     expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
   });
 
   it('plans a rekey when iCloud reassigned the ID (DASH CAM case)', () => {
     const cache = cacheAfterCreate();
+
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
     expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
       { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: CREATED_ID, toId: 'P-REKEYED' },
@@ -394,6 +428,7 @@ describe('sync reconciliation', () => {
 
   it('reports identical copies without planning a deletion', () => {
     const cache = cacheAfterCreate();
+
     cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-ECHO' }), {
       durationMs: 1,
     });
@@ -411,10 +446,12 @@ describe('sync reconciliation', () => {
     // like the other's echo. A naive plan would delete BOTH (reciprocal data
     // loss) — the planner must stand down on ambiguous groups.
     const cache = refreshed();
+
     for (const id of ['P-FIRST', 'P-SECOND']) {
       cache.upsertPlaylistAfterWrite({ persistentId: id, trackCount: TRACKS.length }, NAME, TRACKS);
       cache.recordPlaylistCreation(id, NAME, TRACKS);
     }
+
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-FIRST' }, { id: 'P-SECOND' }), {
       durationMs: 1,
     });
@@ -425,6 +462,7 @@ describe('sync reconciliation', () => {
 
   it('never touches same-name twins with no creation receipt (legacy Relax/Workout dupes)', () => {
     const cache = refreshed();
+
     cache.refreshFromSnapshot(
       snapshotWith({ id: 'P-RELAX-1', name: 'Relax' }, { id: 'P-RELAX-2', name: 'Relax' }),
       { durationMs: 1 },
@@ -434,15 +472,18 @@ describe('sync reconciliation', () => {
 
   it('ignores receipts older than the window', () => {
     const cache = cacheAfterCreate();
+
     cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-ECHO' }), {
       durationMs: 1,
     });
     const later = new Date(Date.now() + 2 * 3_600_000);
+
     expect(cache.planSyncReconciliation({ windowMinutes: 60, now: later })).toEqual([]);
   });
 
   it('reports copies whose track sequence no longer matches the receipt', () => {
     const cache = cacheAfterCreate();
+
     // The "twin" was edited (extra track) — order/content mismatch, hands off.
     cache.refreshFromSnapshot(
       snapshotWith({ id: CREATED_ID }, { id: 'P-EDITED', tracks: [...TRACKS, 'T-ANGEL'] }),
@@ -455,29 +496,35 @@ describe('sync reconciliation', () => {
 
   it('applyDuplicateRemoval drops the deleted copy and remaps the receipt', () => {
     const cache = cacheAfterCreate();
+
     cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-ECHO' }), {
       durationMs: 1,
     });
     cache.applyDuplicateRemoval(CREATED_ID, CREATED_ID, 'P-ECHO');
 
     const rows = cache.listPlaylists({ nameQuery: NAME });
+
     expect(rows.map((p) => p.persistentId)).toEqual(['P-ECHO']);
     // The creation-time ID stays resolvable: searches against it hit the survivor.
     const { rows: tracks } = cache.searchTracks({ inPlaylist: CREATED_ID });
+
     expect(tracks.map((t) => t.persistentId).sort()).toEqual([...TRACKS].sort());
   });
 
   it('applyRekey keeps the creation-time ID resolvable after an iCloud rekey', () => {
     const cache = cacheAfterCreate();
+
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
     cache.applyRekey(CREATED_ID, CREATED_ID, 'P-REKEYED');
 
     const { rows } = cache.searchTracks({ inPlaylist: CREATED_ID });
+
     expect(rows.map((t) => t.persistentId).sort()).toEqual([...TRACKS].sort());
   });
 
   it('getOverview scopes by a creation-time ID after a rekey (resolve path)', () => {
     const cache = cacheAfterCreate();
+
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
     cache.applyRekey(CREATED_ID, CREATED_ID, 'P-REKEYED');
 
@@ -491,6 +538,7 @@ describe('sync reconciliation', () => {
   // reordered it while auditioning — but only for names the caller reserves.
   it('rekeys a reserved slot by name alone when the sequence changed', () => {
     const cache = cacheAfterCreate();
+
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED', tracks: [...TRACKS].reverse() }), {
       durationMs: 1,
     });
@@ -506,6 +554,7 @@ describe('sync reconciliation', () => {
     // it as "the" slot would clone the stale order. Both ordinary and reserved
     // receipts report every candidate without choosing one.
     const cache = cacheAfterCreate();
+
     cache.refreshFromSnapshot(
       snapshotWith({ id: 'P-TWIN' }, { id: 'P-AUDITIONED', tracks: [...TRACKS].reverse() }),
       { durationMs: 1 },
@@ -520,6 +569,7 @@ describe('sync reconciliation', () => {
 
   it('leaves a reserved slot alone when several same-name copies diverged', () => {
     const cache = cacheAfterCreate();
+
     cache.refreshFromSnapshot(
       snapshotWith(
         { id: 'P-ONE', tracks: [...TRACKS].reverse() },
@@ -535,6 +585,7 @@ describe('sync reconciliation', () => {
   it('applyLiveRekey aliases a stale ID to the live playlist and mirrors its order', () => {
     const cache = cacheAfterCreate();
     const liveOrder = [...TRACKS].reverse();
+
     cache.applyLiveRekey(CREATED_ID, { persistentId: 'P-LIVE', name: NAME, trackIds: liveOrder });
 
     expect(cache.getPlaylist(CREATED_ID)).toBeNull();
@@ -546,6 +597,7 @@ describe('sync reconciliation', () => {
 
   it('applyLiveRekey follows a receipt chain without minting a new receipt', () => {
     const cache = cacheAfterCreate();
+
     // Refresh-time rekey first: CREATED_ID -> P-MID. Then the bridge finds
     // P-MID gone too; the one receipt must end up at the newest live ID.
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-MID' }), { durationMs: 1 });
@@ -563,6 +615,7 @@ describe('sync reconciliation', () => {
 
   it('getRecentCreationNames lists only in-window names', () => {
     const cache = cacheAfterCreate();
+
     expect(cache.getRecentCreationNames(60)).toEqual([NAME]);
     expect(cache.getRecentCreationNames(60, new Date(Date.now() + 2 * 3_600_000))).toEqual([]);
   });
@@ -585,6 +638,7 @@ describe('play history', () => {
   it('records nothing on first sighting — baseline is silent', () => {
     const cache = refreshed();
     const n = cache.db.prepare('SELECT COUNT(*) AS n FROM play_history').get() as { n: number };
+
     expect(n.n).toBe(0);
   });
 
@@ -593,6 +647,7 @@ describe('play history', () => {
     const result = cache.refreshFromSnapshot(bumped({ 'T-TEARDROP': { plays: 3, skips: 1 } }), {
       durationMs: 1,
     });
+
     expect(result.playDeltasRecorded).toBe(1);
     expect(result.playCountResets).toBe(0);
     expect(historyFor(cache, 'T-TEARDROP')).toEqual([{ plays: 3, skips: 1 }]);
@@ -601,8 +656,10 @@ describe('play history', () => {
   it('records no row when counters are unchanged', () => {
     const cache = refreshed();
     const result = cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+
     expect(result.playDeltasRecorded).toBe(0);
     const n = cache.db.prepare('SELECT COUNT(*) AS n FROM play_history').get() as { n: number };
+
     expect(n.n).toBe(0);
   });
 
@@ -611,12 +668,14 @@ describe('play history', () => {
     const result = cache.refreshFromSnapshot(bumped({ 'T-TEARDROP': { plays: -10 } }), {
       durationMs: 1,
     });
+
     expect(result.playDeltasRecorded).toBe(0);
     expect(result.playCountResets).toBe(1);
     expect(historyFor(cache, 'T-TEARDROP')).toEqual([]);
     const log = cache.db
       .prepare('SELECT notes FROM refresh_log WHERE refreshed_at = ?')
       .get(result.refreshedAt) as { notes: string | null };
+
     expect(log.notes).toContain('reset');
 
     // Later listening measures from the NEW baseline (32), not the old one.
@@ -629,6 +688,7 @@ describe('play history', () => {
     const result = cache.refreshFromSnapshot(bumped({ 'T-ROADS': { plays: 4, skips: -2 } }), {
       durationMs: 1,
     });
+
     expect(result.playDeltasRecorded).toBe(1);
     expect(result.playCountResets).toBe(1);
     expect(historyFor(cache, 'T-ROADS')).toEqual([{ plays: 4, skips: 0 }]);
@@ -636,6 +696,7 @@ describe('play history', () => {
 
   it('prunes history with its track; surviving tracks keep theirs', () => {
     const cache = refreshed();
+
     cache.refreshFromSnapshot(bumped({ 'T-TEARDROP': { plays: 1 }, 'T-MIDNIGHT': { plays: 1 } }), {
       durationMs: 1,
     });
@@ -643,6 +704,7 @@ describe('play history', () => {
       ...snapshot,
       tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-MIDNIGHT'),
     };
+
     cache.refreshFromSnapshot(without, { durationMs: 1 });
     expect(historyFor(cache, 'T-MIDNIGHT')).toEqual([]);
     expect(historyFor(cache, 'T-TEARDROP')).toHaveLength(1);
@@ -664,11 +726,13 @@ describe('play history', () => {
 
   it('getTrackPlayHistory returns windows newest first, capped', () => {
     const cache = refreshed();
+
     insertHistory(cache, 'T-ANGEL', '2026-06-01T00:00:00.000Z', 2, 0);
     insertHistory(cache, 'T-ANGEL', '2026-06-15T00:00:00.000Z', 5, 1);
     insertHistory(cache, 'T-ANGEL', '2026-07-01T00:00:00.000Z', 1, 0);
 
     const all = cache.getTrackPlayHistory('T-ANGEL', 12);
+
     expect(all.map((w) => w.playCountDelta)).toEqual([1, 5, 2]);
     expect(all[1]).toEqual({
       refreshedAt: '2026-06-15T00:00:00.000Z',
@@ -680,6 +744,7 @@ describe('play history', () => {
 
   it('overview recentActivity sums deltas since the cutoff, scoped by filters', () => {
     const cache = refreshed();
+
     cache.refreshFromSnapshot(
       bumped({ 'T-TEARDROP': { plays: 3, skips: 1 }, 'T-ROADS': { plays: 2 } }),
       { durationMs: 1 },
@@ -690,17 +755,20 @@ describe('play history', () => {
     const since = '2026-01-01T00:00:00.000Z';
     const recent = (filters: Parameters<SelectaCache['getOverview']>[0], cutoff = since) =>
       cache.getOverview(filters, cutoff).recentActivity;
+
     expect(recent({})).toEqual({ tracksPlayed: 2, totalPlays: 5, totalSkips: 1 });
     // Everything counts from an earlier cutoff.
     expect(recent({}, '2019-01-01T00:00:00.000Z').totalPlays).toBe(104);
     // Filters scope the slice like the rest of the overview.
     const teardropArtist = snapshot.tracks.find((t) => t.persistentId === 'T-TEARDROP')!.artist!;
+
     expect(recent({ artist: teardropArtist }).totalPlays).toBe(3);
     expect(recent({ artist: 'Nobody' })).toEqual({ tracksPlayed: 0, totalPlays: 0, totalSkips: 0 });
   });
 
   it('a skip-only window counts skips but not tracksPlayed', () => {
     const cache = refreshed();
+
     cache.refreshFromSnapshot(bumped({ 'T-GLORYBOX': { skips: 2 } }), { durationMs: 1 });
     expect(cache.getOverview({}, '2026-01-01T00:00:00.000Z').recentActivity).toEqual({
       tracksPlayed: 0,
@@ -711,14 +779,17 @@ describe('play history', () => {
 
   it('sort recent_plays orders by recent deltas, not lifetime count', () => {
     const cache = refreshed();
+
     // T-ROADS (lifetime 7) gets the most recent plays; T-MIDNIGHT (lifetime 55) none.
     cache.refreshFromSnapshot(bumped({ 'T-ROADS': { plays: 6 }, 'T-ANGEL': { plays: 1 } }), {
       durationMs: 1,
     });
     const { rows } = cache.searchTracks({ sort: 'recent_plays' });
+
     expect(rows.slice(0, 2).map((t) => t.persistentId)).toEqual(['T-ROADS', 'T-ANGEL']);
     // The zero-delta tail is stable (ID order), so paging can't shuffle it.
     const tail = rows.slice(2).map((t) => t.persistentId);
+
     expect(tail).toEqual([...tail].sort());
   });
 });
@@ -729,6 +800,7 @@ describe('notes', () => {
   it('upserts one note per subject, keeping created_at across rewrites', async () => {
     const cache = refreshed();
     const first = cache.setNote('track', 'T-TEARDROP', 'great opener');
+
     expect(first).toEqual({
       subjectKind: 'track',
       subjectId: 'T-TEARDROP',
@@ -738,6 +810,7 @@ describe('notes', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 2));
     const second = cache.setNote('track', 'T-TEARDROP', 'great opener, too long for dinner');
+
     expect(second.body).toBe('great opener, too long for dinner');
     expect(second.createdAt).toBe(first.createdAt);
     expect(second.updatedAt > first.updatedAt).toBe(true);
@@ -746,6 +819,7 @@ describe('notes', () => {
 
   it('keeps track and playlist notes on the same ID apart', () => {
     const cache = refreshed();
+
     cache.setNote('track', 'X', 'track note');
     cache.setNote('playlist', 'X', 'playlist note');
     expect(cache.getNote('track', 'X')!.body).toBe('track note');
@@ -754,6 +828,7 @@ describe('notes', () => {
 
   it('clears a note; clearing again is a no-op', () => {
     const cache = refreshed();
+
     cache.setNote('playlist', 'P-LATENIGHT', 'dinner set');
     cache.clearNote('playlist', 'P-LATENIGHT');
     expect(cache.getNote('playlist', 'P-LATENIGHT')).toBeNull();
@@ -763,8 +838,10 @@ describe('notes', () => {
   it('rides every track and playlist projection verbatim', () => {
     const cache = refreshed();
     const note = cache.setNote('track', 'T-TEARDROP', '  use this version, not the remaster  ');
+
     cache.setNote('playlist', 'P-LATENIGHT', 'the arc works');
     const track = cache.getTrack('T-TEARDROP')!;
+
     expect(track.noteBody).toBe('  use this version, not the remaster  ');
     expect(track.noteCreatedAt).toBe(note.createdAt);
     expect(track.noteUpdatedAt).toBe(note.updatedAt);
@@ -787,6 +864,7 @@ describe('notes', () => {
     const cache = refreshed();
     const track = cache.setNote('track', 'T-TEARDROP', 'keep');
     const playlist = cache.setNote('playlist', 'P-LATENIGHT', 'keep too');
+
     cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
     expect(cache.getNote('track', 'T-TEARDROP')).toEqual(track);
     expect(cache.getNote('playlist', 'P-LATENIGHT')).toEqual(playlist);
@@ -794,6 +872,7 @@ describe('notes', () => {
 
   it('is pruned when its subject leaves the library', () => {
     const cache = refreshed();
+
     cache.setNote('track', 'T-TEARDROP', 'gone soon');
     cache.setNote('track', 'T-ANGEL', 'stays');
     cache.setNote('playlist', 'P-LATENIGHT', 'gone soon');
@@ -815,6 +894,7 @@ describe('notes', () => {
   it('follows an iCloud rekey through refresh and reconciliation', () => {
     const cache = cacheAfterCreate();
     const note = cache.setNote('playlist', 'P-CREATED', 'user liked the arc; kept the plain name');
+
     // The refresh sees only the rekeyed ID: the receipt shields the note from
     // the prune until reconciliation moves it.
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
@@ -830,6 +910,7 @@ describe('notes', () => {
 
   it('is pruned once its receipt is too old to reconcile and the playlist is gone', () => {
     const cache = cacheAfterCreate();
+
     cache.setNote('playlist', CREATED_ID, 'deleted in Music.app later');
     // The user removed the playlist in Music.app well after the reconciliation
     // window: the receipt lingers, but it can no longer move anything.
@@ -842,6 +923,7 @@ describe('notes', () => {
 
   it('follows a write-time (live) rekey of the preview slot', () => {
     const cache = cacheAfterCreate();
+
     cache.setNote('playlist', CREATED_ID, 'draft 3: softer close');
     cache.applyLiveRekey(CREATED_ID, { persistentId: 'P-LIVE', name: NAME, trackIds: TRACKS });
     expect(cache.getNote('playlist', CREATED_ID)).toBeNull();
@@ -851,6 +933,7 @@ describe('notes', () => {
 
   it('moves to the surviving twin when an echo duplicate is removed', () => {
     const cache = cacheAfterCreate();
+
     cache.setNote('playlist', 'P-CREATED', 'arc approved');
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-CREATED' }, { id: 'P-ECHO' }), {
       durationMs: 1,
@@ -862,6 +945,7 @@ describe('notes', () => {
 
   it('goes with the playlist on deletePlaylistRow', () => {
     const cache = refreshed();
+
     cache.setNote('playlist', 'P-TRIPHOP', 'doomed');
     cache.deletePlaylistRow('P-TRIPHOP');
     expect(cache.getNote('playlist', 'P-TRIPHOP')).toBeNull();

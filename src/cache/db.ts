@@ -17,9 +17,12 @@ export function openDatabase(path: string = defaultDbPath()): Database.Database 
     if (path !== ':memory:') {
       mkdirSync(dirname(path), { recursive: true });
     }
+
     const db = new Database(path);
+
     db.pragma('journal_mode = WAL');
     db.exec(SCHEMA);
+
     return db;
   } catch (err) {
     throw new BridgeError(

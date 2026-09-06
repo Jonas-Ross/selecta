@@ -42,6 +42,7 @@ export async function handleListPlaylists(
   deps: ToolDeps,
 ): Promise<ListPlaylistsOutput | SelectaError> {
   const parsed = parseInput(ListPlaylistsInput, raw);
+
   if (!parsed.ok) return parsed.error;
 
   try {
@@ -49,6 +50,7 @@ export async function handleListPlaylists(
       kind: parsed.data.kind,
       nameQuery: parsed.data.name_query,
     });
+
     return {
       playlists: rows.map((p) => ({
         id: p.persistentId,

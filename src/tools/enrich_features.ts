@@ -78,7 +78,9 @@ export async function handleEnrichFeatures(
   deps: ToolDeps,
 ): Promise<EnrichFeaturesOutput | SelectaError> {
   const parsed = parseInput(EnrichFeaturesInput, raw ?? {});
+
   if (!parsed.ok) return parsed.error;
+
   if (parsed.data.track_ids != null && parsed.data.limit != null) {
     return validationError('track_ids and limit select different modes; provide only one.');
   }
@@ -89,6 +91,7 @@ export async function handleEnrichFeatures(
         ? { trackIds: parsed.data.track_ids }
         : { limit: parsed.data.limit ?? DEFAULT_LIMIT };
     const summary = await enrichPendingTracks(deps.cache(), options, deps.enrich ?? {});
+
     return {
       processed: summary.processed,
       enriched: summary.enriched,

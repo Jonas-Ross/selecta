@@ -22,10 +22,13 @@ function seededDatabase(): { dbPath: string; refreshedAt: string } {
   const dbPath = join(directory, 'library.db');
   const cache = SelectaCache.open(dbPath);
   const { refreshedAt } = cache.refreshFromSnapshot(snapshot, { durationMs: 42 });
+
   cache.saveAudioFeatures([featuresRow()]);
   const summary: ReconciliationSummary = { rekeys: 1, duplicates_removed: 2, failures: 0 };
+
   cache.appendRefreshNote(refreshedAt, formatReconciliationSummary(summary));
   cache.close();
+
   return { dbPath, refreshedAt };
 }
 

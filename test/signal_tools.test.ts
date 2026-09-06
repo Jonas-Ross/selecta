@@ -18,7 +18,9 @@ function signalResult<State>(tracks: State[], preWriteTracks: State[] = tracks) 
 
 function signalRow(cache: SelectaCache, id: string): { loved: 0 | 1; rating: number | null } {
   const row = cache.getTrack(id);
+
   expect(row).not.toBeNull();
+
   return { loved: row!.loved, rating: row!.rating };
 }
 
@@ -77,6 +79,7 @@ describe('set_loved', () => {
         .fn()
         .mockResolvedValue(signalResult([{ persistentId: 'T-ANGEL', loved: false }])),
     });
+
     await handleSetLoved({ track_ids: ['T-ANGEL'], loved: true }, deps);
     expect(signalRow(deps.cacheInstance, 'T-ANGEL').loved).toBe(0);
   });
@@ -84,6 +87,7 @@ describe('set_loved', () => {
   it('rejects unknown track IDs before any bridge call', async () => {
     const deps = makeToolDeps();
     const err = asError(await handleSetLoved({ track_ids: ['T-FAKE'], loved: true }, deps));
+
     expect(err.error).toBe('track_not_found');
     expect(err.hint).toContain('T-FAKE');
     expect(deps.bridge.setTrackLoved).not.toHaveBeenCalled();
@@ -96,6 +100,7 @@ describe('set_loved', () => {
         .mockRejectedValue(new BridgeError('track_not_found', 'gone live', 'stale')),
     });
     const err = asError(await handleSetLoved({ track_ids: ['T-ANGEL'], loved: true }, deps));
+
     expect(err.error).toBe('track_not_found');
     expect(signalRow(deps.cacheInstance, 'T-ANGEL').loved).toBe(0);
   });
@@ -103,6 +108,7 @@ describe('set_loved', () => {
   it('rejects an empty track_ids array', async () => {
     const deps = makeToolDeps();
     const err = asError(await handleSetLoved({ track_ids: [], loved: true }, deps));
+
     expect(err.error).toBe('validation_error');
     expect(deps.bridge.setTrackLoved).not.toHaveBeenCalled();
   });
@@ -150,6 +156,7 @@ describe('set_rating', () => {
   it('rejects a non-half-star rating', async () => {
     const deps = makeToolDeps();
     const err = asError(await handleSetRating({ track_ids: ['T-ANGEL'], rating: 3.7 }, deps));
+
     expect(err.error).toBe('validation_error');
     expect(deps.bridge.setTrackRating).not.toHaveBeenCalled();
   });
@@ -157,6 +164,7 @@ describe('set_rating', () => {
   it('rejects a rating above 5', async () => {
     const deps = makeToolDeps();
     const err = asError(await handleSetRating({ track_ids: ['T-ANGEL'], rating: 6 }, deps));
+
     expect(err.error).toBe('validation_error');
     expect(deps.bridge.setTrackRating).not.toHaveBeenCalled();
   });
@@ -164,6 +172,7 @@ describe('set_rating', () => {
   it('rejects unknown track IDs before any bridge call', async () => {
     const deps = makeToolDeps();
     const err = asError(await handleSetRating({ track_ids: ['T-FAKE'], rating: 5 }, deps));
+
     expect(err.error).toBe('track_not_found');
     expect(deps.bridge.setTrackRating).not.toHaveBeenCalled();
   });
@@ -173,6 +182,7 @@ describe('set_rating', () => {
       setTrackRating: vi.fn().mockRejectedValue(new BridgeError('jxa_error', 'boom')),
     });
     const err = asError(await handleSetRating({ track_ids: ['T-MIDNIGHT'], rating: 1 }, deps));
+
     expect(err.error).toBe('jxa_error');
     expect(signalRow(deps.cacheInstance, 'T-MIDNIGHT').rating).toBe(80);
   });

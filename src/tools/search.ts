@@ -80,10 +80,14 @@ export async function handleSearch(
   deps: ToolDeps,
 ): Promise<SearchOutput | CompactSearchOutput | SelectaError> {
   const parsed = parseInput(SearchInput, raw);
+
   if (!parsed.ok) return parsed.error;
+
   const input = parsed.data;
   const rangeError = validateFilterRanges(input);
+
   if (rangeError) return rangeError;
+
   if (input.sort === 'playlist_order' && input.in_playlist == null) {
     return validationError('sort playlist_order requires in_playlist.');
   }
@@ -96,16 +100,20 @@ export async function handleSearch(
       dedupe: input.dedupe,
     });
     const positions = new Map<string, number[]>();
+
     if (input.sort === 'playlist_order' && input.in_playlist != null) {
       const cache = deps.cache();
+
       cache
         .getPlaylistTrackIds(cache.resolvePlaylistId(input.in_playlist))
         .forEach((id, position) => {
           const list = positions.get(id) ?? [];
+
           list.push(position);
           positions.set(id, list);
         });
     }
+
     const entryPositions = (id: string, alternates: string[] = []) =>
       input.sort === 'playlist_order'
         ? {
@@ -115,6 +123,7 @@ export async function handleSearch(
           }
         : {};
     const common = { total_matches: total, cache_age_hours: roundedCacheAge(deps) };
+
     if (input.compact === true) {
       return {
         track_fields: COMPACT_TRACK_FIELDS,
@@ -126,6 +135,7 @@ export async function handleSearch(
         ...common,
       };
     }
+
     return {
       tracks: rows.map((row) => ({
         ...projectApiTrack(row, false),

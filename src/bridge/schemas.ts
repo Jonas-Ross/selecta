@@ -6,6 +6,7 @@ const count = z.number().int().nonnegative();
 const rating = z.number().min(0).max(100);
 const date = z.iso.datetime({ offset: true });
 const kind = z.enum(['user', 'smart', 'folder', 'special', 'subscription']);
+
 export const playlist = z.object({
   persistentId: id,
   name: z.string(),
@@ -44,6 +45,7 @@ export const snapshot = z.object({
 const missing = z.object({ missingTrackIds: ids.min(1) });
 const notFound = z.object({ playlistNotFound: z.literal(true) });
 const notEditable = z.object({ notEditable: z.literal(true) });
+
 export const partialWriteResult = z.object({
   partialWrite: z.object({ persistentId: id, trackPersistentIds: ids.optional() }),
 });
@@ -54,6 +56,7 @@ export const writeSuccess = z.object({
 });
 const consistentCount = (v: z.infer<typeof writeSuccess>) =>
   v.trackCount === v.trackPersistentIds.length;
+
 export const write = z.union([
   missing,
   partialWriteResult,
@@ -94,6 +97,7 @@ export const edit = z.union([
 ]);
 const loved = z.object({ persistentId: id, loved: z.boolean() });
 const rated = z.object({ persistentId: id, rating: rating.nullable() });
+
 export const lovedResult = z.union([
   missing,
   z.object({ tracks: z.array(loved), preWriteTracks: z.array(loved) }),

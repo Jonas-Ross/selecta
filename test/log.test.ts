@@ -62,6 +62,7 @@ describe('debug file logging', () => {
   it('surfaces a file failure once and keeps logging without throwing', () => {
     const directory = mkdtempSync(join(tmpdir(), 'selecta-log-failure-'));
     const blockedParent = join(directory, 'not-a-directory');
+
     writeFileSync(blockedParent, 'occupied');
     const stderr: string[] = [];
     const logger = createLogger({

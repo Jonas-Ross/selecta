@@ -13,7 +13,9 @@ const NOT_RUNNING_SIGNATURE = /-600|isn['’]?t running|not running|can['’]?t 
 
 function mapJxaError(stderr: string): ErrorCode {
   if (PERMISSION_SIGNATURE.test(stderr)) return 'automation_permission_denied';
+
   if (NOT_RUNNING_SIGNATURE.test(stderr)) return 'music_app_not_running';
+
   return 'jxa_error';
 }
 
@@ -45,14 +47,18 @@ export function runJxa(script: string): Promise<unknown> {
               'The Music.app operation was interrupted; its outcome is unknown and writes may be partial. Inspect Music.app and run refresh_library before deciding what to do. Do not repeat the write blindly.',
             ),
           );
+
           return;
         }
+
         if (error) {
           reject(
             jxaError(mapJxaError(stderr), `osascript failed: ${stderr.trim() || error.message}`),
           );
+
           return;
         }
+
         try {
           resolve(JSON.parse(stdout));
         } catch {

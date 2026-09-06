@@ -31,6 +31,7 @@ describe('observed write outcomes', () => {
         sourceTrackPersistentIds: [A, B],
       });
       const deps = makeToolDeps(bridge);
+
       try {
         const result =
           mode === 'preview'
@@ -44,12 +45,14 @@ describe('observed write outcomes', () => {
                 },
                 deps,
               );
+
         expect(result).toMatchObject({
           playlist_id: 'P-NEW',
           track_count: 3,
           order_matches_request: false,
         });
         expect(deps.cacheInstance.getPlaylistTrackIds('P-NEW')).toEqual([B, A, A]);
+
         if (mode === 'clone') expect(result).toMatchObject({ source: { track_count: 2 } });
       } finally {
         deps.cacheInstance.close();
@@ -59,6 +62,7 @@ describe('observed write outcomes', () => {
 
   it('keeps a rekeyed clone source separate from a drifted destination', async () => {
     const deps = makeToolDeps(bridge);
+
     try {
       deps.cacheInstance.upsertPlaylistAfterWrite(
         { persistentId: 'OLD', trackCount: 2 },
@@ -74,6 +78,7 @@ describe('observed write outcomes', () => {
         sourceTrackPersistentIds: [A, B],
       });
       const result = await handleCreatePlaylist({ name: 'Mix', source_playlist_id: 'OLD' }, deps);
+
       expect(result).toMatchObject({
         track_count: 1,
         source: { track_count: 2, rekeyed_from: 'OLD' },
@@ -87,6 +92,7 @@ describe('observed write outcomes', () => {
 
   it('reports the observed favorite and rating when Music.app did not retain the request', async () => {
     const deps = makeToolDeps(bridge);
+
     try {
       vi.mocked(runJxa).mockResolvedValue({
         tracks: [{ persistentId: A, loved: false }],
@@ -139,7 +145,9 @@ describe('observed write outcomes', () => {
         tracks: {
           persistentID: () => {
             reads++;
+
             if (!readable) throw Error('read failed');
+
             return [A];
           },
         },
@@ -165,6 +173,7 @@ describe('observed write outcomes', () => {
           Application: () => music,
         }),
       );
+
       expect(raw).toEqual({
         partialWrite: {
           persistentId: 'P-PARTIAL',
@@ -173,6 +182,7 @@ describe('observed write outcomes', () => {
       });
       vi.mocked(runJxa).mockResolvedValue(raw);
       const deps = makeToolDeps(bridge);
+
       try {
         expect(await handleCreatePlaylist({ name: 'Mix', track_ids: [A, B] }, deps)).toMatchObject({
           error: 'jxa_error',
@@ -221,6 +231,7 @@ describe('observed write outcomes', () => {
           Application: () => music,
         }),
       );
+
       expect(raw).toEqual(
         failed
           ? { partialWrite: { persistentId: 'EMPTY', trackPersistentIds: [] } }
@@ -242,6 +253,7 @@ describe('observed write outcomes', () => {
         Application: () => music,
       }),
     );
+
     vi.mocked(runJxa).mockResolvedValue(raw);
     await expect(
       bridge.replacePlaylist({ name: 'Selecta Preview', trackIds: [A] }),

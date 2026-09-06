@@ -25,8 +25,10 @@ describe('operation lifecycle', () => {
       .fn()
       .mockResolvedValue({ tracks: [{ persistentId: 'T-TEARDROP', loved: true }] });
     const deps = makeToolDeps({ readLibrary, setTrackLoved });
+
     try {
       const refresh = refreshLibrary(deps.cacheInstance, deps.bridge);
+
       expect(await handleSetLoved({ track_ids: ['T-TEARDROP'], loved: true }, deps)).toMatchObject({
         error: 'operation_busy',
       });
@@ -45,6 +47,7 @@ describe('operation lifecycle', () => {
   it('excludes another process against the same database and releases both lock kinds', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'selecta-lock-'));
     const cache = SelectaCache.open(join(directory, 'library.db'));
+
     try {
       for (const kind of ['music', 'enrich'] as const) {
         await withOperation(cache, kind, async () => {
@@ -54,6 +57,7 @@ describe('operation lifecycle', () => {
             try { await withOperation(c, ${JSON.stringify(kind)}, async () => {}); process.exitCode = 1; }
             catch (e) { if (e.errorCode !== 'operation_busy') throw e; }
             finally { c.close(); }`;
+
           expect(() =>
             execFileSync(process.execPath, ['--input-type=module', '-e', script]),
           ).not.toThrow();
@@ -68,6 +72,7 @@ describe('operation lifecycle', () => {
 
   it('does not resurrect enrichment rows for tracks removed during lookup', () => {
     const cache = SelectaCache.open(':memory:');
+
     try {
       cache.refreshFromSnapshot(fixture as LibrarySnapshot, { durationMs: 1 });
       cache.refreshFromSnapshot({ ...fixture, tracks: [] } as LibrarySnapshot, { durationMs: 1 });
@@ -85,6 +90,7 @@ describe('operation lifecycle', () => {
       const calls: number[] = [];
       const fetchLike = vi.fn(async () => {
         calls.push(time);
+
         return calls.length === 1
           ? { ok: false, status: 503, headers: { get: () => header }, json: async () => ({}) }
           : { ok: true, status: 200, json: async () => ({ recordings: [] }) };
@@ -96,6 +102,7 @@ describe('operation lifecycle', () => {
           time += ms;
         },
       });
+
       await expect(
         sources.mbFindRecording({ artist: 'A', title: 'first', durationSeconds: null }),
       ).rejects.toMatchObject({ errorCode: 'enrichment_error' });
@@ -131,6 +138,7 @@ describe('operation lifecycle', () => {
         },
       });
     const target = { artist: 'A', title: 'first', durationSeconds: null };
+
     try {
       await expect(makeSources().mbFindRecording(target)).rejects.toMatchObject({
         errorCode: 'enrichment_error',
@@ -154,6 +162,7 @@ describe('operation lifecycle', () => {
 
   it('applies an abort deadline to production fetch including response body reads', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response('{}'));
+
     await withUserAgent(fetchImpl)('https://example.invalid');
     expect(fetchImpl.mock.calls[0]![1].signal).toBeInstanceOf(AbortSignal);
   });

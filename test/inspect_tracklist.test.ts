@@ -22,8 +22,10 @@ const inspectFixture = fixture as {
 
 function makeDeps(): ToolDeps {
   const cache = SelectaCache.open(':memory:');
+
   cache.refreshFromSnapshot(inspectFixture.snapshot, { durationMs: 1 });
   cache.saveAudioFeatures(inspectFixture.audioFeatures);
+
   return { cache: () => cache, bridge: makeBridge() };
 }
 
@@ -56,11 +58,13 @@ function makeLargeDraft(): { deps: ToolDeps; trackIds: string[] } {
       fetchedAt: '2026-08-02T00:00:00.000Z',
     }));
   const cache = SelectaCache.open(':memory:');
+
   cache.refreshFromSnapshot(
     { capturedAt: '2026-08-01T12:00:00.000Z', tracks, playlists: [] },
     { durationMs: 1 },
   );
   cache.saveAudioFeatures(features);
+
   return {
     deps: { cache: () => cache, bridge: makeBridge() },
     trackIds: tracks.map((track) => track.persistentId),
@@ -77,6 +81,7 @@ async function inspect(deps = makeDeps()): Promise<InspectTracklistOutput> {
 describe('inspect_tracklist', () => {
   it('preserves supplied order and returns only draft-relevant track facts', async () => {
     const out = await inspect();
+
     expect(out.tracks.map((track) => track.persistent_id)).toEqual(inspectFixture.draftTrackIds);
     expect(out.tracks[0]).toEqual({
       persistent_id: 'T-DREAM-A',
@@ -102,6 +107,7 @@ describe('inspect_tracklist', () => {
 
   it('computes runtime, artist occurrences, and every feature aggregate from the fixture', async () => {
     const out = await inspect();
+
     expect(out.track_count).toBe(5);
     expect(out.runtime).toEqual({
       known_seconds: 817,
@@ -133,6 +139,7 @@ describe('inspect_tracklist', () => {
 
   it('reports repeated IDs separately from distinct owned copies of one song', async () => {
     const out = await inspect();
+
     expect(out.duplicate_ids).toEqual([
       { persistent_id: 'T-DREAM-A', count: 2, positions: [0, 3] },
     ]);
@@ -151,6 +158,7 @@ describe('inspect_tracklist', () => {
   it('fingerprints the UTF-8 JSON ID array stably, including order and ID boundaries', async () => {
     const deps = makeDeps();
     const out = await inspect(deps);
+
     expect(out.fingerprint).toBe(
       'sha256:e4ac5d46e0944e54cd57d9780a5ed9b0ac7c7d569a49e1c9b6dfd76f6894bbd3',
     );
@@ -158,6 +166,7 @@ describe('inspect_tracklist', () => {
       { track_ids: [...inspectFixture.draftTrackIds].reverse() },
       deps,
     )) as InspectTracklistOutput;
+
     expect(reordered.fingerprint).not.toBe(out.fingerprint);
     expect(orderedTrackIdsFingerprint(['ab', 'c'])).not.toBe(
       orderedTrackIdsFingerprint(['a', 'bc']),
@@ -171,6 +180,7 @@ describe('inspect_tracklist', () => {
       deps,
     );
     const err = asError(result);
+
     expect(err.error).toBe('track_not_found');
     expect(err.hint).toContain('T-NOT-OWNED');
     expect(result).not.toHaveProperty('tracks');
@@ -180,8 +190,11 @@ describe('inspect_tracklist', () => {
   it('uses only the cache: no Music.app bridge method or network fetch runs', async () => {
     const deps = makeDeps();
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
     await inspect(deps);
+
     for (const method of Object.values(deps.bridge)) expect(method).not.toHaveBeenCalled();
+
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
@@ -192,6 +205,7 @@ describe('inspect_tracklist', () => {
       { track_ids: trackIds },
       deps,
     )) as InspectTracklistOutput;
+
     expect(out.track_count).toBe(500);
     expect(new Set(out.tracks.map((track) => track.persistent_id)).size).toBe(500);
     expect(out.tracks[0]!.persistent_id).toBe('T-LARGE-0001');

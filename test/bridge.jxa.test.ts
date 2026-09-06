@@ -20,6 +20,7 @@ function stubExecFile(opts: { error?: Error | null; stdout?: string; stderr?: st
     cb: (e: Error | null, stdout: string, stderr: string) => void,
   ) => {
     cb(opts.error ?? null, opts.stdout ?? '', opts.stderr ?? '');
+
     return {} as never;
   }) as never);
 }
@@ -92,6 +93,7 @@ describe('bridge result sentinel mapping', () => {
   async function editBridge() {
     return (await import('../src/bridge/index.js')).bridge;
   }
+
   const input = { playlistId: 'P1', trackIds: ['T1'] };
 
   it('maps playlistNotFound to playlist_not_found', async () => {
@@ -107,12 +109,14 @@ describe('bridge result sentinel mapping', () => {
   it('maps missingTrackIds to track_not_found, naming the IDs', async () => {
     stubExecFile({ stdout: '{"missingTrackIds":["T1"]}' });
     const p = (await editBridge()).removePlaylistTracks(input);
+
     await expectErrorCode(p, 'track_not_found');
   });
 
   it('maps invalidPositions to validation_error with the live count in the hint', async () => {
     stubExecFile({ stdout: '{"invalidPositions":[9],"liveTrackCount":3}' });
     const p = (await editBridge()).removePlaylistTracks({ playlistId: 'P1', positions: [9] });
+
     await expect(p).rejects.toMatchObject({
       errorCode: 'validation_error',
       hint: expect.stringContaining('3 tracks'),

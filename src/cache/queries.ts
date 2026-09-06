@@ -89,6 +89,7 @@ const UNIT_SEPARATOR = '\u001f';
 
 function parsePlaylistRefs(raw: string): PlaylistRef[] {
   const parsed: unknown = JSON.parse(raw);
+
   if (!Array.isArray(parsed)) throw new Error('invalid co-occurrence playlist JSON');
 
   const refs = parsed.map((value): PlaylistRef => {
@@ -102,6 +103,7 @@ function parsePlaylistRefs(raw: string): PlaylistRef[] {
     ) {
       throw new Error('invalid co-occurrence playlist reference');
     }
+
     return { id: value.id, name: value.name };
   });
 
@@ -116,10 +118,13 @@ function buildCoOccurrenceSourceFilter(filters: CoOccurrenceFilters): {
   const excludeIds = [...new Set(filters.excludePlaylistIds ?? [])];
   const excludeParams = Object.fromEntries(excludeIds.map((id, i) => [`exclude${i}`, id]));
   const checks: string[] = [];
+
   if (excludeIds.length > 0) {
     const placeholders = excludeIds.map((_, i) => `@exclude${i}`).join(', ');
+
     checks.push(`p.persistent_id IN (${placeholders})`);
   }
+
   if (filters.maxPlaylistTracks != null) {
     checks.push(
       `(SELECT COUNT(*) FROM playlist_tracks size_pt
@@ -128,6 +133,7 @@ function buildCoOccurrenceSourceFilter(filters: CoOccurrenceFilters): {
   }
 
   const excludedSql = checks.length > 0 ? checks.join(' OR ') : '0';
+
   return {
     excludedSql,
     includedSql: checks.length > 0 ? `AND NOT (${excludedSql})` : '',
@@ -169,82 +175,101 @@ function buildTrackFilter(filters: SearchFilters): {
   const from = filters.query
     ? 'FROM tracks_fts f JOIN tracks t ON t.rowid = f.rowid'
     : 'FROM tracks t';
+
   if (filters.query) {
     where.push('tracks_fts MATCH @ftsQuery');
     params.ftsQuery = toFtsQuery(filters.query);
   }
+
   if (filters.artist != null) {
     where.push('t.artist = @artist COLLATE NOCASE');
     params.artist = filters.artist;
   }
+
   if (filters.genre != null) {
     where.push('t.genre = @genre COLLATE NOCASE');
     params.genre = filters.genre;
   }
+
   if (filters.yearMin != null) {
     where.push('t.year >= @yearMin');
     params.yearMin = filters.yearMin;
   }
+
   if (filters.yearMax != null) {
     where.push('t.year <= @yearMax');
     params.yearMax = filters.yearMax;
   }
+
   if (filters.bpmMin != null) {
     where.push(`${EFFECTIVE_BPM} >= @bpmMin`);
     params.bpmMin = filters.bpmMin;
   }
+
   if (filters.bpmMax != null) {
     where.push(`${EFFECTIVE_BPM} <= @bpmMax`);
     params.bpmMax = filters.bpmMax;
   }
+
   if (filters.loved != null) {
     where.push('t.loved = @loved');
     params.loved = filters.loved ? 1 : 0;
   }
+
   if (filters.disliked != null) {
     where.push('t.disliked = @disliked');
     params.disliked = filters.disliked ? 1 : 0;
   }
+
   if (filters.ratingMin != null) {
     where.push('t.rating >= @ratingMin');
     params.ratingMin = filters.ratingMin;
   }
+
   if (filters.minPlays != null) {
     where.push('t.play_count >= @minPlays');
     params.minPlays = filters.minPlays;
   }
+
   if (filters.maxPlays != null) {
     where.push('t.play_count <= @maxPlays');
     params.maxPlays = filters.maxPlays;
   }
+
   if (filters.lastPlayedBefore != null) {
     // Never-played tracks count as "not played since X" — that is the
     // dig-up-forgotten-gems use case.
     where.push('(t.last_played < @lastPlayedBefore OR t.last_played IS NULL)');
     params.lastPlayedBefore = filters.lastPlayedBefore;
   }
+
   if (filters.lastPlayedAfter != null) {
     where.push('t.last_played > @lastPlayedAfter');
     params.lastPlayedAfter = filters.lastPlayedAfter;
   }
+
   if (filters.addedBefore != null) {
     where.push('t.date_added < @addedBefore');
     params.addedBefore = filters.addedBefore;
   }
+
   if (filters.addedAfter != null) {
     where.push('t.date_added > @addedAfter');
     params.addedAfter = filters.addedAfter;
   }
+
   if (filters.inPlaylist != null) {
     where.push(
       't.persistent_id IN (SELECT track_persistent_id FROM playlist_tracks WHERE playlist_persistent_id = @inPlaylist)',
     );
     params.inPlaylist = filters.inPlaylist;
   }
+
   if (filters.locationKind != null) {
     where.push('t.location_kind = @locationKind');
     params.locationKind = filters.locationKind;
   }
+
   if (filters.excludeArtists?.length) {
     // NOT EXISTS instead of NOT IN: a NULL artist must survive the exclusion
     // (excluding "Kygo" shouldn't drop unknown-artist tracks).
@@ -253,12 +278,14 @@ function buildTrackFilter(filters: SearchFilters): {
     );
     params.excludeArtists = JSON.stringify(filters.excludeArtists);
   }
+
   if (filters.excludeTracks?.length) {
     where.push('t.persistent_id NOT IN (SELECT value FROM json_each(@excludeTracks))');
     params.excludeTracks = JSON.stringify(filters.excludeTracks);
   }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
   return { from, whereSql, params };
 }
 
@@ -321,6 +348,7 @@ function orderClause(
       if (filters.inPlaylist == null) {
         throw new Error('sort playlist_order requires the inPlaylist filter');
       }
+
       // MIN(position): a track duplicated in the playlist is one search row —
       // it sorts at its first occurrence. @inPlaylist is already bound as a
       // filter param.
@@ -606,6 +634,7 @@ export function createQueries(db: Database) {
 
     pruneTracksNotIn(presentPersistentIds: Set<string>): void {
       const ids = JSON.stringify([...presentPersistentIds]);
+
       pruneTracksStmt.run(ids);
       pruneFeaturesStmt.run(ids);
       prunePlayHistoryStmt.run(ids);
@@ -619,6 +648,7 @@ export function createQueries(db: Database) {
         playCount: number;
         skipCount: number;
       }[];
+
       return new Map(rows.map((r) => [r.persistentId, r]));
     },
 
@@ -651,7 +681,9 @@ export function createQueries(db: Database) {
       const row = getAudioFeaturesStmt.get(trackPersistentId) as
         | (Omit<AudioFeaturesRow, 'sources'> & { sources: string | null })
         | undefined;
+
       if (!row) return null;
+
       return {
         ...row,
         sources:
@@ -662,6 +694,7 @@ export function createQueries(db: Database) {
     /** reconcilableSince: receipts created at or after it still shield their note. */
     prunePlaylistsNotIn(presentPersistentIds: Set<string>, reconcilableSince: string): void {
       const ids = JSON.stringify([...presentPersistentIds]);
+
       prunePlaylistsStmt.run(ids);
       pruneMembershipsStmt.run(ids);
       prunePlaylistNotesStmt.run(ids, reconcilableSince);
@@ -705,6 +738,7 @@ export function createQueries(db: Database) {
       const rows = creationsSinceStmt.all(sinceIso) as (Omit<PlaylistCreationRow, 'trackIds'> & {
         trackIdsJson: string;
       })[];
+
       return rows.map(({ trackIdsJson, ...row }) => ({
         ...row,
         trackIds: JSON.parse(trackIdsJson) as string[],
@@ -721,11 +755,13 @@ export function createQueries(db: Database) {
 
     resolveCreatedPlaylistId(createdId: string): string | null {
       const row = resolveCreationStmt.get(createdId) as { currentId: string } | undefined;
+
       return row?.currentId ?? null;
     },
 
     getCreationName(createdId: string): string | null {
       const row = resolveCreationStmt.get(createdId) as { name: string } | undefined;
+
       return row?.name ?? null;
     },
 
@@ -774,7 +810,9 @@ export function createQueries(db: Database) {
 
     getCacheAgeHours(): number | null {
       const row = latestRefreshStmt.get() as { refreshedAt: string } | undefined;
+
       if (!row) return null;
+
       return (Date.now() - Date.parse(row.refreshedAt)) / 3_600_000;
     },
 
@@ -790,6 +828,7 @@ export function createQueries(db: Database) {
         const rows = db
           .prepare(`SELECT ${TRACK_COLUMNS} ${from} ${whereSql} ${order.sql} LIMIT @limit`)
           .all({ ...params, ...order.params, limit }) as TrackRow[];
+
         return { rows, total };
       }
 
@@ -819,12 +858,14 @@ export function createQueries(db: Database) {
            ${order.sql} LIMIT @limit`,
         )
         .all({ ...params, ...order.params, limit }) as (TrackRow & { groupIds: string })[];
+
       return {
         rows: rows.map(({ groupIds, ...row }) => {
           const alternates = groupIds
             .split(',')
             .filter((id) => id !== row.persistentId)
             .sort();
+
           return { ...row, alternateIds: alternates.length > 0 ? alternates : undefined };
         }),
         total,
@@ -925,15 +966,19 @@ export function createQueries(db: Database) {
     listPlaylists(filters: { kind?: PlaylistRow['kind']; nameQuery?: string }): PlaylistRow[] {
       const where: string[] = [];
       const params: Record<string, unknown> = {};
+
       if (filters.kind != null) {
         where.push('p.kind = @kind');
         params.kind = filters.kind;
       }
+
       if (filters.nameQuery != null) {
         where.push("p.name LIKE @nameQuery ESCAPE '\\'");
         params.nameQuery = `%${filters.nameQuery.replace(/[\\%_]/g, '\\$&')}%`;
       }
+
       const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
       return db
         .prepare(
           `SELECT ${PLAYLIST_COLUMNS} FROM playlists p ${whereSql} ORDER BY p.name COLLATE NOCASE`,
@@ -945,6 +990,7 @@ export function createQueries(db: Database) {
       const row = db
         .prepare(`SELECT ${TRACK_COLUMNS} FROM tracks t WHERE t.persistent_id = ?`)
         .get(persistentId) as TrackRow | undefined;
+
       return row ?? null;
     },
 
@@ -980,6 +1026,7 @@ export function createQueries(db: Database) {
       if (seedIds.length === 0 || limit <= 0) {
         return { tracks: [], sourcePlaylists: { considered: 0, excluded: 0 } };
       }
+
       // Co-occurrence counts only the user's own playlists (kind 'user') — the
       // curatorial signal. Smart and subscription playlists are machine- or
       // Apple-curated and would drown it out.
@@ -1037,6 +1084,7 @@ export function createQueries(db: Database) {
         namesRaw: string;
         playlistsRaw: string;
       })[];
+
       return {
         tracks: rows.map(({ namesRaw, playlistsRaw, ...row }) => ({
           ...row,

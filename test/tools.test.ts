@@ -35,17 +35,20 @@ const snapshot = fixture as LibrarySnapshot;
 
 function makeDeps(overrides: Partial<Bridge> = {}): ToolDeps {
   const cache = SelectaCache.open(':memory:');
+
   cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
   const bridge = makeBridge({
     readLibrary: vi.fn().mockResolvedValue(snapshot),
     deletePlaylistById: vi.fn().mockResolvedValue(1),
     ...overrides,
   });
+
   return { cache: () => cache, bridge };
 }
 
 function addUtilityPlaylists(deps: ToolDeps): void {
   const cache = deps.cache();
+
   cache.upsertPlaylistAfterWrite(
     { persistentId: 'P-INTENTIONAL', trackCount: 2 },
     'Small Intentional Mix',
@@ -102,12 +105,14 @@ function expectCompactTrackParity(full: ApiTrack, compact: CompactApiTrack): voi
 
 describe('search', () => {
   let deps: ToolDeps;
+
   beforeEach(() => {
     deps = makeDeps();
   });
 
   it('matches free text against title via FTS', async () => {
     const out = (await handleSearch({ query: 'teardrop' }, deps)) as SearchOutput;
+
     expect(out.tracks.map((t) => t.persistent_id)).toEqual(['T-TEARDROP']);
     expect(out.total_matches).toBe(1);
     expect(out.cache_age_hours).not.toBeNull();
@@ -116,6 +121,7 @@ describe('search', () => {
   it('surfaces the behavioral signal bundle with star-scale rating', async () => {
     const out = (await handleSearch({ query: 'teardrop' }, deps)) as SearchOutput;
     const signal = out.tracks[0]!.signal;
+
     expect(signal.play_count).toBe(42);
     expect(signal.skip_count).toBe(1);
     expect(signal.rating).toBe(5); // 100 / 20
@@ -126,9 +132,11 @@ describe('search', () => {
   it('keeps the full response unchanged when compact is absent or false', async () => {
     const omitted = await handleSearch({ limit: 6 }, deps);
     const explicit = await handleSearch({ limit: 6, compact: false }, deps);
+
     expect(explicit).toEqual(omitted);
 
     const full = omitted as SearchOutput;
+
     expect(full.tracks[0]).toHaveProperty('genre');
     expect(full.tracks[0]).toHaveProperty('location_kind');
     expect(full.tracks[0]!.signal).toHaveProperty('date_added');
@@ -143,12 +151,14 @@ describe('search', () => {
     expect(compact.cache_age_hours).toBe(full.cache_age_hours);
     expect(compact.track_fields).toEqual(COMPACT_TRACK_FIELDS);
     expect(compact.tracks.map((t) => t.track[0])).toEqual(full.tracks.map((t) => t.persistent_id));
+
     for (let i = 0; i < full.tracks.length; i++) {
       expectCompactTrackParity(full.tracks[i]!, compact.tracks[i]!.track);
     }
 
     const fullBytes = Buffer.byteLength(JSON.stringify(full));
     const compactBytes = Buffer.byteLength(JSON.stringify(compact));
+
     expect(compactBytes).toBeLessThan(fullBytes);
   });
 
@@ -158,12 +168,14 @@ describe('search', () => {
       deps,
     )) as CompactSearchOutput;
     const first = decodeCompactTrack(out.tracks[0]!.track);
+
     expect(first.persistent_id).toBe('T-MIDNIGHT');
     expect(first.signal.date_added).toBe('2025-11-05T08:00:00.000Z');
   });
 
   it('filters by artist case-insensitively, ordered by play count', async () => {
     const out = (await handleSearch({ artist: 'portishead' }, deps)) as SearchOutput;
+
     expect(out.tracks.map((t) => t.persistent_id)).toEqual(['T-GLORYBOX', 'T-ROADS']);
   });
 
@@ -172,12 +184,14 @@ describe('search', () => {
       { year_min: 1990, year_max: 2000, loved: true },
       deps,
     )) as SearchOutput;
+
     expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual(['T-GLORYBOX', 'T-TEARDROP']);
   });
 
   it('surfaces audio features rounded for the wire, omitted when unknown', async () => {
     deps.cache().saveAudioFeatures([featuresRow()]);
     const enriched = (await handleSearch({ query: 'teardrop' }, deps)) as SearchOutput;
+
     expect(enriched.tracks[0]).toMatchObject({
       bpm: 78.4, // 78.42 → one decimal
       musical_key: 'A minor',
@@ -186,10 +200,12 @@ describe('search', () => {
 
     // Native Music.app tag is the bpm fallback; key/danceability stay absent.
     const native = (await handleSearch({ query: 'glory' }, deps)) as SearchOutput;
+
     expect(native.tracks[0]!.bpm).toBe(95);
     expect(native.tracks[0]!.musical_key).toBeUndefined();
 
     const unknown = (await handleSearch({ query: 'angel' }, deps)) as SearchOutput;
+
     expect(unknown.tracks[0]!.bpm).toBeUndefined();
     expect(unknown.tracks[0]!.danceability).toBeUndefined();
   });
@@ -197,66 +213,78 @@ describe('search', () => {
   it('filters to a bpm band', async () => {
     deps.cache().saveAudioFeatures([featuresRow()]);
     const out = (await handleSearch({ bpm_min: 70, bpm_max: 100 }, deps)) as SearchOutput;
+
     expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual(['T-GLORYBOX', 'T-TEARDROP']);
   });
 
   it('rejects an inverted bpm range', async () => {
     const err = asError(await handleSearch({ bpm_min: 140, bpm_max: 90 }, deps));
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain('bpm_min');
   });
 
   it('filters by playlist membership', async () => {
     const out = (await handleSearch({ in_playlist: 'P-LATENIGHT' }, deps)) as SearchOutput;
+
     expect(out.tracks).toHaveLength(3);
   });
 
   it('converts rating_min stars to the internal 0-100 scale', async () => {
     const out = (await handleSearch({ rating_min: 4.5 }, deps)) as SearchOutput;
+
     expect(out.tracks.map((t) => t.persistent_id)).toEqual(['T-TEARDROP']);
   });
 
   it('last_played_before includes never-played tracks', async () => {
     const out = (await handleSearch({ last_played_before: '2026-01-01' }, deps)) as SearchOutput;
+
     // Played long ago: none. Never played: T-ANGEL, T-ROADS, T-BARE.
     expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual(['T-ANGEL', 'T-BARE', 'T-ROADS']);
   });
 
   it('caps results at limit but reports the unbounded total', async () => {
     const out = (await handleSearch({ limit: 2 }, deps)) as SearchOutput;
+
     expect(out.tracks).toHaveLength(2);
     expect(out.total_matches).toBe(6);
   });
 
   it('returns an empty result set without error for no matches', async () => {
     const out = (await handleSearch({ query: 'nonexistent zzz' }, deps)) as SearchOutput;
+
     expect(out.tracks).toEqual([]);
     expect(out.total_matches).toBe(0);
   });
 
   it('does not choke on FTS metacharacters in the query', async () => {
     const out = (await handleSearch({ query: 'tear"drop AND (x OR y)' }, deps)) as SearchOutput;
+
     expect(out.tracks).toEqual([]);
   });
 
   it('rejects year_min > year_max as validation_error', async () => {
     const err = asError(await handleSearch({ year_min: 2000, year_max: 1990 }, deps));
+
     expect(err.error).toBe('validation_error');
   });
 
   it('rejects unknown parameters as validation_error', async () => {
     const err = asError(await handleSearch({ vibe: 'late night' }, deps));
+
     expect(err.error).toBe('validation_error');
   });
 
   it('rejects a non-boolean compact flag', async () => {
     const err = asError(await handleSearch({ compact: 'yes' }, deps));
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain('compact');
   });
 
   it('sort: least_played orders ascending by play count', async () => {
     const out = (await handleSearch({ sort: 'least_played' }, deps)) as SearchOutput;
+
     expect(out.tracks.map((t) => t.persistent_id)).toEqual([
       'T-BARE', // 0 plays
       'T-ROADS', // 7
@@ -269,6 +297,7 @@ describe('search', () => {
 
   it('sort: recently_added orders newest first, undated last', async () => {
     const out = (await handleSearch({ sort: 'recently_added' }, deps)) as SearchOutput;
+
     expect(out.tracks.map((t) => t.persistent_id)).toEqual([
       'T-MIDNIGHT', // 2025-11-05
       'T-GLORYBOX', // 2024-03-02 (id tiebreak)
@@ -281,6 +310,7 @@ describe('search', () => {
 
   it('sort: random returns the full match set (order unconstrained)', async () => {
     const out = (await handleSearch({ sort: 'random' }, deps)) as SearchOutput;
+
     expect(out.total_matches).toBe(6);
     expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual([
       'T-ANGEL',
@@ -299,11 +329,13 @@ describe('search', () => {
       { in_playlist: 'P-TRIPHOP', sort: 'playlist_order' },
       deps,
     )) as SearchOutput;
+
     expect(out.tracks.map((t) => t.persistent_id)).toEqual(['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX']);
   });
 
   it('sort: playlist_order without in_playlist is a validation_error', async () => {
     const err = asError(await handleSearch({ sort: 'playlist_order' }, deps));
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain('in_playlist');
   });
@@ -314,11 +346,13 @@ describe('search', () => {
       { query: 'dummy', sort: 'least_played' },
       deps,
     )) as SearchOutput;
+
     expect(out.tracks.map((t) => t.persistent_id)).toEqual(['T-ROADS', 'T-GLORYBOX']);
   });
 
   it('rejects an unknown sort value as validation_error', async () => {
     const err = asError(await handleSearch({ sort: 'alphabetical' }, deps));
+
     expect(err.error).toBe('validation_error');
   });
 
@@ -327,6 +361,7 @@ describe('search', () => {
       { exclude_artists: ['massive attack', 'M83'] },
       deps,
     )) as SearchOutput;
+
     // T-BARE has no artist and must survive an artist exclusion.
     expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual([
       'T-BARE',
@@ -341,6 +376,7 @@ describe('search', () => {
       { exclude_tracks: ['T-TEARDROP', 'T-BARE'] },
       deps,
     )) as SearchOutput;
+
     expect(out.tracks.map((t) => t.persistent_id).sort()).toEqual([
       'T-ANGEL',
       'T-GLORYBOX',
@@ -355,6 +391,7 @@ describe('search', () => {
       deps,
     )) as SearchOutput;
     const artists = out.tracks.map((t) => t.artist);
+
     expect(out.tracks.length).toBeGreaterThan(0);
     expect(artists).not.toContain('Portishead');
   });
@@ -364,17 +401,20 @@ describe('search', () => {
       { exclude_artists: [], exclude_tracks: [] },
       deps,
     )) as SearchOutput;
+
     expect(out.total_matches).toBe(6);
   });
 
   it('rejects an empty string inside exclude_artists as validation_error', async () => {
     const err = asError(await handleSearch({ exclude_artists: [''] }, deps));
+
     expect(err.error).toBe('validation_error');
   });
 });
 
 describe('get_track_context', () => {
   let deps: ToolDeps;
+
   beforeEach(() => {
     deps = makeDeps();
   });
@@ -393,6 +433,7 @@ describe('get_track_context', () => {
     ]);
 
     const cooc = out.co_occurring_tracks;
+
     expect(cooc[0]!.persistent_id).toBe('T-GLORYBOX'); // shares 2 user playlists
     expect(cooc[0]!.shared_playlist_count).toBe(2);
     expect(cooc[0]!.shared_playlist_names.sort()).toEqual(['Late Night', 'Trip Hop Essentials']);
@@ -403,6 +444,7 @@ describe('get_track_context', () => {
   it('keeps full single-seed context unchanged when compact is absent or false', async () => {
     const omitted = await handleGetTrackContext({ track_id: 'T-TEARDROP' }, deps);
     const explicit = await handleGetTrackContext({ track_id: 'T-TEARDROP', compact: false }, deps);
+
     expect(explicit).toEqual(omitted);
   });
 
@@ -428,15 +470,19 @@ describe('get_track_context', () => {
     expect(compact.appearing_in_playlists).toEqual(full.appearing_in_playlists);
     expect(compact.source_playlists).toEqual(full.source_playlists);
     expect(compact.cache_age_hours).toBe(full.cache_age_hours);
+
     for (let i = 0; i < full.same_artist.length; i++) {
       expectCompactTrackParity(full.same_artist[i]!, compact.same_artist[i]!);
     }
+
     for (let i = 0; i < full.co_occurring_tracks.length; i++) {
       const fullTrack = full.co_occurring_tracks[i]!;
       const compactTrack = compact.co_occurring_tracks[i]!;
+
       expectCompactTrackParity(fullTrack, compactTrack.track);
       expect(compactTrack.shared_playlist_count).toBe(fullTrack.shared_playlist_count);
       const playlists = compactTrack.playlist_refs.map((ref) => compact.playlist_legend[ref]!);
+
       expect(playlists.map((playlist) => playlist.name).sort()).toEqual(
         [...fullTrack.shared_playlist_names].sort(),
       );
@@ -449,6 +495,7 @@ describe('get_track_context', () => {
       { track_id: 'T-MIDNIGHT' },
       deps,
     )) as TrackContextOutput;
+
     // T-MIDNIGHT only shares the smart playlist P-RECENT with T-BARE.
     expect(out.co_occurring_tracks).toEqual([]);
     // But the smart playlist still shows under appearing_in_playlists.
@@ -457,6 +504,7 @@ describe('get_track_context', () => {
 
   it('returns track_not_found for an unknown ID', async () => {
     const err = asError(await handleGetTrackContext({ track_id: 'T-NOPE' }, deps));
+
     expect(err.error).toBe('track_not_found');
     expect(err.hint).toContain('refresh_library');
   });
@@ -472,9 +520,11 @@ describe('get_track_context', () => {
       { track_id: 'T-TEARDROP' },
       deps,
     )) as TrackContextOutput;
+
     expect(out.seed.bpm).toBe(78.4);
     expect(out.seed.musical_key).toBe('A minor');
     const glory = out.co_occurring_tracks.find((t) => t.persistent_id === 'T-GLORYBOX')!;
+
     expect(glory.bpm).toBe(118.3);
     expect(glory.musical_key).toBe('E minor');
   });
@@ -522,16 +572,20 @@ describe('get_track_context', () => {
 
     expect(compact.source_playlists).toEqual(full.source_playlists);
     expect(compact.cache_age_hours).toBe(full.cache_age_hours);
+
     for (let i = 0; i < full.seeds.length; i++) {
       expectCompactTrackParity(full.seeds[i]!, compact.seeds[i]!);
     }
+
     for (let i = 0; i < full.co_occurring_tracks.length; i++) {
       const fullTrack = full.co_occurring_tracks[i]!;
       const compactTrack = compact.co_occurring_tracks[i]!;
+
       expectCompactTrackParity(fullTrack, compactTrack.track);
       expect(compactTrack.total_shared_playlist_count).toBe(fullTrack.total_shared_playlist_count);
       expect(compactTrack.seeds_matched).toBe(fullTrack.seeds_matched);
       const playlists = compactTrack.playlist_refs.map((ref) => compact.playlist_legend[ref]!);
+
       expect(playlists.map((playlist) => playlist.name).sort()).toEqual(
         [...fullTrack.shared_playlist_names].sort(),
       );
@@ -559,6 +613,7 @@ describe('get_track_context', () => {
     expect(out.co_occurring_tracks.flatMap((track) => track.playlist_refs)).toEqual(
       expect.arrayContaining([0, 1]),
     );
+
     for (const track of out.co_occurring_tracks) {
       for (const ref of track.playlist_refs) {
         expect(out.playlist_legend[ref]).toBeDefined();
@@ -571,8 +626,10 @@ describe('get_track_context', () => {
       { seed_ids: ['T-TEARDROP', 'T-TEARDROP'] },
       deps,
     )) as MultiSeedContextOutput;
+
     expect(out.seeds.map((s) => s.persistent_id)).toEqual(['T-TEARDROP']);
     const glory = out.co_occurring_tracks.find((t) => t.persistent_id === 'T-GLORYBOX')!;
+
     expect(glory.total_shared_playlist_count).toBe(2);
     expect(glory.seeds_matched).toBe(1);
   });
@@ -583,6 +640,7 @@ describe('get_track_context', () => {
       { seed_ids: ['T-MIDNIGHT', 'T-BARE'] },
       deps,
     )) as MultiSeedContextOutput;
+
     expect(out.co_occurring_tracks).toEqual([]);
   });
 
@@ -593,6 +651,7 @@ describe('get_track_context', () => {
       { track_id: 'T-MIDNIGHT' },
       deps,
     )) as TrackContextOutput;
+
     expect(unfiltered.co_occurring_tracks[0]!.persistent_id).toBe('T-TEARDROP');
     expect(unfiltered.source_playlists).toEqual({ considered: 2, excluded: 0 });
 
@@ -600,6 +659,7 @@ describe('get_track_context', () => {
       { track_id: 'T-MIDNIGHT', exclude_playlist_ids: ['P-UTILITY'] },
       deps,
     )) as TrackContextOutput;
+
     expect(filtered.co_occurring_tracks.map((t) => t.persistent_id)).toEqual(['T-BARE']);
     expect(filtered.co_occurring_tracks[0]!.shared_playlist_names).toEqual([
       'Small Intentional Mix',
@@ -614,6 +674,7 @@ describe('get_track_context', () => {
       { seed_ids: ['T-MIDNIGHT', 'T-TEARDROP'], max_playlist_tracks: 3 },
       deps,
     )) as MultiSeedContextOutput;
+
     expect(out.source_playlists).toEqual({ considered: 4, excluded: 1 });
     expect(out.co_occurring_tracks.flatMap((t) => t.shared_playlist_names)).not.toContain(
       'Offline Utility Bucket',
@@ -631,6 +692,7 @@ describe('get_track_context', () => {
       },
       deps,
     )) as TrackContextOutput;
+
     expect(out.co_occurring_tracks).toEqual([]);
     expect(out.source_playlists).toEqual({ considered: 2, excluded: 2 });
   });
@@ -642,12 +704,14 @@ describe('get_track_context', () => {
         deps,
       ),
     );
+
     expect(unknown.error).toBe('validation_error');
     expect(unknown.hint).toContain('P-NOPE');
 
     const emptyId = asError(
       await handleGetTrackContext({ track_id: 'T-TEARDROP', exclude_playlist_ids: [''] }, deps),
     );
+
     expect(emptyId.error).toBe('validation_error');
     expect(emptyId.hint).toContain('exclude_playlist_ids.0');
 
@@ -657,6 +721,7 @@ describe('get_track_context', () => {
         deps,
       ),
     );
+
     expect(smart.error).toBe('validation_error');
     expect(smart.hint).toContain('user playlists');
 
@@ -669,6 +734,7 @@ describe('get_track_context', () => {
         deps,
       ),
     );
+
     expect(tooMany.error).toBe('validation_error');
     expect(tooMany.hint).toContain('exclude_playlist_ids');
     expect(tooMany.hint.length).toBeLessThan(200);
@@ -682,6 +748,7 @@ describe('get_track_context', () => {
         deps,
       ),
     );
+
     expect(atCap.hint).toContain('(+495 more)');
     expect(atCap.hint.length).toBeLessThan(250);
 
@@ -689,6 +756,7 @@ describe('get_track_context', () => {
       const invalid = asError(
         await handleGetTrackContext({ track_id: 'T-TEARDROP', max_playlist_tracks: max }, deps),
       );
+
       expect(invalid.error).toBe('validation_error');
       expect(invalid.hint).toContain('max_playlist_tracks');
     }
@@ -696,10 +764,12 @@ describe('get_track_context', () => {
 
   it('rejects neither / both of track_id and seed_ids', async () => {
     const neither = asError(await handleGetTrackContext({}, deps));
+
     expect(neither.error).toBe('validation_error');
     const both = asError(
       await handleGetTrackContext({ track_id: 'T-TEARDROP', seed_ids: ['T-ANGEL'] }, deps),
     );
+
     expect(both.error).toBe('validation_error');
   });
 
@@ -707,6 +777,7 @@ describe('get_track_context', () => {
     const err = asError(
       await handleGetTrackContext({ track_id: 'T-TEARDROP', compact: 'yes' }, deps),
     );
+
     expect(err.error).toBe('validation_error');
     expect(err.hint).toContain('compact');
   });
@@ -714,11 +785,13 @@ describe('get_track_context', () => {
   it('rejects a seed set past the cap as validation_error', async () => {
     const ids = Array.from({ length: 21 }, (_, i) => `T-${i}`);
     const err = asError(await handleGetTrackContext({ seed_ids: ids }, deps));
+
     expect(err.error).toBe('validation_error');
   });
 
   it('names unknown seeds in a track_not_found envelope', async () => {
     const err = asError(await handleGetTrackContext({ seed_ids: ['T-TEARDROP', 'T-NOPE'] }, deps));
+
     expect(err.error).toBe('track_not_found');
     expect(err.hint).toContain('T-NOPE');
   });
@@ -726,14 +799,17 @@ describe('get_track_context', () => {
 
 describe('list_playlists', () => {
   let deps: ToolDeps;
+
   beforeEach(() => {
     deps = makeDeps();
   });
 
   it('lists all playlists with counts and parents', async () => {
     const out = (await handleListPlaylists({}, deps)) as ListPlaylistsOutput;
+
     expect(out.playlists).toHaveLength(4);
     const lateNight = out.playlists.find((p) => p.name === 'Late Night')!;
+
     expect(lateNight.track_count).toBe(3);
     expect(lateNight.parent_id).toBe('P-MOODS');
     expect(lateNight.kind).toBe('user');
@@ -741,24 +817,28 @@ describe('list_playlists', () => {
 
   it('filters by kind and name substring', async () => {
     const byKind = (await handleListPlaylists({ kind: 'user' }, deps)) as ListPlaylistsOutput;
+
     expect(byKind.playlists.map((p) => p.name).sort()).toEqual([
       'Late Night',
       'Trip Hop Essentials',
     ]);
 
     const byName = (await handleListPlaylists({ name_query: 'trip' }, deps)) as ListPlaylistsOutput;
+
     expect(byName.playlists.map((p) => p.name)).toEqual(['Trip Hop Essentials']);
   });
 });
 
 describe('library_overview', () => {
   let deps: ToolDeps;
+
   beforeEach(() => {
     deps = makeDeps();
   });
 
   it('summarizes the whole library', async () => {
     const out = (await handleLibraryOverview({}, deps)) as LibraryOverviewOutput;
+
     expect(out.filtered).toBe(false);
     expect(out.total_tracks).toBe(6);
     expect(out.total_runtime_seconds).toBe(1563);
@@ -800,6 +880,7 @@ describe('library_overview', () => {
       { artist: 'Portishead' },
       deps,
     )) as LibraryOverviewOutput;
+
     expect(out.filtered).toBe(true);
     expect(out.total_tracks).toBe(2);
     expect(out.genres).toEqual([{ name: 'Trip-Hop', count: 2 }]);
@@ -813,6 +894,7 @@ describe('library_overview', () => {
       {},
       { cache: () => cache, bridge: makeBridge() },
     )) as LibraryOverviewOutput;
+
     expect(out.total_tracks).toBe(0);
     expect(out.total_runtime_human).toBe('0m');
     expect(out.genres).toEqual([]);
@@ -823,16 +905,19 @@ describe('library_overview', () => {
 
   it('rejects unknown parameters as validation_error', async () => {
     const err = asError(await handleLibraryOverview({ vibe: 'late night' }, deps));
+
     expect(err.error).toBe('validation_error');
   });
 
   it('rejects year_min > year_max as validation_error', async () => {
     const err = asError(await handleLibraryOverview({ year_min: 2000, year_max: 1990 }, deps));
+
     expect(err.error).toBe('validation_error');
   });
 
   it('rejects min_plays > max_plays as validation_error', async () => {
     const err = asError(await handleLibraryOverview({ min_plays: 10, max_plays: 1 }, deps));
+
     expect(err.error).toBe('validation_error');
   });
 
@@ -841,6 +926,7 @@ describe('library_overview', () => {
       { exclude_artists: ['portishead'], exclude_tracks: ['T-MIDNIGHT'] },
       deps,
     )) as LibraryOverviewOutput;
+
     expect(out.filtered).toBe(true);
     // 6 tracks minus Portishead's 2 minus T-MIDNIGHT; artistless T-BARE survives.
     expect(out.total_tracks).toBe(3);
@@ -876,6 +962,7 @@ describe('shapeOverview', () => {
       ...overrides,
     };
   }
+
   const shape = (stats: OverviewStats) =>
     shapeOverview(stats, {
       filtered: false,
@@ -889,6 +976,7 @@ describe('shapeOverview', () => {
       count: GENRE_CAP + 5 - i,
     }));
     const out = shape(emptyStats({ genres }));
+
     expect(out.genres).toHaveLength(GENRE_CAP);
     expect(out.genres_other).toEqual({
       distinct: 5,
@@ -906,11 +994,13 @@ describe('shapeOverview', () => {
         ],
       }),
     );
+
     expect(out.signal.rating_histogram).toEqual({ '5': 2, '4.5': 1, '1.5': 4 });
   });
 
   it('humanizes runtime across day/hour/minute thresholds', () => {
     const human = (s: number) => shape(emptyStats({ totalRuntimeSeconds: s })).total_runtime_human;
+
     expect(human(0)).toBe('0m');
     expect(human(1563)).toBe('26m');
     expect(human(3 * 3600 + 25 * 60)).toBe('3h 25m');
@@ -935,9 +1025,11 @@ describe('refresh_library', () => {
       cache: () => cache,
       bridge: makeBridge({ readLibrary: vi.fn().mockResolvedValue(snapshot) }),
     };
+
     expect(cache.getCacheAgeHours()).toBeNull();
 
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+
     expect(out.track_count).toBe(6);
     expect(out.playlist_count).toBe(4);
     expect(Date.parse(out.refreshed_at)).not.toBeNaN();
@@ -951,6 +1043,7 @@ describe('refresh_library', () => {
     const deps = makeDeps({ readLibrary });
 
     const err = asError(await handleRefreshLibrary({}, deps));
+
     expect(err.error).toBe('automation_permission_denied');
     expect(err.hint).toContain('System Settings');
     expect(readLibrary).toHaveBeenCalledTimes(1);
@@ -983,6 +1076,7 @@ describe('refresh_library sync reconciliation', () => {
     created = { id: 'P-CREATED', name: 'Rearview' },
   ): ToolDeps & { cacheInstance: SelectaCache } {
     const cache = SelectaCache.open(':memory:');
+
     cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
     cache.upsertPlaylistAfterWrite(
       { persistentId: created.id, trackCount: 2 },
@@ -991,6 +1085,7 @@ describe('refresh_library sync reconciliation', () => {
     );
     cache.recordPlaylistCreation(created.id, created.name, TRACKS);
     const bridge = makeBridge({ deletePlaylistById: vi.fn().mockResolvedValue(1), ...overrides });
+
     return { cache: () => cache, bridge, cacheInstance: cache };
   }
 
@@ -1000,6 +1095,7 @@ describe('refresh_library sync reconciliation', () => {
     });
 
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
     expect(out.sync_reconciliation!.duplicates_removed).toEqual([]);
     expect(out.sync_reconciliation!.ambiguous).toEqual([
@@ -1007,6 +1103,7 @@ describe('refresh_library sync reconciliation', () => {
     ]);
     expect(out.playlist_count).toBe(6); // Both copies preserved.
     const rows = deps.cacheInstance.listPlaylists({ nameQuery: 'Rearview' });
+
     expect(rows.map((p) => p.persistentId)).toEqual(['P-CREATED', 'P-ECHO']);
   });
 
@@ -1016,12 +1113,14 @@ describe('refresh_library sync reconciliation', () => {
     });
 
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+
     expect(out.sync_reconciliation!.rekeys).toEqual([
       { name: 'Rearview', from_id: 'P-CREATED', to_id: 'P-REKEYED' },
     ]);
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
     // The ID create_playlist returned still resolves for searches.
     const { rows } = deps.cacheInstance.searchTracks({ inPlaylist: 'P-CREATED' });
+
     expect(rows).toHaveLength(2);
   });
 
@@ -1040,6 +1139,7 @@ describe('refresh_library sync reconciliation', () => {
     );
 
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+
     expect(out.sync_reconciliation!.rekeys).toEqual([
       { name: 'Selecta Preview', from_id: 'P-PREVIEW', to_id: 'P-PREVIEW-2' },
     ]);
@@ -1053,6 +1153,7 @@ describe('refresh_library sync reconciliation', () => {
     });
 
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+
     expect(out.sync_reconciliation!.failures).toEqual([]);
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
     // Cache untouched for the failed delete: both copies still visible.
@@ -1062,11 +1163,13 @@ describe('refresh_library sync reconciliation', () => {
   it('omits sync_reconciliation when there is nothing to reconcile', async () => {
     const deps = makeDeps();
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+
     expect(out.sync_reconciliation).toBeUndefined();
     const row = deps
       .cache()
       .db.prepare('SELECT notes FROM refresh_log WHERE refreshed_at = ?')
       .get(out.refreshed_at) as { notes: string };
+
     expect(row.notes).toContain(
       'sync_reconciliation={"rekeys":0,"duplicates_removed":0,"failures":0}',
     );
@@ -1082,6 +1185,7 @@ describe('play history surfaces', () => {
   it('get_track_context: seed play_history windows, empty before any delta', async () => {
     const deps = makeDeps();
     let out = (await handleGetTrackContext({ track_id: 'T-TEARDROP' }, deps)) as TrackContextOutput;
+
     expect(out.play_history).toEqual([]);
 
     deps.cache().refreshFromSnapshot(bumped({ 'T-TEARDROP': { plays: 3, skips: 1 } }), {
@@ -1095,6 +1199,7 @@ describe('play history surfaces', () => {
 
   it('library_overview: recent_activity reports the captured window, scoped by filters', async () => {
     const deps = makeDeps();
+
     deps
       .cache()
       .refreshFromSnapshot(
@@ -1103,6 +1208,7 @@ describe('play history surfaces', () => {
       );
 
     const out = (await handleLibraryOverview({}, deps)) as LibraryOverviewOutput;
+
     expect(out.recent_activity).toMatchObject({
       window_days: 30,
       tracks_played: 2,
@@ -1116,6 +1222,7 @@ describe('play history surfaces', () => {
       { artist: teardropArtist },
       deps,
     )) as LibraryOverviewOutput;
+
     expect(scoped.recent_activity.total_plays).toBe(3);
   });
 
@@ -1124,6 +1231,7 @@ describe('play history surfaces', () => {
       readLibrary: vi.fn().mockResolvedValue(bumped({ 'T-ROADS': { plays: 2 } })),
     });
     const out = (await handleRefreshLibrary({}, grew)) as RefreshLibraryOutput;
+
     expect(out.play_deltas_recorded).toBe(1);
     expect(out.play_count_resets).toBeUndefined();
 
@@ -1131,14 +1239,17 @@ describe('play history surfaces', () => {
       readLibrary: vi.fn().mockResolvedValue(bumped({ 'T-ROADS': { plays: -5 } })),
     });
     const out2 = (await handleRefreshLibrary({}, shrank)) as RefreshLibraryOutput;
+
     expect(out2.play_deltas_recorded).toBe(0);
     expect(out2.play_count_resets).toBe(1);
   });
 
   it('search: sort recent_plays surfaces current rotation first', async () => {
     const deps = makeDeps();
+
     deps.cache().refreshFromSnapshot(bumped({ 'T-ROADS': { plays: 6 } }), { durationMs: 1 });
     const out = (await handleSearch({ sort: 'recent_plays' }, deps)) as SearchOutput;
+
     expect(out.tracks[0]!.persistent_id).toBe('T-ROADS');
   });
 });

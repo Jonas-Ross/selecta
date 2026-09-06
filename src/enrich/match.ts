@@ -29,6 +29,7 @@ export function durationCompatible(
   bSeconds: number | null | undefined,
 ): boolean {
   if (aSeconds == null || bSeconds == null) return true;
+
   return Math.abs(aSeconds - bSeconds) <= 10;
 }
 

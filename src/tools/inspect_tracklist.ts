@@ -107,16 +107,20 @@ function compactTrack(row: TrackRow): InspectedTrack {
     date_added: _dateAdded,
     ...compactSignal
   } = signal;
+
   return { ...track, signal: compactSignal };
 }
 
 function positionsById(rows: TrackRow[]): Map<string, number[]> {
   const positions = new Map<string, number[]>();
+
   rows.forEach((row, position) => {
     const existing = positions.get(row.persistentId);
+
     if (existing) existing.push(position);
     else positions.set(row.persistentId, [position]);
   });
+
   return positions;
 }
 
@@ -129,9 +133,12 @@ function duplicateOwnedCopies(
   for (const row of rows) {
     const title = row.title?.trim();
     const artist = row.artist?.trim();
+
     if (!title || !artist) continue;
+
     const key = songIdentityKey(row.title, row.artist, row.persistentId);
     const existing = groups.get(key);
+
     if (existing) existing.persistentIds.add(row.persistentId);
     else groups.set(key, { title, artist, persistentIds: new Set([row.persistentId]) });
   }
@@ -154,17 +161,22 @@ function artistOccurrences(rows: TrackRow[]): {
 } {
   const counts = new Map<string, { artist: string; count: number }>();
   let unknownArtistCount = 0;
+
   for (const row of rows) {
     const artist = row.artist?.trim();
+
     if (!artist) {
       unknownArtistCount += 1;
       continue;
     }
+
     const key = artist.toLowerCase();
     const existing = counts.get(key);
+
     if (existing) existing.count += 1;
     else counts.set(key, { artist, count: 1 });
   }
+
   return { artistCounts: [...counts.values()], unknownArtistCount };
 }
 
@@ -177,16 +189,21 @@ function featureFacts(rows: TrackRow[]): {
 
   for (const row of rows) {
     const missing: FeatureName[] = [];
+
     if (row.bpm == null) missing.push('bpm');
     else present.bpm += 1;
+
     if (row.musicalKey == null) missing.push('musical_key');
     else present.musical_key += 1;
+
     if (row.danceability == null) missing.push('danceability');
     else present.danceability += 1;
+
     if (missing.length === 0) continue;
 
     const key = missing.join(',');
     const group = groups.get(key);
+
     if (group) group.trackIds.add(row.persistentId);
     else groups.set(key, { missing, trackIds: new Set([row.persistentId]) });
   }
@@ -247,17 +264,20 @@ export async function handleInspectTracklist(
   deps: ToolDeps,
 ): Promise<InspectTracklistOutput | SelectaError> {
   const parsed = parseInput(InspectTracklistInput, raw);
+
   if (!parsed.ok) return parsed.error;
 
   try {
     const cache = deps.cache();
     const uniqueTrackIds = [...new Set(parsed.data.track_ids)];
     const cacheMiss = missingTrackIdsError(cache, uniqueTrackIds);
+
     if (cacheMiss) return cacheMiss;
 
     // Resolution is deliberately separate from aggregation: a miss returns
     // above before the pure builder can produce even a partial inspection.
     const rows = parsed.data.track_ids.map((id) => cache.getTrack(id)!);
+
     return {
       ...buildTracklistInspection(rows),
       cache_age_hours: roundedCacheAge(deps),

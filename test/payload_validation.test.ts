@@ -19,6 +19,7 @@ describe('external payload boundaries', () => {
       sleep: async () => {},
       nowMs: () => 0,
     });
+
     await expect(
       sources.mbFindRecording({ artist: 'Artist', title: 'Song', durationSeconds: 180 }),
     ).resolves.toBe('recording');
@@ -65,6 +66,7 @@ describe('external payload boundaries', () => {
     { recordings: [{ id: 'mb', score: '100' }] },
   ])('keeps malformed MusicBrainz targets pending: %j', async (body) => {
     const cache = SelectaCache.open(':memory:');
+
     try {
       cache.refreshFromSnapshot(fixture, { durationMs: 1 });
       const fetchLike = vi.fn(async () => ({ ok: true, status: 200, json: async () => body }));
@@ -73,6 +75,7 @@ describe('external payload boundaries', () => {
         { trackIds: ['T-TEARDROP'] },
         { fetchLike, sleep: async () => {} },
       );
+
       expect(result.skipped).toBe(1);
       expect(result.errors[0]).toContain('MusicBrainz');
       expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
@@ -85,6 +88,7 @@ describe('external payload boundaries', () => {
     'does not persist invalid %s payloads',
     async (scenario) => {
       const cache = SelectaCache.open(':memory:');
+
       try {
         cache.refreshFromSnapshot(fixture, { durationMs: 1 });
         const urls: string[] = [];
@@ -106,10 +110,12 @@ describe('external payload boundaries', () => {
                         ],
                       }
                     : { bpm: 'fast' };
+
               return { ok: true, status: 200, json: async () => body };
             },
           },
         );
+
         expect(result.skipped).toBe(1);
         expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
         expect(urls.some((url) => url.includes('undefined'))).toBe(false);

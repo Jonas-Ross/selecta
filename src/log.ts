@@ -36,19 +36,23 @@ export function createLogger(options: LoggerOptions = {}): Logger {
 
   function append(level: 'info' | 'debug' | 'error', message: string): void {
     if (!debugEnabled()) return;
+
     try {
       mkdirSync(dirname(logPath), { recursive: true });
       appendFileSync(logPath, `${now().toISOString()} ${level.toUpperCase()} ${message}\n`, 'utf8');
     } catch (err) {
       if (fileFailureReported) return;
+
       fileFailureReported = true;
       const detail = err instanceof Error ? err.message : String(err);
+
       writeStderr(`[debug-log] Could not append to ${logPath}: ${detail}\n`);
     }
   }
 
   function write(level: 'info' | 'debug' | 'error', args: unknown[]): void {
     const message = format(args);
+
     writeStderr(message + '\n');
     append(level, message);
   }

@@ -15,5 +15,6 @@ export function songIdentityKey(
   persistentId: string,
 ): string {
   if (!title?.trim() || !artist?.trim()) return persistentId;
+
   return `${normalizeIdentityPart(title)}${UNIT_SEPARATOR}${normalizeIdentityPart(artist)}`;
 }

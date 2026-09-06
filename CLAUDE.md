@@ -24,7 +24,7 @@ Shared types live in `src/types/`; the cross-cutting error envelope in `src/type
 | `npm test` | Unit suite (fast, no Music.app) |
 | `npm run test:integration` | Bridge integration suite against real Music.app (slow, opt-in) |
 | `npm run lint` | oxlint |
-| `npm run format:check` | oxfmt check; `npm run format` rewrites |
+| `npm run format:check` | oxfmt check; `npm run format` applies lint fixes, then formats |
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |
 | `npm run smoke` | End-to-end smoke against the real library (builds first) |
 | `npm run verify:echo` | Live iCloud-echo reconciliation harness |

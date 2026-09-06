@@ -40,20 +40,26 @@ export async function handlePreviewPlaylist(
   deps: ToolDeps,
 ): Promise<PreviewPlaylistOutput | SelectaError> {
   const parsed = parseInput(PreviewPlaylistInput, raw);
+
   if (!parsed.ok) return parsed.error;
+
   const { track_ids } = parsed.data;
 
   try {
     const cache = deps.cache();
+
     return await withOperation(cache, 'music', async () => {
       const cacheMiss = missingTrackIdsError(cache, track_ids);
+
       if (cacheMiss) return cacheMiss;
 
       const result = await deps.bridge.replacePlaylist({
         name: PREVIEW_PLAYLIST_NAME,
         trackIds: track_ids,
       });
+
       cache.upsertPlaylistAfterWrite(result, PREVIEW_PLAYLIST_NAME, result.trackPersistentIds);
+
       // A first-ever slot is a fresh playlist, so iCloud may rekey it: the same
       // receipt create_playlist records keeps this playlist_id resolvable
       // (docs/music-app.md, iCloud sync). An overwrite created nothing.
@@ -64,6 +70,7 @@ export async function handlePreviewPlaylist(
           result.trackPersistentIds,
         );
       }
+
       return {
         playlist_id: result.persistentId,
         track_count: result.trackCount,

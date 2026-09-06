@@ -46,19 +46,25 @@ export async function handleSetNote(
   deps: ToolDeps,
 ): Promise<SetNoteOutput | SelectaError> {
   const parsed = parseInput(SetNoteInput, raw);
+
   if (!parsed.ok) return parsed.error;
+
   const { subject, body } = parsed.data;
 
   try {
     const cache = deps.cache();
     let id = parsed.data.id;
+
     if (subject === 'track') {
       const cacheMiss = missingTrackIdsError(cache, [id]);
+
       if (cacheMiss) return cacheMiss;
     } else {
       // Key playlist notes by canonical ID so reconciliation can follow rekeys.
       const resolved = resolvePlaylist(cache, id);
+
       if (!resolved.ok) return resolved.error;
+
       id = resolved.playlist.persistentId;
     }
 
@@ -66,8 +72,10 @@ export async function handleSetNote(
     // indentation and line breaks are the model's own formatting.
     if (body.trim() === '') {
       cache.clearNote(subject, id);
+
       return { subject, id, cleared: true };
     }
+
     return { subject, id, note: apiNoteFromRow(cache.setNote(subject, id, body)) };
   } catch (err) {
     return toErrorEnvelope(err);

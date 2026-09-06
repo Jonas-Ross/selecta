@@ -36,17 +36,22 @@ export async function handleSetRating(
   deps: ToolDeps,
 ): Promise<SetRatingOutput | SelectaError> {
   const parsed = parseInput(SetRatingInput, raw);
+
   if (!parsed.ok) return parsed.error;
+
   const { track_ids, rating } = parsed.data;
 
   try {
     const cache = deps.cache();
+
     return await withOperation(cache, 'music', async () => {
       const cacheMiss = missingTrackIdsError(cache, track_ids);
+
       if (cacheMiss) return cacheMiss;
 
       // Stars (0–5) → Music.app's 0–100 scale at the boundary.
       const result = await deps.bridge.setTrackRating({ trackIds: track_ids, rating: rating * 20 });
+
       cache.patchTrackRating(result.tracks);
       const mismatches = result.tracks
         .filter((row) => !((row.rating ?? 0) === rating * 20))
@@ -54,6 +59,7 @@ export async function handleSetRating(
           track_id: row.persistentId,
           rating: row.rating == null ? null : row.rating / 20,
         }));
+
       return {
         updated: result.tracks.length - mismatches.length,
         rating,

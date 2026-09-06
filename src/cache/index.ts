@@ -86,15 +86,19 @@ export class SelectaCache {
     const run = this.db.transaction(() => {
       // Previous counters BEFORE any upsert — the delta compare needs them.
       const prior = q.getPlayCounts();
+
       for (const track of snapshot.tracks) {
         const prev = prior.get(track.persistentId);
+
         if (prev) {
           // First sighting (no prev) establishes baseline silently. A counter
           // that went down resets its baseline — no negative deltas; the other
           // counter still records if it rose.
           const playDelta = (track.playCount ?? prev.playCount) - prev.playCount;
           const skipDelta = (track.skipCount ?? prev.skipCount) - prev.skipCount;
+
           if (playDelta < 0 || skipDelta < 0) playCountResets += 1;
+
           if (playDelta > 0 || skipDelta > 0) {
             q.insertPlayHistory({
               trackPersistentId: track.persistentId,
@@ -105,17 +109,21 @@ export class SelectaCache {
             playDeltasRecorded += 1;
           }
         }
+
         const previous = prior.get(track.persistentId);
+
         q.upsertTrack({
           ...track,
           playCount: track.playCount ?? previous?.playCount,
           skipCount: track.skipCount ?? previous?.skipCount,
         });
       }
+
       for (const playlist of snapshot.playlists) {
         q.upsertPlaylist(playlist);
         q.replacePlaylistMembership(playlist.persistentId, playlist.trackPersistentIds);
       }
+
       q.pruneTracksNotIn(new Set(snapshot.tracks.map((t) => t.persistentId)));
       q.prunePlaylistsNotIn(
         new Set(snapshot.playlists.map((p) => p.persistentId)),
@@ -126,6 +134,7 @@ export class SelectaCache {
         playCountResets > 0
           ? `${playCountResets} play-counter reset(s), baseline re-established`
           : null;
+
       q.appendRefreshLog({
         refreshedAt,
         durationMs: opts.durationMs,
@@ -134,7 +143,9 @@ export class SelectaCache {
         notes: [opts.notes, resetNote].filter(Boolean).join('; ') || undefined,
       });
     });
+
     run();
+
     return {
       trackCount: snapshot.tracks.length,
       playlistCount: snapshot.playlists.length,
@@ -161,6 +172,7 @@ export class SelectaCache {
    */
   resolvePlaylistId(persistentId: string): string {
     if (this.queries.playlistExists(persistentId)) return persistentId;
+
     return this.queries.resolveCreatedPlaylistId(persistentId) ?? persistentId;
   }
 
@@ -168,6 +180,7 @@ export class SelectaCache {
     if (filters.inPlaylist != null) {
       filters = { ...filters, inPlaylist: this.resolvePlaylistId(filters.inPlaylist) };
     }
+
     return this.queries.searchTracks(filters);
   }
 
@@ -180,6 +193,7 @@ export class SelectaCache {
     if (filters.inPlaylist != null) {
       filters = { ...filters, inPlaylist: this.resolvePlaylistId(filters.inPlaylist) };
     }
+
     return this.queries.overviewStats(filters, recentSince);
   }
 
@@ -231,6 +245,7 @@ export class SelectaCache {
     const row = this.db
       .prepare('SELECT until_ms FROM enrichment_cooldowns WHERE host = ?')
       .get(host) as { until_ms: number } | undefined;
+
     return row?.until_ms ?? null;
   }
 
@@ -249,6 +264,7 @@ export class SelectaCache {
         if (this.getTrack(row.trackPersistentId)) this.queries.upsertAudioFeatures(row);
       }
     });
+
     run();
   }
 
@@ -305,6 +321,7 @@ export class SelectaCache {
       });
       this.queries.replacePlaylistMembership(result.persistentId, trackIds);
     });
+
     run();
   }
 
@@ -317,6 +334,7 @@ export class SelectaCache {
     const run = this.db.transaction(() => {
       this.queries.replacePlaylistMembership(persistentId, trackIds);
     });
+
     run();
   }
 
@@ -330,6 +348,7 @@ export class SelectaCache {
     const run = this.db.transaction(() => {
       for (const state of states) this.queries.updateTrackLoved(state);
     });
+
     run();
   }
 
@@ -337,6 +356,7 @@ export class SelectaCache {
     const run = this.db.transaction(() => {
       for (const state of states) this.queries.updateTrackRating(state);
     });
+
     run();
   }
 
@@ -354,6 +374,7 @@ export class SelectaCache {
       this.queries.deletePlaylistRow(persistentId);
       this.queries.deleteCreationsByCurrentId(persistentId);
     });
+
     run();
   }
 
@@ -397,12 +418,14 @@ export class SelectaCache {
       );
       this.queries.deletePlaylistRow(staleId);
     });
+
     run();
   }
 
   /** Names of playlists created within the window — the "watch list" for echo logging. */
   getRecentCreationNames(windowMinutes: number, now = new Date()): string[] {
     const since = new Date(now.getTime() - windowMinutes * 60_000).toISOString();
+
     return [...new Set(this.queries.getCreationsSince(since).map((c) => c.name))];
   }
 
@@ -421,6 +444,7 @@ export class SelectaCache {
     const since = new Date(now.getTime() - opts.windowMinutes * 60_000).toISOString();
     const creations = this.queries.getCreationsSince(since);
     const actions: ReconcileAction[] = [];
+
     for (const creation of creations) {
       const wanted = JSON.stringify(creation.trackIds);
       const sameNameIds = this.queries.getUserPlaylistIdsByName(creation.name);
@@ -438,6 +462,7 @@ export class SelectaCache {
         : matchIds.length === 1
           ? matchIds[0]!
           : null;
+
       if (
         rekeyId !== null &&
         rekeyId !== currentId &&
@@ -458,6 +483,7 @@ export class SelectaCache {
         actions.push({ kind: 'ambiguous', name: creation.name, playlistIds: sameNameIds });
       }
     }
+
     return actions;
   }
 
@@ -470,6 +496,7 @@ export class SelectaCache {
       this.queries.movePlaylistNote(fromId, toId);
       this.queries.setCreationCurrentId(createdId, toId);
     });
+
     run();
   }
 
@@ -485,6 +512,7 @@ export class SelectaCache {
       this.queries.deletePlaylistRow(deletedId);
       this.queries.setCreationCurrentId(createdId, keptId);
     });
+
     run();
   }
 
