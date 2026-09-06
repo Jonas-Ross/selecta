@@ -1,3 +1,4 @@
+import { APP_VERSION } from '../version.js';
 import type { z } from 'zod';
 import * as schemas from './schemas.js';
 import { parsePayload } from '../types/validation.js';
@@ -20,7 +21,7 @@ import { BridgeError } from '../types/errors.js';
 import { durationCompatible, luceneEscape, primaryArtist, stripFeat } from './match.js';
 
 // MusicBrainz requires an identifying User-Agent; the same one rides every source.
-export const USER_AGENT = 'Selecta/0.1 (https://github.com/Jonas-Ross/selecta)';
+export const USER_AGENT = `Selecta/${APP_VERSION} (https://github.com/Jonas-Ross/selecta)`;
 
 const MB_SPACING_MS = 1100;
 const AB_SPACING_MS = 1100;
