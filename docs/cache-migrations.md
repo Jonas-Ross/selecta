@@ -12,9 +12,10 @@ FTS contents, track and playlist IDs, features, history, notes, refresh logs,
 creation receipts, and enrichment cooldowns are retained. Missing objects are
 created. No refresh or persistent-ID remapping occurs.
 
-The runner takes an immediate transaction before reading the installed version,
-then executes pending steps in ascending order, updating the version after each
-step. The entire pending upgrade commits together. An error rolls back schema,
+The runner first reads the installed version without a writer lock and returns
+if it is already current. Otherwise it takes an immediate transaction and re-reads
+the version, then executes pending steps in ascending order, updating the version
+after each step. The entire pending upgrade commits together. An error rolls back schema,
 data, and version changes; the opening connection closes and reports
 `cache_unavailable` with the underlying error. The original database remains
 available for the previous build or an explicit later attempt. A database newer

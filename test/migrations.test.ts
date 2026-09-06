@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openDatabase } from '../src/cache/db.js';
 import { migrateDatabase, MIGRATIONS } from '../src/cache/migrations.js';
 import { readStatus } from '../src/diagnostics/status.js';
@@ -68,6 +68,8 @@ function rows(db: Database.Database): Record<string, unknown> {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
+
   for (const db of connections.splice(0)) if (db.open) db.close();
 
   for (const directory of directories.splice(0))
@@ -143,6 +145,48 @@ describe('cache schema migrations', () => {
       { value: 'two-three', completed: 1 },
     ]);
   });
+
+  it.each([2, 3])(
+    'rechecks a concurrent upgrade to version %i after preflight',
+    (concurrentVersion) => {
+      const path = diskPath();
+      const db = track(openDatabase(path));
+      const other = track(new Database(path));
+      const supported = [
+        ...MIGRATIONS,
+        {
+          version: 2,
+          sql: "CREATE TABLE upgrade_receipt (value); INSERT INTO upgrade_receipt VALUES ('once');",
+        },
+      ];
+      const concurrent =
+        concurrentVersion === 2
+          ? supported
+          : [...supported, { version: 3, sql: 'CREATE TABLE future_schema (id);' }];
+      const pragma = db.pragma.bind(db);
+
+      // Deterministically interleave a real commit on a second connection between
+      // the first opener's unlocked read and its acquisition of the writer lock.
+      vi.spyOn(db, 'pragma').mockImplementationOnce((source, options) => {
+        const installed = pragma(source, options);
+
+        expect(db.inTransaction).toBe(false);
+        expect(installed).toBe(1);
+        migrateDatabase(other, concurrent);
+
+        return installed;
+      });
+
+      if (concurrentVersion === 2) {
+        expect(() => migrateDatabase(db, supported)).not.toThrow();
+      } else {
+        expect(() => migrateDatabase(db, supported)).toThrow('Unsupported cache schema version 3');
+      }
+
+      expect(db.pragma('user_version', { simple: true })).toBe(concurrentVersion);
+      expect(db.prepare('SELECT * FROM upgrade_receipt').all()).toEqual([{ value: 'once' }]);
+    },
+  );
 
   it('rolls back data, schema and version across all pending steps after a late failure', () => {
     const path = diskPath();

@@ -20,7 +20,11 @@ export function migrateDatabase(
     }
   }
 
-  // Acquire the writer lock before reading the version: concurrent openers must
+  // A current schema needs no writer lock: startup must still work while another
+  // process writes the cache, so it can reach the operation lock when needed.
+  if (db.pragma('user_version', { simple: true }) === migrations.length) return;
+
+  // Acquire the writer lock before re-reading the version: concurrent openers must
   // observe the version committed by the previous writer, not run its work twice.
   // One transaction covers the whole upgrade, including every version update.
   db.transaction(() => {
