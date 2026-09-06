@@ -10,6 +10,7 @@ import { handleEnrichFeatures, type EnrichFeaturesOutput } from '../src/tools/en
 import type { ToolDeps } from '../src/tools/common.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 import { asError, featuresRow, makeBridge } from './helpers.js';
+import packageInfo from '../package.json' with { type: 'json' };
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
@@ -55,7 +56,9 @@ describe('source request identity', () => {
     await withUserAgent(fetchImpl)('https://example.test');
 
     expect(new Headers(requestInit?.headers).get('User-Agent')).toBe(USER_AGENT);
-    expect(USER_AGENT).toContain('github.com/Jonas-Ross/selecta');
+    expect(USER_AGENT).toBe(
+      `Selecta/${packageInfo.version} (https://github.com/Jonas-Ross/selecta)`,
+    );
   });
 });
 

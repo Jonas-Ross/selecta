@@ -9,6 +9,7 @@ import { createServer } from '../src/server.js';
 import { SelectaCache } from '../src/cache/index.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 import { makeBridge } from './helpers.js';
+import packageInfo from '../package.json' with { type: 'json' };
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
@@ -37,6 +38,16 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 }
 
 describe('MCP server over in-memory transport', () => {
+  it('advertises the package version in the MCP handshake', async () => {
+    const client = await connectedClient();
+
+    expect(client.getServerVersion()).toEqual({
+      name: packageInfo.name,
+      version: packageInfo.version,
+    });
+    await client.close();
+  });
+
   it('exposes the sixteen tools', async () => {
     const client = await connectedClient();
     const { tools } = await client.listTools();

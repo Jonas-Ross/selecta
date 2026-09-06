@@ -3,6 +3,7 @@
 // serializes their output-or-error-envelope as a JSON text block. Envelopes set
 // isError so the model treats them as actionable failures.
 
+import { APP_VERSION } from './version.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolDeps } from './tools/common.js';
 import { isSelectaError } from './tools/common.js';
@@ -75,7 +76,7 @@ import {
 } from './tools/inspect_tracklist.js';
 import { handleSetNote, setNoteInputShape, SET_NOTE_DESCRIPTION } from './tools/set_note.js';
 
-export const SERVER_INFO = { name: 'selecta', version: '0.1.0' };
+export const SERVER_INFO = { name: 'selecta', version: APP_VERSION };
 
 function toToolResult(result: object) {
   return {

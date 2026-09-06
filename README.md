@@ -106,6 +106,8 @@ Selecta only writes where you point it: it creates playlists, overwrites its own
 
 ## Development
 
+The application version is maintained in `package.json`; MCP server metadata and the enrichment User-Agent read it through `src/version.ts`. Keep `package-lock.json` in sync when bumping it.
+
 | Command | Use |
 |---|---|
 | `npm test` | Unit suite (fast, no Music.app) |

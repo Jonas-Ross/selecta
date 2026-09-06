@@ -1,8 +1,6 @@
 // Public typed API for the bridge layer. Tools depend on the `Bridge` type;
 // nothing outside src/bridge/ touches osascript or JXA.
-//
-// M1 (this milestone) implements only readPlaylist. The remaining methods
-// throw not_implemented until their milestones land (cache read M2, writes M5).
+// Implements library reads, playlist writes and edits, and track signal updates.
 
 import { runJxa as runUncheckedJxa } from './jxa.js';
 import { z } from 'zod';
