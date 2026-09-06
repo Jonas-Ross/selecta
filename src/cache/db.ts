@@ -6,25 +6,28 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { BridgeError } from '../types/errors.js';
-import { SCHEMA } from './schema.js';
+import { migrateDatabase } from './migrations.js';
 
 export function defaultDbPath(): string {
   return join(homedir(), 'Library', 'Application Support', 'Selecta', 'library.db');
 }
 
 export function openDatabase(path: string = defaultDbPath()): Database.Database {
+  let db: Database.Database | undefined;
+
   try {
     if (path !== ':memory:') {
       mkdirSync(dirname(path), { recursive: true });
     }
 
-    const db = new Database(path);
+    db = new Database(path);
 
+    migrateDatabase(db);
     db.pragma('journal_mode = WAL');
-    db.exec(SCHEMA);
 
     return db;
   } catch (err) {
+    db?.close();
     throw new BridgeError(
       'cache_unavailable',
       `Could not open cache at ${path}: ${err instanceof Error ? err.message : String(err)}`,

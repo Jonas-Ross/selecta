@@ -1,9 +1,5 @@
-// Frozen version-1 baseline for fresh and historical unversioned databases.
-// Do not edit: append changes in migrations.ts (docs/cache-migrations.md).
-// No FKs: prune does explicit deletes inside the refresh transaction, which
-// keeps the schema simple and the delete order obvious.
+-- Historical schema from 25243d5; immutable upgrade fixture.
 
-export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tracks (
   persistent_id TEXT PRIMARY KEY,
   title TEXT, artist TEXT, album_artist TEXT, album TEXT, genre TEXT,
@@ -51,11 +47,6 @@ CREATE TABLE IF NOT EXISTS playlist_creations (
 -- are pruned on refresh. status is terminal: 'ok' (has data), 'no_data'
 -- (matched, sources had nothing), 'no_match' (unmatchable) — enrichment never
 -- retries a track that has a row.
-CREATE TABLE IF NOT EXISTS enrichment_cooldowns (
-  host TEXT PRIMARY KEY,
-  until_ms REAL NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS audio_features (
   track_persistent_id TEXT PRIMARY KEY,
   bpm REAL,
@@ -120,4 +111,3 @@ CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre);
 CREATE INDEX IF NOT EXISTS idx_tracks_play_count ON tracks(play_count);
 CREATE INDEX IF NOT EXISTS idx_tracks_loved ON tracks(loved);
 CREATE INDEX IF NOT EXISTS idx_pt_track ON playlist_tracks(track_persistent_id);
-`;

@@ -58,9 +58,15 @@ describe('operation lifecycle', () => {
             catch (e) { if (e.errorCode !== 'operation_busy') throw e; }
             finally { c.close(); }`;
 
-          expect(() =>
-            execFileSync(process.execPath, ['--input-type=module', '-e', script]),
-          ).not.toThrow();
+          // Hold the SQLite writer lock as a refresh does while another process
+          // opens the current schema and reaches the operation lock.
+          cache.db
+            .transaction(() => {
+              expect(() =>
+                execFileSync(process.execPath, ['--input-type=module', '-e', script]),
+              ).not.toThrow();
+            })
+            .immediate();
         });
         await expect(withOperation(cache, kind, async () => 'released')).resolves.toBe('released');
       }
