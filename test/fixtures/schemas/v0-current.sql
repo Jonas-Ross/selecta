@@ -1,9 +1,5 @@
-// Frozen version-1 baseline for fresh and historical unversioned databases.
-// Do not edit: append changes in migrations.ts (docs/cache-migrations.md).
-// No FKs: prune does explicit deletes inside the refresh transaction, which
-// keeps the schema simple and the delete order obvious.
+-- Last unversioned schema; immutable upgrade fixture.
 
-export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tracks (
   persistent_id TEXT PRIMARY KEY,
   title TEXT, artist TEXT, album_artist TEXT, album TEXT, genre TEXT,
@@ -120,4 +116,3 @@ CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre);
 CREATE INDEX IF NOT EXISTS idx_tracks_play_count ON tracks(play_count);
 CREATE INDEX IF NOT EXISTS idx_tracks_loved ON tracks(loved);
 CREATE INDEX IF NOT EXISTS idx_pt_track ON playlist_tracks(track_persistent_id);
-`;

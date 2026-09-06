@@ -2,7 +2,8 @@
 
 A local MCP server that exposes the user's Apple Music library to Claude so playlists can be built from owned tracks and written back to Music.app. The model is the brain — it does all sequencing, ranking, and taste; Selecta surfaces facts (inventory, behavioral signal, audio features) and executes reads and writes.
 
-`AGENTS.md` is a symlink to this file. `docs/music-app.md` is the one companion doc: field notes on what Music.app actually does when scripted.
+`AGENTS.md` is a symlink to this file. `docs/music-app.md` records what Music.app actually does when scripted.
+`docs/cache-migrations.md` covers schema upgrades and the backup policy for future destructive migrations.
 
 ## Architecture
 
