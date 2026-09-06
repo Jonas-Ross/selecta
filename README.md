@@ -1,10 +1,10 @@
 # Selecta
 
-> A *selecta* is the soundsystem term for the one who picks the records. Claude is the selector; your library is the crate.
+> A *selecta* is the soundsystem term for the one who picks the records. Your AI agent is the selector; your library is the crate.
 
-A local MCP server that gives Claude access to your Apple Music library, so it can build playlists from music you actually own and write them back to Music.app.
+A local MCP server that gives AI agents access to your Apple Music library, so they can build playlists from music you actually own and write them back to Music.app.
 
-There's no recommendation engine in here, no similarity scoring, no ML. Claude does the picking. Selecta tells it what you own, how you listen (plays, favorites, ratings, skips, your own playlists) and, where known, how the music moves (BPM, key, danceability), and turns the tracklist Claude comes up with into a real playlist.
+There's no recommendation engine in here, no similarity scoring, no ML. Your agent does the picking. Selecta tells it what you own, how you listen (plays, favorites, ratings, skips, your own playlists) and, where known, how the music moves (BPM, key, danceability), and turns the tracklist your agent comes up with into a real playlist.
 
 ## Requirements
 
@@ -26,9 +26,9 @@ Then populate the cache. macOS will ask for Music.app automation permission the 
 node dist/index.js refresh
 ```
 
-This reads your whole library into a SQLite cache at `~/Library/Application Support/Selecta/library.db`. A few thousand tracks take 10–15 seconds. The cache never refreshes itself, so rerun `refresh` (or ask Claude to call `refresh_library`) after your library changes.
+This reads your whole library into a SQLite cache at `~/Library/Application Support/Selecta/library.db`. A few thousand tracks take 10–15 seconds. The cache never refreshes itself, so rerun `refresh` (or ask your agent to call `refresh_library`) after your library changes.
 
-Optionally, backfill tempo and key data so Claude can sequence by BPM:
+Optionally, backfill tempo and key data so your agent can sequence by BPM:
 
 ```bash
 node dist/index.js enrich        # all not-yet-attempted tracks
@@ -46,7 +46,9 @@ node dist/index.js doctor
 
 Set `SELECTA_DEBUG=1` to mirror stderr logging to `~/Library/Logs/Selecta/selecta.log`. Failure to create or append that file is reported on stderr and never stops the MCP server.
 
-## Register with Claude
+## Register with an MCP client
+
+Selecta is agent-independent: use an MCP client that can launch a local server over stdio. Configure it to run `node` with `/ABSOLUTE/PATH/TO/selecta/dist/index.js` as its argument, with no subcommand. The server exposes the same tools regardless of which agent uses them. The Claude configurations below are examples.
 
 For Claude Desktop, add this to `~/Library/Application Support/Claude/claude_desktop_config.json` (create the `mcpServers` key if it isn't there) and restart the app:
 
@@ -71,7 +73,7 @@ Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vib
 
 ## Tools
 
-Sixteen tools, in three groups. The first group answers from the local cache and never touches Music.app; the second writes to Music.app; the third keeps the cache current and holds Claude's own notes.
+Sixteen tools, in three groups. The first group answers from the local cache and never touches Music.app; the second writes to Music.app; the third keeps the cache current and holds the agent's own notes.
 
 ### Reading
 
@@ -99,7 +101,7 @@ Sixteen tools, in three groups. The first group answers from the local cache and
 | Tool | What it does |
 |---|---|
 | `refresh_library` | Full reread of Music.app into the cache. Manual by design. Also records play and skip deltas since the previous refresh, and remaps unambiguous recent playlist rekeys and reports ambiguous copies without deleting them. |
-| `set_note` | Save Claude's own note on a track or playlist ("great opener", "user preferred the plain name") so it's there next session. Cache-only, never written to Music.app. Notes come back verbatim on reads; Selecta never filters or ranks on them. |
+| `set_note` | Save the agent's own note on a track or playlist ("great opener", "user preferred the plain name") so it's there next session. Cache-only, never written to Music.app. Notes come back verbatim on reads; Selecta never filters or ranks on them. |
 | `enrich_features` | Fetch BPM, key and danceability for tracks not yet attempted, from MusicBrainz/AcousticBrainz and Deezer. Works through the most-played backlog, or targets specific track IDs (up to 50). The only tool that uses the network. For a whole-library backfill, prefer the `enrich` CLI command above. |
 
 Selecta only writes where you point it: it creates playlists, overwrites its own preview slot, edits or deletes the user playlists you ask it to, and sets favorites and ratings on the tracks you name. Smart, subscription and folder playlists are never modified.
@@ -131,7 +133,7 @@ Architecture and working conventions are in [`CLAUDE.md`](CLAUDE.md); Music.app 
 ## Troubleshooting
 
 - Start with `node dist/index.js status`; use `doctor` when the report points toward the Music.app boundary.
-- `automation_permission_denied`: System Settings → Privacy & Security → Automation → enable Music for your terminal (CLI use) and for Claude Desktop.
+- `automation_permission_denied`: System Settings → Privacy & Security → Automation → enable Music for the terminal or MCP client app that launches Selecta.
 - `music_app_not_running`: open Music.app and retry.
 - Tools return `cache_age_hours: null`: the cache was never populated. Run `refresh`.
 - `track_not_found` on writes: the cache is stale. Refresh and re-resolve track IDs.

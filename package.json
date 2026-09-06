@@ -2,7 +2,7 @@
   "name": "selecta",
   "version": "0.1.0",
   "private": true,
-  "description": "Local MCP server exposing the Apple Music library to Claude.",
+  "description": "Local MCP server exposing the Apple Music library to AI agents through MCP.",
   "type": "module",
   "bin": {
     "selecta": "dist/index.js"
