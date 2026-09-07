@@ -93,8 +93,8 @@
 #selecta-content #feedback {
   display: block;
   width: 100%;
-  min-height: 34px;
-  height: 34px;
+  min-height: 68px;
+  height: 68px;
   max-height: 120px;
   margin: 0;
   padding: 8px 10px;
@@ -103,9 +103,6 @@
   border-radius: 7px;
   background: var(--soft);
   resize: vertical;
-}
-#selecta-content #feedback:focus {
-  min-height: 68px;
 }
 #selecta-content footer {
   gap: 8px;
