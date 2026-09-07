@@ -1,8 +1,13 @@
 import { host, ui, el } from './dom.js';
 import './pulse.js';
+import { observeSize } from './resize.js';
 import { App, applyHostStyleVariables } from '@modelcontextprotocol/ext-apps';
 
-const app = new App({ name: 'Selecta playlist draft', version: '1.0.0' }, {});
+const app = new App(
+  { name: 'Selecta playlist draft', version: '1.0.0' },
+  {},
+  { autoResize: false },
+);
 let state;
 let draftId;
 let busy = false;
@@ -431,6 +436,11 @@ app.onhostcontextchanged = theme;
 try {
   await app.connect();
   connected = true;
+  observeSize(host, (height) => {
+    void app
+      .sendSizeChanged({ height })
+      .catch((error) => console.error('Card sizing failed', error));
+  });
   theme(app.getHostContext());
   status('Ready. Recover a draft by ID if its original result is unavailable.');
 

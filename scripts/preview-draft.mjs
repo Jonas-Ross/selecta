@@ -52,6 +52,7 @@ const files = [
   'ui/pulse.css',
   'ui/pulse.js',
   'ui/dom.js',
+  'ui/resize.js',
 ];
 const version = async () =>
   (await Promise.all(files.map(async (file) => (await stat(new URL(file, root))).mtimeMs))).join(
