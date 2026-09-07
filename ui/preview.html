@@ -51,7 +51,7 @@
         padding: 7px 10px;
       }
       main {
-        padding: 42px 20px;
+        padding: 24px 20px;
       }
       .stage {
         max-width: 760px;
@@ -99,6 +99,46 @@
         font-size: 11px;
         color: #a9aab4;
       }
+      .designs {
+        max-width: 960px;
+        margin: 22px auto 0;
+        padding: 0 20px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+      .designs button {
+        text-align: left;
+        cursor: pointer;
+        background: transparent;
+        padding: 12px 14px;
+        border-color: #ffffff20;
+      }
+      .designs button[aria-pressed='true'] {
+        background: #262a30;
+        border-color: #9bacba;
+      }
+      .designs strong {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 13px;
+      }
+      .designs small {
+        font-size: 11px;
+        line-height: 1.4;
+        color: #a1a8b1;
+      }
+      #direction {
+        margin: 14px 20px 0;
+        text-align: center;
+        color: #a1a8b1;
+        font-size: 12px;
+      }
+      @media (max-width: 600px) {
+        .designs {
+          grid-template-columns: 1fr;
+        }
+      }
     </style>
   </head>
   <body>
@@ -115,15 +155,29 @@
           <option value="dark">Dark</option>
           <option value="light">Light</option>
           <option value="claude">Claude-like</option>
-          <option value="codex">Codex-style injection</option></select
+          <option value="codex" selected>Codex-style injection</option></select
         ><button id="reset">Reset fixture</button>
       </div>
     </div>
+    <nav class="designs" aria-label="Design options">
+      <button data-design="queue" aria-pressed="true">
+        <strong>1. Queue</strong><small>Compact header, expandable input, slim action bar.</small>
+      </button>
+      <button data-design="sidecar" aria-pressed="false">
+        <strong>2. Sidecar</strong><small>Feedback beside the music. Best at wider sizes.</small>
+      </button>
+      <button data-design="setlist" aria-pressed="false">
+        <strong>3. Setlist</strong
+        ><small>Dense rows. Direction drawer opens only when needed.</small>
+      </button>
+    </nav>
+    <p id="direction">The compact layout we discussed. Focus the feedback input to expand it.</p>
     <main>
       <div class="stage" id="stage">
-        <iframe id="card" title="Playlist draft preview" src="/widget"></iframe>
+        <iframe id="card" title="Playlist draft preview" src="/widget?host=codex"></iframe>
         <div class="caption">
-          <span>Same widget code. Live updates.</span><span>Fixture library / simulated save</span>
+          <span id="space">Measuring track space…</span
+          ><span>Fixture library / simulated save</span>
         </div>
       </div>
       <details>
@@ -137,6 +191,23 @@
     <script>
       let draftId = '__DRAFT_ID__';
       const card = document.getElementById('card');
+      let design = 'queue';
+      const sendDesign = () =>
+        card.contentWindow.postMessage({ type: 'selecta-preview-design', design }, location.origin);
+      const descriptions = {
+        queue: 'The compact layout we discussed. Focus the feedback input to expand it.',
+        sidecar: 'The list and composer share the width. At narrow sizes the composer moves below.',
+        setlist: 'More rows, less chrome. Open Give direction when you want to revise the draft.',
+      };
+      for (const button of document.querySelectorAll('[data-design]'))
+        button.onclick = () => {
+          design = button.dataset.design;
+          for (const choice of document.querySelectorAll('[data-design]'))
+            choice.setAttribute('aria-pressed', String(choice === button));
+          document.getElementById('direction').textContent = descriptions[design];
+          sendDesign();
+        };
+      card.addEventListener('load', sendDesign);
       const reloadCard = () => {
         card.src = '/widget?host=' + document.getElementById('theme').value;
       };
@@ -158,7 +229,13 @@
         };
       }
       addEventListener('message', async ({ data, source }) => {
-        if (source !== card.contentWindow || !data?.jsonrpc) return;
+        if (source !== card.contentWindow) return;
+        if (data?.type === 'selecta-preview-space' && data.design === design) {
+          document.getElementById('space').textContent =
+            `Track area ${data.queueHeight}px / card ${data.total}px (${data.share}%)`;
+          return;
+        }
+        if (!data?.jsonrpc) return;
         let result = {};
         try {
           if (data.method === 'ui/initialize')

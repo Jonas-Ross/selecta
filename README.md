@@ -71,7 +71,7 @@ claude mcp add --scope user selecta -- node /ABSOLUTE/PATH/TO/selecta/dist/index
 
 Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vibe. Preview it first."*
 
-For visual iteration without reconnecting MCP, run `npm run preview:draft` and open [the local design preview](http://127.0.0.1:8766). It uses the same widget with fixture data, simulated saves, live reload, and width/surface controls.
+For visual iteration without reconnecting MCP, run `npm run preview:draft` and open [the local design preview](http://127.0.0.1:8766). It uses the same widget with fixture data, simulated saves, live reload, and width/surface controls. Three preview-only layouts compare Queue (compact header and action bar), Sidecar (feedback beside the tracks), and Setlist (dense rows and an optional feedback drawer). Switching layouts preserves draft edits and typed feedback.
 
 ## Tools
 

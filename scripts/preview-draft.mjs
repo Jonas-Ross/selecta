@@ -53,6 +53,8 @@ const files = [
   'ui/pulse.js',
   'ui/dom.js',
   'ui/resize.js',
+  'ui/preview-designs.js',
+  'ui/preview-designs.css',
 ];
 const version = async () =>
   (await Promise.all(files.map(async (file) => (await stat(new URL(file, root))).mtimeMs))).join(
@@ -144,6 +146,18 @@ const server = createServer(async (req, res) => {
         new URL('../dist/ui/playlist-draft.html', import.meta.url),
         'utf8',
       );
+
+      const [designCss, designScript] = await Promise.all([
+        readFile(new URL('../ui/preview-designs.css', import.meta.url), 'utf8'),
+        readFile(new URL('../ui/preview-designs.js', import.meta.url), 'utf8'),
+      ]);
+
+      widget = widget
+        .replace('</template>', `<style>${designCss}</style></template>`)
+        .replace(
+          '<script type="module">',
+          `<script>${designScript}</script><script type="module">`,
+        );
 
       if (url.searchParams.get('host') === 'codex') {
         // Representative conflicting renderer rules, not a copy of host CSS.
