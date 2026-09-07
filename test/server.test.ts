@@ -63,6 +63,7 @@ describe('MCP server over in-memory transport', () => {
       'inspect_tracklist',
       'library_overview',
       'list_playlists',
+      'playlist_draft_appearance',
       'preview_playlist',
       'refresh_library',
       'remove_tracks',

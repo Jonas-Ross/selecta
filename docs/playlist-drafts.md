@@ -17,11 +17,11 @@ Save checks the requested revision, claims it durably, then calls `handleCreateP
 On September 7, 2026:
 
 - Unit/protocol coverage exercises repeated occurrences, exact selections, persistence across store instances, stale revisions, identity reassignment, unknown tracks, read-only recovery, missing drafts, missing tracks after refresh, concurrent save/edit, partial write errors, interrupted claims and receipt-storage failures.
-- Real stdio discovery exposes the four draft tools alongside the sixteen existing tools.
+- Discovery exposes four draft tools and an app-only appearance helper alongside the sixteen existing tools.
 - A temporary loopback fixture host exercised the actual bundled widget and production draft handlers through standard MCP Apps messages. Playwright selected the second Teardrop occurrence, pinned it, moved it above Angel, sent feedback carrying that entry ID at revision 5, and reloaded with only the original tool input. Order, selection, pin and feedback were restored. Context events included explicit revisions. Explicit save reached the fake bridge once for revision 5 and disabled repeat save.
 - The card rendered at 390px width in a dark fixture host. No real library writes or user-theme changes occurred.
 
-The fixture host is not evidence that the new feature passed in either desktop application. It remains scratch verification outside the repository.
+The fixture host is not evidence that the new feature passed in either desktop application. The fixture host is available through `npm run preview:draft`.
 
 ## Desktop smoke results
 
@@ -61,10 +61,10 @@ Use the width selector for 760px, 553px or 390px cards, and the surface selector
 
 The design pass uses aligned time/BPM/key columns, compact icon controls, occurrence-specific selection highlighting, a focused feedback composer, and secondary save. IDs remain accessible in Track details. Browser checks verified selection of the second repeated occurrence, pin/reorder, feedback carrying revision 5, persistence across preview remount, and the 390px Claude-like surface. Keyboard focus and queue scroll are retained during row redraws. This does not replace the pending Codex host smoke check.
 
-### Current design comparison
+### Appearance
 
-The chooser keeps **1. Studio** for comparison and defaults to **2. Pulse**, the user's preferred direction. Pulse now uses deep petrol, copper interaction accents and teal details. Spectrum and Bootleg were rejected and removed. Alternative styling remains preview-only until the final design is chosen.
+Pulse is the shipped design, including entry motion that respects reduced-motion preferences. **Appearance** defaults to **Follow host**. Copper, Cobalt, Ember, Moss and Oxblood explicitly override the host colors, with light and dark versions following the host mode; OLED forces true black and dark controls. Returning to Follow host restores the current host colors and mode.
 
-A timing-dependent reorder bug was reproduced: the asynchronous context update could finish after motion began, and the final busy-state render replaced the animated row nodes. Rendering now retains rows when their displayed state is unchanged, updating disabled controls in place. A controlled regression test fails on the previous implementation and passes with this fix; boundary arrows remain disabled correctly. Pulse's existing reduced-motion behavior is preserved.
+The choice is stored locally in a separate preferences table in `drafts.db`, through the app-only `playlist_draft_appearance` helper. It survives card reloads and is read when a new card connects. Already open cards retain their appearance until reopened or changed. It never increments a draft revision, changes library state, or enters model context. Changing appearance preserves typed feedback. Storage failures are reported without automatic retry.
 
-Pulse offers six preview palettes: **1. Copper** (petrol/copper/teal), **2. Cobalt** (navy/periwinkle/ice), **3. Ember** (charcoal/amber/khaki), **4. Moss** (evergreen/citron/sage), **5. Oxblood** (wine/rose/champagne), and **6. OLED** (true black/silver/ice blue). OLED intentionally forces a dark, pure-black surface in the preview. Palette buttons update the existing iframe via an origin-checked preview message, preserving unsaved text and motion. Studio disables this selector. The production bundle remains unchanged.
+Rendering retains rows when their displayed state is unchanged, so asynchronous context delivery cannot cancel reorder motion by replacing the animated nodes. A controlled regression test covers that race.

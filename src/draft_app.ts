@@ -8,7 +8,7 @@ import {
 } from '@modelcontextprotocol/ext-apps/server';
 import type { ToolDeps } from './tools/common.js';
 import { isSelectaError } from './tools/common.js';
-import type { DraftStore } from './drafts/store.js';
+import { Appearance, type DraftStore } from './drafts/store.js';
 import {
   PlaylistDraftTools,
   showDraftInputShape,
@@ -40,6 +40,18 @@ export function registerDraftApp(server: McpServer, deps: ToolDeps, store?: Draf
       },
     ],
   }));
+  registerAppTool(
+    server,
+    'playlist_draft_appearance',
+    {
+      description:
+        'Read or set the local card appearance preference. Independent of draft content and revisions. No Music.app call.',
+      inputSchema: { appearance: Appearance.optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      _meta: { ui: { resourceUri: DRAFT_RESOURCE, visibility: ['app'] } },
+    },
+    async (args) => result(handlers.appearance(args)),
+  );
   registerAppTool(
     server,
     'show_playlist_draft',

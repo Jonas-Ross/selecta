@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { DraftStore, type Draft } from '../drafts/store.js';
+import { Appearance, DraftStore, type Draft } from '../drafts/store.js';
 import { BridgeError } from '../types/errors.js';
 import { handleInspectTracklist, inspectTracklistInputShape } from './inspect_tracklist.js';
 import { handleCreatePlaylist } from './create_playlist.js';
@@ -53,6 +53,18 @@ export class PlaylistDraftTools {
     private deps: ToolDeps,
     private store: DraftStore = new DraftStore(),
   ) {}
+
+  appearance(input: unknown) {
+    const parsed = parseInput(z.strictObject({ appearance: Appearance.optional() }), input);
+
+    if (!parsed.ok) return parsed.error;
+
+    try {
+      return { appearance: this.store.appearance(parsed.data.appearance) };
+    } catch (error) {
+      return toErrorEnvelope(error);
+    }
+  }
 
   private async view(draft: Draft) {
     const inspection = await handleInspectTracklist(

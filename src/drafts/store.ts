@@ -8,6 +8,8 @@ import { z } from 'zod';
 import { defaultDbPath } from '../cache/db.js';
 import { BridgeError } from '../types/errors.js';
 
+export const Appearance = z.enum(['host', 'copper', 'cobalt', 'ember', 'moss', 'oxblood', 'oled']);
+
 export const Entry = z.strictObject({
   entry_id: z.string().uuid(),
   track_id: z.string().min(1),
@@ -60,6 +62,38 @@ export class DraftStore {
     } finally {
       db?.close();
     }
+  }
+
+  appearance(value?: z.infer<typeof Appearance>): z.infer<typeof Appearance> {
+    if (value !== undefined) Appearance.parse(value);
+
+    if (value === undefined && !existsSync(this.path)) return 'host';
+
+    return this.access(value !== undefined, (db) => {
+      if (value !== undefined) {
+        db.exec(
+          'CREATE TABLE IF NOT EXISTS preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+        );
+        db.prepare(
+          "INSERT INTO preferences VALUES ('appearance', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        ).run(value);
+
+        return value;
+      }
+
+      if (
+        !db
+          .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'preferences'")
+          .get()
+      )
+        return 'host';
+
+      const row = db.prepare("SELECT value FROM preferences WHERE key = 'appearance'").get() as
+        | { value: string }
+        | undefined;
+
+      return row ? Appearance.parse(row.value) : 'host';
+    });
   }
 
   private read(db: Database.Database, id: string): Draft {

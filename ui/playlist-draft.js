@@ -1,3 +1,4 @@
+import './pulse.js';
 import { App, applyHostStyleVariables } from '@modelcontextprotocol/ext-apps';
 
 const app = new App({ name: 'Selecta playlist draft', version: '1.0.0' }, {});
@@ -18,11 +19,48 @@ const duration = (seconds) => {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 };
 
+let hostTheme;
+let appearance = 'host';
+
 function theme(context) {
   if (context?.styles?.variables) applyHostStyleVariables(context.styles.variables);
 
-  if (context?.theme) document.documentElement.style.colorScheme = context.theme;
+  if (context?.theme) hostTheme = context.theme;
+
+  document.documentElement.style.colorScheme =
+    appearance === 'oled' ? 'dark' : (hostTheme ?? 'light dark');
 }
+
+async function loadAppearance(value) {
+  el('appearance').disabled = true;
+
+  try {
+    const result = await app.callServerTool({
+      name: 'playlist_draft_appearance',
+      arguments: value === undefined ? {} : { appearance: value },
+    });
+    const data =
+      result.structuredContent ??
+      JSON.parse(result.content?.find((item) => item.type === 'text')?.text ?? '{}');
+
+    if (
+      result.isError ||
+      !['host', 'copper', 'cobalt', 'ember', 'moss', 'oxblood', 'oled'].includes(data.appearance)
+    )
+      throw new Error(data.hint ?? 'Appearance unavailable.');
+
+    appearance = data.appearance;
+    document.documentElement.dataset.palette = appearance;
+    theme();
+  } catch (error) {
+    status(`Could not load or save appearance: ${error.message}`);
+  } finally {
+    el('appearance').value = appearance;
+    el('appearance').disabled = false;
+  }
+}
+
+el('appearance').onchange = () => loadAppearance(el('appearance').value);
 
 function unpack(result) {
   const data =
@@ -395,6 +433,8 @@ try {
   status('Ready. Recover a draft by ID if its original result is unavailable.');
 
   if (draftId) await recover(draftId);
+
+  await loadAppearance();
 } catch (error) {
   status(`Host connection failed: ${error.message}. Reopen this card after reconnecting Selecta.`);
 }

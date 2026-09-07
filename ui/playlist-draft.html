@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-palette="host">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -483,6 +483,9 @@
         }
       }
     </style>
+    <style>
+      /*__PULSE__*/
+    </style>
   </head>
   <body>
     <header>
@@ -504,6 +507,17 @@
           <path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1" /></svg
         >Reload latest
       </button>
+      <label class="appearance"
+        >Appearance<select id="appearance" disabled>
+          <option value="host">Follow host</option>
+          <option value="copper">Copper</option>
+          <option value="cobalt">Cobalt</option>
+          <option value="ember">Ember</option>
+          <option value="moss">Moss</option>
+          <option value="oxblood">Oxblood</option>
+          <option value="oled">OLED</option>
+        </select></label
+      >
     </header>
     <h1 id="name">Open your draft</h1>
     <div id="recovery">

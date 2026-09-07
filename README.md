@@ -157,3 +157,5 @@ Architecture and working conventions are in [`CLAUDE.md`](CLAUDE.md); Music.app 
 - Tools return `cache_age_hours: null`: the cache was never populated. Run `refresh`.
 - `track_not_found` on writes: the cache is stale. Refresh and re-resolve track IDs.
 - A created playlist appears twice in Music.app: run `refresh` to inspect recent rekeys and ambiguous copies. Identical tracks and names cannot distinguish an iCloud echo from an intentional copy, so refresh never deletes playlists. Choose which copy to keep before deleting the other.
+
+Playlist draft cards use the Pulse design. Their Appearance menu defaults to Follow host and offers Copper, Cobalt, Ember, Moss, Oxblood and OLED. The local preference persists across cards independently of draft edits.

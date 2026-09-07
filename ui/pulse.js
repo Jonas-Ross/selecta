@@ -1,4 +1,4 @@
-// Preview motion only: animate occurrence identities, never infer music facts.
+// Animate animate occurrence identities, never infer music facts.
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const queue = document.getElementById('tracks');
 let previous = new Map();
@@ -20,7 +20,7 @@ new MutationObserver(() => {
 
       next.set(id, top);
 
-      if (document.documentElement.dataset.variant !== 'pulse' || reducedMotion.matches) continue;
+      if (reducedMotion.matches) continue;
 
       if (!entered)
         row.animate(
@@ -30,7 +30,7 @@ new MutationObserver(() => {
           ],
           {
             duration: 450,
-            delay: index * 55,
+            delay: Math.min(index, 12) * 55,
             easing: 'cubic-bezier(.16,1,.3,1)',
             fill: 'backwards',
           },
@@ -50,13 +50,3 @@ new MutationObserver(() => {
     previous = next;
   });
 }).observe(queue, { childList: true });
-
-// The fixture host can compare palettes without remounting or losing typed text.
-addEventListener('message', ({ source, origin, data }) => {
-  if (source !== parent || origin !== location.origin || data?.type !== 'selecta-preview-palette')
-    return;
-
-  if (['copper', 'cobalt', 'ember', 'moss', 'oxblood', 'oled'].includes(data.palette)) {
-    document.documentElement.dataset.palette = data.palette;
-  }
-});

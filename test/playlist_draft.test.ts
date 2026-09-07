@@ -41,6 +41,36 @@ async function draft() {
   return result.draft;
 }
 
+describe('card appearance', () => {
+  it('defaults to host without creating storage and reads older draft stores', async () => {
+    expect(tools.appearance({})).toEqual({ appearance: 'host' });
+    expect(existsSync(store.path)).toBe(false);
+    await draft();
+    expect(tools.appearance({})).toEqual({ appearance: 'host' });
+  });
+  it('persists separately across cards without changing draft state', async () => {
+    const original = await draft();
+
+    for (const appearance of ['copper', 'cobalt', 'ember', 'moss', 'oxblood', 'oled', 'host']) {
+      expect(tools.appearance({ appearance })).toEqual({ appearance });
+      expect(new DraftStore(store.path).appearance()).toBe(appearance);
+      expect(store.get(original.draft_id)).toEqual(original);
+    }
+
+    expect(deps.bridge.createPlaylist).not.toHaveBeenCalled();
+  });
+  it('rejects invalid settings and reports storage failure without overwriting', () => {
+    expect(tools.appearance({ appearance: 'invalid' })).toMatchObject({
+      error: 'validation_error',
+    });
+    expect(existsSync(store.path)).toBe(false);
+    vi.spyOn(store, 'appearance').mockImplementation(() => {
+      throw new BridgeError('cache_unavailable', 'broken storage');
+    });
+    expect(tools.appearance({})).toMatchObject({ error: 'cache_unavailable' });
+  });
+});
+
 describe('playlist drafts', () => {
   it('retains duplicate occurrences and existing inspection facts without bridge calls', async () => {
     const result = await tools.show({ draft_id: randomUUID(), name: 'Repeated', track_ids: ids });
@@ -263,11 +293,23 @@ describe('playlist drafts', () => {
       expect(listed.tools.find((item) => item.name === 'show_playlist_draft')?._meta).toMatchObject(
         { ui: { resourceUri: DRAFT_RESOURCE } },
       );
+      expect(
+        listed.tools.find((item) => item.name === 'playlist_draft_appearance')?._meta,
+      ).toMatchObject({ ui: { visibility: ['app'] } });
+      expect(
+        (
+          await client.callTool({
+            name: 'playlist_draft_appearance',
+            arguments: { appearance: 'oled' },
+          })
+        ).structuredContent,
+      ).toEqual({ appearance: 'oled' });
       const resource = await client.readResource({ uri: DRAFT_RESOURCE });
 
       expect(resource.contents[0].mimeType).toBe('text/html;profile=mcp-app');
       expect(resource.contents[0].text).toContain('Save this revision to Music.app');
       expect(resource.contents[0].text).not.toContain('/*__APP__*/');
+      expect(resource.contents[0].text).not.toContain('/*__PULSE__*/');
       const id = randomUUID();
       const result = await client.callTool({
         name: 'show_playlist_draft',
