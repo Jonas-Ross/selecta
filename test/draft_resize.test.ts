@@ -4,7 +4,13 @@ import { expect, it, vi } from 'vitest';
 
 it('reports intrinsic card height with rounding room, including later growth and shrinkage', () => {
   let contentHeight = 801.25;
-  const element = { getBoundingClientRect: () => ({ height: contentHeight }) };
+  const dataset: Record<string, string> = {};
+  const element = {
+    dataset,
+    getBoundingClientRect: () => ({
+      height: 'measuring' in dataset ? contentHeight : Math.min(contentHeight, 720),
+    }),
+  };
   const frames: (() => void)[] = [];
   let notify = () => {};
   const observe = vi.fn();
@@ -30,6 +36,7 @@ it('reports intrinsic card height with rounding room, including later growth and
   expect(observe).toHaveBeenCalledWith(element);
   frames.shift()!();
   expect(onSize).toHaveBeenLastCalledWith(804);
+  expect(dataset).toEqual({});
   notify();
   notify();
   expect(frames).toHaveLength(1);

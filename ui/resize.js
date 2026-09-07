@@ -9,8 +9,12 @@ export function observeSize(element, onSize) {
     scheduled = true;
     requestAnimationFrame(() => {
       scheduled = false;
-      // Leave two CSS pixels for iframe borders/fractional host rounding.
+      // Ask for the natural height even when the host caps the actual iframe.
+      // Restore the constrained layout synchronously, before the next paint.
+      element.dataset.measuring = '';
       const height = Math.ceil(element.getBoundingClientRect().height) + 2;
+
+      delete element.dataset.measuring;
 
       if (height === previous) return;
 

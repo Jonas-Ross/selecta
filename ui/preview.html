@@ -188,7 +188,10 @@
           } else if (data.method === 'ui/message' || data.method === 'ui/update-model-context')
             document.getElementById('event').textContent = JSON.stringify(data.params, null, 2);
           else if (data.method === 'ui/notifications/size-changed')
-            card.style.height = Math.ceil(data.params.height) + 'px';
+            card.style.height =
+              (document.getElementById('theme').value === 'codex'
+                ? Math.min(720, Math.ceil(data.params.height))
+                : Math.ceil(data.params.height)) + 'px';
           if (data.id !== undefined)
             source.postMessage({ jsonrpc: '2.0', id: data.id, result }, location.origin);
         } catch (error) {

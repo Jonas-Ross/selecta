@@ -186,3 +186,36 @@
     justify-content: flex-end;
   }
 }
+
+/* Hosts can cap an inline iframe below its requested height. Keep the controls
+   in view and let only the track list absorb that constraint. */
+#selecta-content {
+  display: flex;
+  flex-direction: column;
+  max-height: 100dvh;
+}
+#selecta-content > *,
+#editor > * {
+  flex-shrink: 0;
+}
+#editor {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 1;
+  min-height: 0;
+}
+#tracks {
+  flex-shrink: 1;
+  min-height: 0;
+}
+.inspection[open] {
+  max-height: 110px;
+  overflow: auto;
+}
+#status {
+  max-height: 3em;
+  overflow: auto;
+}
+:host([data-measuring]) #selecta-content {
+  max-height: none;
+}
