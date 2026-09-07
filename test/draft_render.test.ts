@@ -12,6 +12,8 @@ class Element {
   inert = false;
   textContent = '';
   value = '';
+  hidden = true;
+  classList = { toggle() {} };
   constructor(readonly tag = 'div') {}
   append(...nodes: Element[]) {
     this.children.push(...nodes);
@@ -65,10 +67,20 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
 
   runInNewContext(`${renderSource}; render();`, runtime);
   expect(el('feedback-toggle').textContent).toBe('Feedback on the playlist');
+  expect(el('feedback-label').textContent).toBe('Feedback on the whole playlist');
   state.draft.selected_entry_ids = ['b'];
   runInNewContext(`${renderSource}; render();`, runtime);
   expect(el('feedback-toggle').textContent).toBe('Feedback on 1 track');
-  expect(el('feedback-label').textContent).toBe('Feedback on 1 track');
+  expect(el('feedback-label').textContent).toBe('Feedback on 02 · this track');
+  el('feedback-panel').hidden = false;
+  runInNewContext(`${renderSource}; render();`, runtime);
+  expect(el('feedback-toggle').textContent).toBe('Hide feedback');
+  el('feedback-panel').hidden = true;
+  state.draft.selected_entry_ids = ['a', 'b'];
+  runInNewContext(`${renderSource}; render();`, runtime);
+  expect(el('feedback-toggle').textContent).toBe('Feedback on 2 tracks');
+  expect(el('feedback-label').textContent).toBe('Feedback on tracks 01, 02');
+  state.draft.selected_entry_ids = ['b'];
   expect(
     el('tracks')
       .querySelectorAll()

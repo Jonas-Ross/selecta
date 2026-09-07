@@ -13,12 +13,14 @@
     background 0.24s,
     border-color 0.24s;
 }
+/* Hover only tints; selection is the subject of feedback and must read at a
+   glance: rail, tinted fill, border and accented title. */
 :host .track-row:hover {
-  border-color: var(--line);
-  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  background: var(--soft);
 }
-:host .track-row.selected {
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+:host .track-row.selected,
+:host .track-row.selected:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 :host h1 {
   position: relative;
@@ -82,8 +84,9 @@
 :host .queue-head {
   color: var(--cool);
 }
-:host .track-row.selected {
-  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+:host .track-row.selected,
+:host .track-row.selected:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
 }
 :host .feedback-box {
   background: color-mix(in srgb, var(--cool) 5%, var(--surface));

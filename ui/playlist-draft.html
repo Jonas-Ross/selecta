@@ -18,6 +18,7 @@
           --accent: var(--color-text-primary, light-dark(#23252b, #f1f1f4));
           --on-accent: var(--surface);
           --selection: color-mix(in srgb, var(--accent) 11%, var(--surface));
+          --danger: light-dark(#b42318, #ff8f85);
           display: block;
         }
         * {
@@ -101,10 +102,21 @@
           margin: 22px 0 10px;
           overflow-wrap: anywhere;
         }
-        #summary {
+        .meta {
           color: var(--muted);
           margin: 0;
           font-size: 12px;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: baseline;
+          gap: 4px 10px;
+        }
+        .revision:empty {
+          display: none;
+        }
+        .revision:not(:empty):before {
+          content: '·';
+          margin-right: 10px;
         }
         .overview {
           display: flex;
@@ -158,6 +170,12 @@
           padding: 0 10px 10px;
           font-size: 10px;
           color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          opacity: 0.75;
+        }
+        .queue-head.no-bpm .bpm-heading {
+          visibility: hidden;
         }
         .queue-head .track-heading {
           grid-column: 3;
@@ -202,17 +220,23 @@
           content: '';
           position: absolute;
           left: 0;
-          top: 14px;
-          bottom: 14px;
-          width: 2px;
-          border-radius: 2px;
+          top: 0;
+          bottom: 0;
+          width: 3px;
+          border-radius: 3px;
           background: var(--accent);
+        }
+        .track-row.selected .title {
+          color: var(--accent);
+        }
+        .track-row.selected .number {
+          color: var(--text);
         }
         input[type='checkbox'] {
           appearance: none;
           width: 14px;
           height: 14px;
-          border: 1px solid color-mix(in srgb, var(--muted) 60%, transparent);
+          border: 1px solid color-mix(in srgb, var(--muted) 85%, transparent);
           border-radius: 4px;
           margin: 0;
           cursor: pointer;
@@ -249,7 +273,7 @@
           font-size: 9px;
           font-weight: 500;
           color: var(--muted);
-          border: 1px solid var(--line);
+          border: 1px solid color-mix(in srgb, var(--muted) 45%, transparent);
           border-radius: 4px;
           padding: 0 4px;
           margin-left: 7px;
@@ -275,7 +299,7 @@
           border-radius: 6px;
         }
         .actions .move {
-          opacity: 0.5;
+          opacity: 0.65;
         }
         .track-row:hover .move,
         .track-row:focus-within .move {
@@ -371,6 +395,46 @@
           color: var(--muted);
           margin: 12px 0 0;
           overflow-wrap: anywhere;
+          display: flex;
+          align-items: baseline;
+          gap: 7px;
+        }
+        #status:before {
+          content: '';
+          flex-shrink: 0;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: currentColor;
+          opacity: 0.5;
+          transform: translateY(-1px);
+        }
+        #status[data-tone='ok'] {
+          color: var(--text);
+        }
+        #status[data-tone='ok']:before {
+          background: var(--cool, var(--accent));
+          opacity: 1;
+        }
+        #status[data-tone='error'] {
+          color: var(--danger);
+        }
+        #status[data-tone='error']:before {
+          background: var(--danger);
+          opacity: 1;
+        }
+        #status[data-tone='pending']:before {
+          background: var(--accent);
+          opacity: 1;
+          animation: status-pulse 1s ease-in-out infinite alternate;
+        }
+        @keyframes status-pulse {
+          from {
+            opacity: 0.25;
+          }
+          to {
+            opacity: 1;
+          }
         }
         #status:empty {
           display: none;
@@ -496,13 +560,20 @@
         <header class="draft-top">
           <div class="draft-heading">
             <h1 id="name">Open your draft</h1>
-            <p id="summary"></p>
+            <p class="meta">
+              <span id="summary"></span><span id="revision" class="revision"></span>
+            </p>
+            <details class="inspection">
+              <summary>Track details</summary>
+              <p id="details"></p>
+              <p id="identity"></p>
+            </details>
           </div>
           <details id="options" class="card-options">
             <summary
               class="options-trigger"
               aria-label="Card options"
-              title="Appearance, reload and track details"
+              title="Appearance and reload"
             >
               •••
             </summary>
@@ -524,12 +595,6 @@
                   /></svg
                 >Reload latest
               </button>
-              <details class="inspection">
-                <summary>Track details</summary>
-                <p id="details"></p>
-                <p id="identity"></p>
-              </details>
-              <span id="revision" class="revision"></span>
             </div>
           </details>
         </header>
@@ -542,7 +607,7 @@
           </button>
         </div>
         <main id="editor" hidden>
-          <div class="queue-head" aria-hidden="true">
+          <div id="queue-head" class="queue-head" aria-hidden="true">
             <span class="track-heading">Track</span><span class="metric">Time</span
             ><span class="metric bpm-heading">BPM</span><span></span>
           </div>

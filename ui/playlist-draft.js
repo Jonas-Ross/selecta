@@ -13,8 +13,13 @@ let draftId;
 let busy = false;
 let connected = false;
 let renderedTracks;
-const status = (text) => {
+// tone: 'ok' | 'error' | 'pending' | undefined (neutral). The dot in front of
+// the line is what makes a failed save look different from a restored draft.
+const status = (text, tone) => {
   el('status').textContent = text;
+
+  if (tone) el('status').dataset.tone = tone;
+  else delete el('status').dataset.tone;
 };
 const duration = (seconds) => {
   if (seconds == null) return 'duration unknown';
@@ -55,7 +60,7 @@ async function loadAppearance(value) {
     host.dataset.palette = appearance;
     theme();
   } catch (error) {
-    status(`Could not load or save appearance: ${error.message}`);
+    status(`Could not load or save appearance: ${error.message}`, 'error');
   } finally {
     el('appearance').value = appearance;
     el('appearance').disabled = false;
@@ -134,6 +139,7 @@ async function publish() {
   } catch {
     status(
       'Draft saved locally. Context delivery failed; use Send feedback or ask the agent to get this draft.',
+      'error',
     );
   }
 }
@@ -149,12 +155,24 @@ function render() {
   el('name').textContent = draft.name;
   el('identity').textContent = `Draft ${draft.draft_id}`;
   el('revision').textContent = `Revision ${draft.revision}`;
-  const feedbackScope = draft.selected_entry_ids.length
-    ? `Feedback on ${draft.selected_entry_ids.length} ${draft.selected_entry_ids.length === 1 ? 'track' : 'tracks'}`
+  // The toggle counts; the composer heading names, so the two never repeat
+  // each other and the subject of feedback is spelled out where it is typed.
+  const selected = draft.entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => draft.selected_entry_ids.includes(entry.entry_id));
+  const positions = selected.map(({ index }) => String(index + 1).padStart(2, '0'));
+  const feedbackScope = selected.length
+    ? `Feedback on ${selected.length} ${selected.length === 1 ? 'track' : 'tracks'}`
     : 'Feedback on the playlist';
+  const feedbackSubject =
+    selected.length === 1
+      ? `Feedback on ${positions[0]} · ${inspection?.tracks[selected[0].index]?.title ?? 'this track'}`
+      : selected.length
+        ? `Feedback on tracks ${positions.slice(0, 6).join(', ')}${positions.length > 6 ? ` +${positions.length - 6}` : ''}`
+        : 'Feedback on the whole playlist';
 
-  el('feedback-label').textContent = feedbackScope;
-  el('feedback-toggle').textContent = feedbackScope;
+  el('feedback-label').textContent = feedbackSubject;
+  el('feedback-toggle').textContent = el('feedback-panel').hidden ? feedbackScope : 'Hide feedback';
   el('recover-id').value = draft.draft_id;
   el('recovery').hidden = true;
   el('editor').hidden = false;
@@ -191,6 +209,11 @@ function render() {
   renderedTracks = trackView;
   const scrollTop = el('tracks').scrollTop;
 
+  // A column of dashes says only "no data"; blank cells let real values stand out.
+  el('queue-head').classList.toggle(
+    'no-bpm',
+    !inspection?.tracks.some((track) => track?.bpm != null),
+  );
   el('tracks').replaceChildren();
   draft.entries.forEach((entry, index) => {
     const track = inspection?.tracks[index];
@@ -243,8 +266,12 @@ function render() {
     const smallBpm = document.createElement('span');
 
     smallBpm.className = 'mobile-bpm';
-    smallBpm.textContent = ` / ${track?.bpm ?? '—'} BPM`;
-    facts.append(smallBpm);
+
+    if (track?.bpm != null) {
+      smallBpm.textContent = ` / ${track.bpm} BPM`;
+      facts.append(smallBpm);
+    }
+
     const time = document.createElement('span');
 
     time.className = 'metric';
@@ -253,7 +280,7 @@ function render() {
     const bpm = document.createElement('span');
 
     bpm.className = 'metric bpm';
-    bpm.textContent = track?.bpm ?? '—';
+    bpm.textContent = track?.bpm ?? '';
     bpm.title = track?.bpm == null ? 'BPM unknown' : 'BPM';
     text.append(title, facts);
     text.title = `Entry ${entry.entry_id}\nTrack ${entry.track_id}`;
@@ -307,7 +334,10 @@ async function action(fn) {
   try {
     await fn();
   } catch (error) {
-    status(`${error.message} No automatic retry. Use Reload latest to inspect current state.`);
+    status(
+      `${error.message} No automatic retry. Use Reload latest to inspect current state.`,
+      'error',
+    );
   } finally {
     busy = false;
     render();
@@ -329,7 +359,7 @@ async function edit(patch) {
         }),
       ),
     );
-    status(`Draft revision ${state.draft.revision} saved locally.`);
+    status(`Draft revision ${state.draft.revision} saved locally.`, 'ok');
     await publish();
   });
 }
@@ -343,11 +373,13 @@ async function recover(id) {
     );
 
     accept(data);
-    status(
-      data.draft.save
-        ? `Save attempt: ${data.draft.save.status}. ${JSON.stringify(data.draft.save.result ?? 'Outcome unknown; inspect Music.app before any further write.')}`
-        : 'Latest local draft restored.',
-    );
+
+    if (data.draft.save)
+      status(
+        `Save attempt: ${data.draft.save.status}. ${JSON.stringify(data.draft.save.result ?? 'Outcome unknown; inspect Music.app before any further write.')}`,
+        data.draft.save.status === 'ok' ? 'ok' : 'error',
+      );
+    else status('Latest local draft restored.', 'ok');
   });
 }
 
@@ -356,6 +388,7 @@ el('feedback-toggle').onclick = () => {
 
   panel.hidden = !panel.hidden;
   el('feedback-toggle').setAttribute('aria-expanded', String(!panel.hidden));
+  render();
 
   if (!panel.hidden) el('feedback').focus();
 };
@@ -397,7 +430,7 @@ el('send').onclick = () => {
         },
       ],
     });
-    status('Feedback handed to the host. If it appears in the composer, press Send.');
+    status('Feedback handed to the host. If it appears in the composer, press Send.', 'ok');
   });
 };
 
@@ -405,7 +438,7 @@ el('save').onclick = () =>
   action(async () => {
     const revision = state.draft.revision;
 
-    status(`Saving revision ${revision} to Music.app…`);
+    status(`Saving revision ${revision} to Music.app…`, 'pending');
     const result = await app.callServerTool({
       name: 'save_playlist_draft',
       arguments: { draft_id: draftId, revision },
@@ -418,7 +451,7 @@ el('save').onclick = () =>
     if (result.isError || data.error)
       throw new Error(data.hint ?? 'Save failed. Inspect the stored outcome.');
 
-    status(`Saved revision ${revision}. ${JSON.stringify(data.result)}`);
+    status(`Saved revision ${revision}. ${JSON.stringify(data.result)}`, 'ok');
     await publish();
   });
 
@@ -448,7 +481,7 @@ app.ontoolresult = (result) => {
     // A replayed result after reload can be stale; the store holds the latest.
     if (connected) void recover(draftId);
   } catch (error) {
-    status(error.message);
+    status(error.message, 'error');
 
     // A failed show created nothing to recover; a stripped result did.
     if (draftId && connected && !result.isError) void recover(draftId);
@@ -472,5 +505,8 @@ try {
 
   await loadAppearance();
 } catch (error) {
-  status(`Host connection failed: ${error.message}. Reopen this card after reconnecting Selecta.`);
+  status(
+    `Host connection failed: ${error.message}. Reopen this card after reconnecting Selecta.`,
+    'error',
+  );
 }
