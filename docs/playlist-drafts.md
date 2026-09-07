@@ -23,9 +23,25 @@ On September 7, 2026:
 
 The fixture host is not evidence that the new feature passed in either desktop application. It remains scratch verification outside the repository.
 
-## Desktop smoke checklist — pending
+## Desktop smoke results
 
-The two target surfaces were established in [issue #84](https://github.com/Jonas-Ross/selecta/issues/84): OpenAI Codex task surface and Claude Desktop Code. The current feature still needs the following checks in each after reconnecting the updated Selecta server:
+User-reported Claude Desktop Code results for draft `ff9d8396-9573-44b4-a967-87964e0f0a53`:
+
+- Passed: all four tools loaded with full schemas; cached search and opening a draft with three tracks and an intentional repeat of Talk produced distinct occurrence IDs.
+- Passed: selecting, pinning and moving the second Talk occurrence produced revisions 2–4. The staged composer message, widget context and server draft agreed on revision 4, order, selection and pins, targeting only that occurrence.
+- Passed: navigation away, reopening and app reload restored the same order, selection and pins.
+- Passed: an agent-side edit set feedback at revision 5 while preserving entry IDs and pins. A stale revision-4 edit attempting to unpin, clear selection and replace feedback returned `draft_revision_conflict`; a follow-up read confirmed revision 5 remained intact.
+- Passed: a nonexistent UUID returned `draft_not_found` with a useful recovery hint.
+- Untested: typing feedback into the widget and recovering that saved text after reload. The feedback field was empty during the interaction/reload checks; setting it later through the agent does not verify the widget text-input path.
+- No save, audition, library refresh, Music.app change or theme change was reported.
+
+Observed limitation: an agent-side edit does not automatically update an already mounted card or its published context. The reported card/context remained at revision 4 after the server reached revision 5. Source inspection confirms **Reload latest** reads the current draft and updates the card without reopening it; that specific button still needs a desktop smoke check. Recovery alone does not republish widget context; a subsequent widget edit or feedback message carries the current revision. Stale submissions are rejected. No polling or automatic synchronization is implemented.
+
+OpenAI Codex task-surface testing remains pending for this feature.
+
+## Desktop smoke checklist
+
+The two target surfaces were established in [issue #84](https://github.com/Jonas-Ross/selecta/issues/84): OpenAI Codex task surface and Claude Desktop Code. Use the following checks in each after reconnecting the updated Selecta server; results and remaining gaps are recorded above:
 
 1. Run `npm ci && npm run build` in the configured checkout; reconnect Selecta. Confirm `show_playlist_draft`, `get_playlist_draft`, `edit_playlist_draft`, and `save_playlist_draft` are available. Open a fresh card; Claude may need a full restart to clear resource caching.
 2. Ask the agent to search for a few owned tracks and open a draft that intentionally repeats one ID. Check titles, artists, runtime, known BPM/key and missing facts.
@@ -35,4 +51,4 @@ The two target surfaces were established in [issue #84](https://github.com/Jonas
 6. Open the same draft in a second card or edit it through the agent. Attempt an edit from the older revision and confirm rejection followed by **Reload latest** recovery. Preserve the user's current theme.
 7. Save only a user-approved real draft, if desired. This is an actual library write; fixture tests already cover the contract. Never use destructive fault injection or remove user playlists for this smoke check.
 
-No new-feature desktop pass is claimed yet: this task's live connector still advertised only the original sixteen tools during implementation. The PR remains a draft until these host checks are recorded.
+The PR remains a draft while the Codex smoke check and the remaining Claude feedback/recovery checks are pending. Prior compatibility testing is not counted as evidence for this feature.
