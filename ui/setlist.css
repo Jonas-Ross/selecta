@@ -1,5 +1,5 @@
 #selecta-content {
-  padding: 18px 20px 10px;
+  padding: 18px 20px;
 }
 #selecta-content .draft-top {
   position: relative;
@@ -200,7 +200,7 @@
 }
 @media (max-width: 620px) {
   #selecta-content {
-    padding: 14px 14px 8px;
+    padding: 14px;
   }
   #selecta-content .track-name {
     display: block;
