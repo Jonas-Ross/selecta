@@ -6,9 +6,13 @@ import { randomUUID } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import Database from 'better-sqlite3';
-import { DraftStore } from '../src/drafts/store.js';
+import { DraftStore, draftDbPath } from '../src/drafts/store.js';
 import { PlaylistDraftTools } from '../src/tools/playlist_draft.js';
+// The wire test runs the built server because the widget resource resolves
+// relative to dist/; its store must come from the same module graph so the
+// BridgeError class identity used by the error envelope matches.
 import { createServer } from '../dist/server.js';
+import { DraftStore as BuiltDraftStore } from '../dist/drafts/store.js';
 import { DRAFT_RESOURCE } from '../src/draft_app.js';
 import { withOperation } from '../src/operations/lock.js';
 import { BridgeError } from '../src/types/errors.js';
@@ -24,7 +28,7 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'selecta-draft-'));
   store = new DraftStore(join(dir, 'drafts.db'));
   deps = makeToolDeps();
-  tools = new PlaylistDraftTools(deps, store);
+  tools = new PlaylistDraftTools({ ...deps, drafts: () => store });
 });
 afterEach(() => {
   deps.cacheInstance.close();
@@ -103,7 +107,7 @@ describe('playlist drafts', () => {
     expect(edited).toMatchObject({
       draft: { revision: 2, entries, selected_entry_ids: [entries[0].entry_id] },
     });
-    const reopened = new PlaylistDraftTools(deps, new DraftStore(store.path));
+    const reopened = new PlaylistDraftTools({ ...deps, drafts: () => new DraftStore(store.path) });
 
     expect(await reopened.get({ draft_id: original.draft_id })).toEqual(edited);
     expect(
@@ -209,7 +213,10 @@ describe('playlist drafts', () => {
     await vi.waitFor(() => expect(deps.bridge.createPlaylist).toHaveBeenCalledTimes(1));
     expect(
       await tools.edit({ draft_id: original.draft_id, revision: 2, feedback: 'racing edit' }),
-    ).toMatchObject({ error: 'operation_busy' });
+    ).toMatchObject({
+      error: 'operation_busy',
+      hint: expect.stringContaining('Inspect Music.app'),
+    });
     expect(await tools.save({ draft_id: original.draft_id, revision: 2 })).toHaveProperty('error');
     reject(
       new BridgeError('jxa_error', 'Failed', 'Inspect the partial playlist', {
@@ -273,7 +280,7 @@ describe('playlist drafts', () => {
       ...value,
       save: { revision: 1, status: 'pending' },
     }));
-    const reopened = new PlaylistDraftTools(deps, new DraftStore(store.path));
+    const reopened = new PlaylistDraftTools({ ...deps, drafts: () => new DraftStore(store.path) });
 
     expect(await reopened.save({ draft_id: original.draft_id, revision: 2 })).toHaveProperty(
       'error',
@@ -281,7 +288,7 @@ describe('playlist drafts', () => {
     expect(deps.bridge.createPlaylist).not.toHaveBeenCalled();
   });
   it('registers the bundled widget, structured fallback and read-only recovery over MCP', async () => {
-    const server = createServer(deps, store);
+    const server = createServer({ ...deps, drafts: () => new BuiltDraftStore(store.path) });
     const client = new Client({ name: 'draft-test', version: '1' });
     const [a, b] = InMemoryTransport.createLinkedPair();
 
@@ -320,14 +327,18 @@ describe('playlist drafts', () => {
       expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual(
         result.structuredContent,
       );
-      expect(
-        (
-          await client.callTool({
-            name: 'get_playlist_draft',
-            arguments: { draft_id: randomUUID() },
-          })
-        ).isError,
-      ).toBe(true);
+      // The injected store path, not the default location, holds the draft.
+      expect(store.get(id).revision).toBe(1);
+      const missing = await client.callTool({
+        name: 'get_playlist_draft',
+        arguments: { draft_id: randomUUID() },
+      });
+
+      expect(missing.isError).toBe(true);
+      expect(missing.structuredContent).toMatchObject({
+        error: 'draft_not_found',
+        hint: expect.stringContaining('draft'),
+      });
     } finally {
       await client.close();
       await server.close();
@@ -412,6 +423,58 @@ it('allows an explicit save retry after operation contention without changing th
       revision: store.get(original.draft_id).revision,
     }),
   ).toMatchObject({ error: 'validation_error' });
+});
+
+it('places the draft store next to the library cache it was pointed at', () => {
+  expect(draftDbPath('/tmp/isolated/library.db')).toBe('/tmp/isolated/drafts.db');
+  expect(new DraftStore().path).toBe(draftDbPath());
+});
+
+it('releases the claim after a failure that provably preceded any write', async () => {
+  const original = await draft();
+
+  vi.mocked(deps.bridge.createPlaylist).mockRejectedValueOnce(
+    new BridgeError('automation_permission_denied', 'denied'),
+  );
+  expect(await tools.save({ draft_id: original.draft_id, revision: 1 })).toMatchObject({
+    error: 'automation_permission_denied',
+    draft: { revision: 3 },
+  });
+  expect(store.get(original.draft_id).save).toBeUndefined();
+  vi.mocked(deps.bridge.createPlaylist).mockResolvedValue({
+    persistentId: 'P-GRANTED',
+    trackCount: 2,
+    trackPersistentIds: ids,
+  });
+  expect(await tools.save({ draft_id: original.draft_id, revision: 3 })).toMatchObject({
+    result: { playlist_id: 'P-GRANTED' },
+  });
+  expect(deps.bridge.createPlaylist).toHaveBeenCalledTimes(2);
+});
+
+it('records a cache failure after the Music.app write as the stored outcome', async () => {
+  const original = await draft();
+
+  vi.mocked(deps.bridge.createPlaylist).mockResolvedValue({
+    persistentId: 'P-CREATED',
+    trackCount: 2,
+    trackPersistentIds: ids,
+  });
+  vi.spyOn(deps.cacheInstance, 'upsertPlaylistAfterWrite').mockImplementation(() => {
+    throw new Error('SQLITE_FULL: database or disk is full');
+  });
+  expect(await tools.save({ draft_id: original.draft_id, revision: 1 })).toMatchObject({
+    error: 'cache_unavailable',
+    hint: expect.stringContaining('SQLITE_FULL'),
+    draft: { save: { status: 'finished', result: { error: 'cache_unavailable' } } },
+  });
+  expect(
+    await tools.save({
+      draft_id: original.draft_id,
+      revision: store.get(original.draft_id).revision,
+    }),
+  ).toMatchObject({ error: 'validation_error' });
+  expect(deps.bridge.createPlaylist).toHaveBeenCalledTimes(1);
 });
 
 it('keeps an uncertain bridge failure blocked even without a partial-write receipt', async () => {

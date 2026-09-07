@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { Appearance, DraftStore, type Draft } from '../drafts/store.js';
-import { BridgeError } from '../types/errors.js';
+import { BridgeError, type ErrorCode } from '../types/errors.js';
 import { handleInspectTracklist, inspectTracklistInputShape } from './inspect_tracklist.js';
 import { handleCreatePlaylist } from './create_playlist.js';
 import {
@@ -45,13 +45,27 @@ export const editDraftInputShape = {
 
 export const SHOW_DRAFT_DESCRIPTION = `Open an interactive playlist draft from ordered cached track_ids. Supply a new UUID as draft_id; this identity is also recoverable from the original tool input after reload. Local draft only: no playback or Music.app write. Each repeated ID gets a separate entry_id. Returns inspection facts, draft_id, revision and editable entries; works as JSON without UI. Selection identifies the subject of explicit feedback, not an instruction to replace or preserve tracks. Empty selection refers to the whole playlist. Use edit_playlist_draft with the returned revision and preserve existing entry_ids when revising. Widget context reaches Codex directly; in Claude Code retrieve Read widget context. Feedback messages may be staged in the composer for the user to send. After reload recover by get_playlist_draft using draft_id; never create a replacement silently. Save only on explicit user approval via save_playlist_draft with the exact revision.`;
 export const EDIT_DRAFT_DESCRIPTION = `Edit local playlist draft at an exact revision: replace ordered entries, name, selection or feedback. Preserve entry_ids for existing occurrences including repeated tracks; omit entry_id for new occurrences. Selected entry IDs identify which occurrences the feedback refers to; empty selection means the whole playlist. Follow explicit feedback rather than inferring an action from selection alone. No Music.app calls. A stale revision fails: get_playlist_draft and reconcile rather than replaying. Returns the new revision and current cached inspection; removed library tracks remain recoverable but cannot be saved.`;
-export const SAVE_DRAFT_DESCRIPTION = `Explicitly save the approved exact draft revision as a real Music.app playlist using create_playlist contracts. Never call for selection, reorder or feedback. Claims this revision before writing and stores the outcome, so duplicate or uncertain requests never automatically repeat a write. An operation_busy lock rejection releases the claim: wait, get the latest draft revision, then explicitly retry. Other errors retain the guard; inspect result/partial_write and Music.app before deciding a new draft revision is safe to save. A pending save after interruption is uncertain, not permission to retry. No fingerprint precondition, audition or preview-slot integration.`;
+export const GET_DRAFT_DESCRIPTION = `Read-only recovery of a local draft by draft_id, including latest revision, edits, selection, feedback and save outcome. No Music.app call or draft mutation. Missing tracks return inspection_error alongside the recoverable draft. Missing drafts return a recovery hint.`;
+export const SAVE_DRAFT_DESCRIPTION = `Explicitly save the approved exact draft revision as a real Music.app playlist using create_playlist contracts. Never call for selection, reorder or feedback. Claims this revision before writing and stores the outcome, so duplicate or uncertain requests never automatically repeat a write. A rejection that provably precedes any write (operation_busy, track_not_found, automation_permission_denied, music_app_not_running without partial_write) releases the claim: fix the cause, get the latest draft revision, then explicitly retry. Other errors retain the guard; inspect result/partial_write and Music.app before deciding a new draft revision is safe to save. A pending save after interruption is uncertain, not permission to retry. No fingerprint precondition, audition or preview-slot integration.`;
+
+// Failures create_playlist reports before any Apple event that could create a
+// playlist: lock contention, its own cache check, and the first Music.app
+// access being refused. Releasing the claim for these lets the user fix the
+// cause and retry explicitly; every other outcome keeps the guard because a
+// playlist may exist.
+const PRE_WRITE_ERRORS: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+  'operation_busy',
+  'track_not_found',
+  'automation_permission_denied',
+  'music_app_not_running',
+]);
 
 export class PlaylistDraftTools {
-  constructor(
-    private deps: ToolDeps,
-    private store: DraftStore = new DraftStore(),
-  ) {}
+  private store: DraftStore;
+
+  constructor(private deps: ToolDeps) {
+    this.store = deps.drafts?.() ?? new DraftStore();
+  }
 
   appearance(input: unknown) {
     const parsed = parseInput(z.strictObject({ appearance: Appearance.optional() }), input);
@@ -132,7 +146,8 @@ export class PlaylistDraftTools {
         if (previous.save?.status === 'pending')
           throw new BridgeError(
             'operation_busy',
-            'Save outcome is pending. Inspect Music.app before further edits.',
+            'Save outcome is pending.',
+            'A save of this draft is pending with an unknown outcome and never clears on its own. Inspect Music.app for the playlist before further edits; do not retry the save.',
           );
 
         const entries =
@@ -218,19 +233,31 @@ export class PlaylistDraftTools {
         ...draft,
         save: { revision, status: 'pending' },
       }));
-      const result = await handleCreatePlaylist(
-        { name: claimed.name, track_ids: claimed.entries.map((entry) => entry.track_id) },
-        this.deps,
-      );
+      let result: Awaited<ReturnType<typeof handleCreatePlaylist>>;
 
       try {
-        // The operation lock rejects contention before running create's action.
-        // Other errors can follow a write even without a partial-write receipt.
-        const preWriteBusy =
-          isSelectaError(result) && result.error === 'operation_busy' && !result.partial_write;
+        result = await handleCreatePlaylist(
+          { name: claimed.name, track_ids: claimed.entries.map((entry) => entry.track_id) },
+          this.deps,
+        );
+      } catch (error) {
+        // create envelopes every bridge failure itself; only its cache writes
+        // after the Music.app call can throw past it, so the playlist may exist.
+        result =
+          error instanceof BridgeError
+            ? toErrorEnvelope(error)
+            : {
+                error: 'cache_unavailable',
+                hint: `create_playlist failed after the Music.app call: ${String(error)}. Inspect Music.app for the new playlist; do not repeat the write.`,
+              };
+      }
+
+      try {
+        const preWrite =
+          isSelectaError(result) && PRE_WRITE_ERRORS.has(result.error) && !result.partial_write;
         const finished = this.store.update(draft_id, claimed.revision, (draft) => ({
           ...draft,
-          save: preWriteBusy ? undefined : { revision, status: 'finished', result },
+          save: preWrite ? undefined : { revision, status: 'finished', result },
         }));
 
         return {

@@ -1,35 +1,27 @@
-// Additive MCP Apps registration. Core draft handlers remain transport-neutral.
+// Additive MCP Apps registration: the widget resource and the tools whose
+// results render in it. The plain draft tools register in server.ts.
 import { readFile } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   registerAppResource,
   registerAppTool,
   RESOURCE_MIME_TYPE,
 } from '@modelcontextprotocol/ext-apps/server';
-import type { ToolDeps } from './tools/common.js';
-import { isSelectaError } from './tools/common.js';
-import { Appearance, type DraftStore } from './drafts/store.js';
+import { Appearance } from './drafts/store.js';
 import {
-  PlaylistDraftTools,
+  type PlaylistDraftTools,
   showDraftInputShape,
-  getDraftInputShape,
-  editDraftInputShape,
-  revisionInputShape,
   SHOW_DRAFT_DESCRIPTION,
-  EDIT_DRAFT_DESCRIPTION,
-  SAVE_DRAFT_DESCRIPTION,
 } from './tools/playlist_draft.js';
 
 export const DRAFT_RESOURCE = 'ui://selecta/playlist-draft.html';
 
-export function registerDraftApp(server: McpServer, deps: ToolDeps, store?: DraftStore) {
-  const handlers = new PlaylistDraftTools(deps, store);
-  const result = (value: object) => ({
-    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
-    structuredContent: { ...value },
-    ...(isSelectaError(value) ? { isError: true } : {}),
-  });
-
+export function registerDraftApp(
+  server: McpServer,
+  handlers: PlaylistDraftTools,
+  toToolResult: (result: object) => CallToolResult,
+) {
   registerAppResource(server, 'Playlist draft', DRAFT_RESOURCE, {}, async () => ({
     contents: [
       {
@@ -50,7 +42,7 @@ export function registerDraftApp(server: McpServer, deps: ToolDeps, store?: Draf
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       _meta: { ui: { resourceUri: DRAFT_RESOURCE, visibility: ['app'] } },
     },
-    async (args) => result(handlers.appearance(args)),
+    async (args) => toToolResult(handlers.appearance(args)),
   );
   registerAppTool(
     server,
@@ -61,34 +53,6 @@ export function registerDraftApp(server: McpServer, deps: ToolDeps, store?: Draf
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       _meta: { ui: { resourceUri: DRAFT_RESOURCE } },
     },
-    async (args) => result(await handlers.show(args)),
-  );
-  server.registerTool(
-    'get_playlist_draft',
-    {
-      description:
-        'Read-only recovery of a local draft by draft_id, including latest revision, edits, selection, feedback and save outcome. No Music.app call or draft mutation. Missing tracks return inspection_error alongside the recoverable draft. Missing drafts return a recovery hint.',
-      inputSchema: getDraftInputShape,
-      annotations: { readOnlyHint: true, openWorldHint: false },
-    },
-    async (args) => result(await handlers.get(args)),
-  );
-  server.registerTool(
-    'edit_playlist_draft',
-    {
-      description: EDIT_DRAFT_DESCRIPTION,
-      inputSchema: editDraftInputShape,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    },
-    async (args) => result(await handlers.edit(args)),
-  );
-  server.registerTool(
-    'save_playlist_draft',
-    {
-      description: SAVE_DRAFT_DESCRIPTION,
-      inputSchema: revisionInputShape,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    },
-    async (args) => result(await handlers.save(args)),
+    async (args) => toToolResult(await handlers.show(args)),
   );
 }

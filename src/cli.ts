@@ -9,6 +9,7 @@ import { bridge as defaultBridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
 import { runDoctor } from './diagnostics/doctor.js';
 import { readStatus } from './diagnostics/status.js';
+import { DraftStore, draftDbPath } from './drafts/store.js';
 import { enrichPendingTracks } from './enrich/index.js';
 import { log as defaultLogger, type Logger } from './log.js';
 import { createServer } from './server.js';
@@ -70,7 +71,11 @@ export function createCliProgram(options: CliOptions = {}): Command {
     .command('serve', { isDefault: true })
     .description('Start the MCP server over stdio (default when no verb is given)')
     .action(async () => {
-      const server = createServer({ cache: lazyCache(dbPath), bridge });
+      const server = createServer({
+        cache: lazyCache(dbPath),
+        bridge,
+        drafts: () => new DraftStore(draftDbPath(dbPath)),
+      });
 
       await server.connect(new StdioServerTransport());
       logger.info('selecta MCP server listening on stdio');

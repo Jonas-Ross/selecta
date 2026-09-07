@@ -31,8 +31,13 @@ export const Draft = z.strictObject({
 });
 export type Draft = z.infer<typeof Draft>;
 
+/** Drafts sit next to whichever library cache the process was pointed at. */
+export function draftDbPath(libraryDbPath: string = defaultDbPath()): string {
+  return join(dirname(libraryDbPath), 'drafts.db');
+}
+
 export class DraftStore {
-  constructor(readonly path = join(dirname(defaultDbPath()), 'drafts.db')) {}
+  constructor(readonly path = draftDbPath()) {}
 
   private access<T>(write: boolean, run: (db: Database.Database) => T): T {
     let db: Database.Database | undefined;

@@ -19,19 +19,17 @@ const fixture = JSON.parse(
 );
 
 cache.refreshFromSnapshot(fixture, { durationMs: 1 });
-const handlers = new PlaylistDraftTools(
-  {
-    cache: () => cache,
-    bridge: {
-      createPlaylist: async ({ trackIds }) => ({
-        persistentId: `PREVIEW-${randomUUID()}`,
-        trackCount: trackIds.length,
-        trackPersistentIds: trackIds,
-      }),
-    },
+const handlers = new PlaylistDraftTools({
+  cache: () => cache,
+  bridge: {
+    createPlaylist: async ({ trackIds }) => ({
+      persistentId: `PREVIEW-${randomUUID()}`,
+      trackCount: trackIds.length,
+      trackPersistentIds: trackIds,
+    }),
   },
-  new DraftStore(join(directory, 'drafts.db')),
-);
+  drafts: () => new DraftStore(join(directory, 'drafts.db')),
+});
 let draftId;
 
 async function reset() {
