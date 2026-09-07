@@ -1,0 +1,224 @@
+/* Pulse layout and explicit appearance palettes. */
+:host([data-palette='copper']) {
+  --surface: light-dark(#f4f7f6, #19282a);
+  --text: light-dark(#203335, #edf4ed);
+  --muted: light-dark(#526c6d, #a3babb);
+  --on-accent: light-dark(#fff, #29241d);
+  --accent: light-dark(#a34f30, #e9a276);
+  --cool: light-dark(#287c7c, #84c6c1);
+}
+:host .track-row {
+  border: 1px solid transparent;
+  transition:
+    background 0.24s,
+    border-color 0.24s;
+}
+/* Hover only tints; selection is the subject of feedback and must read at a
+   glance: rail, tinted fill, border and accented title. */
+:host .track-row:hover {
+  background: var(--soft);
+}
+:host .track-row.selected,
+:host .track-row.selected:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+:host h1 {
+  position: relative;
+  padding-bottom: 16px;
+}
+:host h1:after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 64px;
+  height: 3px;
+  border-radius: 4px;
+  background: var(--cool);
+  transform-origin: left;
+}
+:host .actions button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  color: var(--text);
+}
+:host #send:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  :host h1:after {
+    animation: pulse-line 1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  :host .actions button,
+  :host #send {
+    transition:
+      transform 0.18s,
+      box-shadow 0.18s,
+      background 0.18s;
+  }
+  :host .brand svg {
+    animation: record-turn 1.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes pulse-line {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  @keyframes record-turn {
+    from {
+      transform: rotate(-150deg);
+    }
+    to {
+      transform: rotate(0);
+    }
+  }
+}
+
+/* Copper against deep petrol: color accents the controls, not the tracks. */
+:host .brand svg {
+  color: var(--cool);
+}
+:host .queue-head {
+  color: var(--cool);
+}
+:host .track-row.selected,
+:host .track-row.selected:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+:host .feedback-box {
+  background: color-mix(in srgb, var(--cool) 5%, var(--surface));
+  border-color: color-mix(in srgb, var(--cool) 23%, transparent);
+}
+:host #send {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+:host #save {
+  border-color: color-mix(in srgb, var(--cool) 28%, transparent);
+}
+:host #selected-count {
+  color: var(--accent);
+}
+
+/* Explicit palettes override host colors while retaining its light/dark mode. */
+:host([data-palette='cobalt']) {
+  --surface: light-dark(#f3f5fa, #1a2233);
+  --text: light-dark(#1c2c46, #edf2ff);
+  --muted: light-dark(#596b86, #abb8d1);
+  --on-accent: light-dark(#fff, #29241d);
+  --accent: light-dark(#345fc0, #a2bbff);
+  --cool: light-dark(#397c88, #8dccd4);
+}
+:host([data-palette='ember']) {
+  --surface: light-dark(#faf6ee, #282522);
+  --text: light-dark(#34291e, #f5efe4);
+  --muted: light-dark(#75634f, #beb0a0);
+  --on-accent: light-dark(#fff, #29241d);
+  --accent: light-dark(#996322, #e8b66b);
+  --cool: light-dark(#81733d, #c8c18d);
+}
+:host([data-palette='moss']) {
+  --surface: light-dark(#f3f6ed, #222b25);
+  --text: light-dark(#263623, #eff4e7);
+  --muted: light-dark(#62715a, #b0bda7);
+  --on-accent: light-dark(#fff, #29241d);
+  --accent: light-dark(#687622, #c4ce81);
+  --cool: light-dark(#347b66, #91c6ae);
+}
+:host([data-palette='oxblood']) {
+  --surface: light-dark(#fbf3f1, #302326);
+  --text: light-dark(#46242d, #faefeb);
+  --muted: light-dark(#816069, #c9abb2);
+  --on-accent: light-dark(#fff, #29241d);
+  --accent: light-dark(#a2455a, #e8a2b0);
+  --cool: light-dark(#92703c, #d1bb91);
+}
+
+:host([data-palette='oled']) {
+  color-scheme: dark;
+  --surface: #000000;
+  --on-accent: #101318;
+  --text: #edf1f6;
+  --muted: #a0a8b3;
+  --accent: #d6e2f3;
+  --cool: #8eabc4;
+}
+
+:host([data-palette='host']) {
+  --cool: var(--accent);
+}
+.appearance {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+#appearance {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px;
+  max-width: 120px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :host .actions button:hover:not(:disabled),
+  :host #send:hover:not(:disabled) {
+    transform: none;
+  }
+  :host .track-row {
+    transition: none;
+  }
+}
+
+@media (max-width: 620px) {
+  header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  header .brand {
+    flex: 1;
+  }
+  .appearance {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* Hosts can cap an inline iframe below its requested height. Keep the controls
+   in view and let only the track list absorb that constraint. */
+#selecta-content {
+  display: flex;
+  flex-direction: column;
+  max-height: 100dvh;
+}
+#selecta-content > *,
+#editor > * {
+  flex-shrink: 0;
+}
+#editor {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 1;
+  min-height: 0;
+}
+#tracks {
+  flex-shrink: 1;
+  min-height: 0;
+}
+.inspection[open] {
+  max-height: 110px;
+  overflow: auto;
+}
+#status {
+  max-height: 3em;
+  overflow: auto;
+}
+:host([data-measuring]) #selecta-content {
+  max-height: none;
+}

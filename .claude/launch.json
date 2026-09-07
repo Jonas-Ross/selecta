@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "preview-draft",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "preview:draft"],
+      "port": 8766
+    }
+  ]
+}

@@ -11,7 +11,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/build-ui.mjs",
     "test": "npm run build && vitest run --tags-filter='!integration'",
     "test:integration": "vitest run --tags-filter=integration",
     "smoke": "npm run build && node scripts/smoke.mjs",
@@ -20,9 +20,11 @@
     "lint": "oxlint",
     "format": "oxlint --fix && oxfmt",
     "format:check": "oxfmt --check",
-    "check": "npm test && npm run lint && npm run format:check"
+    "check": "npm test && npm run lint && npm run format:check",
+    "preview:draft": "npm run build && node scripts/preview-draft.mjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "better-sqlite3": "^13.0.3",
     "commander": "^15.0.0",
@@ -32,6 +34,7 @@
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.4.0",
+    "esbuild": "0.28.2",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0",
     "typescript": "^7.0.2",

@@ -5,6 +5,8 @@
 // on the bridge package.
 
 export type ErrorCode =
+  | 'draft_not_found'
+  | 'draft_revision_conflict'
   | 'operation_busy'
   | 'automation_permission_denied' // macOS denied Music.app automation
   | 'music_app_not_running' // Music.app isn't open
@@ -58,6 +60,10 @@ export class BridgeError extends Error {
 // resolve the hint as `err.hint ?? defaultHints[err.errorCode]`, so a per-call
 // `hint` is reserved for overrides "when more context is available."
 export const defaultHints: Record<ErrorCode, string> = {
+  draft_not_found:
+    'No local draft with that ID. Check the original draft_id or ask the agent to open a new draft explicitly.',
+  draft_revision_conflict:
+    'The draft has changed. Use get_playlist_draft and reconcile your edits before continuing.',
   operation_busy: 'Another operation is active. Wait for it to finish before trying again.',
   automation_permission_denied:
     'macOS has not granted Music.app automation access. Ask the user to enable it in System Settings → Privacy & Security → Automation.',

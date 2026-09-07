@@ -48,7 +48,7 @@ describe('MCP server over in-memory transport', () => {
     await client.close();
   });
 
-  it('exposes the sixteen tools', async () => {
+  it('exposes library and draft tools', async () => {
     const client = await connectedClient();
     const { tools } = await client.listTools();
 
@@ -56,19 +56,24 @@ describe('MCP server over in-memory transport', () => {
       'add_tracks',
       'create_playlist',
       'delete_playlist',
+      'edit_playlist_draft',
       'enrich_features',
+      'get_playlist_draft',
       'get_track_context',
       'inspect_tracklist',
       'library_overview',
       'list_playlists',
+      'playlist_draft_appearance',
       'preview_playlist',
       'refresh_library',
       'remove_tracks',
       'reorder_tracks',
+      'save_playlist_draft',
       'search',
       'set_loved',
       'set_note',
       'set_rating',
+      'show_playlist_draft',
     ]);
     // Tool descriptions are first-class — they must survive the wire.
     const search = tools.find((t) => t.name === 'search')!;

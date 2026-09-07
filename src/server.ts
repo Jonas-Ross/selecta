@@ -3,6 +3,7 @@
 // serializes their output-or-error-envelope as a JSON text block. Envelopes set
 // isError so the model treats them as actionable failures.
 
+import { registerDraftApp } from './draft_app.js';
 import { APP_VERSION } from './version.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolDeps } from './tools/common.js';
@@ -75,12 +76,24 @@ import {
   INSPECT_TRACKLIST_DESCRIPTION,
 } from './tools/inspect_tracklist.js';
 import { handleSetNote, setNoteInputShape, SET_NOTE_DESCRIPTION } from './tools/set_note.js';
+import {
+  PlaylistDraftTools,
+  getDraftInputShape,
+  editDraftInputShape,
+  revisionInputShape,
+  GET_DRAFT_DESCRIPTION,
+  EDIT_DRAFT_DESCRIPTION,
+  SAVE_DRAFT_DESCRIPTION,
+} from './tools/playlist_draft.js';
 
 export const SERVER_INFO = { name: 'selecta', version: APP_VERSION };
 
-function toToolResult(result: object) {
+// structuredContent is opt-in: the draft widget reads it, while doubling every
+// core tool's payload on the wire would only cost tokens.
+function toToolResult(result: object, options: { structured?: boolean } = {}) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(result) }],
+    ...(options.structured ? { structuredContent: { ...result } } : {}),
     ...(isSelectaError(result) ? { isError: true } : {}),
   };
 }
@@ -183,6 +196,41 @@ export function createServer(deps: ToolDeps): McpServer {
     { description: SET_NOTE_DESCRIPTION, inputSchema: setNoteInputShape },
     async (args) => toToolResult(await handleSetNote(args, deps)),
   );
+
+  const drafts = new PlaylistDraftTools(deps);
+  const toDraftResult = (result: object) => toToolResult(result, { structured: true });
+
+  server.registerTool(
+    'get_playlist_draft',
+    {
+      description: GET_DRAFT_DESCRIPTION,
+      inputSchema: getDraftInputShape,
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => toDraftResult(await drafts.get(args)),
+  );
+
+  server.registerTool(
+    'edit_playlist_draft',
+    {
+      description: EDIT_DRAFT_DESCRIPTION,
+      inputSchema: editDraftInputShape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) => toDraftResult(await drafts.edit(args)),
+  );
+
+  server.registerTool(
+    'save_playlist_draft',
+    {
+      description: SAVE_DRAFT_DESCRIPTION,
+      inputSchema: revisionInputShape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) => toDraftResult(await drafts.save(args)),
+  );
+
+  registerDraftApp(server, drafts, toDraftResult);
 
   return server;
 }
