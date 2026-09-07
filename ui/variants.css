@@ -105,3 +105,33 @@ html[data-variant='pulse'] #save {
 html[data-variant='pulse'] #selected-count {
   color: var(--accent);
 }
+
+/* Pulse palette studies; surface overrides from a real host remain authoritative. */
+html[data-variant='pulse'][data-palette='cobalt'] {
+  --surface: var(--color-background-primary, light-dark(#f3f5fa, #1a2233));
+  --text: var(--color-text-primary, light-dark(#1c2c46, #edf2ff));
+  --muted: var(--color-text-secondary, light-dark(#596b86, #abb8d1));
+  --accent: light-dark(#345fc0, #a2bbff);
+  --cool: light-dark(#397c88, #8dccd4);
+}
+html[data-variant='pulse'][data-palette='ember'] {
+  --surface: var(--color-background-primary, light-dark(#faf6ee, #282522));
+  --text: var(--color-text-primary, light-dark(#34291e, #f5efe4));
+  --muted: var(--color-text-secondary, light-dark(#75634f, #beb0a0));
+  --accent: light-dark(#996322, #e8b66b);
+  --cool: light-dark(#81733d, #c8c18d);
+}
+html[data-variant='pulse'][data-palette='moss'] {
+  --surface: var(--color-background-primary, light-dark(#f3f6ed, #222b25));
+  --text: var(--color-text-primary, light-dark(#263623, #eff4e7));
+  --muted: var(--color-text-secondary, light-dark(#62715a, #b0bda7));
+  --accent: light-dark(#687622, #c4ce81);
+  --cool: light-dark(#347b66, #91c6ae);
+}
+html[data-variant='pulse'][data-palette='oxblood'] {
+  --surface: var(--color-background-primary, light-dark(#fbf3f1, #302326));
+  --text: var(--color-text-primary, light-dark(#46242d, #faefeb));
+  --muted: var(--color-text-secondary, light-dark(#816069, #c9abb2));
+  --accent: light-dark(#a2455a, #e8a2b0);
+  --cool: light-dark(#92703c, #d1bb91);
+}

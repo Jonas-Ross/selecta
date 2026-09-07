@@ -142,6 +142,45 @@
           grid-template-columns: repeat(2, 1fr);
         }
       }
+      .palettes {
+        max-width: 960px;
+        margin: 18px auto 0;
+        padding: 0 20px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .palettes button {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        cursor: pointer;
+        background: transparent;
+        font-size: 12px;
+        border-color: #ffffff18;
+        flex: 1;
+        justify-content: center;
+        min-width: 120px;
+      }
+      .palettes button[aria-pressed='true'] {
+        background: #292a33;
+        border-color: #b8bbc9;
+      }
+      .swatches {
+        display: flex;
+      }
+      .swatches i {
+        width: 13px;
+        height: 20px;
+        background: var(--swatch);
+        display: block;
+      }
+      .swatches i:first-child {
+        border-radius: 4px 0 0 4px;
+      }
+      .swatches i:last-child {
+        border-radius: 0 4px 4px 0;
+      }
     </style>
   </head>
   <body>
@@ -169,7 +208,39 @@
         <strong>2. Pulse</strong><small>Fluid motion. Copper and petrol.</small>
       </button>
     </nav>
-    <p id="direction">Pulse: deep petrol, warm copper, and motion that follows your edits.</p>
+    <nav class="palettes" aria-label="Pulse palettes">
+      <button data-palette="copper" aria-pressed="true">
+        <span class="swatches" aria-hidden="true"
+          ><i style="--swatch: #19282a"></i><i style="--swatch: #e9a276"></i
+          ><i style="--swatch: #84c6c1"></i></span
+        >1. Copper
+      </button>
+      <button data-palette="cobalt" aria-pressed="false">
+        <span class="swatches" aria-hidden="true"
+          ><i style="--swatch: #1a2233"></i><i style="--swatch: #a2bbff"></i
+          ><i style="--swatch: #8dccd4"></i></span
+        >2. Cobalt
+      </button>
+      <button data-palette="ember" aria-pressed="false">
+        <span class="swatches" aria-hidden="true"
+          ><i style="--swatch: #282522"></i><i style="--swatch: #e8b66b"></i
+          ><i style="--swatch: #c8c18d"></i></span
+        >3. Ember
+      </button>
+      <button data-palette="moss" aria-pressed="false">
+        <span class="swatches" aria-hidden="true"
+          ><i style="--swatch: #222b25"></i><i style="--swatch: #c4ce81"></i
+          ><i style="--swatch: #91c6ae"></i></span
+        >4. Moss
+      </button>
+      <button data-palette="oxblood" aria-pressed="false">
+        <span class="swatches" aria-hidden="true"
+          ><i style="--swatch: #302326"></i><i style="--swatch: #e8a2b0"></i
+          ><i style="--swatch: #d1bb91"></i></span
+        >5. Oxblood
+      </button>
+    </nav>
+    <p id="direction">Choose a Pulse palette. Color changes instantly; your draft stays in place.</p>
     <main>
       <div class="stage" id="stage">
         <iframe id="card" title="Playlist draft preview" src="/widget?variant=pulse"></iframe>
@@ -189,6 +260,20 @@
       let draftId = '__DRAFT_ID__';
       const card = document.getElementById('card');
       let variant = 'pulse';
+      let palette = 'copper';
+      const sendPalette = () =>
+        card.contentWindow.postMessage(
+          { type: 'selecta-preview-palette', palette },
+          location.origin,
+        );
+      for (const button of document.querySelectorAll('[data-palette]'))
+        button.onclick = () => {
+          palette = button.dataset.palette;
+          for (const item of document.querySelectorAll('[data-palette]'))
+            item.setAttribute('aria-pressed', String(item === button));
+          sendPalette();
+        };
+      card.addEventListener('load', sendPalette);
       const reloadCard = () => {
         card.src = `/widget?variant=${variant}`;
       };
@@ -200,6 +285,8 @@
       for (const button of document.querySelectorAll('[data-variant]'))
         button.onclick = () => {
           variant = button.dataset.variant;
+          for (const choice of document.querySelectorAll('[data-palette]'))
+            choice.disabled = variant !== 'pulse';
           for (const item of document.querySelectorAll('[data-variant]'))
             item.setAttribute('aria-pressed', String(item === button));
           document.getElementById('direction').textContent = descriptions[variant];
@@ -234,6 +321,7 @@
               hostContext: hostContext(),
             };
           else if (data.method === 'ui/notifications/initialized') {
+            sendPalette();
             source.postMessage(
               {
                 jsonrpc: '2.0',

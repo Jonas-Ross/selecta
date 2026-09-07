@@ -50,3 +50,13 @@ new MutationObserver(() => {
     previous = next;
   });
 }).observe(queue, { childList: true });
+
+// The fixture host can compare palettes without remounting or losing typed text.
+addEventListener('message', ({ source, origin, data }) => {
+  if (source !== parent || origin !== location.origin || data?.type !== 'selecta-preview-palette')
+    return;
+
+  if (['copper', 'cobalt', 'ember', 'moss', 'oxblood'].includes(data.palette)) {
+    document.documentElement.dataset.palette = data.palette;
+  }
+});
