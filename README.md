@@ -73,7 +73,7 @@ Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vib
 
 ## Tools
 
-Sixteen tools, in three groups. The first group answers from the local cache and never touches Music.app; the second writes to Music.app; the third keeps the cache current and holds the agent's own notes.
+Twenty tools, in four groups. The first group answers from the local cache and never touches Music.app; the second writes to Music.app; the third keeps the cache current and holds the agent's own notes.
 
 ### Reading
 
@@ -84,6 +84,23 @@ Sixteen tools, in three groups. The first group answers from the local cache and
 | `get_track_context` | What sits around a track in your own playlists: same-artist tracks, the playlists it's in, and the tracks that co-occur with it. Accepts up to 20 seeds at once for a combined co-occurrence view. Single-seed calls include the track's play history across refreshes. You can leave specific playlists out, or skip any above a given size, before it counts; the response says which playlists were considered and which were dropped. |
 | `inspect_tracklist` | Sanity-check an ordered draft before previewing or creating it: runtime, repeated IDs, duplicate copies of the same song, artist counts, per-track signal, and where BPM and key data is missing. Facts only, no judgement. |
 | `list_playlists` | Your playlists, with kind (`user`/`smart`/`subscription`/`folder`) and track counts. Filter by kind or name. |
+
+### Interactive drafts
+
+| Tool | What it does |
+|---|---|
+| `show_playlist_draft` | Opens an ordered interactive draft with existing inspection facts. Supply a fresh UUID as `draft_id`, a name, and ordered track IDs. Each occurrence gets its own entry ID. |
+| `get_playlist_draft` | Read-only recovery of the latest local draft, including selection, pins, feedback and save outcome. |
+| `edit_playlist_draft` | Changes the draft at an explicit revision. Preserve occurrence IDs when reordering or revising. Stale edits fail instead of overwriting newer work. |
+| `save_playlist_draft` | Saves an explicitly approved revision using the existing `create_playlist` contract. Selection, pinning and feedback never call it. |
+
+Ask your agent to **open an interactive playlist draft**. Select entries, move them with the arrow buttons, and pin entries you want retained in later revisions. Use **Keep feedback in draft** to persist text, or **Send feedback to agent** to request a revision. Codex receives context/messages directly; Claude Desktop Code exposes context through **Read widget context** and may stage feedback in the composer for you to send. Pins are instructions for you and your agent, not scores or enforced positions.
+
+Drafts live in `~/Library/Application Support/Selecta/drafts.db`, separate from library refreshes. **Reload latest** restores persisted edits. If a host omits the original result after reload, the card recovers from the original tool input's draft ID; you can also paste that ID into **Recover draft**. A missing draft is reported explicitly. Uncommitted feedback text must be kept or sent before closing the card. Missing library tracks remain visible by ID in recovered drafts, with an inspection error; ask the agent to replace them before saving.
+
+**Save this revision to Music.app** explicitly creates a real playlist. A save attempt is recorded before the Music.app call and its result is retained, including partial-write errors. Pending outcomes after interruption are uncertain and cannot be retried automatically; inspect Music.app before choosing further action. A changed name or track order/list can be saved as a new revision after a completed attempt. Selection, feedback and pin changes alone do not re-enable save. Playback and preview-slot controls are outside this widget.
+
+After updating Selecta, run `npm ci && npm run build` in the checkout your connector runs. The build bundles the widget and SDK into `dist/ui/playlist-draft.html`; no CDN or separate service is needed. Restart/reconnect Selecta in your MCP client so it discovers the four new tools, and reopen the card (Claude may need a full app restart to clear cached resources). Existing core tools still work in hosts without MCP Apps. See [draft smoke checks](docs/playlist-drafts.md) for verification and current desktop-test status.
 
 ### Writing to Music.app
 
@@ -115,7 +132,7 @@ The application version is maintained in `package.json`; MCP server metadata and
 | `npm test` | Unit suite (fast, no Music.app) |
 | `npm run test:integration` | Bridge tests against your real Music.app. Needs a user playlist named `Selecta Test` with at least two tracks. |
 | `npm run smoke` | End-to-end scenario over real MCP stdio: refresh → search → context → preview → create, then cleans up after itself. |
-| `npm run build` | TypeScript → `dist/` |
+| `npm run build` | TypeScript and bundled widget → `dist/` |
 | `npm run lint` | oxlint |
 | `npm run format:check` | oxfmt check (`npm run format` rewrites) |
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |

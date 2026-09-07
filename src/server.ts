@@ -3,6 +3,8 @@
 // serializes their output-or-error-envelope as a JSON text block. Envelopes set
 // isError so the model treats them as actionable failures.
 
+import { registerDraftApp } from './draft_app.js';
+import type { DraftStore } from './drafts/store.js';
 import { APP_VERSION } from './version.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolDeps } from './tools/common.js';
@@ -85,7 +87,7 @@ function toToolResult(result: object) {
   };
 }
 
-export function createServer(deps: ToolDeps): McpServer {
+export function createServer(deps: ToolDeps, drafts?: DraftStore): McpServer {
   const server = new McpServer(SERVER_INFO);
 
   server.registerTool(
@@ -183,6 +185,8 @@ export function createServer(deps: ToolDeps): McpServer {
     { description: SET_NOTE_DESCRIPTION, inputSchema: setNoteInputShape },
     async (args) => toToolResult(await handleSetNote(args, deps)),
   );
+
+  registerDraftApp(server, deps, drafts);
 
   return server;
 }

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: var(--font-sans, system-ui, sans-serif);
+        color: var(--color-text-primary, light-dark(#202322, #e8eeeb));
+        background: var(--color-background-primary, light-dark(#fafbf9, #17201e));
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        font-size: 13px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: start;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 4px 0 8px;
+        letter-spacing: -0.4px;
+      }
+      .eyebrow {
+        font-size: 10px;
+        letter-spacing: 1.6px;
+        text-transform: uppercase;
+        opacity: 0.7;
+      }
+      p {
+        line-height: 1.5;
+      }
+      #summary {
+        margin: 8px 0;
+      }
+      #identity {
+        font-size: 11px;
+        overflow-wrap: anywhere;
+        opacity: 0.7;
+      }
+      button,
+      input,
+      textarea {
+        font: inherit;
+        color: inherit;
+        background: var(--color-background-secondary, light-dark(#edf0eb, #24322d));
+        border: 1px solid var(--color-border-primary, light-dark(#cbd2cb, #46594f));
+        border-radius: 6px;
+        padding: 7px 9px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      :focus-visible {
+        outline: 2px solid var(--color-text-primary, #a3c9b2);
+        outline-offset: 2px;
+      }
+      #tracks {
+        padding: 0;
+        list-style: none;
+        max-height: 360px;
+        overflow: auto;
+        margin: 12px 0;
+      }
+      li {
+        display: grid;
+        grid-template-columns: 20px 24px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 0;
+        border-top: 1px solid var(--color-border-primary, light-dark(#dce0d9, #35473e));
+      }
+      .title {
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .facts {
+        font-size: 11px;
+        opacity: 0.75;
+        margin-top: 4px;
+        line-height: 1.5;
+      }
+      .actions {
+        display: flex;
+        gap: 4px;
+      }
+      .actions button {
+        padding: 5px 7px;
+      }
+      button[aria-pressed='true'] {
+        background: var(--color-background-info, light-dark(#d4e4da, #3d5e4c));
+      }
+      textarea {
+        width: 100%;
+        resize: vertical;
+        margin: 6px 0;
+      }
+      footer {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      #status {
+        min-height: 20px;
+        margin: 10px 0 0;
+      }
+      details {
+        font-size: 12px;
+        margin: 8px 0;
+      }
+      #recovery {
+        margin: 12px 0;
+      }
+      #recover-id {
+        width: min(100%, 340px);
+      }
+      #editor[hidden],
+      #recovery[hidden] {
+        display: none;
+      }
+      @media (max-width: 440px) {
+        body {
+          padding: 10px;
+        }
+        li {
+          grid-template-columns: 18px 18px minmax(0, 1fr);
+        }
+        .actions {
+          grid-column: 3;
+          justify-content: flex-end;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <span class="eyebrow">Selecta / playlist draft</span>
+        <h1 id="name">Open your draft</h1>
+      </div>
+      <button id="reload" disabled>Reload latest</button>
+    </header>
+    <div id="identity"></div>
+    <div id="recovery">
+      <p>
+        Recover an existing draft using its draft ID from the conversation. If the draft is missing,
+        ask the agent to open a new one.
+      </p>
+      <input id="recover-id" aria-label="Draft ID" placeholder="Draft UUID" /><button id="recover">
+        Recover draft
+      </button>
+    </div>
+    <main id="editor" hidden>
+      <p id="summary"></p>
+      <details>
+        <summary>Artists and missing data</summary>
+        <p id="details"></p>
+      </details>
+      <ol id="tracks" aria-label="Ordered draft tracks"></ol>
+      <label for="feedback">Feedback about selected entries</label
+      ><textarea
+        id="feedback"
+        rows="2"
+        maxlength="2000"
+        placeholder="What would you like to change?"
+      ></textarea>
+      <p class="facts">
+        Pins ask the agent to keep an entry in future revisions. Edits stay in this draft.
+      </p>
+      <footer>
+        <button id="keep-feedback">Keep feedback in draft</button
+        ><button id="send">Send feedback to agent</button
+        ><button id="save">Save this revision to Music.app</button>
+      </footer>
+    </main>
+    <p id="status" role="status" aria-live="polite">Connecting to the host…</p>
+    <script type="module">
+      /*__APP__*/
+    </script>
+  </body>
+</html>
