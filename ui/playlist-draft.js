@@ -1,8 +1,8 @@
+import { host, ui, el } from './dom.js';
 import './pulse.js';
 import { App, applyHostStyleVariables } from '@modelcontextprotocol/ext-apps';
 
 const app = new App({ name: 'Selecta playlist draft', version: '1.0.0' }, {});
-const el = (id) => document.getElementById(id);
 let state;
 let draftId;
 let busy = false;
@@ -27,8 +27,7 @@ function theme(context) {
 
   if (context?.theme) hostTheme = context.theme;
 
-  document.documentElement.style.colorScheme =
-    appearance === 'oled' ? 'dark' : (hostTheme ?? 'light dark');
+  host.style.colorScheme = appearance === 'oled' ? 'dark' : (hostTheme ?? 'light dark');
 }
 
 async function loadAppearance(value) {
@@ -50,7 +49,7 @@ async function loadAppearance(value) {
       throw new Error(data.hint ?? 'Appearance unavailable.');
 
     appearance = data.appearance;
-    document.documentElement.dataset.palette = appearance;
+    host.dataset.palette = appearance;
     theme();
   } catch (error) {
     status(`Could not load or save appearance: ${error.message}`);
@@ -85,6 +84,7 @@ function accept(data) {
     return;
 
   state = data;
+  el('feedback').value = data.draft.feedback;
   draftId = data.draft.draft_id;
   render();
 }
@@ -121,6 +121,9 @@ function render() {
 
   const { draft, inspection, inspection_error } = state;
 
+  el('editor').inert = busy;
+  el('editor').setAttribute('aria-busy', String(busy));
+
   el('name').textContent = draft.name;
   el('identity').textContent = `Draft ${draft.draft_id}`;
   el('revision').textContent = `Revision ${draft.revision}`;
@@ -130,12 +133,12 @@ function render() {
   el('recover-id').value = draft.draft_id;
   el('recovery').hidden = true;
   el('editor').hidden = false;
-  el('reload').disabled = busy;
-  el('feedback').value = draft.feedback;
-  el('feedback').disabled = busy || draft.save?.status === 'pending';
-  el('send').disabled = busy;
-  el('keep-feedback').disabled = busy || draft.save?.status === 'pending';
-  el('save').disabled = busy || !!draft.save || !!inspection_error;
+  el('reload').disabled = false;
+  el('reload').inert = busy;
+  el('feedback').disabled = draft.save?.status === 'pending';
+  el('send').disabled = false;
+  el('keep-feedback').disabled = draft.save?.status === 'pending';
+  el('save').disabled = !!draft.save || !!inspection_error;
   el('summary').textContent = inspection
     ? `${inspection.track_count} tracks / ${duration(inspection.runtime.known_seconds)}${inspection.runtime.missing_count ? ' known runtime' : ' runtime'}${inspection.duplicate_ids.length ? ` / ${inspection.duplicate_ids.length} repeated` : ''}`
     : (inspection_error?.hint ?? 'Inspection unavailable');
@@ -154,7 +157,7 @@ function render() {
   if (trackView === renderedTracks) {
     for (const control of el('tracks').querySelectorAll('input, button')) {
       control.disabled =
-        busy || draft.save?.status === 'pending' || control.dataset.edgeDisabled === 'true';
+        draft.save?.status === 'pending' || control.dataset.edgeDisabled === 'true';
     }
 
     return;
@@ -178,7 +181,7 @@ function render() {
       'aria-label',
       `Select entry ${index + 1}: ${track?.title ?? entry.track_id}`,
     );
-    select.disabled = busy || draft.save?.status === 'pending';
+    select.disabled = draft.save?.status === 'pending';
     select.onchange = () =>
       edit({
         selected_entry_ids: select.checked
@@ -256,7 +259,6 @@ function render() {
         index + delta < 0 || index + delta >= draft.entries.length,
       );
       button.disabled =
-        busy ||
         draft.save?.status === 'pending' ||
         index + delta < 0 ||
         index + delta >= draft.entries.length;
@@ -279,7 +281,7 @@ function render() {
     pin.title = entry.pinned ? 'Pinned: keep this entry' : 'Pin: ask the agent to keep this entry';
     pin.setAttribute('aria-label', `Pin entry ${index + 1}`);
     pin.setAttribute('aria-pressed', String(entry.pinned));
-    pin.disabled = busy || draft.save?.status === 'pending';
+    pin.disabled = draft.save?.status === 'pending';
     pin.onclick = () =>
       edit({
         entries: draft.entries.map((item) =>
@@ -296,7 +298,8 @@ function render() {
 async function action(fn) {
   if (busy) return;
 
-  const focusKey = document.activeElement?.dataset.focus;
+  const focused = ui.activeElement;
+  const focusKey = focused?.dataset.focus;
 
   busy = true;
   render();
@@ -310,9 +313,8 @@ async function action(fn) {
     render();
 
     if (focusKey)
-      document
-        .querySelector(`[data-focus="${CSS.escape(focusKey)}"]`)
-        ?.focus({ preventScroll: true });
+      ui.querySelector(`[data-focus="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
+    else focused?.focus({ preventScroll: true });
   }
 }
 

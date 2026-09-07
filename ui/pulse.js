@@ -1,6 +1,8 @@
-// Animate animate occurrence identities, never infer music facts.
+// Animate occurrence identities, never infer music facts.
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const queue = document.getElementById('tracks');
+
+import { el } from './dom.js';
+const queue = el('tracks');
 let previous = new Map();
 let scheduled = false;
 let entered = false;

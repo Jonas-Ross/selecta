@@ -46,7 +46,13 @@ async function reset() {
 await reset();
 const port = Number(process.env.SELECTA_PREVIEW_PORT ?? 8766);
 const origin = `http://127.0.0.1:${port}`;
-const files = ['ui/playlist-draft.html', 'ui/playlist-draft.js', 'ui/pulse.css', 'ui/pulse.js'];
+const files = [
+  'ui/playlist-draft.html',
+  'ui/playlist-draft.js',
+  'ui/pulse.css',
+  'ui/pulse.js',
+  'ui/dom.js',
+];
 const version = async () =>
   (await Promise.all(files.map(async (file) => (await stat(new URL(file, root))).mtimeMs))).join(
     '-',
@@ -133,10 +139,22 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/widget') {
       await promisify(execFile)(process.execPath, ['scripts/build-ui.mjs'], { cwd: root });
       res.setHeader('Content-Type', 'text/html');
-      const widget = await readFile(
+      let widget = await readFile(
         new URL('../dist/ui/playlist-draft.html', import.meta.url),
         'utf8',
       );
+
+      if (url.searchParams.get('host') === 'codex') {
+        // Representative conflicting renderer rules, not a copy of host CSS.
+        widget = widget.replace(
+          '</head>',
+          `<style>
+          :root { --accent: #223344; --muted: #777777; background: #111111 !important; }
+          html > body { padding: 0; color: #777777; background: transparent !important; }
+          button, select, textarea { background: #000000; color: #777777; }
+        </style></head>`,
+        );
+      }
 
       res.end(widget);
 

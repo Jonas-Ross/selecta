@@ -37,7 +37,9 @@ User-reported Claude Desktop Code results for draft `ff9d8396-9573-44b4-a967-879
 
 Observed limitation: an agent-side edit does not automatically update an already mounted card or its published context. The reported card/context remained at revision 4 after the server reached revision 5. Source inspection confirms **Reload latest** reads the current draft and updates the card without reopening it; the user subsequently confirmed the remaining recovery check passed. Recovery alone does not republish widget context; a subsequent widget edit or feedback message carries the current revision. Stale submissions are rejected. No polling or automatic synchronization is implemented.
 
-OpenAI Codex task-surface testing remains pending for this feature.
+Codex task-surface testing started with draft `718f6655-2535-4bf3-b02e-cd07f01c9504`: discovery and draft creation succeeded, and widget context reached the model at revision 5. The user confirmed animations worked but reported action flicker and incorrect colors, including explicit palettes. This is a partial smoke result, not a pass.
+
+Inspection of the installed Codex renderer found injected global CSS overlapping the card's custom properties, body spacing and form controls. The card now mounts its styles and content in a shadow tree and inherits only the standard MCP host theme variables. Follow host uses neutral host text colors instead of the leftover purple accent. Temporary requests make the editor inert without dimming every button; feedback updates only when a server response is accepted, avoiding a flash back to old text during submission. The controlled render regression checks transient interaction blocking, stable disabled states, feedback retention and animated row lifetime. The fixture host includes representative CSS collisions; browser checks verified Copper rendering and occurrence selection, pin/reorder and feedback through the isolated tree. Actual-host rechecking remains pending.
 
 ## Desktop smoke checklist
 

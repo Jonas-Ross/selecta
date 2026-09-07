@@ -1,29 +1,30 @@
 /* Pulse layout and explicit appearance palettes. */
-html[data-palette='copper'] {
+:host([data-palette='copper']) {
   --surface: light-dark(#f4f7f6, #19282a);
   --text: light-dark(#203335, #edf4ed);
   --muted: light-dark(#526c6d, #a3babb);
+  --on-accent: light-dark(#fff, #29241d);
   --accent: light-dark(#a34f30, #e9a276);
   --cool: light-dark(#287c7c, #84c6c1);
 }
-html .track-row {
+:host .track-row {
   border: 1px solid transparent;
   transition:
     background 0.24s,
     border-color 0.24s;
 }
-html .track-row:hover {
+:host .track-row:hover {
   border-color: var(--line);
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));
 }
-html .track-row.selected {
+:host .track-row.selected {
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
-html h1 {
+:host h1 {
   position: relative;
   padding-bottom: 16px;
 }
-html h1:after {
+:host h1:after {
   content: '';
   position: absolute;
   left: 0;
@@ -34,26 +35,26 @@ html h1:after {
   background: var(--cool);
   transform-origin: left;
 }
-html .actions button:hover:not(:disabled) {
+:host .actions button:hover:not(:disabled) {
   transform: translateY(-2px);
   color: var(--text);
 }
-html #send:hover:not(:disabled) {
+:host #send:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 5px 18px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 @media (prefers-reduced-motion: no-preference) {
-  html h1:after {
+  :host h1:after {
     animation: pulse-line 1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
-  html .actions button,
-  html #send {
+  :host .actions button,
+  :host #send {
     transition:
       transform 0.18s,
       box-shadow 0.18s,
       background 0.18s;
   }
-  html .brand svg {
+  :host .brand svg {
     animation: record-turn 1.6s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
   @keyframes pulse-line {
@@ -75,73 +76,75 @@ html #send:hover:not(:disabled) {
 }
 
 /* Copper against deep petrol: color accents the controls, not the tracks. */
-html .brand svg {
+:host .brand svg {
   color: var(--cool);
 }
-html .queue-head {
+:host .queue-head {
   color: var(--cool);
 }
-html .track-row.selected {
+:host .track-row.selected {
   background: color-mix(in srgb, var(--accent) 9%, var(--surface));
 }
-html .feedback-box {
+:host .feedback-box {
   background: color-mix(in srgb, var(--cool) 5%, var(--surface));
   border-color: color-mix(in srgb, var(--cool) 23%, transparent);
 }
-html #send {
+:host #send {
   background: var(--accent);
-  color: light-dark(#fff, #29241d);
+  color: var(--on-accent);
 }
-html #save {
+:host #save {
   border-color: color-mix(in srgb, var(--cool) 28%, transparent);
 }
-html #selected-count {
+:host #selected-count {
   color: var(--accent);
 }
 
 /* Explicit palettes override host colors while retaining its light/dark mode. */
-html[data-palette='cobalt'] {
+:host([data-palette='cobalt']) {
   --surface: light-dark(#f3f5fa, #1a2233);
   --text: light-dark(#1c2c46, #edf2ff);
   --muted: light-dark(#596b86, #abb8d1);
+  --on-accent: light-dark(#fff, #29241d);
   --accent: light-dark(#345fc0, #a2bbff);
   --cool: light-dark(#397c88, #8dccd4);
 }
-html[data-palette='ember'] {
+:host([data-palette='ember']) {
   --surface: light-dark(#faf6ee, #282522);
   --text: light-dark(#34291e, #f5efe4);
   --muted: light-dark(#75634f, #beb0a0);
+  --on-accent: light-dark(#fff, #29241d);
   --accent: light-dark(#996322, #e8b66b);
   --cool: light-dark(#81733d, #c8c18d);
 }
-html[data-palette='moss'] {
+:host([data-palette='moss']) {
   --surface: light-dark(#f3f6ed, #222b25);
   --text: light-dark(#263623, #eff4e7);
   --muted: light-dark(#62715a, #b0bda7);
+  --on-accent: light-dark(#fff, #29241d);
   --accent: light-dark(#687622, #c4ce81);
   --cool: light-dark(#347b66, #91c6ae);
 }
-html[data-palette='oxblood'] {
+:host([data-palette='oxblood']) {
   --surface: light-dark(#fbf3f1, #302326);
   --text: light-dark(#46242d, #faefeb);
   --muted: light-dark(#816069, #c9abb2);
+  --on-accent: light-dark(#fff, #29241d);
   --accent: light-dark(#a2455a, #e8a2b0);
   --cool: light-dark(#92703c, #d1bb91);
 }
 
-html[data-palette='oled'] {
+:host([data-palette='oled']) {
   color-scheme: dark;
   --surface: #000000;
+  --on-accent: #101318;
   --text: #edf1f6;
   --muted: #a0a8b3;
   --accent: #d6e2f3;
   --cool: #8eabc4;
 }
-html[data-palette='oled'] #send {
-  color: #101318;
-}
 
-html[data-palette='host'] {
+:host([data-palette='host']) {
   --cool: var(--accent);
 }
 .appearance {
@@ -161,11 +164,11 @@ html[data-palette='host'] {
   max-width: 120px;
 }
 @media (prefers-reduced-motion: reduce) {
-  html .actions button:hover:not(:disabled),
-  html #send:hover:not(:disabled) {
+  :host .actions button:hover:not(:disabled),
+  :host #send:hover:not(:disabled) {
     transform: none;
   }
-  html .track-row {
+  :host .track-row {
     transition: none;
   }
 }

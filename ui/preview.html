@@ -114,7 +114,8 @@
         ><select id="theme">
           <option value="dark">Dark</option>
           <option value="light">Light</option>
-          <option value="claude">Claude-like</option></select
+          <option value="claude">Claude-like</option>
+          <option value="codex">Codex-style injection</option></select
         ><button id="reset">Reset fixture</button>
       </div>
     </div>
@@ -137,13 +138,13 @@
       let draftId = '__DRAFT_ID__';
       const card = document.getElementById('card');
       const reloadCard = () => {
-        card.src = '/widget';
+        card.src = '/widget?host=' + document.getElementById('theme').value;
       };
       function hostContext() {
         const surface = document.getElementById('theme').value;
         return {
           theme: surface === 'light' ? 'light' : 'dark',
-          ...(surface === 'claude'
+          ...(['claude', 'codex'].includes(surface)
             ? {
                 styles: {
                   variables: {

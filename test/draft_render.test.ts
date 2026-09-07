@@ -9,6 +9,7 @@ class Element {
   dataset: Record<string, string> = {};
   scrollTop = 0;
   disabled = false;
+  inert = false;
   textContent = '';
   value = '';
   constructor(readonly tag = 'div') {}
@@ -63,6 +64,21 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
   };
 
   runInNewContext(`${renderSource}; render();`, runtime);
+  const idleDisabled = el('tracks')
+    .querySelectorAll()
+    .map((node) => node.disabled);
+
+  el('feedback').value = 'Unsaved feedback';
+  runtime.busy = true;
+  runInNewContext(`${renderSource}; render();`, runtime);
+  expect(el('editor').inert).toBe(true);
+  expect(el('feedback').value).toBe('Unsaved feedback');
+  expect(
+    el('tracks')
+      .querySelectorAll()
+      .map((node) => node.disabled),
+  ).toEqual(idleDisabled);
+  expect(el('send').disabled).toBe(false);
   state.draft.entries.reverse();
   state.draft.revision++;
   runtime.busy = true;
@@ -71,6 +87,7 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
 
   runtime.busy = false;
   runInNewContext(`${renderSource}; render();`, runtime);
+  expect(el('editor').inert).toBe(false);
   expect(el('tracks').children[0]).toBe(movingRows[0]);
   expect(el('tracks').children[1]).toBe(movingRows[1]);
   const controls = el('tracks').querySelectorAll();
