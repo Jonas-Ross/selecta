@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Selecta · Design preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #141519;
+        color: #e7e7ed;
+        font:
+          13px -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+      }
+      .toolbar {
+        padding: 18px 28px;
+        border-bottom: 1px solid #ffffff12;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+      .toolbar strong {
+        font-weight: 600;
+      }
+      .toolbar span {
+        color: #898b99;
+        font-size: 12px;
+        margin-left: 10px;
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      select,
+      button {
+        font: inherit;
+        color: inherit;
+        background: #23242b;
+        border: 1px solid #ffffff16;
+        border-radius: 7px;
+        padding: 7px 10px;
+      }
+      main {
+        padding: 42px 20px;
+      }
+      .stage {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        border: 1px solid #ffffff12;
+        border-radius: 16px;
+        background: #202125;
+        height: 820px;
+        box-shadow: 0 18px 70px #0003;
+      }
+      .caption {
+        color: #858795;
+        font-size: 11px;
+        margin: 14px 0;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      details {
+        max-width: 760px;
+        margin: 20px auto;
+        color: #898b99;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font:
+          11px ui-monospace,
+          monospace;
+        padding: 16px;
+        background: #1c1d23;
+        border-radius: 8px;
+      }
+      .hint {
+        color: #858795;
+        font-size: 11px;
+        text-align: center;
+        margin: 26px 0;
+      }
+      label {
+        font-size: 11px;
+        color: #a9aab4;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <div><strong>Selecta</strong><span>Design preview</span></div>
+      <div class="controls">
+        <label for="width">Width</label
+        ><select id="width">
+          <option value="760">Wide · 760</option>
+          <option value="553">Card · 553</option>
+          <option value="390">Narrow · 390</option></select
+        ><label for="theme">Surface</label
+        ><select id="theme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="claude">Claude-like</option></select
+        ><button id="reset">Reset fixture</button>
+      </div>
+    </div>
+    <main>
+      <div class="stage" id="stage">
+        <iframe id="card" title="Playlist draft preview" src="/widget"></iframe>
+        <div class="caption">
+          <span>Same widget code. Live updates.</span><span>Fixture library / simulated save</span>
+        </div>
+      </div>
+      <details>
+        <summary>Latest interaction</summary>
+        <pre id="event">Try selecting a track, pinning it, or sending feedback.</pre>
+      </details>
+      <p class="hint">
+        Edit ui/playlist-draft.html or ui/playlist-draft.js. The card reloads automatically.
+      </p>
+    </main>
+    <script>
+      let draftId = '__DRAFT_ID__';
+      const card = document.getElementById('card');
+      function hostContext() {
+        const surface = document.getElementById('theme').value;
+        return {
+          theme: surface === 'light' ? 'light' : 'dark',
+          ...(surface === 'claude'
+            ? {
+                styles: {
+                  variables: {
+                    '--color-background-primary': '#30302e',
+                    '--color-text-primary': '#eeeeeb',
+                    '--color-text-secondary': '#b9b9b2',
+                  },
+                },
+              }
+            : {}),
+        };
+      }
+      addEventListener('message', async ({ data, source }) => {
+        if (source !== card.contentWindow || !data?.jsonrpc) return;
+        let result = {};
+        try {
+          if (data.method === 'ui/initialize')
+            result = {
+              protocolVersion: data.params.protocolVersion,
+              hostInfo: { name: 'Selecta design preview', version: '1' },
+              hostCapabilities: { serverTools: {}, updateModelContext: {}, message: { text: {} } },
+              hostContext: hostContext(),
+            };
+          else if (data.method === 'ui/notifications/initialized') {
+            source.postMessage(
+              {
+                jsonrpc: '2.0',
+                method: 'ui/notifications/tool-input',
+                params: { arguments: { draft_id: draftId } },
+              },
+              location.origin,
+            );
+            return;
+          } else if (data.method === 'tools/call') {
+            const response = await fetch('/call', {
+              method: 'POST',
+              body: JSON.stringify(data.params),
+            });
+            if (!response.ok) throw Error('Fixture request failed');
+            result = await response.json();
+          } else if (data.method === 'ui/message' || data.method === 'ui/update-model-context')
+            document.getElementById('event').textContent = JSON.stringify(data.params, null, 2);
+          else if (data.method === 'ui/notifications/size-changed')
+            card.style.height = Math.ceil(data.params.height) + 'px';
+          if (data.id !== undefined)
+            source.postMessage({ jsonrpc: '2.0', id: data.id, result }, location.origin);
+        } catch (error) {
+          if (data.id !== undefined)
+            source.postMessage(
+              { jsonrpc: '2.0', id: data.id, error: { code: -32603, message: error.message } },
+              location.origin,
+            );
+        }
+      });
+      document.getElementById('width').onchange = (e) =>
+        (document.getElementById('stage').style.maxWidth = e.target.value + 'px');
+      document.getElementById('theme').onchange = () => {
+        card.src = '/widget';
+      };
+      document.getElementById('reset').onclick = async () => {
+        const result = await fetch('/reset', { method: 'POST' }).then((r) => r.json());
+        draftId = result.draft_id;
+        card.src = '/widget';
+      };
+      let current;
+      setInterval(async () => {
+        try {
+          const next = await fetch('/version').then((r) => r.text());
+          if (current && next !== current) card.src = '/widget';
+          current = next;
+        } catch {}
+      }, 1000);
+    </script>
+  </body>
+</html>

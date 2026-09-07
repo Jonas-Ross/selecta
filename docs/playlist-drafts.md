@@ -32,10 +32,10 @@ User-reported Claude Desktop Code results for draft `ff9d8396-9573-44b4-a967-879
 - Passed: navigation away, reopening and app reload restored the same order, selection and pins.
 - Passed: an agent-side edit set feedback at revision 5 while preserving entry IDs and pins. A stale revision-4 edit attempting to unpin, clear selection and replace feedback returned `draft_revision_conflict`; a follow-up read confirmed revision 5 remained intact.
 - Passed: a nonexistent UUID returned `draft_not_found` with a useful recovery hint.
-- Untested: typing feedback into the widget and recovering that saved text after reload. The feedback field was empty during the interaction/reload checks; setting it later through the agent does not verify the widget text-input path.
+- Passed in user follow-up: typed feedback, selection, order and pins survive reload after the remaining feedback/recovery check. This result applies to the pre-redesign card.
 - No save, audition, library refresh, Music.app change or theme change was reported.
 
-Observed limitation: an agent-side edit does not automatically update an already mounted card or its published context. The reported card/context remained at revision 4 after the server reached revision 5. Source inspection confirms **Reload latest** reads the current draft and updates the card without reopening it; that specific button still needs a desktop smoke check. Recovery alone does not republish widget context; a subsequent widget edit or feedback message carries the current revision. Stale submissions are rejected. No polling or automatic synchronization is implemented.
+Observed limitation: an agent-side edit does not automatically update an already mounted card or its published context. The reported card/context remained at revision 4 after the server reached revision 5. Source inspection confirms **Reload latest** reads the current draft and updates the card without reopening it; the user subsequently confirmed the remaining recovery check passed. Recovery alone does not republish widget context; a subsequent widget edit or feedback message carries the current revision. Stale submissions are rejected. No polling or automatic synchronization is implemented.
 
 OpenAI Codex task-surface testing remains pending for this feature.
 
@@ -51,4 +51,12 @@ The two target surfaces were established in [issue #84](https://github.com/Jonas
 6. Open the same draft in a second card or edit it through the agent. Attempt an edit from the older revision and confirm rejection followed by **Reload latest** recovery. Preserve the user's current theme.
 7. Save only a user-approved real draft, if desired. This is an actual library write; fixture tests already cover the contract. Never use destructive fault injection or remove user playlists for this smoke check.
 
-The PR remains a draft while the Codex smoke check and the remaining Claude feedback/recovery checks are pending. Prior compatibility testing is not counted as evidence for this feature.
+The PR remains a draft while the Codex smoke check is pending. The visual redesign must also be checked in the actual hosts after browser review. Prior compatibility testing is not counted as evidence for this feature.
+
+## Live design preview
+
+Run `npm run preview:draft`, then open `http://127.0.0.1:8766`. Use `SELECTA_PREVIEW_PORT` to choose a different port. This development-only loopback host loads the actual bundled widget, a fixture library in memory, and a temporary draft store. It never loads the live Music.app bridge or user cache. Save is simulated and feedback appears under **Latest interaction**.
+
+Use the width selector for 760px, 553px or 390px cards, and the surface selector for dark, light or Claude-like colors. These controls affect only the preview. Editing `ui/playlist-draft.html` or `ui/playlist-draft.js` rebuilds and reloads the card automatically; persisted fixture edits survive reload. Unsaved text does not. **Reset fixture** starts a fresh draft. Ctrl+C stops the preview and removes its temporary store. This is a development tool, not a shipped standalone UI or an alternative to host smoke testing.
+
+The design pass uses aligned time/BPM/key columns, compact icon controls, occurrence-specific selection highlighting, a focused feedback composer, and secondary save. IDs remain accessible in Track details. Browser checks verified selection of the second repeated occurrence, pin/reorder, feedback carrying revision 5, persistence across preview remount, and the 390px Claude-like surface. Keyboard focus and queue scroll are retained during row redraws. This does not replace the pending Codex host smoke check.

@@ -6,187 +6,560 @@
     <style>
       :root {
         color-scheme: light dark;
-        font-family: var(--font-sans, system-ui, sans-serif);
-        color: var(--color-text-primary, light-dark(#202322, #e8eeeb));
-        background: var(--color-background-primary, light-dark(#fafbf9, #17201e));
+        font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+        --surface: var(--color-background-primary, light-dark(#fcfcfd, #202125));
+        --text: var(--color-text-primary, light-dark(#23252b, #f1f1f4));
+        --muted: var(--color-text-secondary, light-dark(#60636d, #a6a7b1));
+        --line: color-mix(in srgb, var(--text) 11%, transparent);
+        --soft: color-mix(in srgb, var(--text) 4%, var(--surface));
+        --accent: light-dark(#5850b8, #b9b3f1);
+        --selection: color-mix(in srgb, var(--accent) 11%, var(--surface));
+        color: var(--text);
+        background: var(--surface);
       }
       * {
         box-sizing: border-box;
       }
       body {
         margin: 0;
-        padding: 16px;
+        padding: 24px;
         font-size: 13px;
-      }
-      header {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: start;
-      }
-      h1 {
-        font-size: 20px;
-        margin: 4px 0 8px;
-        letter-spacing: -0.4px;
-      }
-      .eyebrow {
-        font-size: 10px;
-        letter-spacing: 1.6px;
-        text-transform: uppercase;
-        opacity: 0.7;
-      }
-      p {
         line-height: 1.5;
-      }
-      #summary {
-        margin: 8px 0;
-      }
-      #identity {
-        font-size: 11px;
-        overflow-wrap: anywhere;
-        opacity: 0.7;
       }
       button,
       input,
       textarea {
         font: inherit;
         color: inherit;
-        background: var(--color-background-secondary, light-dark(#edf0eb, #24322d));
-        border: 1px solid var(--color-border-primary, light-dark(#cbd2cb, #46594f));
-        border-radius: 6px;
-        padding: 7px 9px;
       }
       button {
         cursor: pointer;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        min-height: 32px;
+        padding: 6px 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        white-space: nowrap;
+      }
+      button:hover:not(:disabled) {
+        background: var(--soft);
       }
       button:disabled {
-        opacity: 0.45;
+        opacity: 0.35;
         cursor: default;
       }
+      button svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex-shrink: 0;
+      }
       :focus-visible {
-        outline: 2px solid var(--color-text-primary, #a3c9b2);
-        outline-offset: 2px;
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
       }
-      #tracks {
-        padding: 0;
-        list-style: none;
-        max-height: 360px;
-        overflow: auto;
-        margin: 12px 0;
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
       }
-      li {
-        display: grid;
-        grid-template-columns: 20px 24px minmax(0, 1fr) auto;
+      .brand {
+        display: flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 0;
-        border-top: 1px solid var(--color-border-primary, light-dark(#dce0d9, #35473e));
+        color: var(--muted);
+        font-size: 12px;
       }
-      .title {
-        font-weight: 600;
+      .brand svg {
+        width: 20px;
+        height: 20px;
+      }
+      .draft-label {
+        border-left: 1px solid var(--line);
+        padding-left: 10px;
+        margin-left: 2px;
+      }
+      h1 {
+        font-size: clamp(22px, 3.8vw, 30px);
+        line-height: 1.15;
+        letter-spacing: -1px;
+        font-weight: 650;
+        margin: 22px 0 10px;
         overflow-wrap: anywhere;
       }
-      .facts {
+      #summary {
+        color: var(--muted);
+        margin: 0;
+        font-size: 12px;
+      }
+      .overview {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 23px;
+      }
+      .revision {
         font-size: 11px;
-        opacity: 0.75;
-        margin-top: 4px;
-        line-height: 1.5;
-      }
-      .actions {
-        display: flex;
-        gap: 4px;
-      }
-      .actions button {
-        padding: 5px 7px;
-      }
-      button[aria-pressed='true'] {
-        background: var(--color-background-info, light-dark(#d4e4da, #3d5e4c));
-      }
-      textarea {
-        width: 100%;
-        resize: vertical;
-        margin: 6px 0;
-      }
-      footer {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-top: 10px;
-      }
-      #status {
-        min-height: 20px;
-        margin: 10px 0 0;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
       }
       details {
         font-size: 12px;
-        margin: 8px 0;
+        color: var(--muted);
       }
-      #recovery {
-        margin: 12px 0;
+      summary {
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 5px;
       }
-      #recover-id {
-        width: min(100%, 340px);
-      }
-      #editor[hidden],
-      #recovery[hidden] {
+      summary::-webkit-details-marker {
         display: none;
       }
-      @media (max-width: 440px) {
+      summary:after {
+        content: '⌄';
+      }
+      details[open] summary:after {
+        content: '⌃';
+      }
+      #details {
+        max-width: 75ch;
+        line-height: 1.7;
+      }
+      .inspection {
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+        margin-bottom: 18px;
+      }
+      .queue-head,
+      .track-row {
+        display: grid;
+        grid-template-columns: 18px 22px minmax(110px, 1fr) 48px 54px 84px 100px;
+        gap: 10px;
+        align-items: center;
+      }
+      .queue-head {
+        padding: 0 10px 10px;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .queue-head .track-heading {
+        grid-column: 3;
+      }
+      .number,
+      .metric {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .number {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .key {
+        font-size: 11px;
+      }
+      #tracks {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 14px;
+        max-height: 410px;
+        overflow: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--line) transparent;
+      }
+      .track-row {
+        padding: 10px;
+        border-radius: 8px;
+        min-height: 62px;
+        position: relative;
+      }
+      .track-row + .track-row {
+        margin-top: 3px;
+      }
+      .track-row:hover {
+        background: var(--soft);
+      }
+      .track-row.selected {
+        background: var(--selection);
+      }
+      .track-row.selected:before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 14px;
+        bottom: 14px;
+        width: 2px;
+        border-radius: 2px;
+        background: var(--accent);
+      }
+      input[type='checkbox'] {
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border: 1px solid color-mix(in srgb, var(--muted) 60%, transparent);
+        border-radius: 4px;
+        margin: 0;
+        cursor: pointer;
+        display: grid;
+        place-content: center;
+      }
+      input[type='checkbox']:checked {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      input[type='checkbox']:checked:after {
+        content: '✓';
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--surface);
+      }
+      .title {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+      }
+      .artist {
+        font-size: 11px;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+        margin-top: 2px;
+      }
+      .track-name {
+        min-width: 0;
+      }
+      .repeat {
+        display: inline-block;
+        font-size: 9px;
+        font-weight: 500;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0 4px;
+        margin-left: 7px;
+        vertical-align: 1px;
+      }
+      .metric {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .unknown {
+        color: var(--muted);
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1px;
+      }
+      .actions button {
+        padding: 5px;
+        width: 30px;
+        min-height: 30px;
+        color: var(--muted);
+        border-radius: 6px;
+      }
+      .actions .move {
+        opacity: 0.5;
+      }
+      .track-row:hover .move,
+      .track-row:focus-within .move {
+        opacity: 1;
+      }
+      .actions button[aria-pressed='true'] {
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+      }
+      .feedback-box {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--soft);
+        padding: 13px 14px;
+        margin: 20px 0 16px;
+      }
+      .feedback-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      label {
+        font-size: 12px;
+        font-weight: 550;
+      }
+      #selected-count {
+        font-size: 11px;
+        color: var(--accent);
+      }
+      textarea {
+        display: block;
+        width: 100%;
+        border: 0;
+        background: transparent;
+        resize: vertical;
+        min-height: 54px;
+        max-height: 180px;
+        padding: 10px 0 2px;
+        line-height: 1.6;
+        outline: none;
+      }
+      textarea::placeholder {
+        color: var(--muted);
+        opacity: 0.8;
+      }
+      textarea:focus-visible {
+        outline: none;
+      }
+      .feedback-box:focus-within {
+        border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+      }
+      .feedback-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .quiet {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      #send {
+        background: var(--text);
+        color: var(--surface);
+        font-size: 11px;
+        padding-inline: 12px;
+      }
+      #send:hover:not(:disabled) {
+        opacity: 0.85;
+      }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid var(--line);
+        padding-top: 14px;
+        gap: 12px;
+      }
+      #save {
+        border-color: var(--line);
+        font-size: 11px;
+      }
+      .footnote {
+        font-size: 10px;
+        color: var(--muted);
+        max-width: 35ch;
+        margin: 0;
+      }
+      #status {
+        font-size: 11px;
+        color: var(--muted);
+        margin: 12px 0 0;
+        overflow-wrap: anywhere;
+      }
+      #status:empty {
+        display: none;
+      }
+      #identity {
+        overflow-wrap: anywhere;
+        font-size: 10px;
+      }
+      .draft-info {
+        margin-top: 12px;
+      }
+      #recovery {
+        padding: 20px 0;
+      }
+      #recover-id {
+        max-width: 100%;
+        width: 320px;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 620px) {
         body {
-          padding: 10px;
+          padding: 18px;
         }
-        li {
-          grid-template-columns: 18px 18px minmax(0, 1fr);
+        .queue-head,
+        .track-row {
+          grid-template-columns: 16px 18px minmax(90px, 1fr) 40px 45px 80px;
+          gap: 7px;
+        }
+        .key {
+          display: none;
         }
         .actions {
-          grid-column: 3;
-          justify-content: flex-end;
+          gap: 0;
+        }
+        .actions button {
+          width: 26px;
+        }
+        .queue-head .key-heading {
+          display: none;
+        }
+        .mobile-key {
+          display: inline;
+        }
+        .overview {
+          margin-bottom: 18px;
+        }
+      }
+      @media (min-width: 621px) {
+        .mobile-key {
+          display: none;
+        }
+      }
+      @media (max-width: 420px) {
+        body {
+          padding: 14px;
+        }
+        .queue-head,
+        .track-row {
+          grid-template-columns: 14px 16px minmax(80px, 1fr) 39px 68px;
+          gap: 6px;
+        }
+        .bpm-heading,
+        .bpm {
+          display: none;
+        }
+        .mobile-bpm {
+          display: inline;
+        }
+        .actions button {
+          width: 23px;
+          padding: 4px;
+        }
+        .track-row {
+          padding: 9px 6px;
+        }
+        .queue-head {
+          padding-inline: 6px;
+        }
+        h1 {
+          margin-top: 18px;
+          letter-spacing: -0.6px;
+        }
+        .revision {
+          display: none;
+        }
+        footer {
+          align-items: flex-start;
+        }
+        .footnote {
+          max-width: 23ch;
+        }
+        .feedback-actions {
+          gap: 4px;
+        }
+        button {
+          padding-inline: 7px;
+        }
+      }
+      @media (min-width: 421px) {
+        .mobile-bpm {
+          display: none;
+        }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        button {
+          transition:
+            background 0.12s,
+            color 0.12s;
         }
       }
     </style>
   </head>
   <body>
     <header>
-      <div>
-        <span class="eyebrow">Selecta / playlist draft</span>
-        <h1 id="name">Open your draft</h1>
+      <div class="brand">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="3" />
+          <path d="M5 12a7 7 0 0 1 7-7m7 7a7 7 0 0 1-7 7" /></svg
+        ><span>Selecta</span><span class="draft-label">Playlist draft</span>
       </div>
-      <button id="reload" disabled>Reload latest</button>
+      <button id="reload" class="quiet" disabled title="Reload latest draft">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1" /></svg
+        >Reload latest
+      </button>
     </header>
-    <div id="identity"></div>
+    <h1 id="name">Open your draft</h1>
     <div id="recovery">
-      <p>
-        Recover an existing draft using its draft ID from the conversation. If the draft is missing,
-        ask the agent to open a new one.
-      </p>
+      <p>Recover your draft using its ID from the conversation.</p>
       <input id="recover-id" aria-label="Draft ID" placeholder="Draft UUID" /><button id="recover">
         Recover draft
       </button>
     </div>
     <main id="editor" hidden>
-      <p id="summary"></p>
-      <details>
-        <summary>Artists and missing data</summary>
-        <p id="details"></p>
-      </details>
+      <div class="overview">
+        <p id="summary"></p>
+        <span class="revision" id="revision"></span>
+      </div>
+      <div class="queue-head" aria-hidden="true">
+        <span class="track-heading">Track</span><span class="metric">Time</span
+        ><span class="metric bpm-heading">BPM</span><span class="metric key-heading">Key</span
+        ><span></span>
+      </div>
       <ol id="tracks" aria-label="Ordered draft tracks"></ol>
-      <label for="feedback">Feedback about selected entries</label
-      ><textarea
-        id="feedback"
-        rows="2"
-        maxlength="2000"
-        placeholder="What would you like to change?"
-      ></textarea>
-      <p class="facts">
-        Pins ask the agent to keep an entry in future revisions. Edits stay in this draft.
-      </p>
+      <details class="inspection">
+        <summary>Track details</summary>
+        <p id="details"></p>
+        <p id="identity"></p>
+      </details>
+      <section class="feedback-box">
+        <div class="feedback-heading">
+          <label for="feedback">Shape this playlist</label><span id="selected-count"></span>
+        </div>
+        <textarea
+          id="feedback"
+          rows="2"
+          maxlength="2000"
+          placeholder="What would you change about these tracks?"
+        ></textarea>
+        <div class="feedback-actions">
+          <button id="keep-feedback" class="quiet">Keep feedback in draft</button
+          ><button id="send">
+            Send feedback
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5" /></svg>
+          </button>
+        </div>
+      </section>
       <footer>
-        <button id="keep-feedback">Keep feedback in draft</button
-        ><button id="send">Send feedback to agent</button
-        ><button id="save">Save this revision to Music.app</button>
+        <p class="footnote">
+          Your draft, until you save it.<br />Pins tell the agent what to keep.
+        </p>
+        <button id="save" aria-label="Save this revision to Music.app">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 18V5l11-2v13M9 9l11-2" />
+            <ellipse cx="6" cy="18" rx="3" ry="2" />
+            <ellipse cx="17" cy="16" rx="3" ry="2" /></svg
+          >Save to Music.app
+        </button>
       </footer>
     </main>
-    <p id="status" role="status" aria-live="polite">Connecting to the host…</p>
+    <p id="status" role="status" aria-live="polite">Connecting…</p>
     <script type="module">
       /*__APP__*/
     </script>

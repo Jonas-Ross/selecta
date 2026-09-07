@@ -83,7 +83,11 @@ function render() {
   const { draft, inspection, inspection_error } = state;
 
   el('name').textContent = draft.name;
-  el('identity').textContent = `Draft ${draft.draft_id} · revision ${draft.revision}`;
+  el('identity').textContent = `Draft ${draft.draft_id}`;
+  el('revision').textContent = `Revision ${draft.revision}`;
+  el('selected-count').textContent = draft.selected_entry_ids.length
+    ? `${draft.selected_entry_ids.length} selected`
+    : 'All tracks';
   el('recover-id').value = draft.draft_id;
   el('recovery').hidden = true;
   el('editor').hidden = false;
@@ -94,18 +98,23 @@ function render() {
   el('keep-feedback').disabled = busy || draft.save?.status === 'pending';
   el('save').disabled = busy || !!draft.save || !!inspection_error;
   el('summary').textContent = inspection
-    ? `${inspection.track_count} entries · ${duration(inspection.runtime.known_seconds)} known runtime${inspection.runtime.missing_count ? ` · ${inspection.runtime.missing_count} missing durations` : ''} · ${inspection.duplicate_ids.length} repeated track IDs`
+    ? `${inspection.track_count} tracks / ${duration(inspection.runtime.known_seconds)}${inspection.runtime.missing_count ? ' known runtime' : ' runtime'}${inspection.duplicate_ids.length ? ` / ${inspection.duplicate_ids.length} repeated` : ''}`
     : (inspection_error?.hint ?? 'Inspection unavailable');
   el('details').textContent = inspection
-    ? `${inspection.artist_counts.map((item) => `${item.artist} ×${item.count}`).join(' · ')}. Unknown artists: ${inspection.unknown_artist_count}. Missing BPM: ${inspection.feature_coverage.bpm.missing_count}; key: ${inspection.feature_coverage.musical_key.missing_count}. Owned-copy duplicates: ${inspection.duplicate_owned_copies.length}.`
+    ? `${inspection.artist_counts.map((item) => `${item.artist} ×${item.count}`).join(' · ')}. Unknown artists: ${inspection.unknown_artist_count}. Missing durations: ${inspection.runtime.missing_count}. Missing BPM: ${inspection.feature_coverage.bpm.missing_count}; key: ${inspection.feature_coverage.musical_key.missing_count}. Owned-copy duplicates: ${inspection.duplicate_owned_copies.length}.`
     : 'Restore or replace missing tracks with the agent before saving.';
+  const scrollTop = el('tracks').scrollTop;
+
   el('tracks').replaceChildren();
   draft.entries.forEach((entry, index) => {
     const track = inspection?.tracks[index];
     const row = document.createElement('li');
+
+    row.className = `track-row${draft.selected_entry_ids.includes(entry.entry_id) ? ' selected' : ''}`;
     const select = document.createElement('input');
 
     select.type = 'checkbox';
+    select.dataset.focus = `select-${entry.entry_id}`;
     select.checked = draft.selected_entry_ids.includes(entry.entry_id);
     select.setAttribute(
       'aria-label',
@@ -120,18 +129,55 @@ function render() {
       });
     const position = document.createElement('span');
 
-    position.textContent = String(index + 1);
+    position.textContent = String(index + 1).padStart(2, '0');
+    position.className = 'number';
     const text = document.createElement('div');
+
+    text.className = 'track-name';
     const title = document.createElement('div');
 
     title.className = 'title';
     title.textContent = track?.title ?? 'Title unavailable';
     const facts = document.createElement('div');
 
-    facts.className = 'facts';
+    facts.className = 'artist';
     const repeated = draft.entries.filter((item) => item.track_id === entry.track_id).length;
 
-    facts.textContent = `${track?.artist ?? 'Artist unknown'} · ${duration(track?.duration_seconds)} · ${track?.bpm == null ? 'BPM unknown' : `${track.bpm} BPM`} · ${track?.musical_key ?? 'Key unknown'}${repeated > 1 ? ` · repeated ×${repeated}` : ''}`;
+    facts.textContent = track?.artist ?? 'Artist unknown';
+
+    if (repeated > 1) {
+      const badge = document.createElement('span');
+
+      badge.className = 'repeat';
+      badge.textContent = `×${repeated}`;
+      badge.title = 'Repeated track';
+      title.append(badge);
+    }
+
+    const smallBpm = document.createElement('span');
+
+    smallBpm.className = 'mobile-bpm';
+    smallBpm.textContent = ` / ${track?.bpm ?? '—'} BPM`;
+    const smallKey = document.createElement('span');
+
+    smallKey.className = 'mobile-key';
+    smallKey.textContent = ` / ${track?.musical_key ?? 'Key unknown'}`;
+    facts.append(smallBpm, smallKey);
+    const time = document.createElement('span');
+
+    time.className = 'metric';
+    time.textContent = track?.duration_seconds == null ? '—' : duration(track.duration_seconds);
+    time.title = track?.duration_seconds == null ? 'Duration unknown' : 'Duration';
+    const bpm = document.createElement('span');
+
+    bpm.className = 'metric bpm';
+    bpm.textContent = track?.bpm ?? '—';
+    bpm.title = track?.bpm == null ? 'BPM unknown' : 'BPM';
+    const key = document.createElement('span');
+
+    key.className = 'metric key';
+    key.textContent = track?.musical_key ?? '—';
+    key.title = track?.musical_key ?? 'Key unknown';
     text.append(title, facts);
     text.title = `Entry ${entry.entry_id}\nTrack ${entry.track_id}`;
     const actions = document.createElement('div');
@@ -145,6 +191,8 @@ function render() {
       const button = document.createElement('button');
 
       button.textContent = label;
+      button.className = 'move';
+      button.dataset.focus = `move-${delta}-${entry.entry_id}`;
       button.setAttribute('aria-label', `Move entry ${index + 1} ${delta < 0 ? 'up' : 'down'}`);
       button.disabled =
         busy ||
@@ -164,7 +212,10 @@ function render() {
 
     const pin = document.createElement('button');
 
-    pin.textContent = entry.pinned ? 'Pinned' : 'Pin';
+    pin.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5v3l-3-3-6 6m3-12H5l5-3 1-4z"/></svg>';
+    pin.dataset.focus = `pin-${entry.entry_id}`;
+    pin.title = entry.pinned ? 'Pinned: keep this entry' : 'Pin: ask the agent to keep this entry';
     pin.setAttribute('aria-label', `Pin entry ${index + 1}`);
     pin.setAttribute('aria-pressed', String(entry.pinned));
     pin.disabled = busy || draft.save?.status === 'pending';
@@ -175,13 +226,16 @@ function render() {
         ),
       });
     actions.append(pin);
-    row.append(select, position, text, actions);
+    row.append(select, position, text, time, bpm, key, actions);
     el('tracks').append(row);
   });
+  el('tracks').scrollTop = scrollTop;
 }
 
 async function action(fn) {
   if (busy) return;
+
+  const focusKey = document.activeElement?.dataset.focus;
 
   busy = true;
   render();
@@ -193,6 +247,11 @@ async function action(fn) {
   } finally {
     busy = false;
     render();
+
+    if (focusKey)
+      document
+        .querySelector(`[data-focus="${CSS.escape(focusKey)}"]`)
+        ?.focus({ preventScroll: true });
   }
 }
 

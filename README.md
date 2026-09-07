@@ -71,6 +71,8 @@ claude mcp add --scope user selecta -- node /ABSOLUTE/PATH/TO/selecta/dist/index
 
 Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vibe. Preview it first."*
 
+For visual iteration without reconnecting MCP, run `npm run preview:draft` and open [the local design preview](http://127.0.0.1:8766). It uses the same widget with fixture data, simulated saves, live reload, and width/surface controls.
+
 ## Tools
 
 Twenty tools, in four groups. The first group answers from the local cache and never touches Music.app; the second writes to Music.app; the third keeps the cache current and holds the agent's own notes.
@@ -94,11 +96,11 @@ Twenty tools, in four groups. The first group answers from the local cache and n
 | `edit_playlist_draft` | Changes the draft at an explicit revision. Preserve occurrence IDs when reordering or revising. Stale edits fail instead of overwriting newer work. |
 | `save_playlist_draft` | Saves an explicitly approved revision using the existing `create_playlist` contract. Selection, pinning and feedback never call it. |
 
-Ask your agent to **open an interactive playlist draft**. Select entries, move them with the arrow buttons, and pin entries you want retained in later revisions. Use **Keep feedback in draft** to persist text, or **Send feedback to agent** to request a revision. Codex receives context/messages directly; Claude Desktop Code exposes context through **Read widget context** and may stage feedback in the composer for you to send. Pins are instructions for you and your agent, not scores or enforced positions.
+Ask your agent to **open an interactive playlist draft**. Select entries, move them with the arrow buttons, and pin entries you want retained in later revisions. Use **Keep feedback in draft** to persist text, or **Send feedback** to request a revision. Codex receives context/messages directly; Claude Desktop Code exposes context through **Read widget context** and may stage feedback in the composer for you to send. Pins are instructions for you and your agent, not scores or enforced positions.
 
 Drafts live in `~/Library/Application Support/Selecta/drafts.db`, separate from library refreshes. **Reload latest** restores persisted edits. If a host omits the original result after reload, the card recovers from the original tool input's draft ID; you can also paste that ID into **Recover draft**. A missing draft is reported explicitly. Uncommitted feedback text must be kept or sent before closing the card. Missing library tracks remain visible by ID in recovered drafts, with an inspection error; ask the agent to replace them before saving.
 
-**Save this revision to Music.app** explicitly creates a real playlist. A save attempt is recorded before the Music.app call and its result is retained, including partial-write errors. Pending outcomes after interruption are uncertain and cannot be retried automatically; inspect Music.app before choosing further action. A changed name or track order/list can be saved as a new revision after a completed attempt. Selection, feedback and pin changes alone do not re-enable save. Playback and preview-slot controls are outside this widget.
+**Save to Music.app** explicitly creates a real playlist. A save attempt is recorded before the Music.app call and its result is retained, including partial-write errors. Pending outcomes after interruption are uncertain and cannot be retried automatically; inspect Music.app before choosing further action. A changed name or track order/list can be saved as a new revision after a completed attempt. Selection, feedback and pin changes alone do not re-enable save. Playback and preview-slot controls are outside this widget.
 
 After updating Selecta, run `npm ci && npm run build` in the checkout your connector runs. The build bundles the widget and SDK into `dist/ui/playlist-draft.html`; no CDN or separate service is needed. Restart/reconnect Selecta in your MCP client so it discovers the four new tools, and reopen the card (Claude may need a full app restart to clear cached resources). Existing core tools still work in hosts without MCP Apps. See [draft smoke checks](docs/playlist-drafts.md) for verification and current desktop-test status.
 
