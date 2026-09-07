@@ -56,7 +56,7 @@ addEventListener('message', ({ source, origin, data }) => {
   if (source !== parent || origin !== location.origin || data?.type !== 'selecta-preview-palette')
     return;
 
-  if (['copper', 'cobalt', 'ember', 'moss', 'oxblood'].includes(data.palette)) {
+  if (['copper', 'cobalt', 'ember', 'moss', 'oxblood', 'oled'].includes(data.palette)) {
     document.documentElement.dataset.palette = data.palette;
   }
 });
