@@ -46,10 +46,10 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
       revision: 1,
       name: 'Fixture',
       feedback: '',
-      selected_entry_ids: [],
+      selected_entry_ids: [] as string[],
       entries: [
-        { entry_id: 'a', track_id: 'same', pinned: false },
-        { entry_id: 'b', track_id: 'same', pinned: false },
+        { entry_id: 'a', track_id: 'same' },
+        { entry_id: 'b', track_id: 'same' },
       ],
     },
   };
@@ -64,6 +64,16 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
   };
 
   runInNewContext(`${renderSource}; render();`, runtime);
+  expect(el('feedback-toggle').textContent).toBe('Feedback on the playlist');
+  state.draft.selected_entry_ids = ['b'];
+  runInNewContext(`${renderSource}; render();`, runtime);
+  expect(el('feedback-toggle').textContent).toBe('Feedback on 1 track');
+  expect(el('feedback-label').textContent).toBe('Feedback on 1 track');
+  expect(
+    el('tracks')
+      .querySelectorAll()
+      .filter((node) => node.tag === 'button'),
+  ).toHaveLength(4);
   const idleDisabled = el('tracks')
     .querySelectorAll()
     .map((node) => node.disabled);

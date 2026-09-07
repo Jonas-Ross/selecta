@@ -13,7 +13,6 @@ export const Appearance = z.enum(['host', 'copper', 'cobalt', 'ember', 'moss', '
 export const Entry = z.strictObject({
   entry_id: z.string().uuid(),
   track_id: z.string().min(1),
-  pinned: z.boolean(),
 });
 export const Draft = z.strictObject({
   draft_id: z.string().uuid(),
@@ -103,7 +102,19 @@ export class DraftStore {
 
     if (!row) throw new BridgeError('draft_not_found', 'Draft not found.');
 
-    return Draft.parse(JSON.parse(row.body));
+    // Retire the prototype pin field at the storage boundary. Reads preserve the
+    // original file and revision; later explicit edits persist the current shape.
+    const stored = Draft.extend({
+      entries: z
+        .array(Entry.extend({ pinned: z.boolean().optional() }))
+        .min(1)
+        .max(500),
+    }).parse(JSON.parse(row.body));
+
+    return Draft.parse({
+      ...stored,
+      entries: stored.entries.map(({ entry_id, track_id }) => ({ entry_id, track_id })),
+    });
   }
 
   get(id: string): Draft {
@@ -115,7 +126,7 @@ export class DraftStore {
       draft_id: id,
       revision: 1,
       name,
-      entries: trackIds.map((track_id) => ({ entry_id: randomUUID(), track_id, pinned: false })),
+      entries: trackIds.map((track_id) => ({ entry_id: randomUUID(), track_id })),
       selected_entry_ids: [],
       feedback: '',
     });

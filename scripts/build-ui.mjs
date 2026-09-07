@@ -4,6 +4,10 @@ import { build } from 'esbuild';
 const html = (
   await readFile(new URL('../ui/playlist-draft.html', import.meta.url), 'utf8')
 ).replace('/*__PULSE__*/', await readFile(new URL('../ui/pulse.css', import.meta.url), 'utf8'));
+const widgetHtml = html.replace(
+  '/*__SETLIST__*/',
+  await readFile(new URL('../ui/setlist.css', import.meta.url), 'utf8'),
+);
 const result = await build({
   entryPoints: ['ui/playlist-draft.js'],
   bundle: true,
@@ -17,7 +21,7 @@ const result = await build({
 await mkdir(new URL('../dist/ui/', import.meta.url), { recursive: true });
 await writeFile(
   new URL('../dist/ui/playlist-draft.html', import.meta.url),
-  html.replace('/*__APP__*/', () =>
+  widgetHtml.replace('/*__APP__*/', () =>
     result.outputFiles[0].text.replaceAll('</script', '<\\/script'),
   ),
 );

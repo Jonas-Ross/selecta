@@ -490,40 +490,49 @@
       </style>
       <style>
         /*__PULSE__*/
+        /*__SETLIST__*/
       </style>
       <div id="selecta-content">
-        <header>
-          <div class="brand">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="12" r="9" />
-              <circle cx="12" cy="12" r="3" />
-              <path d="M5 12a7 7 0 0 1 7-7m7 7a7 7 0 0 1-7 7" /></svg
-            ><span>Selecta</span><span class="draft-label">Playlist draft</span>
+        <header class="draft-top">
+          <div class="draft-heading">
+            <h1 id="name">Open your draft</h1>
+            <p id="summary"></p>
           </div>
-          <button id="reload" class="quiet" disabled title="Reload latest draft">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1" /></svg
-            >Reload latest
-          </button>
-          <label class="appearance"
-            >Appearance<select id="appearance" disabled>
-              <option value="host">Follow host</option>
-              <option value="copper">Copper</option>
-              <option value="cobalt">Cobalt</option>
-              <option value="ember">Ember</option>
-              <option value="moss">Moss</option>
-              <option value="oxblood">Oxblood</option>
-              <option value="oled">OLED</option>
-            </select></label
-          >
+          <details id="options" class="card-options">
+            <summary
+              class="options-trigger"
+              aria-label="Card options"
+              title="Appearance, reload and track details"
+            >
+              •••
+            </summary>
+            <div class="options-panel">
+              <label class="appearance"
+                >Appearance<select id="appearance" disabled>
+                  <option value="host">Follow host</option>
+                  <option value="copper">Copper</option>
+                  <option value="cobalt">Cobalt</option>
+                  <option value="ember">Ember</option>
+                  <option value="moss">Moss</option>
+                  <option value="oxblood">Oxblood</option>
+                  <option value="oled">OLED</option>
+                </select></label
+              ><button id="reload" class="quiet" disabled title="Reload latest draft">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"
+                  /></svg
+                >Reload latest
+              </button>
+              <details class="inspection">
+                <summary>Track details</summary>
+                <p id="details"></p>
+                <p id="identity"></p>
+              </details>
+              <span id="revision" class="revision"></span>
+            </div>
+          </details>
         </header>
-        <h1 id="name">Open your draft</h1>
         <div id="recovery">
           <p>Recover your draft using its ID from the conversation.</p>
           <input id="recover-id" aria-label="Draft ID" placeholder="Draft UUID" /><button
@@ -533,30 +542,21 @@
           </button>
         </div>
         <main id="editor" hidden>
-          <div class="overview">
-            <p id="summary"></p>
-            <span class="revision" id="revision"></span>
-          </div>
           <div class="queue-head" aria-hidden="true">
             <span class="track-heading">Track</span><span class="metric">Time</span
-            ><span class="metric bpm-heading">BPM</span><span class="metric key-heading">Key</span
-            ><span></span>
+            ><span class="metric bpm-heading">BPM</span><span></span>
           </div>
           <ol id="tracks" aria-label="Ordered draft tracks"></ol>
-          <details class="inspection">
-            <summary>Track details</summary>
-            <p id="details"></p>
-            <p id="identity"></p>
-          </details>
-          <section class="feedback-box">
+
+          <section id="feedback-panel" class="feedback-box" hidden>
             <div class="feedback-heading">
-              <label for="feedback">Shape this playlist</label><span id="selected-count"></span>
+              <label id="feedback-label" for="feedback">Feedback on the playlist</label>
             </div>
             <textarea
               id="feedback"
               rows="2"
               maxlength="2000"
-              placeholder="What would you change about these tracks?"
+              placeholder="What would you like to change?"
             ></textarea>
             <div class="feedback-actions">
               <button id="keep-feedback" class="quiet">Keep feedback in draft</button
@@ -567,9 +567,14 @@
             </div>
           </section>
           <footer>
-            <p class="footnote">
-              Your draft, until you save it.<br />Pins tell the agent what to keep.
-            </p>
+            <button
+              id="feedback-toggle"
+              class="compose-toggle"
+              aria-expanded="false"
+              aria-controls="feedback-panel"
+            >
+              Feedback on the playlist
+            </button>
             <button id="save" aria-label="Save this revision to Music.app">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M9 18V5l11-2v13M9 9l11-2" />

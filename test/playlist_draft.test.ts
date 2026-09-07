@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import Database from 'better-sqlite3';
 import { DraftStore } from '../src/drafts/store.js';
 import { PlaylistDraftTools } from '../src/tools/playlist_draft.js';
 import { createServer } from '../dist/server.js';
@@ -86,11 +87,10 @@ describe('playlist drafts', () => {
 
     for (const fn of Object.values(deps.bridge)) expect(fn).not.toHaveBeenCalled();
   });
-  it('persists order, exact selection, pins and feedback across instances; rejects stale cards', async () => {
+  it('persists order, exact selection and feedback across instances; rejects stale cards', async () => {
     const original = await draft();
     const entries = [...original.entries].reverse();
 
-    entries[0].pinned = true;
     const edited = await tools.edit({
       draft_id: original.draft_id,
       revision: 1,
@@ -246,7 +246,7 @@ describe('playlist drafts', () => {
     expect(store.get(original.draft_id).save?.status).toBe('pending');
     expect(deps.bridge.createPlaylist).toHaveBeenCalledTimes(1);
   });
-  it('selection, feedback and pins preserve the completed save guard', async () => {
+  it('selection and feedback preserve the completed save guard', async () => {
     const original = await draft();
 
     vi.mocked(deps.bridge.createPlaylist).mockResolvedValue({
@@ -258,7 +258,6 @@ describe('playlist drafts', () => {
     await tools.edit({
       draft_id: original.draft_id,
       revision: 3,
-      entries: original.entries.map((entry) => ({ ...entry, pinned: true })),
       feedback: 'Keep both',
       selected_entry_ids: [original.entries[0].entry_id],
     });
@@ -333,4 +332,53 @@ describe('playlist drafts', () => {
       await server.close();
     }
   });
+});
+
+it('opens legacy pinned drafts without leaking pins or mutating the stored revision', async () => {
+  const original = await draft();
+  const legacy = {
+    ...original,
+    entries: original.entries.map((entry) => ({ ...entry, pinned: true })),
+  };
+  const db = new Database(store.path);
+
+  try {
+    db.prepare('UPDATE drafts SET body = ? WHERE id = ?').run(
+      JSON.stringify(legacy),
+      original.draft_id,
+    );
+    expect(store.get(original.draft_id)).toEqual(original);
+    expect(
+      JSON.parse(
+        (
+          db.prepare('SELECT body FROM drafts WHERE id = ?').get(original.draft_id) as {
+            body: string;
+          }
+        ).body,
+      ),
+    ).toEqual(legacy);
+    const result = await tools.edit({
+      draft_id: original.draft_id,
+      revision: 1,
+      selected_entry_ids: [original.entries[1].entry_id],
+      feedback: 'Move this earlier',
+    });
+
+    expect(result).toMatchObject({
+      draft: {
+        revision: 2,
+        entries: original.entries,
+        selected_entry_ids: [original.entries[1].entry_id],
+      },
+    });
+    expect(
+      (
+        db.prepare('SELECT body FROM drafts WHERE id = ?').get(original.draft_id) as {
+          body: string;
+        }
+      ).body,
+    ).not.toContain('pinned');
+  } finally {
+    db.close();
+  }
 });

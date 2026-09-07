@@ -1,76 +1,40 @@
-# Playlist draft verification
+# Interactive playlist drafts
 
-The widget uses standard [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) over Selecta's existing local stdio transport. The SDK and UI are bundled by `npm run build`; the server serves one `ui://selecta/playlist-draft.html` resource. No host adapter, CDN, service or skill installation is involved.
+## Contract
 
-## State and save contract
+Drafts live in `drafts.db`, separately from the refreshable library cache. Each repeated track has its own occurrence ID. Edits compare the exact revision inside a SQLite transaction; stale cards must reload and reconcile. A missing draft is never silently recreated. Missing library tracks remain recoverable alongside an inspection error.
 
-`show_playlist_draft` takes a caller-supplied UUID so the original tool input identifies the card even if the host loses its structured result. A repeated call with that ID fails rather than resetting it. `get_playlist_draft` opens the draft file read-only; it does not create a missing store. Drafts are stored separately from library snapshots and enrichment. Every occurrence has a distinct immutable `entry_id` tied to its `track_id`.
+The Setlist card shows track, artist, duration and BPM. Select occurrences, open **Feedback on N tracks**, and write the requested change. With no selection the drawer says **Feedback on the playlist**. Selection identifies the subject of explicit feedback; it never means replace, remove, preserve or rank. Arrow controls change order. Pinning is retired. Older stored drafts accept and discard validated legacy pin fields when read, without rewriting storage or changing revisions; later explicit edits persist the current shape.
 
-All edits use SQLite transactions with a required revision. A stale card fails rather than replacing a later edit. New entries omit `entry_id`; existing occurrences retain theirs. Unknown tracks fail before edits that replace the list. Recovery still returns existing state if inspection fails (for example, a track left the library).
+**Keep feedback in draft**, **Send feedback**, or another draft edit persists typed feedback. Sending includes the exact revision, ordered occurrence IDs, selection and feedback. Codex receives widget context directly; Claude Desktop Code exposes **Read widget context** and may stage messages in the composer for the user to send. Agent edits require **Reload latest**; no automatic production polling is added.
 
-Selection, feedback and pins are local state and agent context only. Feedback text is committed by **Keep feedback in draft**, **Send feedback to agent**, or another draft edit. Arrow controls change order; pins ask the agent to retain entries, without ranking or enforcing positions.
+**Save to Music.app** checks the revision, durably claims the attempt, then calls the existing create handler. Partial outcomes are retained. Interrupted pending saves cannot be retried automatically; inspect Music.app first. After a completed attempt, changing the name or ordered track list permits a new explicitly requested save. Selection and feedback alone retain the save guard. No audition integration is included.
 
-Save checks the requested revision, claims it durably, then calls `handleCreatePlaylist`. The result, including existing errors and `partial_write`, is persisted. A receipt-storage failure preserves the returned Music.app outcome and leaves the durable pending claim in place. Concurrent edits and repeated saves cannot race a pending claim. Interrupted pending saves require inspection of Music.app; there is no automatic retry or pending-state reset. After a completed attempt, a changed name or ordered track list permits another explicitly requested save. Feedback, pin and selection changes alone retain the guard. There is no audition integration or fingerprint write precondition.
+## Layout and appearance
 
-## Automated and controlled checks
+Setlist uses a compact title/count header, an options menu for Appearance, Reload latest and Track details, dense rows, and a feedback drawer. Musical key is omitted from the card. The underlying inspection API retains its objective facts.
 
-On September 7, 2026:
+Appearance defaults to **Follow host**. Copper, Cobalt, Ember, Moss and Oxblood override colors while following host light/dark mode; OLED forces black. The app-only appearance helper stores this preference independently of draft revisions and model context. Existing cards read it when reopened. Changing appearance preserves typed feedback; storage errors are reported without retries.
 
-- Unit/protocol coverage exercises repeated occurrences, exact selections, persistence across store instances, stale revisions, identity reassignment, unknown tracks, read-only recovery, missing drafts, missing tracks after refresh, concurrent save/edit, partial write errors, interrupted claims and receipt-storage failures.
-- Discovery exposes four draft tools and an app-only appearance helper alongside the sixteen existing tools.
-- A temporary loopback fixture host exercised the actual bundled widget and production draft handlers through standard MCP Apps messages. Playwright selected the second Teardrop occurrence, pinned it, moved it above Angel, sent feedback carrying that entry ID at revision 5, and reloaded with only the original tool input. Order, selection, pin and feedback were restored. Context events included explicit revisions. Explicit save reached the fake bridge once for revision 5 and disabled repeat save.
-- The card rendered at 390px width in a dark fixture host. No real library writes or user-theme changes occurred.
+The card uses a shadow tree to isolate host CSS. Transient requests make the editor inert without dimming controls. Unchanged row nodes survive asynchronous context delivery so reorder motion can finish; motion respects reduced-motion preferences.
 
-The fixture host is not evidence that the new feature passed in either desktop application. The fixture host is available through `npm run preview:draft`.
+Codex caps inline cards at 720 CSS pixels. The track list absorbs the viewport constraint while feedback, save and status remain visible. Size reporting measures natural height independently of the capped viewport. Track details and status have bounded overflow. The user confirmed the host-style/flicker fixes and cap-aware layout before choosing Setlist.
 
-## Desktop smoke results
+## Local preview
 
-User-reported Claude Desktop Code results for draft `ff9d8396-9573-44b4-a967-87964e0f0a53`:
+Run `npm run preview:draft`, then open `http://127.0.0.1:8766`. `SELECTA_PREVIEW_PORT` selects another port. This loopback fixture host loads the production widget, an in-memory fixture library and a temporary draft store. It never loads the live Music.app bridge or user cache. Saves are simulated; feedback appears under **Latest interaction**.
 
-- Passed: all four tools loaded with full schemas; cached search and opening a draft with three tracks and an intentional repeat of Talk produced distinct occurrence IDs.
-- Passed: selecting, pinning and moving the second Talk occurrence produced revisions 2–4. The staged composer message, widget context and server draft agreed on revision 4, order, selection and pins, targeting only that occurrence.
-- Passed: navigation away, reopening and app reload restored the same order, selection and pins.
-- Passed: an agent-side edit set feedback at revision 5 while preserving entry IDs and pins. A stale revision-4 edit attempting to unpin, clear selection and replace feedback returned `draft_revision_conflict`; a follow-up read confirmed revision 5 remained intact.
-- Passed: a nonexistent UUID returned `draft_not_found` with a useful recovery hint.
-- Passed in user follow-up: typed feedback, selection, order and pins survive reload after the remaining feedback/recovery check. This result applies to the pre-redesign card.
-- No save, audition, library refresh, Music.app change or theme change was reported.
+Width controls offer 760px, 553px and 390px cards. Surface controls include dark, light, Claude-like and Codex-style injected CSS with its 720px height cap. Source edits reload the card; persisted fixture edits survive, but unsaved text does not. **Reset fixture** starts a fresh draft. Ctrl+C stops the preview and removes its temporary store. This is a development tool, not a standalone product.
 
-Observed limitation: an agent-side edit does not automatically update an already mounted card or its published context. The reported card/context remained at revision 4 after the server reached revision 5. Source inspection confirms **Reload latest** reads the current draft and updates the card without reopening it; the user subsequently confirmed the remaining recovery check passed. Recovery alone does not republish widget context; a subsequent widget edit or feedback message carries the current revision. Stale submissions are rejected. No polling or automatic synchronization is implemented.
+## Validation and host smoke
 
-Codex task-surface testing started with draft `718f6655-2535-4bf3-b02e-cd07f01c9504`: discovery and draft creation succeeded, and widget context reached the model at revision 5. The user confirmed animations worked but reported action flicker and incorrect colors, including explicit palettes. This is a partial smoke result, not a pass.
+Controlled tests cover exact occurrence IDs, revision conflicts, selection and feedback persistence, legacy draft recovery, save guards and failures, appearance isolation, row lifetime and size reporting. Fixture browser checks cover repeated-occurrence selection, feedback scope and messages, reordering and narrow layouts.
 
-Inspection of the installed Codex renderer found injected global CSS overlapping the card's custom properties, body spacing and form controls. The card now mounts its styles and content in a shadow tree and inherits only the standard MCP host theme variables. Follow host uses neutral host text colors instead of the leftover purple accent. Temporary requests make the editor inert without dimming every button; feedback updates only when a server response is accepted, avoiding a flash back to old text during submission. The controlled render regression checks transient interaction blocking, stable disabled states, feedback retention and animated row lifetime. The fixture host includes representative CSS collisions; browser checks verified Copper rendering and occurrence selection, pin/reorder and feedback through the isolated tree. Actual-host rechecking remains pending.
+Earlier user-reported Claude Desktop Code checks passed discovery, repeated-track editing, context/message agreement, reload recovery, stale-edit rejection and missing-draft errors. Those checks preceded Setlist. Codex reached creation and context delivery, with subsequent user confirmation of host CSS, flicker and height fixes. The final Setlist layout still needs a fresh actual-host check after rebuilding and restarting Selecta; fixture checks do not substitute for that. No real Music.app writes were performed for the design changes.
 
-## Desktop smoke checklist
+Before marking the PR ready:
 
-The two target surfaces were established in [issue #84](https://github.com/Jonas-Ross/selecta/issues/84): OpenAI Codex task surface and Claude Desktop Code. Use the following checks in each after reconnecting the updated Selecta server; results and remaining gaps are recorded above:
-
-1. Run `npm ci && npm run build` in the configured checkout; reconnect Selecta. Confirm `show_playlist_draft`, `get_playlist_draft`, `edit_playlist_draft`, and `save_playlist_draft` are available. Open a fresh card; Claude may need a full restart to clear resource caching.
-2. Ask the agent to search for a few owned tracks and open a draft that intentionally repeats one ID. Check titles, artists, runtime, known BPM/key and missing facts.
-3. Select only the second occurrence, pin it, and reorder it. Verify the agent receives the exact entry and current revision. On Claude use **Read widget context**; on Codex context should arrive directly.
-4. Enter feedback and send it. On Claude send the staged composer message; on Codex verify direct delivery.
-5. Navigate away and reopen, then reload the app. Confirm edits and selection recover; if the host supplies neither input nor result, paste the displayed draft UUID into **Recover draft**. Check a nonexistent UUID's useful recovery message.
-6. Open the same draft in a second card or edit it through the agent. Attempt an edit from the older revision and confirm rejection followed by **Reload latest** recovery. Preserve the user's current theme.
-7. Save only a user-approved real draft, if desired. This is an actual library write; fixture tests already cover the contract. Never use destructive fault injection or remove user playlists for this smoke check.
-
-The PR remains a draft while the Codex smoke check is pending. The visual redesign must also be checked in the actual hosts after browser review. Prior compatibility testing is not counted as evidence for this feature.
-
-## Live design preview
-
-Run `npm run preview:draft`, then open `http://127.0.0.1:8766`. Use `SELECTA_PREVIEW_PORT` to choose a different port. This development-only loopback host loads the actual bundled widget, a fixture library in memory, and a temporary draft store. It never loads the live Music.app bridge or user cache. Save is simulated and feedback appears under **Latest interaction**.
-
-Use the width selector for 760px, 553px or 390px cards, and the surface selector for dark, light or Claude-like colors. These controls affect only the preview. Editing `ui/playlist-draft.html` or `ui/playlist-draft.js` rebuilds and reloads the card automatically; persisted fixture edits survive reload. Unsaved text does not. **Reset fixture** starts a fresh draft. Ctrl+C stops the preview and removes its temporary store. This is a development tool, not a shipped standalone UI or an alternative to host smoke testing.
-
-The design pass uses aligned time/BPM/key columns, compact icon controls, occurrence-specific selection highlighting, a focused feedback composer, and secondary save. IDs remain accessible in Track details. Browser checks verified selection of the second repeated occurrence, pin/reorder, feedback carrying revision 5, persistence across preview remount, and the 390px Claude-like surface. Keyboard focus and queue scroll are retained during row redraws. This does not replace the pending Codex host smoke check.
-
-### Appearance
-
-The local preview offers three layout studies: **1. Queue** uses a compact title/count header, an options menu, expanding feedback input and slim action bar; **2. Sidecar** places the composer beside the queue on wide cards and below it on narrow cards; **3. Setlist** uses dense rows and a feedback drawer. The chooser rearranges the existing controls without remounting the widget, preserving draft edits and typed feedback. A caption reports the visible track area. These studies live in `ui/preview-designs.js` and `ui/preview-designs.css` and are injected only by the fixture host; they are not included in the MCP resource. Browser checks covered all three at 760px and 390px, retained feedback across switches, and selection, pinning, reordering and feedback submission.
-
-Pulse is the shipped design, including entry motion that respects reduced-motion preferences. **Appearance** defaults to **Follow host**. Copper, Cobalt, Ember, Moss and Oxblood explicitly override the host colors, with light and dark versions following the host mode; OLED forces true black and dark controls. Returning to Follow host restores the current host colors and mode.
-
-The choice is stored locally in a separate preferences table in `drafts.db`, through the app-only `playlist_draft_appearance` helper. It survives card reloads and is read when a new card connects. Already open cards retain their appearance until reopened or changed. It never increments a draft revision, changes library state, or enters model context. Changing appearance preserves typed feedback. Storage failures are reported without automatic retry.
-
-Rendering retains rows when their displayed state is unchanged, so asynchronous context delivery cannot cancel reorder motion by replacing the animated nodes. A controlled regression test covers that race.
-
-The user confirmed the isolated card looked correct, then reported a persistent outer scrollbar. Removing document margins and rounding the requested height did not resolve the actual-host failure. Inspection of the installed Codex renderer established a 720-CSS-pixel inline height cap. The preview now reproduces that cap under **Codex-style injection**. The card fits the iframe viewport with a flexible track list while feedback, save and status stay visible; expanded details are bounded independently. Size notifications measure the unconstrained natural height synchronously, so a small initial iframe cannot lock subsequent size requests to that small height. Controlled sizing coverage tests natural height beyond the cap. Browser measurements at 390px width and with expanded details showed equal document scroll/client heights (718px inside the bordered 720px fixture), with overflow confined to the track list. The user confirmed the cap-aware layout and requested a further preview pass to reduce header and footer space.
+1. Rebuild with `npm run build`, restart the client's Selecta connection, and open a draft containing a repeated track.
+2. Select only the second occurrence, open its feedback drawer and submit explicit feedback. Confirm context and the user message contain the same occurrence ID and revision without pins.
+3. Reorder, reopen and reload; confirm saved selection, order and feedback recover. Verify stale edits fail and missing drafts show recovery guidance.
+4. Check Appearance, narrow sizing and the open feedback drawer in the actual host. Save only with explicit authorization for the real playlist write.

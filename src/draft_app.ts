@@ -67,7 +67,7 @@ export function registerDraftApp(server: McpServer, deps: ToolDeps, store?: Draf
     'get_playlist_draft',
     {
       description:
-        'Read-only recovery of a local draft by draft_id, including latest revision, edits, selection, pins, feedback and save outcome. No Music.app call or draft mutation. Missing tracks return inspection_error alongside the recoverable draft. Missing drafts return a recovery hint.',
+        'Read-only recovery of a local draft by draft_id, including latest revision, edits, selection, feedback and save outcome. No Music.app call or draft mutation. Missing tracks return inspection_error alongside the recoverable draft. Missing drafts return a recovery hint.',
       inputSchema: getDraftInputShape,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },

@@ -110,7 +110,7 @@ async function publish() {
       content: [
         {
           type: 'text',
-          text: `Selecta draft context (pins are user intent): ${JSON.stringify(context())}`,
+          text: `Selecta draft context (selection identifies the subject of feedback, not a requested change): ${JSON.stringify(context())}`,
         },
       ],
     });
@@ -132,9 +132,12 @@ function render() {
   el('name').textContent = draft.name;
   el('identity').textContent = `Draft ${draft.draft_id}`;
   el('revision').textContent = `Revision ${draft.revision}`;
-  el('selected-count').textContent = draft.selected_entry_ids.length
-    ? `${draft.selected_entry_ids.length} selected`
-    : 'All tracks';
+  const feedbackScope = draft.selected_entry_ids.length
+    ? `Feedback on ${draft.selected_entry_ids.length} ${draft.selected_entry_ids.length === 1 ? 'track' : 'tracks'}`
+    : 'Feedback on the playlist';
+
+  el('feedback-label').textContent = feedbackScope;
+  el('feedback-toggle').textContent = feedbackScope;
   el('recover-id').value = draft.draft_id;
   el('recovery').hidden = true;
   el('editor').hidden = false;
@@ -148,7 +151,7 @@ function render() {
     ? `${inspection.track_count} tracks / ${duration(inspection.runtime.known_seconds)}${inspection.runtime.missing_count ? ' known runtime' : ' runtime'}${inspection.duplicate_ids.length ? ` / ${inspection.duplicate_ids.length} repeated` : ''}`
     : (inspection_error?.hint ?? 'Inspection unavailable');
   el('details').textContent = inspection
-    ? `${inspection.artist_counts.map((item) => `${item.artist} ×${item.count}`).join(' · ')}. Unknown artists: ${inspection.unknown_artist_count}. Missing durations: ${inspection.runtime.missing_count}. Missing BPM: ${inspection.feature_coverage.bpm.missing_count}; key: ${inspection.feature_coverage.musical_key.missing_count}. Owned-copy duplicates: ${inspection.duplicate_owned_copies.length}.`
+    ? `${inspection.artist_counts.map((item) => `${item.artist} ×${item.count}`).join(' · ')}. Unknown artists: ${inspection.unknown_artist_count}. Missing durations: ${inspection.runtime.missing_count}. Missing BPM: ${inspection.feature_coverage.bpm.missing_count}. Owned-copy duplicates: ${inspection.duplicate_owned_copies.length}.`
     : 'Restore or replace missing tracks with the agent before saving.';
   // Context delivery finishes independently of row motion. Changing only busy
   // state must not replace the DOM nodes that are currently animating.
@@ -224,11 +227,7 @@ function render() {
 
     smallBpm.className = 'mobile-bpm';
     smallBpm.textContent = ` / ${track?.bpm ?? '—'} BPM`;
-    const smallKey = document.createElement('span');
-
-    smallKey.className = 'mobile-key';
-    smallKey.textContent = ` / ${track?.musical_key ?? 'Key unknown'}`;
-    facts.append(smallBpm, smallKey);
+    facts.append(smallBpm);
     const time = document.createElement('span');
 
     time.className = 'metric';
@@ -239,11 +238,6 @@ function render() {
     bpm.className = 'metric bpm';
     bpm.textContent = track?.bpm ?? '—';
     bpm.title = track?.bpm == null ? 'BPM unknown' : 'BPM';
-    const key = document.createElement('span');
-
-    key.className = 'metric key';
-    key.textContent = track?.musical_key ?? '—';
-    key.title = track?.musical_key ?? 'Key unknown';
     text.append(title, facts);
     text.title = `Entry ${entry.entry_id}\nTrack ${entry.track_id}`;
     const actions = document.createElement('div');
@@ -278,23 +272,7 @@ function render() {
       actions.append(button);
     }
 
-    const pin = document.createElement('button');
-
-    pin.innerHTML =
-      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5v3l-3-3-6 6m3-12H5l5-3 1-4z"/></svg>';
-    pin.dataset.focus = `pin-${entry.entry_id}`;
-    pin.title = entry.pinned ? 'Pinned: keep this entry' : 'Pin: ask the agent to keep this entry';
-    pin.setAttribute('aria-label', `Pin entry ${index + 1}`);
-    pin.setAttribute('aria-pressed', String(entry.pinned));
-    pin.disabled = draft.save?.status === 'pending';
-    pin.onclick = () =>
-      edit({
-        entries: draft.entries.map((item) =>
-          item.entry_id === entry.entry_id ? { ...item, pinned: !item.pinned } : item,
-        ),
-      });
-    actions.append(pin);
-    row.append(select, position, text, time, bpm, key, actions);
+    row.append(select, position, text, time, bpm, actions);
     el('tracks').append(row);
   });
   el('tracks').scrollTop = scrollTop;
@@ -356,6 +334,25 @@ async function recover(id) {
   });
 }
 
+el('feedback-toggle').onclick = () => {
+  const panel = el('feedback-panel');
+
+  panel.hidden = !panel.hidden;
+  el('feedback-toggle').setAttribute('aria-expanded', String(!panel.hidden));
+
+  if (!panel.hidden) el('feedback').focus();
+};
+
+el('options').addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    el('options').open = false;
+    el('options').querySelector('summary').focus();
+  }
+});
+ui.addEventListener('click', (event) => {
+  if (!event.composedPath().includes(el('options'))) el('options').open = false;
+});
+
 el('recover').onclick = () => recover(el('recover-id').value.trim());
 el('reload').onclick = () => recover(draftId);
 el('keep-feedback').onclick = () => edit({ feedback: el('feedback').value });
@@ -379,7 +376,7 @@ el('send').onclick = () => {
       content: [
         {
           type: 'text',
-          text: `Please revise this Selecta draft using my feedback and pinned-entry instructions: ${JSON.stringify(context())}`,
+          text: `Please revise this Selecta draft using my explicit feedback. Selected entry IDs identify the tracks I am referring to; an empty selection means the whole playlist. Selection alone does not request replacement, removal or preservation: ${JSON.stringify(context())}`,
         },
       ],
     });
