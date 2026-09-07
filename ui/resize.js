@@ -23,9 +23,23 @@ export function observeSize(element, onSize) {
     });
   };
   const observer = new ResizeObserver(report);
+  // A viewport cap pins the observed box while content inside it grows, so
+  // the DOM changes that cause growth must trigger a measurement as well.
+  // The attribute list excludes the measuring flag to keep this loop-free.
+  const mutations = new MutationObserver(report);
 
   observer.observe(element);
+  mutations.observe(element.shadowRoot ?? element, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['hidden', 'class', 'open', 'style'],
+  });
   report();
 
-  return () => observer.disconnect();
+  return () => {
+    observer.disconnect();
+    mutations.disconnect();
+  };
 }

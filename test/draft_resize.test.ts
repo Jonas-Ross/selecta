@@ -2,18 +2,22 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { expect, it, vi } from 'vitest';
 
-it('reports intrinsic card height with rounding room, including later growth and shrinkage', () => {
+it('reports intrinsic card height with rounding room, including growth under a viewport cap', () => {
   let contentHeight = 801.25;
   const dataset: Record<string, string> = {};
+  const shadowRoot = {};
   const element = {
     dataset,
+    shadowRoot,
     getBoundingClientRect: () => ({
       height: 'measuring' in dataset ? contentHeight : Math.min(contentHeight, 720),
     }),
   };
   const frames: (() => void)[] = [];
   let notify = () => {};
+  let mutate = () => {};
   const observe = vi.fn();
+  const observeMutations = vi.fn();
   const disconnect = vi.fn();
   const onSize = vi.fn();
   const source = readFileSync(new URL('../ui/resize.js', import.meta.url), 'utf8');
@@ -30,10 +34,21 @@ it('reports intrinsic card height with rounding room, including later growth and
         observe = observe;
         disconnect = disconnect;
       },
+      MutationObserver: class {
+        constructor(fn: () => void) {
+          mutate = fn;
+        }
+        observe = observeMutations;
+        disconnect = disconnect;
+      },
     },
   );
 
   expect(observe).toHaveBeenCalledWith(element);
+  expect(observeMutations).toHaveBeenCalledWith(
+    shadowRoot,
+    expect.objectContaining({ subtree: true, childList: true }),
+  );
   frames.shift()!();
   expect(onSize).toHaveBeenLastCalledWith(804);
   expect(dataset).toEqual({});
@@ -50,6 +65,13 @@ it('reports intrinsic card height with rounding room, including later growth and
     expect(onSize).toHaveBeenLastCalledWith(Math.ceil(height) + 2);
   }
 
+  // Content grows inside the cap: the observed box stays at 720, so only the
+  // DOM change can trigger the measurement.
+  contentHeight = 900;
+  mutate();
+  frames.shift()!();
+  expect(onSize).toHaveBeenLastCalledWith(902);
+
   stop();
-  expect(disconnect).toHaveBeenCalledOnce();
+  expect(disconnect).toHaveBeenCalledTimes(2);
 });

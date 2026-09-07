@@ -43,9 +43,7 @@ async function loadAppearance(value) {
       name: 'playlist_draft_appearance',
       arguments: value === undefined ? {} : { appearance: value },
     });
-    const data =
-      result.structuredContent ??
-      JSON.parse(result.content?.find((item) => item.type === 'text')?.text ?? '{}');
+    const data = payload(result);
 
     if (
       result.isError ||
@@ -66,10 +64,22 @@ async function loadAppearance(value) {
 
 el('appearance').onchange = () => loadAppearance(el('appearance').value);
 
+// A handler that throws past its envelope reaches the card as plain text with
+// no structured content; surface that text instead of a JSON parse failure.
+function payload(result) {
+  if (result.structuredContent) return result.structuredContent;
+
+  const text = result.content?.find((item) => item.type === 'text')?.text ?? '';
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: 'tool_failed', hint: text || 'Tool returned no readable response.' };
+  }
+}
+
 function unpack(result) {
-  const data =
-    result.structuredContent ??
-    JSON.parse(result.content?.find((item) => item.type === 'text')?.text ?? '{}');
+  const data = payload(result);
 
   if (result.isError || data.error)
     throw new Error(data.hint ?? 'Tool failed. Reload the latest draft before continuing.');
@@ -81,15 +91,22 @@ function unpack(result) {
 }
 
 function accept(data) {
-  if (
-    state &&
-    data.draft.draft_id === state.draft.draft_id &&
-    data.draft.revision < state.draft.revision
-  )
-    return;
+  const previous = state?.draft;
+  const sameDraft = previous?.draft_id === data.draft.draft_id;
+
+  if (sameDraft && data.draft.revision < previous.revision) return;
+
+  // Typed but unkept feedback survives a replayed result, a reload and a save
+  // receipt; only another draft or a newer revision without local typing
+  // replaces the field.
+  const keepTyped =
+    sameDraft &&
+    (data.draft.revision === previous.revision || el('feedback').value !== previous.feedback);
 
   state = data;
-  el('feedback').value = data.draft.feedback;
+
+  if (!keepTyped) el('feedback').value = data.draft.feedback;
+
   draftId = data.draft.draft_id;
   render();
 }
@@ -394,9 +411,7 @@ el('save').onclick = () =>
       arguments: { draft_id: draftId, revision },
     });
     // Errors may include a persisted receipt/partial write. Keep it visible.
-    const data =
-      result.structuredContent ??
-      JSON.parse(result.content.find((item) => item.type === 'text').text);
+    const data = payload(result);
 
     if (data.draft) accept({ ...state, draft: data.draft });
 
@@ -407,24 +422,36 @@ el('save').onclick = () =>
     await publish();
   });
 
-app.ontoolinput = ({ arguments: args }) => {
-  if (typeof args?.draft_id === 'string') {
-    draftId = args.draft_id;
-    el('recover-id').value = draftId;
+// Hosts may deliver tool input while show_playlist_draft is still running,
+// before the draft row exists. Recovery from the input alone only serves a
+// host that never delivers the result, so give the result a moment first.
+const RESULT_GRACE_MS = 1500;
+let resultFallback;
 
-    if (connected) void recover(draftId);
-  }
+app.ontoolinput = ({ arguments: args }) => {
+  if (typeof args?.draft_id !== 'string') return;
+
+  draftId = args.draft_id;
+  el('recover-id').value = draftId;
+  clearTimeout(resultFallback);
+  resultFallback = setTimeout(() => {
+    if (!state && connected) void recover(draftId);
+  }, RESULT_GRACE_MS);
 };
 
 app.ontoolresult = (result) => {
+  clearTimeout(resultFallback);
+
   try {
     accept(unpack(result));
 
+    // A replayed result after reload can be stale; the store holds the latest.
     if (connected) void recover(draftId);
   } catch (error) {
     status(error.message);
 
-    if (draftId && connected) void recover(draftId);
+    // A failed show created nothing to recover; a stripped result did.
+    if (draftId && connected && !result.isError) void recover(draftId);
   }
 };
 
@@ -441,7 +468,7 @@ try {
   theme(app.getHostContext());
   status('Ready. Recover a draft by ID if its original result is unavailable.');
 
-  if (draftId) await recover(draftId);
+  if (draftId && !state) await recover(draftId);
 
   await loadAppearance();
 } catch (error) {
