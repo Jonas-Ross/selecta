@@ -137,9 +137,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/widget') {
       await promisify(execFile)(process.execPath, ['scripts/build-ui.mjs'], { cwd: root });
       res.setHeader('Content-Type', 'text/html');
-      const variant = ['studio', 'pulse', 'spectrum', 'bootleg'].includes(
-        url.searchParams.get('variant'),
-      )
+      const variant = ['studio', 'pulse'].includes(url.searchParams.get('variant'))
         ? url.searchParams.get('variant')
         : 'studio';
       let widget = await readFile(

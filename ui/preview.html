@@ -101,7 +101,7 @@
       }
       .variants {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(2, 1fr);
         gap: 10px;
         max-width: 960px;
         margin: 24px auto 0;
@@ -130,12 +130,6 @@
         font-size: 11px;
         line-height: 1.5;
         margin-top: 5px;
-      }
-      .variants button:nth-child(3) strong {
-        color: #edaccc;
-      }
-      .variants button:nth-child(4) strong {
-        color: #ecc795;
       }
       #direction {
         text-align: center;
@@ -168,23 +162,17 @@
       </div>
     </div>
     <nav class="variants" aria-label="Design variants">
-      <button data-variant="studio" aria-pressed="true">
+      <button data-variant="studio" aria-pressed="false">
         <strong>1. Studio</strong><small>Original. Quiet and precise.</small>
       </button>
-      <button data-variant="pulse" aria-pressed="false">
-        <strong>2. Pulse</strong><small>Responsive, fluid movement.</small>
-      </button>
-      <button data-variant="spectrum" aria-pressed="false">
-        <strong>3. Spectrum</strong><small>Color with a softer edge.</small>
-      </button>
-      <button data-variant="bootleg" aria-pressed="false">
-        <strong>4. Bootleg</strong><small>A record sleeve, cut loose.</small>
+      <button data-variant="pulse" aria-pressed="true">
+        <strong>2. Pulse</strong><small>Fluid motion. Copper and petrol.</small>
       </button>
     </nav>
-    <p id="direction">The original design, preserved. Compare using the same draft.</p>
+    <p id="direction">Pulse: deep petrol, warm copper, and motion that follows your edits.</p>
     <main>
       <div class="stage" id="stage">
-        <iframe id="card" title="Playlist draft preview" src="/widget"></iframe>
+        <iframe id="card" title="Playlist draft preview" src="/widget?variant=pulse"></iframe>
         <div class="caption">
           <span>Same widget code. Live updates.</span><span>Fixture library / simulated save</span>
         </div>
@@ -200,7 +188,7 @@
     <script>
       let draftId = '__DRAFT_ID__';
       const card = document.getElementById('card');
-      let variant = 'studio';
+      let variant = 'pulse';
       const reloadCard = () => {
         card.src = `/widget?variant=${variant}`;
       };
@@ -208,9 +196,6 @@
         studio: 'The original design, preserved. Compare using the same draft.',
         pulse:
           'Try reordering a track: entries slide into place. Motion respects reduced-motion preferences.',
-        spectrum: 'Color is decorative, not a score or audio feature. Try dark and light surfaces.',
-        bootleg:
-          'A graphic record-sleeve experiment. This direction intentionally uses its own paper palette.',
       };
       for (const button of document.querySelectorAll('[data-variant]'))
         button.onclick = () => {

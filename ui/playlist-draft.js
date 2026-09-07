@@ -6,6 +6,7 @@ let state;
 let draftId;
 let busy = false;
 let connected = false;
+let renderedTracks;
 const status = (text) => {
   el('status').textContent = text;
 };
@@ -103,6 +104,25 @@ function render() {
   el('details').textContent = inspection
     ? `${inspection.artist_counts.map((item) => `${item.artist} ×${item.count}`).join(' · ')}. Unknown artists: ${inspection.unknown_artist_count}. Missing durations: ${inspection.runtime.missing_count}. Missing BPM: ${inspection.feature_coverage.bpm.missing_count}; key: ${inspection.feature_coverage.musical_key.missing_count}. Owned-copy duplicates: ${inspection.duplicate_owned_copies.length}.`
     : 'Restore or replace missing tracks with the agent before saving.';
+  // Context delivery finishes independently of row motion. Changing only busy
+  // state must not replace the DOM nodes that are currently animating.
+  const trackView = JSON.stringify([
+    draft.draft_id,
+    draft.entries,
+    draft.selected_entry_ids,
+    inspection?.tracks,
+  ]);
+
+  if (trackView === renderedTracks) {
+    for (const control of el('tracks').querySelectorAll('input, button')) {
+      control.disabled =
+        busy || draft.save?.status === 'pending' || control.dataset.edgeDisabled === 'true';
+    }
+
+    return;
+  }
+
+  renderedTracks = trackView;
   const scrollTop = el('tracks').scrollTop;
 
   el('tracks').replaceChildren();
@@ -194,6 +214,9 @@ function render() {
       button.className = 'move';
       button.dataset.focus = `move-${delta}-${entry.entry_id}`;
       button.setAttribute('aria-label', `Move entry ${index + 1} ${delta < 0 ? 'up' : 'down'}`);
+      button.dataset.edgeDisabled = String(
+        index + delta < 0 || index + delta >= draft.entries.length,
+      );
       button.disabled =
         busy ||
         draft.save?.status === 'pending' ||

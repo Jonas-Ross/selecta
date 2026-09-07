@@ -61,8 +61,8 @@ Use the width selector for 760px, 553px or 390px cards, and the surface selector
 
 The design pass uses aligned time/BPM/key columns, compact icon controls, occurrence-specific selection highlighting, a focused feedback composer, and secondary save. IDs remain accessible in Track details. Browser checks verified selection of the second repeated occurrence, pin/reorder, feedback carrying revision 5, persistence across preview remount, and the 390px Claude-like surface. Keyboard focus and queue scroll are retained during row redraws. This does not replace the pending Codex host smoke check.
 
-### Four design explorations
+### Current design comparison
 
-The preview chooser preserves **1. Studio** (the production design) and adds **2. Pulse** (entrance and occurrence-aware reorder animation), **3. Spectrum** (decorative track colors), and **4. Bootleg** (a graphic record-sleeve direction). All four use the same draft handlers and persisted fixture state. Keep feedback before switching variants. Pulse respects reduced-motion preferences; Bootleg intentionally uses a fixed paper palette.
+The chooser keeps **1. Studio** for comparison and defaults to **2. Pulse**, the user's preferred direction. Pulse now uses deep petrol, copper interaction accents and teal details. Spectrum and Bootleg were rejected and removed. Alternative styling remains preview-only until the final design is chosen.
 
-The alternative CSS and animation code in `ui/variants.css` and `ui/variants.js` are injected only by the development preview host, never bundled into the production widget. Studio's production files are unchanged. Variant assets also trigger live reload. Browser inspection covered Spectrum at wide width, Bootleg at wide/narrow widths, and reorder persistence in Pulse; no browser console errors were reported.
+A timing-dependent reorder bug was reproduced: the asynchronous context update could finish after motion began, and the final busy-state render replaced the animated row nodes. Rendering now retains rows when their displayed state is unchanged, updating disabled controls in place. A controlled regression test fails on the previous implementation and passes with this fix; boundary arrows remain disabled correctly. Pulse's existing reduced-motion behavior is preserved.
