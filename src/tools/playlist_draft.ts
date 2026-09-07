@@ -45,7 +45,7 @@ export const editDraftInputShape = {
 
 export const SHOW_DRAFT_DESCRIPTION = `Open an interactive playlist draft from ordered cached track_ids. Supply a new UUID as draft_id; this identity is also recoverable from the original tool input after reload. Local draft only: no playback or Music.app write. Each repeated ID gets a separate entry_id. Returns inspection facts, draft_id, revision and editable entries; works as JSON without UI. Selection identifies the subject of explicit feedback, not an instruction to replace or preserve tracks. Empty selection refers to the whole playlist. Use edit_playlist_draft with the returned revision and preserve existing entry_ids when revising. Widget context reaches Codex directly; in Claude Code retrieve Read widget context. Feedback messages may be staged in the composer for the user to send. After reload recover by get_playlist_draft using draft_id; never create a replacement silently. Save only on explicit user approval via save_playlist_draft with the exact revision.`;
 export const EDIT_DRAFT_DESCRIPTION = `Edit local playlist draft at an exact revision: replace ordered entries, name, selection or feedback. Preserve entry_ids for existing occurrences including repeated tracks; omit entry_id for new occurrences. Selected entry IDs identify which occurrences the feedback refers to; empty selection means the whole playlist. Follow explicit feedback rather than inferring an action from selection alone. No Music.app calls. A stale revision fails: get_playlist_draft and reconcile rather than replaying. Returns the new revision and current cached inspection; removed library tracks remain recoverable but cannot be saved.`;
-export const SAVE_DRAFT_DESCRIPTION = `Explicitly save the approved exact draft revision as a real Music.app playlist using create_playlist contracts. Never call for selection, reorder or feedback. Claims this revision before writing and stores the outcome, so duplicate or uncertain requests never automatically repeat a write. On errors inspect result/partial_write and Music.app before deciding a new draft revision is safe to save. A pending save after interruption is uncertain, not permission to retry. No fingerprint precondition, audition or preview-slot integration.`;
+export const SAVE_DRAFT_DESCRIPTION = `Explicitly save the approved exact draft revision as a real Music.app playlist using create_playlist contracts. Never call for selection, reorder or feedback. Claims this revision before writing and stores the outcome, so duplicate or uncertain requests never automatically repeat a write. An operation_busy lock rejection releases the claim: wait, get the latest draft revision, then explicitly retry. Other errors retain the guard; inspect result/partial_write and Music.app before deciding a new draft revision is safe to save. A pending save after interruption is uncertain, not permission to retry. No fingerprint precondition, audition or preview-slot integration.`;
 
 export class PlaylistDraftTools {
   constructor(
@@ -224,9 +224,13 @@ export class PlaylistDraftTools {
       );
 
       try {
+        // The operation lock rejects contention before running create's action.
+        // Other errors can follow a write even without a partial-write receipt.
+        const preWriteBusy =
+          isSelectaError(result) && result.error === 'operation_busy' && !result.partial_write;
         const finished = this.store.update(draft_id, claimed.revision, (draft) => ({
           ...draft,
-          save: { revision, status: 'finished', result },
+          save: preWriteBusy ? undefined : { revision, status: 'finished', result },
         }));
 
         return {

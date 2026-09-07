@@ -10,6 +10,7 @@ import { DraftStore } from '../src/drafts/store.js';
 import { PlaylistDraftTools } from '../src/tools/playlist_draft.js';
 import { createServer } from '../dist/server.js';
 import { DRAFT_RESOURCE } from '../src/draft_app.js';
+import { withOperation } from '../src/operations/lock.js';
 import { BridgeError } from '../src/types/errors.js';
 import { makeToolDeps } from './helpers.js';
 
@@ -381,4 +382,52 @@ it('opens legacy pinned drafts without leaking pins or mutating the stored revis
   } finally {
     db.close();
   }
+});
+
+it('allows an explicit save retry after operation contention without changing the tracklist', async () => {
+  const original = await draft();
+
+  await withOperation(deps.cacheInstance, 'music', async () => {
+    const busy = await tools.save({ draft_id: original.draft_id, revision: 1 });
+
+    expect(busy).toMatchObject({ error: 'operation_busy', draft: { revision: 3 } });
+    expect(deps.bridge.createPlaylist).not.toHaveBeenCalled();
+    expect(store.get(original.draft_id).save).toBeUndefined();
+  });
+  vi.mocked(deps.bridge.createPlaylist).mockResolvedValue({
+    persistentId: 'P-RETRIED',
+    trackCount: 2,
+    trackPersistentIds: ids,
+  });
+  const latest = store.get(original.draft_id);
+
+  expect(latest.entries).toEqual(original.entries);
+  expect(
+    await tools.save({ draft_id: original.draft_id, revision: latest.revision }),
+  ).toMatchObject({ result: { playlist_id: 'P-RETRIED' } });
+  expect(deps.bridge.createPlaylist).toHaveBeenCalledTimes(1);
+  expect(
+    await tools.save({
+      draft_id: original.draft_id,
+      revision: store.get(original.draft_id).revision,
+    }),
+  ).toMatchObject({ error: 'validation_error' });
+});
+
+it('keeps an uncertain bridge failure blocked even without a partial-write receipt', async () => {
+  const original = await draft();
+
+  vi.mocked(deps.bridge.createPlaylist).mockRejectedValue(
+    new BridgeError('jxa_error', 'Connection lost'),
+  );
+  expect(await tools.save({ draft_id: original.draft_id, revision: 1 })).toMatchObject({
+    error: 'jxa_error',
+  });
+  expect(
+    await tools.save({
+      draft_id: original.draft_id,
+      revision: store.get(original.draft_id).revision,
+    }),
+  ).toMatchObject({ error: 'validation_error' });
+  expect(deps.bridge.createPlaylist).toHaveBeenCalledTimes(1);
 });

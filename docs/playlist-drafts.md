@@ -10,7 +10,7 @@ The open feedback field retains its height when focus moves elsewhere. Regressio
 
 **Keep feedback in draft**, **Send feedback**, or another draft edit persists typed feedback. Sending includes the exact revision, ordered occurrence IDs, selection and feedback. Codex receives widget context directly; Claude Desktop Code exposes **Read widget context** and may stage messages in the composer for the user to send. Agent edits require **Reload latest**; no automatic production polling is added.
 
-**Save to Music.app** checks the revision, durably claims the attempt, then calls the existing create handler. Partial outcomes are retained. Interrupted pending saves cannot be retried automatically; inspect Music.app first. After a completed attempt, changing the name or ordered track list permits a new explicitly requested save. Selection and feedback alone retain the save guard. No audition integration is included.
+**Save to Music.app** checks the revision, durably claims the attempt, then calls the existing create handler. Partial outcomes are retained. Interrupted pending saves cannot be retried automatically; inspect Music.app first. After a completed attempt, changing the name or ordered track list permits a new explicitly requested save. Selection and feedback alone retain the save guard. An `operation_busy` rejection from the Music operation lock occurs before creation and releases the draft claim; after the other operation finishes, reload the latest revision and explicitly save again. No automatic retry occurs. Other failures, including those without a partial-write receipt, retain the guard because their outcome can be uncertain. No audition integration is included.
 
 ## Layout and appearance
 
