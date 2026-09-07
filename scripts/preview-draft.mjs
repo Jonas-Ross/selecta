@@ -46,7 +46,12 @@ async function reset() {
 await reset();
 const port = Number(process.env.SELECTA_PREVIEW_PORT ?? 8766);
 const origin = `http://127.0.0.1:${port}`;
-const files = ['ui/playlist-draft.html', 'ui/playlist-draft.js'];
+const files = [
+  'ui/playlist-draft.html',
+  'ui/playlist-draft.js',
+  'ui/variants.css',
+  'ui/variants.js',
+];
 const version = async () =>
   (await Promise.all(files.map(async (file) => (await stat(new URL(file, root))).mtimeMs))).join(
     '-',
@@ -127,10 +132,32 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.url === '/widget') {
+    const url = new URL(req.url, origin);
+
+    if (url.pathname === '/widget') {
       await promisify(execFile)(process.execPath, ['scripts/build-ui.mjs'], { cwd: root });
       res.setHeader('Content-Type', 'text/html');
-      res.end(await readFile(new URL('../dist/ui/playlist-draft.html', import.meta.url)));
+      const variant = ['studio', 'pulse', 'spectrum', 'bootleg'].includes(
+        url.searchParams.get('variant'),
+      )
+        ? url.searchParams.get('variant')
+        : 'studio';
+      let widget = await readFile(
+        new URL('../dist/ui/playlist-draft.html', import.meta.url),
+        'utf8',
+      );
+
+      if (variant !== 'studio') {
+        const css = await readFile(new URL('../ui/variants.css', import.meta.url), 'utf8');
+        const motion = await readFile(new URL('../ui/variants.js', import.meta.url), 'utf8');
+
+        widget = widget
+          .replace('<html lang="en">', `<html lang="en" data-variant="${variant}">`)
+          .replace('</head>', `<style>${css}</style></head>`)
+          .replace('</body>', `<script type="module">${motion}</script></body>`);
+      }
+
+      res.end(widget);
 
       return;
     }

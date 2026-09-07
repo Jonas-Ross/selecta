@@ -99,6 +99,55 @@
         font-size: 11px;
         color: #a9aab4;
       }
+      .variants {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        max-width: 960px;
+        margin: 24px auto 0;
+        padding: 0 20px;
+      }
+      .variants button {
+        text-align: left;
+        padding: 13px 15px;
+        cursor: pointer;
+        background: transparent;
+        border-color: #ffffff18;
+        min-width: 0;
+      }
+      .variants button[aria-pressed='true'] {
+        background: #292a33;
+        border-color: #b9b3f1;
+      }
+      .variants strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 550;
+      }
+      .variants small {
+        display: block;
+        color: #9698a7;
+        font-size: 11px;
+        line-height: 1.5;
+        margin-top: 5px;
+      }
+      .variants button:nth-child(3) strong {
+        color: #edaccc;
+      }
+      .variants button:nth-child(4) strong {
+        color: #ecc795;
+      }
+      #direction {
+        text-align: center;
+        color: #a2a4b1;
+        font-size: 12px;
+        margin: 16px 20px 0;
+      }
+      @media (max-width: 650px) {
+        .variants {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
     </style>
   </head>
   <body>
@@ -118,6 +167,21 @@
         ><button id="reset">Reset fixture</button>
       </div>
     </div>
+    <nav class="variants" aria-label="Design variants">
+      <button data-variant="studio" aria-pressed="true">
+        <strong>1. Studio</strong><small>Original. Quiet and precise.</small>
+      </button>
+      <button data-variant="pulse" aria-pressed="false">
+        <strong>2. Pulse</strong><small>Responsive, fluid movement.</small>
+      </button>
+      <button data-variant="spectrum" aria-pressed="false">
+        <strong>3. Spectrum</strong><small>Color with a softer edge.</small>
+      </button>
+      <button data-variant="bootleg" aria-pressed="false">
+        <strong>4. Bootleg</strong><small>A record sleeve, cut loose.</small>
+      </button>
+    </nav>
+    <p id="direction">The original design, preserved. Compare using the same draft.</p>
     <main>
       <div class="stage" id="stage">
         <iframe id="card" title="Playlist draft preview" src="/widget"></iframe>
@@ -136,6 +200,26 @@
     <script>
       let draftId = '__DRAFT_ID__';
       const card = document.getElementById('card');
+      let variant = 'studio';
+      const reloadCard = () => {
+        card.src = `/widget?variant=${variant}`;
+      };
+      const descriptions = {
+        studio: 'The original design, preserved. Compare using the same draft.',
+        pulse:
+          'Try reordering a track: entries slide into place. Motion respects reduced-motion preferences.',
+        spectrum: 'Color is decorative, not a score or audio feature. Try dark and light surfaces.',
+        bootleg:
+          'A graphic record-sleeve experiment. This direction intentionally uses its own paper palette.',
+      };
+      for (const button of document.querySelectorAll('[data-variant]'))
+        button.onclick = () => {
+          variant = button.dataset.variant;
+          for (const item of document.querySelectorAll('[data-variant]'))
+            item.setAttribute('aria-pressed', String(item === button));
+          document.getElementById('direction').textContent = descriptions[variant];
+          reloadCard();
+        };
       function hostContext() {
         const surface = document.getElementById('theme').value;
         return {
@@ -198,18 +282,18 @@
       document.getElementById('width').onchange = (e) =>
         (document.getElementById('stage').style.maxWidth = e.target.value + 'px');
       document.getElementById('theme').onchange = () => {
-        card.src = '/widget';
+        reloadCard();
       };
       document.getElementById('reset').onclick = async () => {
         const result = await fetch('/reset', { method: 'POST' }).then((r) => r.json());
         draftId = result.draft_id;
-        card.src = '/widget';
+        reloadCard();
       };
       let current;
       setInterval(async () => {
         try {
           const next = await fetch('/version').then((r) => r.text());
-          if (current && next !== current) card.src = '/widget';
+          if (current && next !== current) reloadCard();
           current = next;
         } catch {}
       }, 1000);
