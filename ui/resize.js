@@ -1,6 +1,12 @@
 // Measure content, not the iframe viewport: host document styles and rounding
-// must not feed back into the next requested height.
-export function observeSize(element, onSize) {
+// must not feed back into the next requested height. The observers and frame
+// scheduler are injectable so tests can drive them without a browser.
+export function observeSize(element, onSize, hooks = {}) {
+  const {
+    ResizeObserver = globalThis.ResizeObserver,
+    MutationObserver = globalThis.MutationObserver,
+    requestAnimationFrame = globalThis.requestAnimationFrame,
+  } = hooks;
   let scheduled = false;
   let previous;
   const report = () => {
