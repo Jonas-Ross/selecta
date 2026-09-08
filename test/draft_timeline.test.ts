@@ -36,7 +36,19 @@ it('keeps exact occurrence order and accumulates durations without per-track rou
   expect(clockLabel(61.05)).toBe('1:01.05');
   expect(clockLabel(60)).toBe('1:00');
   expect(clockLabel(0)).toBe('0:00');
-  expect(clockLabel(3600)).toBe('60:00');
+});
+
+it.each([
+  [3599, '59:59'],
+  [3599.9996, '1h 00m 00s'],
+  [3600, '1h 00m 00s'],
+  [3661.05, '1h 01m 01.05s'],
+  [86399, '23h 59m 59s'],
+  [86400, '1d 0h 00m 00s'],
+  [157912, '1d 19h 51m 52s'],
+  [172800, '2d 0h 00m 00s'],
+])('formats long durations with hours and days: %s seconds', (seconds, label) => {
+  expect(clockLabel(seconds)).toBe(label);
 });
 
 it('breaks the elapsed clock at missing durations without discarding later known durations', () => {

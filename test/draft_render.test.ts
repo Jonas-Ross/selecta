@@ -67,7 +67,6 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
     busy: false,
     el,
     document: { createElement: (tag: string) => new Element(tag) },
-    duration: String,
     edit: vi.fn(),
     renderedTracks: undefined as string | undefined,
     renderedTimeline: undefined as string | undefined,

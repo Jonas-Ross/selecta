@@ -23,13 +23,6 @@ const status = (text, tone) => {
   if (tone) el('status').dataset.tone = tone;
   else delete el('status').dataset.tone;
 };
-const duration = (seconds) => {
-  if (seconds == null) return 'duration unknown';
-
-  const total = Math.round(seconds);
-
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
-};
 
 let hostTheme;
 let appearance = 'host';
@@ -228,7 +221,7 @@ function render() {
   el('keep-feedback').disabled = draft.save?.status === 'pending';
   el('save').disabled = !!draft.save || !!inspection_error;
   el('summary').textContent = inspection
-    ? `${inspection.track_count} tracks / ${duration(inspection.runtime.known_seconds)}${inspection.runtime.missing_count ? ' known runtime' : ' runtime'}${inspection.duplicate_ids.length ? ` / ${inspection.duplicate_ids.length} repeated` : ''}`
+    ? `${inspection.track_count} tracks / ${clockLabel(inspection.runtime.known_seconds)}${inspection.runtime.missing_count ? ' known runtime' : ' runtime'}${inspection.duplicate_ids.length ? ` / ${inspection.duplicate_ids.length} repeated` : ''}`
     : (inspection_error?.hint ?? 'Inspection unavailable');
   el('details').textContent = inspection
     ? `${inspection.artist_counts.map((item) => `${item.artist} ×${item.count}`).join(' · ')}. Unknown artists: ${inspection.unknown_artist_count}. Missing durations: ${inspection.runtime.missing_count}. Missing BPM: ${inspection.feature_coverage.bpm.missing_count}. Owned-copy duplicates: ${inspection.duplicate_owned_copies.length}.`
@@ -315,8 +308,9 @@ function render() {
     const time = document.createElement('span');
 
     time.className = 'metric';
-    time.textContent = track?.duration_seconds == null ? '—' : duration(track.duration_seconds);
-    time.title = track?.duration_seconds == null ? 'Duration unknown' : 'Duration';
+    time.textContent = track?.duration_seconds == null ? '—' : clockLabel(track.duration_seconds);
+    time.title =
+      track?.duration_seconds == null ? 'Duration unknown' : `Duration: ${time.textContent}`;
     const bpm = document.createElement('span');
 
     bpm.className = 'metric bpm';

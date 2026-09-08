@@ -29,11 +29,17 @@ export function clockLabel(seconds) {
 
   // Preserve subsecond facts rather than accumulating rounded track times.
   const rounded = Math.round(seconds * 1000) / 1000;
-  const minutes = Math.floor(rounded / 60);
+  const days = Math.floor(rounded / 86400);
+  const hours = Math.floor(rounded / 3600) % 24;
+  const minutes = Math.floor(rounded / 60) % 60;
   const remainder = rounded % 60;
   const secondsLabel = remainder.toFixed(3).replace(/\.?0+$/, '') || '0';
 
-  return `${minutes}:${remainder < 10 ? '0' : ''}${secondsLabel}`;
+  const paddedSeconds = `${remainder < 10 ? '0' : ''}${secondsLabel}`;
+
+  if (rounded < 3600) return `${minutes}:${paddedSeconds}`;
+
+  return `${days ? `${days}d ` : ''}${hours}h ${String(minutes).padStart(2, '0')}m ${paddedSeconds}s`;
 }
 
 export function renderTimeline(container, entries, { selected, disabled, onSelect }) {
