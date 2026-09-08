@@ -1,7 +1,7 @@
 // Development-only fixture host. Never imports the live Music.app bridge or
 // opens the user's cache. The production bundle runs inside a standard iframe.
 import { createServer } from 'node:http';
-import { readFile, stat, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, readdir, stat, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -18,7 +18,6 @@ const fixture = JSON.parse(
   await readFile(new URL('../test/fixtures/library.json', import.meta.url), 'utf8'),
 );
 
-cache.refreshFromSnapshot(fixture, { durationMs: 1 });
 const handlers = new PlaylistDraftTools({
   cache: () => cache,
   bridge: {
@@ -31,28 +30,46 @@ const handlers = new PlaylistDraftTools({
   drafts: () => new DraftStore(join(directory, 'drafts.db')),
 });
 let draftId;
+const SCENARIOS = ['standard', 'missing', 'long'];
 
-async function reset() {
+async function reset(scenario = 'standard') {
+  const snapshot = structuredClone(fixture);
+
+  if (scenario === 'missing')
+    delete snapshot.tracks.find((track) => track.persistentId === 'T-ANGEL').durationSeconds;
+
+  cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+  // Synthetic feature values for UI verification, never fetched or written live.
+  cache.saveAudioFeatures([
+    {
+      trackPersistentId: 'T-TEARDROP',
+      bpm: 76,
+      musicalKey: 'A minor',
+      danceability: null,
+      sources: { bpm: 'fixture', musicalKey: 'fixture' },
+      mbRecordingMbid: null,
+      deezerTrackId: null,
+      status: 'ok',
+      fetchedAt: fixture.capturedAt,
+    },
+  ]);
   draftId = randomUUID();
+  const trackIds = ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX', 'T-ROADS', 'T-MIDNIGHT', 'T-TEARDROP'];
+
   await handlers.show({
     draft_id: draftId,
-    name: 'After the last train',
-    track_ids: ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX', 'T-ROADS', 'T-MIDNIGHT', 'T-TEARDROP'],
+    name: scenario === 'long' ? 'The very last train (500 entries)' : 'After the last train',
+    track_ids:
+      scenario === 'long'
+        ? Array.from({ length: 500 }, (_, i) => trackIds[i % trackIds.length])
+        : trackIds,
   });
 }
 
 await reset();
 const port = Number(process.env.SELECTA_PREVIEW_PORT ?? 8766);
 const origin = `http://127.0.0.1:${port}`;
-const files = [
-  'ui/playlist-draft.html',
-  'ui/playlist-draft.js',
-  'ui/pulse.css',
-  'ui/pulse.js',
-  'ui/dom.js',
-  'ui/resize.js',
-  'ui/setlist.css',
-];
+const files = (await readdir(new URL('ui/', root))).map((file) => `ui/${file}`);
 const version = async () =>
   (await Promise.all(files.map(async (file) => (await stat(new URL(file, root))).mtimeMs))).join(
     '-',
@@ -89,7 +106,15 @@ const server = createServer(async (req, res) => {
       res.setHeader('Content-Type', 'application/json');
 
       if (req.url === '/reset') {
-        await reset();
+        const { scenario = 'standard' } = JSON.parse(body || '{}');
+
+        if (!SCENARIOS.includes(scenario)) {
+          res.writeHead(400).end();
+
+          return;
+        }
+
+        await reset(scenario);
         res.end(JSON.stringify({ draft_id: draftId }));
 
         return;

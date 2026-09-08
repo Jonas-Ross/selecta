@@ -14,7 +14,9 @@ The open feedback field retains its height when focus moves elsewhere. Regressio
 
 ## Layout and appearance
 
-Setlist uses a compact title/count header, an options menu for Appearance, Reload latest and Track details, dense rows, and a feedback drawer. Musical key is omitted from the card. The underlying inspection API retains its objective facts.
+Setlist uses a compact title/count header, an options menu for Appearance, Reload latest and Track details, a collapsible sequence timeline, dense rows, and a feedback drawer. Musical key is omitted from the rows; the timeline's optional key lane shows the cached fact.
+
+Timeline blocks share one proportional scale. An unknown duration is a fixed-width hatched marker, and the elapsed clock stays unknown from the first gap onwards rather than skipping over it; nothing is interpolated. There is no zero-duration case: the bridge treats a zero duration as unset, so the cache only ever holds positive or missing durations. Blocks and row checkboxes toggle the same occurrence selection through the revision-checked edit flow; lane toggles are view state only. Durations at or over an hour use explicit units (`1h 02m 03s`, `1d 19h 51m 52s`) everywhere the card shows time.
 
 Appearance defaults to **Follow host**. Copper, Cobalt, Ember, Moss and Oxblood override colors while following host light/dark mode; OLED forces black. The app-only appearance helper stores this preference independently of draft revisions and model context. Existing cards read it when reopened. Changing appearance preserves typed feedback; storage errors are reported without retries.
 
@@ -26,11 +28,11 @@ Codex caps inline cards at 720 CSS pixels. The track list absorbs the viewport c
 
 Run `npm run preview:draft`, then open `http://127.0.0.1:8766`. `SELECTA_PREVIEW_PORT` selects another port. This loopback fixture host loads the production widget, an in-memory fixture library and a temporary draft store. It never loads the live Music.app bridge or user cache. Saves are simulated; feedback appears under **Latest interaction**.
 
-Width controls offer 760px, 553px and 390px cards. Surface controls include dark, light, Claude-like and Codex-style injected CSS with its 720px height cap. Source edits reload the card; persisted fixture edits survive, but unsaved text does not. **Reset fixture** starts a fresh draft. Ctrl+C stops the preview and removes its temporary store. This is a development tool, not a standalone product.
+Width controls offer 760px, 553px and 390px cards. Surface controls include dark, light, Claude-like and Codex-style injected CSS with its 720px height cap. Select a **Fixture**, then **Reset fixture** to load repeated tracks, a missing duration, or 500 entries; feature values in the preview are synthetic. Source edits reload the card; persisted fixture edits survive, but unsaved text does not. Ctrl+C stops the preview and removes its temporary store. This is a development tool, not a standalone product.
 
 ## Validation and host smoke
 
-Controlled tests cover exact occurrence IDs, revision conflicts, selection and feedback persistence, legacy draft recovery, save guards and failures, appearance isolation, row lifetime and size reporting. Fixture browser checks cover repeated-occurrence selection, feedback scope and messages, reordering and narrow layouts.
+Controlled tests cover exact occurrence IDs, revision conflicts, selection and feedback persistence, legacy draft recovery, save guards and failures, appearance isolation, row lifetime and size reporting. Timeline tests cover cumulative time, missing durations and features, repeated occurrences, proportional widths, accessible labels and 500-entry drafts. Fixture browser checks cover repeated-occurrence selection, feedback scope and messages, reordering and narrow layouts.
 
 Earlier user-reported Claude Desktop Code checks passed discovery, repeated-track editing, context/message agreement, reload recovery, stale-edit rejection and missing-draft errors. Those checks preceded Setlist. Codex reached creation and context delivery, with subsequent user confirmation of host CSS, flicker and height fixes. The final Setlist layout still needs a fresh actual-host check after rebuilding and restarting Selecta; fixture checks do not substitute for that. No real Music.app writes were performed for the design changes.
 
@@ -40,3 +42,4 @@ Before marking the PR ready:
 2. Select only the second occurrence, open its feedback drawer and submit explicit feedback. Confirm context and the user message contain the same occurrence ID and revision without pins.
 3. Reorder, reopen and reload; confirm saved selection, order and feedback recover. Verify stale edits fail and missing drafts show recovery guidance.
 4. Check Appearance, narrow sizing and the open feedback drawer in the actual host. Save only with explicit authorization for the real playlist write.
+5. Expand the timeline, toggle the tempo/key lanes, and select the second repeated occurrence from its block. Confirm the list and feedback target agree, then reorder and reload. Check horizontal scrolling and keyboard selection in a narrow card and the 500-entry fixture in both supported hosts.

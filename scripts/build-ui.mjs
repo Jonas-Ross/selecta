@@ -1,13 +1,15 @@
 // Bundle the SDK and widget together: no CDN, external assets or runtime server.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { build } from 'esbuild';
-const html = (
-  await readFile(new URL('../ui/playlist-draft.html', import.meta.url), 'utf8')
-).replace('/*__PULSE__*/', await readFile(new URL('../ui/pulse.css', import.meta.url), 'utf8'));
-const widgetHtml = html.replace(
-  '/*__SETLIST__*/',
-  await readFile(new URL('../ui/setlist.css', import.meta.url), 'utf8'),
-);
+let widgetHtml = await readFile(new URL('../ui/playlist-draft.html', import.meta.url), 'utf8');
+
+// Each stylesheet fills its own placeholder so cascade order stays explicit.
+for (const sheet of ['pulse', 'setlist', 'timeline'])
+  widgetHtml = widgetHtml.replace(
+    `/*__${sheet.toUpperCase()}__*/`,
+    await readFile(new URL(`../ui/${sheet}.css`, import.meta.url), 'utf8'),
+  );
+
 const result = await build({
   entryPoints: ['ui/playlist-draft.js'],
   bundle: true,
