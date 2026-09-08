@@ -38,7 +38,9 @@
           font: inherit;
           color: inherit;
         }
-        button {
+        /* Zero specificity: any button component overrides the base look and
+           its hover and disabled states with a single class. */
+        :where(button) {
           cursor: pointer;
           border: 1px solid transparent;
           border-radius: 8px;
@@ -51,10 +53,10 @@
           gap: 7px;
           white-space: nowrap;
         }
-        button:hover:not(:disabled) {
+        :where(button:hover:not(:disabled)) {
           background: var(--soft);
         }
-        button:disabled {
+        :where(button:disabled) {
           opacity: 0.35;
           cursor: default;
         }
@@ -298,23 +300,17 @@
           justify-content: flex-end;
           gap: 1px;
         }
-        .actions button {
+        .move {
           padding: 5px;
           width: 30px;
           min-height: 30px;
           color: var(--muted);
           border-radius: 6px;
-        }
-        .actions .move {
           opacity: 0.65;
         }
         .track-row:hover .move,
         .track-row:focus-within .move {
           opacity: 1;
-        }
-        .actions button[aria-pressed='true'] {
-          color: var(--accent);
-          background: color-mix(in srgb, var(--accent) 12%, transparent);
         }
         .feedback-box {
           border: 1px solid var(--line);
@@ -482,7 +478,7 @@
           .actions {
             gap: 0;
           }
-          .actions button {
+          .move {
             width: 26px;
           }
           .queue-head .key-heading {
@@ -516,7 +512,7 @@
           .mobile-bpm {
             display: inline;
           }
-          .actions button {
+          .move {
             width: 23px;
             padding: 4px;
           }
