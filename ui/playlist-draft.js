@@ -154,8 +154,8 @@ function render() {
 async function action(fn) {
   if (busy) return;
 
+  // Nodes survive the render, so the inert editor can hand focus straight back.
   const focused = ui.activeElement;
-  const focusKey = focused?.dataset.focus;
 
   busy = true;
   render();
@@ -170,10 +170,7 @@ async function action(fn) {
   } finally {
     busy = false;
     render();
-
-    if (focusKey)
-      ui.querySelector(`[data-focus="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
-    else focused?.focus({ preventScroll: true });
+    focused?.focus({ preventScroll: true });
   }
 }
 

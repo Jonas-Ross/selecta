@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 import { renderDraft } from '../ui/render.js';
 import { elementLookup } from './dom.js';
 
-it('keeps reordered row nodes alive when async context delivery finishes', () => {
+it('updates row and timeline nodes in place across selection, reorder and busy renders', () => {
   const el = elementLookup();
   const draft = {
     draft_id: 'draft',
@@ -35,10 +35,19 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
   expect(el('feedback-toggle').textContent).toBe('Feedback on the playlist');
   expect(el('feedback-label').textContent).toBe('Feedback on the whole playlist');
   expect(el('timeline-note').textContent).toBe('Inspection unavailable.');
+  const [rowA, rowB] = el('tracks').children;
+  const [blockA, blockB] = el('timeline').children;
+
+  expect(rowA.classes.has('selected')).toBe(false);
   draft.selected_entry_ids = ['b'];
   render();
   expect(el('feedback-toggle').textContent).toBe('Feedback on 1 track');
   expect(el('feedback-label').textContent).toBe('Feedback on 02 · this track');
+  // Selection is painted onto the nodes that already exist.
+  expect(el('tracks').children).toEqual([rowA, rowB]);
+  expect(rowB.classes.has('selected')).toBe(true);
+  expect(rowB.children[0].checked).toBe(true);
+  expect(el('timeline').children).toEqual([blockA, blockB]);
   expect(el('timeline').children.map((node) => node.attributes['aria-pressed'])).toEqual([
     'false',
     'true',
@@ -54,11 +63,11 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
   draft.selected_entry_ids = ['b'];
   expect(
     el('tracks')
-      .querySelectorAll()
+      .controls()
       .filter((node) => node.tag === 'button'),
   ).toHaveLength(4);
   const idleDisabled = el('tracks')
-    .querySelectorAll()
+    .controls()
     .map((node) => node.disabled);
 
   el('feedback').value = 'Unsaved feedback';
@@ -68,29 +77,27 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
   expect(el('feedback').value).toBe('Unsaved feedback');
   expect(
     el('tracks')
-      .querySelectorAll()
+      .controls()
       .map((node) => node.disabled),
   ).toEqual(idleDisabled);
   expect(el('send').disabled).toBe(false);
   draft.entries.reverse();
   draft.revision++;
   render();
-  const movingRows = [...el('tracks').children];
-
+  // A reorder moves the existing nodes instead of rebuilding them.
+  expect(el('tracks').children).toEqual([rowB, rowA]);
+  expect(el('timeline').children).toEqual([blockB, blockA]);
+  expect(rowB.children[1].textContent).toBe('01');
   busy = false;
   render();
   expect(el('editor').inert).toBe(false);
-  expect(el('tracks').children[0]).toBe(movingRows[0]);
-  expect(el('tracks').children[1]).toBe(movingRows[1]);
-  expect(el('timeline').children.map((node) => node.dataset.focus)).toEqual([
-    'timeline-b',
-    'timeline-a',
-  ]);
+  expect(el('tracks').children).toEqual([rowB, rowA]);
+  expect(el('timeline').children.map((node) => node.dataset.entryId)).toEqual(['b', 'a']);
   expect(el('timeline').children.map((node) => node.attributes['aria-pressed'])).toEqual([
     'true',
     'false',
   ]);
-  const controls = el('tracks').querySelectorAll();
+  const controls = el('tracks').controls();
 
   expect(controls.filter((node) => node.tag === 'input').every((node) => !node.disabled)).toBe(
     true,
@@ -100,7 +107,7 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
   expect(edit).toHaveBeenLastCalledWith({ selected_entry_ids: [] });
   el('timeline').children[1].onclick();
   expect(edit).toHaveBeenLastCalledWith({ selected_entry_ids: ['b', 'a'] });
-  el('tracks').querySelectorAll()[0].onchange();
+  el('tracks').controls()[0].onchange();
   expect(edit).toHaveBeenLastCalledWith({ selected_entry_ids: [] });
   // A pending save disables controls in place; the rendered nodes survive.
   const timelineButtons = [...el('timeline').children];
@@ -119,4 +126,14 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
   expect(el('timeline').classes.has('show-tempo')).toBe(true);
   expect(el('timeline').classes.has('show-key')).toBe(false);
   expect(el('timeline').children).toEqual(timelineButtons);
+  // An entry the agent removed takes its nodes with it; a new one gets fresh nodes.
+  draft.entries = [draft.entries[0], { entry_id: 'c', track_id: 'other' }];
+  render();
+  expect(el('tracks').children[0]).toBe(rowB);
+  expect(el('tracks').children[1]).not.toBe(rowA);
+  expect(el('tracks').children.map((row) => row.dataset.entryId)).toEqual(['b', 'c']);
+  expect(el('timeline').children.map((node) => node.dataset.entryId)).toEqual(['b', 'c']);
+  expect(rowA.parentNode).toBeNull();
+  // The repeat badge follows the data: b is no longer a repeated track.
+  expect(rowB.children[2].children[0].children[1].textContent).toBe('');
 });

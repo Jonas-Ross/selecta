@@ -1,3 +1,5 @@
+import { reconcileChildren, element } from './reconcile.js';
+
 // Occurrences stay in draft order. An unknown duration consumes no invented
 // time, so the elapsed clock is unknown from the first gap onwards.
 export function timelineEntries(entries, tracks = []) {
@@ -47,27 +49,37 @@ const PX_PER_SECOND = 0.35;
 const MARKER_PX = 36;
 const MIN_WIDTH_PX = 640;
 const MAX_WIDTH_PX = 32000;
-const ARTIST_HUES = 6;
 
-// Color is only a reading aid: the raw artist name is always shown.
-function artistHue(artist) {
+// Six fixed hues: enough to tell neighbours apart, never a claim of identity.
+// Color is only a reading aid; the raw artist name is always shown.
+const ARTIST_COLORS = [
+  'light-dark(#38647f, #85b4d0)',
+  'light-dark(#785b8f, #b6a0cd)',
+  'light-dark(#8a602d, #ccae7d)',
+  'light-dark(#366f5e, #8cbfaf)',
+  'light-dark(#905562, #d39aaa)',
+  'light-dark(#656c2a, #b8c180)',
+];
+
+function artistColor(artist) {
   let hash = 0;
 
   for (const char of artist.toLowerCase()) hash = (hash * 31 + char.codePointAt(0)) | 0;
 
-  return String(Math.abs(hash) % ARTIST_HUES);
+  return ARTIST_COLORS[Math.abs(hash) % ARTIST_COLORS.length];
 }
+
+const LANES = [
+  'timeline-start',
+  'timeline-block',
+  'timeline-artist',
+  'timeline-tempo',
+  'timeline-key',
+  'timeline-duration',
+];
 
 export function renderTimeline(container, entries, { selected, disabled, onSelect }) {
   const document = container.ownerDocument;
-  const span = (className, text) => {
-    const node = document.createElement('span');
-
-    node.className = className;
-    node.textContent = text;
-
-    return node;
-  };
   const glyph = (value) => (value === null ? '?' : clockLabel(value));
   const selectedIds = new Set(selected);
   const known = entries.reduce((sum, entry) => sum + (entry.seconds ?? 0), 0);
@@ -75,33 +87,35 @@ export function renderTimeline(container, entries, { selected, disabled, onSelec
   const width = known * PX_PER_SECOND + unknownCount * MARKER_PX;
 
   container.style.width = `${Math.min(MAX_WIDTH_PX, Math.max(MIN_WIDTH_PX, width))}px`;
-  container.replaceChildren(
-    ...entries.map((entry) => {
-      const unknown = entry.seconds === null;
+  reconcileChildren(container, entries, {
+    create: () => {
       const button = document.createElement('button');
-      const label = `Entry ${entry.position}: ${entry.title}, ${entry.artist}. Duration ${unknown ? 'unknown' : clockLabel(entry.seconds)}. Starts ${clockLabel(entry.start)}; ends ${clockLabel(entry.end)}. Tempo ${entry.bpm === null ? 'unknown' : `${entry.bpm} BPM`}. Key ${entry.key ?? 'unknown'}.`;
-      const artist = span('timeline-artist', entry.artist);
 
-      artist.dataset.color = artistHue(entry.artist);
-      button.className = `timeline-entry${unknown ? ' duration-unknown' : ''}`;
+      button.className = 'timeline-entry';
+      button.append(...LANES.map((className) => element(document, 'span', className)));
+
+      return button;
+    },
+    update: (button, entry) => {
+      const unknown = entry.seconds === null;
+      const label = `Entry ${entry.position}: ${entry.title}, ${entry.artist}. Duration ${unknown ? 'unknown' : clockLabel(entry.seconds)}. Starts ${clockLabel(entry.start)}; ends ${clockLabel(entry.end)}. Tempo ${entry.bpm === null ? 'unknown' : `${entry.bpm} BPM`}. Key ${entry.key ?? 'unknown'}.`;
+      const [start, block, artist, tempo, key, duration] = button.children;
+
+      button.classList.toggle('duration-unknown', unknown);
       // Known durations share one scale; unknown markers sit outside it.
       button.style.flex = unknown ? `0 0 ${MARKER_PX}px` : `${entry.seconds} 0 0px`;
       button.disabled = disabled;
-      button.dataset.focus = `timeline-${entry.entry_id}`;
       button.setAttribute('aria-pressed', String(selectedIds.has(entry.entry_id)));
       button.setAttribute('aria-label', label);
       button.title = label;
       button.onclick = () => onSelect(entry.entry_id);
-      button.append(
-        span('timeline-start', glyph(entry.start)),
-        span('timeline-block', `${String(entry.position).padStart(2, '0')} ${entry.title}`),
-        artist,
-        span('timeline-tempo', entry.bpm === null ? '? BPM' : `${entry.bpm} BPM`),
-        span('timeline-key', entry.key ?? '? key'),
-        span('timeline-duration', glyph(entry.seconds)),
-      );
-
-      return button;
-    }),
-  );
+      start.textContent = glyph(entry.start);
+      block.textContent = `${String(entry.position).padStart(2, '0')} ${entry.title}`;
+      artist.textContent = entry.artist;
+      artist.style.borderTopColor = artistColor(entry.artist);
+      tempo.textContent = entry.bpm === null ? '? BPM' : `${entry.bpm} BPM`;
+      key.textContent = entry.key ?? '? key';
+      duration.textContent = glyph(entry.seconds);
+    },
+  });
 }
