@@ -4,9 +4,13 @@ import { build } from 'esbuild';
 const html = (
   await readFile(new URL('../ui/playlist-draft.html', import.meta.url), 'utf8')
 ).replace('/*__PULSE__*/', await readFile(new URL('../ui/pulse.css', import.meta.url), 'utf8'));
-const widgetHtml = html.replace(
+const setlistHtml = html.replace(
   '/*__SETLIST__*/',
   await readFile(new URL('../ui/setlist.css', import.meta.url), 'utf8'),
+);
+const widgetHtml = setlistHtml.replace(
+  '/*__TIMELINE__*/',
+  await readFile(new URL('../ui/timeline.css', import.meta.url), 'utf8'),
 );
 const result = await build({
   entryPoints: ['ui/playlist-draft.js'],

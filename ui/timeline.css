@@ -1,0 +1,132 @@
+#timeline-panel {
+  margin-bottom: 12px;
+  min-width: 0;
+}
+#timeline-panel > summary {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.timeline-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  margin-top: 8px;
+  font-size: 10px;
+}
+.timeline-options > span {
+  margin-right: auto;
+}
+.timeline-options label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 400;
+}
+.timeline-options input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+#timeline-note,
+.timeline-hint {
+  margin: 5px 0;
+  font-size: 10px;
+  line-height: 1.4;
+}
+#timeline-scroll {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+  padding: 4px 2px;
+}
+#timeline {
+  display: flex;
+  min-width: 100%;
+}
+#timeline .timeline-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text);
+  background: transparent;
+}
+.timeline-entry > span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 2px 6px;
+}
+.timeline-start,
+.timeline-duration {
+  height: 21px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.timeline-entry > .timeline-block {
+  height: 38px;
+  padding-top: 10px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-right-width: 0;
+}
+.timeline-entry:last-child .timeline-block {
+  border-right-width: 1px;
+}
+.timeline-entry.duration-unknown .timeline-block {
+  background: repeating-linear-gradient(135deg, transparent 0 4px, var(--line) 4px 6px);
+  border-style: dashed;
+}
+.timeline-entry[aria-pressed='true'] .timeline-block {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background-color: var(--selection);
+}
+.timeline-entry:hover .timeline-block {
+  background-color: var(--selection);
+}
+.timeline-artist {
+  height: 23px;
+  border-top: 3px solid var(--artist-color);
+  color: var(--text);
+}
+.timeline-artist[data-color='0'] {
+  --artist-color: light-dark(#38647f, #85b4d0);
+}
+.timeline-artist[data-color='1'] {
+  --artist-color: light-dark(#785b8f, #b6a0cd);
+}
+.timeline-artist[data-color='2'] {
+  --artist-color: light-dark(#8a602d, #ccae7d);
+}
+.timeline-artist[data-color='3'] {
+  --artist-color: light-dark(#366f5e, #8cbfaf);
+}
+.timeline-artist[data-color='4'] {
+  --artist-color: light-dark(#905562, #d39aaa);
+}
+.timeline-artist[data-color='5'] {
+  --artist-color: light-dark(#656c2a, #b8c180);
+}
+.timeline-entry .timeline-tempo,
+.timeline-entry .timeline-key {
+  display: none;
+  height: 24px;
+}
+#timeline.show-tempo .timeline-tempo,
+#timeline.show-key .timeline-key {
+  display: block;
+}
+#timeline-panel[open] {
+  max-height: 290px;
+  overflow: auto;
+}

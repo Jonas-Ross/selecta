@@ -2,13 +2,18 @@
 // a browser or Music.app. Replacing moving nodes cancels their animations.
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { timelineEntries, renderTimeline, clockLabel } from '../ui/timeline.js';
 
 class Element {
   children: Element[] = [];
   dataset: Record<string, string> = {};
+  style: Record<string, string> = {};
+  attributes: Record<string, string> = {};
+  ownerDocument = { createElement: (tag: string) => new Element(tag) };
   scrollTop = 0;
   disabled = false;
+  onclick = () => {};
   inert = false;
   textContent = '';
   value = '';
@@ -21,7 +26,9 @@ class Element {
   replaceChildren(...nodes: Element[]) {
     this.children = nodes;
   }
-  setAttribute() {}
+  setAttribute(name: string, value: string) {
+    this.attributes[name] = value;
+  }
   querySelectorAll() {
     return this.children.flatMap((node): Element[] => [
       ...(['input', 'button'].includes(node.tag) ? [node] : []),
@@ -38,16 +45,16 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
     return nodes.get(id)!;
   };
   const source = readFileSync(new URL('../ui/playlist-draft.js', import.meta.url), 'utf8');
-  const renderSource = source.slice(
-    source.indexOf('function render()'),
-    source.indexOf('\nasync function action('),
-  );
+  const renderSource =
+    source.slice(source.indexOf('function updateTimeline()'), source.indexOf('\nfor (const lane')) +
+    source.slice(source.indexOf('function render()'), source.indexOf('\nasync function action('));
   const state = {
     draft: {
       draft_id: 'draft',
       revision: 1,
       name: 'Fixture',
       feedback: '',
+      save: undefined as { status: string } | undefined,
       selected_entry_ids: [] as string[],
       entries: [
         { entry_id: 'a', track_id: 'same' },
@@ -61,8 +68,12 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
     el,
     document: { createElement: (tag: string) => new Element(tag) },
     duration: String,
-    edit: () => {},
+    edit: vi.fn(),
     renderedTracks: undefined as string | undefined,
+    renderedTimeline: undefined as string | undefined,
+    timelineEntries,
+    renderTimeline,
+    clockLabel,
   };
 
   runInNewContext(`${renderSource}; render();`, runtime);
@@ -72,6 +83,10 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
   runInNewContext(`${renderSource}; render();`, runtime);
   expect(el('feedback-toggle').textContent).toBe('Feedback on 1 track');
   expect(el('feedback-label').textContent).toBe('Feedback on 02 · this track');
+  expect(el('timeline').children.map((node) => node.attributes['aria-pressed'])).toEqual([
+    'false',
+    'true',
+  ]);
   el('feedback-panel').hidden = false;
   runInNewContext(`${renderSource}; render();`, runtime);
   expect(el('feedback-toggle').textContent).toBe('Hide feedback');
@@ -112,10 +127,28 @@ it('keeps reordered row nodes alive when async context delivery finishes', () =>
   expect(el('editor').inert).toBe(false);
   expect(el('tracks').children[0]).toBe(movingRows[0]);
   expect(el('tracks').children[1]).toBe(movingRows[1]);
+  expect(el('timeline').children.map((node) => node.dataset.focus)).toEqual([
+    'timeline-b',
+    'timeline-a',
+  ]);
+  expect(el('timeline').children.map((node) => node.attributes['aria-pressed'])).toEqual([
+    'true',
+    'false',
+  ]);
   const controls = el('tracks').querySelectorAll();
 
   expect(controls.filter((node) => node.tag === 'input').every((node) => !node.disabled)).toBe(
     true,
   );
   expect(controls.filter((node) => node.tag === 'button' && node.disabled)).toHaveLength(2);
+  el('timeline').children[0].onclick();
+  expect(runtime.edit).toHaveBeenLastCalledWith({ selected_entry_ids: [] });
+  el('timeline').children[1].onclick();
+  expect(runtime.edit).toHaveBeenLastCalledWith({ selected_entry_ids: ['b', 'a'] });
+  state.draft.save = { status: 'pending' };
+  runInNewContext(`${renderSource}; render();`, runtime);
+  expect(el('timeline').children.every((node) => node.disabled)).toBe(true);
+  state.draft.save = undefined;
+  runInNewContext(`${renderSource}; render();`, runtime);
+  expect(el('timeline').children.every((node) => !node.disabled)).toBe(true);
 });

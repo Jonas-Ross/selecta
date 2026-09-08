@@ -555,6 +555,7 @@
       <style>
         /*__PULSE__*/
         /*__SETLIST__*/
+        /*__TIMELINE__*/
       </style>
       <div id="selecta-content">
         <header class="draft-top">
@@ -607,6 +608,26 @@
           </button>
         </div>
         <main id="editor" hidden>
+          <details id="timeline-panel" open>
+            <summary>Sequence timeline</summary>
+            <div class="timeline-options">
+              <span>Blocks follow track duration</span>
+              <label><input id="timeline-tempo" type="checkbox" /> Tempo (BPM)</label>
+              <label><input id="timeline-key" type="checkbox" /> Key</label>
+            </div>
+            <p id="timeline-note"></p>
+            <div
+              id="timeline-scroll"
+              role="region"
+              aria-label="Playlist sequence timeline"
+              tabindex="0"
+            >
+              <div id="timeline"></div>
+            </div>
+            <p class="timeline-hint">
+              Select blocks for feedback. Track list below provides the same selection controls.
+            </p>
+          </details>
           <div id="queue-head" class="queue-head" aria-hidden="true">
             <span class="track-heading">Track</span><span class="metric">Time</span
             ><span class="metric bpm-heading">BPM</span><span></span>

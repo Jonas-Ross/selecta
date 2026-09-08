@@ -1,6 +1,7 @@
 import { host, ui, el } from './dom.js';
 import './pulse.js';
 import { observeSize } from './resize.js';
+import { timelineEntries, renderTimeline, clockLabel } from './timeline.js';
 import { App, applyHostStyleVariables } from '@modelcontextprotocol/ext-apps';
 
 const app = new App(
@@ -13,6 +14,7 @@ let draftId;
 let busy = false;
 let connected = false;
 let renderedTracks;
+let renderedTimeline;
 // tone: 'ok' | 'error' | 'pending' | undefined (neutral). The dot in front of
 // the line is what makes a failed save look different from a restored draft.
 const status = (text, tone) => {
@@ -144,6 +146,48 @@ async function publish() {
   }
 }
 
+function updateTimeline() {
+  const { draft, inspection } = state;
+  const key = JSON.stringify([draft, inspection?.tracks]);
+
+  if (key === renderedTimeline) return;
+
+  renderedTimeline = key;
+  const entries = timelineEntries(draft.entries, inspection?.tracks);
+  const missing = entries.filter((entry) => entry.seconds === null).length;
+  const zero = entries.some((entry) => entry.seconds === 0);
+
+  el('timeline-note').textContent = !inspection
+    ? 'Inspection unavailable. Durations and features are unknown; reload after restoring missing tracks.'
+    : missing
+      ? `${missing} unknown ${missing === 1 ? 'duration' : 'durations'}. Hatched markers are not to scale; elapsed time after a gap is unknown.${zero ? ' Zero-duration markers are also not to scale.' : ''}`
+      : `Ends at ${clockLabel(entries.at(-1)?.end ?? 0)}.${zero ? ' Zero-duration markers are not to scale.' : ''}`;
+  const scrollLeft = el('timeline-scroll').scrollLeft;
+
+  renderTimeline(el('timeline'), entries, {
+    selected: draft.selected_entry_ids,
+    disabled: draft.save?.status === 'pending',
+    onSelect: toggleSelection,
+  });
+  el('timeline-scroll').scrollLeft = scrollLeft;
+}
+
+function toggleSelection(id) {
+  const selected = state.draft.selected_entry_ids;
+
+  return edit({
+    selected_entry_ids: selected.includes(id)
+      ? selected.filter((entryId) => entryId !== id)
+      : [...selected, id],
+  });
+}
+
+for (const lane of ['tempo', 'key']) {
+  el(`timeline-${lane}`).onchange = () => {
+    el('timeline').classList.toggle(`show-${lane}`, el(`timeline-${lane}`).checked);
+  };
+}
+
 function render() {
   if (!state) return;
 
@@ -151,6 +195,7 @@ function render() {
 
   el('editor').inert = busy;
   el('editor').setAttribute('aria-busy', String(busy));
+  updateTimeline();
 
   el('name').textContent = draft.name;
   el('identity').textContent = `Draft ${draft.draft_id}`;
@@ -230,12 +275,7 @@ function render() {
       `Select entry ${index + 1}: ${track?.title ?? entry.track_id}`,
     );
     select.disabled = draft.save?.status === 'pending';
-    select.onchange = () =>
-      edit({
-        selected_entry_ids: select.checked
-          ? [...draft.selected_entry_ids, entry.entry_id]
-          : draft.selected_entry_ids.filter((id) => id !== entry.entry_id),
-      });
+    select.onchange = () => toggleSelection(entry.entry_id);
     const position = document.createElement('span');
 
     position.textContent = String(index + 1).padStart(2, '0');

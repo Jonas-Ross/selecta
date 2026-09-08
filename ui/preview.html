@@ -116,6 +116,11 @@
           <option value="light">Light</option>
           <option value="claude">Claude-like</option>
           <option value="codex" selected>Codex-style injection</option></select
+        ><label for="scenario">Fixture</label
+        ><select id="scenario">
+          <option value="standard">Repeated tracks</option>
+          <option value="missing">Missing / zero durations</option>
+          <option value="long">500 entries</option></select
         ><button id="reset">Reset fixture</button>
       </div>
     </div>
@@ -211,7 +216,10 @@
         reloadCard();
       };
       document.getElementById('reset').onclick = async () => {
-        const result = await fetch('/reset', { method: 'POST' }).then((r) => r.json());
+        const result = await fetch('/reset', {
+          method: 'POST',
+          body: JSON.stringify({ scenario: document.getElementById('scenario').value }),
+        }).then((r) => r.json());
         draftId = result.draft_id;
         reloadCard();
       };

@@ -14,7 +14,13 @@ The open feedback field retains its height when focus moves elsewhere. Regressio
 
 ## Layout and appearance
 
-Setlist uses a compact title/count header, an options menu for Appearance, Reload latest and Track details, dense rows, and a feedback drawer. Musical key is omitted from the card. The underlying inspection API retains its objective facts.
+Setlist uses a compact title/count header, an options menu for Appearance, Reload latest and Track details, a collapsible sequence timeline, dense rows, and a feedback drawer. Musical key is omitted from the rows; the optional timeline key lane shows the cached fact.
+
+The timeline preserves exact draft order and occurrence identity. Positive-duration blocks share one proportional scale; a hatched marker represents an unknown duration and a fixed-width marker represents a known zero duration. Both marker types are explicitly outside the time scale. Elapsed timestamps remain unknown after the first missing duration, while later known durations still determine their own block widths. No durations or features are invented or interpolated. A missing inspection shows unknown facts with recovery guidance.
+
+The artist strip labels raw artist names; colors are reading aids and can repeat across different artists. **Tempo (BPM)** and **Key** toggle independent lanes, initially hidden. Tempo is not a complete energy measurement; there is no transition score or variety judgment. View toggles do not change draft revisions or model context. There are no agent section annotations in this version.
+
+Timeline buttons and track-list checkboxes select the same exact occurrences for feedback. Buttons support Tab and Enter/Space and expose complete track, elapsed-time and feature labels even when visual text is truncated. Long and narrow timelines scroll horizontally; all entries remain available in the list. Selection, ordering, pending-save guards and reload recovery use the existing revision-checked draft flow. The timeline stays synchronized with accepted revisions and preserves its horizontal scroll position through local edits.
 
 Appearance defaults to **Follow host**. Copper, Cobalt, Ember, Moss and Oxblood override colors while following host light/dark mode; OLED forces black. The app-only appearance helper stores this preference independently of draft revisions and model context. Existing cards read it when reopened. Changing appearance preserves typed feedback; storage errors are reported without retries.
 
@@ -26,11 +32,11 @@ Codex caps inline cards at 720 CSS pixels. The track list absorbs the viewport c
 
 Run `npm run preview:draft`, then open `http://127.0.0.1:8766`. `SELECTA_PREVIEW_PORT` selects another port. This loopback fixture host loads the production widget, an in-memory fixture library and a temporary draft store. It never loads the live Music.app bridge or user cache. Saves are simulated; feedback appears under **Latest interaction**.
 
-Width controls offer 760px, 553px and 390px cards. Surface controls include dark, light, Claude-like and Codex-style injected CSS with its 720px height cap. Source edits reload the card; persisted fixture edits survive, but unsaved text does not. **Reset fixture** starts a fresh draft. Ctrl+C stops the preview and removes its temporary store. This is a development tool, not a standalone product.
+Width controls offer 760px, 553px and 390px cards. Surface controls include dark, light, Claude-like and Codex-style injected CSS with its 720px height cap. Select a **Fixture**, then **Reset fixture** to load repeated tracks, missing/zero durations, or 500 entries. Audio feature values in this preview are synthetic. Source edits reload the card; persisted fixture edits survive, but unsaved text does not. Ctrl+C stops the preview and removes its temporary store. This is a development tool, not a standalone product.
 
 ## Validation and host smoke
 
-Controlled tests cover exact occurrence IDs, revision conflicts, selection and feedback persistence, legacy draft recovery, save guards and failures, appearance isolation, row lifetime and size reporting. Fixture browser checks cover repeated-occurrence selection, feedback scope and messages, reordering and narrow layouts.
+Controlled tests cover exact occurrence IDs, revision conflicts, selection and feedback persistence, legacy draft recovery, save guards and failures, appearance isolation, row lifetime and size reporting. Timeline tests cover cumulative time, missing/zero durations and features, repeated occurrences, proportional widths, accessible labels and 500-entry drafts. Fixture browser checks cover repeated-occurrence selection, feedback scope and messages, reordering and narrow layouts.
 
 Earlier user-reported Claude Desktop Code checks passed discovery, repeated-track editing, context/message agreement, reload recovery, stale-edit rejection and missing-draft errors. Those checks preceded Setlist. Codex reached creation and context delivery, with subsequent user confirmation of host CSS, flicker and height fixes. The final Setlist layout still needs a fresh actual-host check after rebuilding and restarting Selecta; fixture checks do not substitute for that. No real Music.app writes were performed for the design changes.
 
@@ -40,3 +46,4 @@ Before marking the PR ready:
 2. Select only the second occurrence, open its feedback drawer and submit explicit feedback. Confirm context and the user message contain the same occurrence ID and revision without pins.
 3. Reorder, reopen and reload; confirm saved selection, order and feedback recover. Verify stale edits fail and missing drafts show recovery guidance.
 4. Check Appearance, narrow sizing and the open feedback drawer in the actual host. Save only with explicit authorization for the real playlist write.
+5. Expand the timeline, toggle tempo/key lanes, and select only the second repeated occurrence. Confirm the list and feedback target agree, then reorder and reload. Check horizontal scrolling and keyboard selection in a narrow card, missing-duration breaks, and the 500-entry fixture in both supported hosts. Fixture surface simulations do not establish actual-host compatibility.
