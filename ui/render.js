@@ -1,9 +1,8 @@
 import { timelineEntries, renderTimeline, clockLabel } from './timeline.js';
+import { reconcileChildren, element } from './reconcile.js';
 
 // The card view: paint every element from draft state. Host and tool calls
 // stay in playlist-draft.js, so this runs against a controlled DOM in tests.
-let renderedView;
-
 export function renderDraft(el, { draft, inspection, inspection_error, busy, lanes = {}, edit }) {
   const pending = draft.save?.status === 'pending';
   const selectedIds = new Set(draft.selected_entry_ids);
@@ -64,29 +63,6 @@ export function renderDraft(el, { draft, inspection, inspection_error, busy, lan
   for (const lane of ['tempo', 'key'])
     el('timeline').classList.toggle(`show-${lane}`, !!lanes[lane]);
 
-  // Context delivery finishes independently of row motion. Changing only busy
-  // or save state must not replace the DOM nodes that are currently animating.
-  const view = JSON.stringify([
-    draft.draft_id,
-    draft.entries,
-    draft.selected_entry_ids,
-    inspection?.tracks,
-  ]);
-
-  if (view === renderedView) {
-    for (const control of [
-      ...el('tracks').querySelectorAll('input, button'),
-      ...el('timeline').querySelectorAll('button'),
-    ])
-      control.disabled = pending || control.dataset.edgeDisabled === 'true';
-
-    return;
-  }
-
-  renderedView = view;
-  // Both lists rebuild from scratch; read scroll offsets before either mutates.
-  const scrollLeft = el('timeline-scroll').scrollLeft;
-  const scrollTop = el('tracks').scrollTop;
   const entries = timelineEntries(draft.entries, inspection?.tracks);
 
   renderTimeline(el('timeline'), entries, {
@@ -95,12 +71,11 @@ export function renderDraft(el, { draft, inspection, inspection_error, busy, lan
     onSelect: toggleSelection,
   });
   renderTracks(el, { draft, entries, pending, selectedIds, edit, toggleSelection });
-  el('timeline-scroll').scrollLeft = scrollLeft;
-  el('tracks').scrollTop = scrollTop;
 }
 
 function renderTracks(el, { draft, entries, pending, selectedIds, edit, toggleSelection }) {
   const document = el('tracks').ownerDocument;
+  const node = (tag, className) => element(document, tag, className);
   const repeats = new Map();
 
   for (const entry of draft.entries)
@@ -108,83 +83,66 @@ function renderTracks(el, { draft, entries, pending, selectedIds, edit, toggleSe
 
   // A column of dashes says only "no data"; blank cells let real values stand out.
   el('queue-head').classList.toggle('no-bpm', !entries.some((entry) => entry.bpm !== null));
-  el('tracks').replaceChildren(
-    ...entries.map((entry, index) => {
-      const row = document.createElement('li');
-
-      row.className = `track-row${selectedIds.has(entry.entry_id) ? ' selected' : ''}`;
-      const select = document.createElement('input');
+  reconcileChildren(el('tracks'), entries, {
+    // The skeleton is fixed; update() only assigns. Optional spans stay in
+    // place and hide when empty.
+    create: () => {
+      const row = node('li', 'track-row');
+      const select = node('input', '');
+      const title = node('div', 'title');
+      const badge = node('span', 'repeat');
+      const facts = node('div', 'artist');
+      const text = node('div', 'track-name');
+      const actions = node('div', 'actions');
+      const up = node('button', 'move');
+      const down = node('button', 'move');
 
       select.type = 'checkbox';
-      select.dataset.focus = `select-${entry.entry_id}`;
+      badge.title = 'Repeated track';
+      title.append(node('span', ''), badge);
+      facts.append(node('span', ''), node('span', 'mobile-bpm'));
+      text.append(title, facts);
+      up.textContent = '↑';
+      down.textContent = '↓';
+      actions.append(up, down);
+      row.append(
+        select,
+        node('span', 'number'),
+        text,
+        node('span', 'metric'),
+        node('span', 'metric bpm'),
+        actions,
+      );
+
+      return row;
+    },
+    update: (row, entry, index) => {
+      const [select, position, text, time, bpm, actions] = row.children;
+      const [title, facts] = text.children;
+      const count = repeats.get(entry.track_id);
+      const duration = entry.seconds === null ? '—' : clockLabel(entry.seconds);
+
+      row.classList.toggle('selected', selectedIds.has(entry.entry_id));
       select.checked = selectedIds.has(entry.entry_id);
       select.setAttribute('aria-label', `Select entry ${entry.position}: ${entry.title}`);
       select.disabled = pending;
       select.onchange = () => toggleSelection(entry.entry_id);
-      const position = document.createElement('span');
-
       position.textContent = String(entry.position).padStart(2, '0');
-      position.className = 'number';
-      const text = document.createElement('div');
-
-      text.className = 'track-name';
-      const title = document.createElement('div');
-
-      title.className = 'title';
-      title.textContent = entry.title;
-      const facts = document.createElement('div');
-
-      facts.className = 'artist';
-      facts.textContent = entry.artist;
-
-      if (repeats.get(entry.track_id) > 1) {
-        const badge = document.createElement('span');
-
-        badge.className = 'repeat';
-        badge.textContent = `×${repeats.get(entry.track_id)}`;
-        badge.title = 'Repeated track';
-        title.append(badge);
-      }
-
-      if (entry.bpm !== null) {
-        const smallBpm = document.createElement('span');
-
-        smallBpm.className = 'mobile-bpm';
-        smallBpm.textContent = ` / ${entry.bpm} BPM`;
-        facts.append(smallBpm);
-      }
-
-      const time = document.createElement('span');
-
-      time.className = 'metric';
-      time.textContent = entry.seconds === null ? '—' : clockLabel(entry.seconds);
-      time.title = entry.seconds === null ? 'Duration unknown' : `Duration: ${time.textContent}`;
-      const bpm = document.createElement('span');
-
-      bpm.className = 'metric bpm';
+      title.children[0].textContent = entry.title;
+      title.children[1].textContent = count > 1 ? `×${count}` : '';
+      facts.children[0].textContent = entry.artist;
+      facts.children[1].textContent = entry.bpm === null ? '' : ` / ${entry.bpm} BPM`;
+      text.title = `Entry ${entry.entry_id}\nTrack ${entry.track_id}`;
+      time.textContent = duration;
+      time.title = entry.seconds === null ? 'Duration unknown' : `Duration: ${duration}`;
       bpm.textContent = entry.bpm ?? '';
       bpm.title = entry.bpm === null ? 'BPM unknown' : 'BPM';
-      text.append(title, facts);
-      text.title = `Entry ${entry.entry_id}\nTrack ${entry.track_id}`;
-      const actions = document.createElement('div');
 
-      actions.className = 'actions';
-
-      for (const [label, delta] of [
-        ['↑', -1],
-        ['↓', 1],
-      ]) {
-        const button = document.createElement('button');
+      for (const [which, button] of [...actions.children].entries()) {
+        const delta = which ? 1 : -1;
         const edge = index + delta < 0 || index + delta >= draft.entries.length;
 
-        button.textContent = label;
-        button.className = 'move';
-        button.dataset.focus = `move-${delta}-${entry.entry_id}`;
-        button.setAttribute(
-          'aria-label',
-          `Move entry ${entry.position} ${delta < 0 ? 'up' : 'down'}`,
-        );
-        button.dataset.edgeDisabled = String(edge);
+        button.setAttribute('aria-label', `Move entry ${entry.position} ${which ? 'down' : 'up'}`);
         button.disabled = pending || edge;
 
         button.onclick = () => {
@@ -193,13 +151,7 @@ function renderTracks(el, { draft, entries, pending, selectedIds, edit, toggleSe
           [order[index], order[index + delta]] = [order[index + delta], order[index]];
           void edit({ entries: order });
         };
-
-        actions.append(button);
       }
-
-      row.append(select, position, text, time, bpm, actions);
-
-      return row;
-    }),
-  );
+    },
+  });
 }

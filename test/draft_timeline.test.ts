@@ -96,7 +96,8 @@ it('selects only the requested repeated occurrence and preserves facts in access
   expect(last.attributes['aria-label']).toContain('Tempo 80 BPM. Key C minor.');
   expect(middle.attributes['aria-label']).toContain('Tempo unknown. Key unknown.');
   expect(parseFloat(middle.style.flex) / parseFloat(first.style.flex)).toBe(2);
-  expect(first.children[2].dataset.color).toBe(last.children[2].dataset.color);
+  expect(first.children[2].style.borderTopColor).toBe(last.children[2].style.borderTopColor);
+  expect(first.children[2].style.borderTopColor).not.toBe(middle.children[2].style.borderTopColor);
   last.onclick();
   expect(onSelect).toHaveBeenCalledExactlyOnceWith('last');
   // Track names are text, never HTML interpreted from library metadata.
@@ -109,7 +110,11 @@ it('selects only the requested repeated occurrence and preserves facts in access
   });
   expect(container.children[0].children[1].textContent).toContain(unsafe);
   expect(container.children.every((button) => button.disabled)).toBe(true);
-  expect(container.children[1].className).toContain('duration-unknown');
+  // The same blocks are repainted: the first is now unknown, the last is not.
+  expect(container.children).toEqual([first, middle, last]);
+  expect(container.children[1].classes.has('duration-unknown')).toBe(true);
+  expect(last.classes.has('duration-unknown')).toBe(true);
+  expect(last.attributes['aria-pressed']).toBe('false');
   expect(container.children[1].style.flex).toBe('0 0 36px');
   expect(container.children[2].children[0].textContent).toBe('?');
   expect(container.children[2].attributes['aria-label']).toContain('Starts Unknown; ends Unknown.');
@@ -130,8 +135,8 @@ it('retains all 500 entries on a bounded scrolling canvas, including very short 
   });
   expect(container.children).toHaveLength(500);
   expect(parseFloat(container.style.width)).toBeLessThanOrEqual(32000);
-  expect(container.children[250].className).toContain('duration-unknown');
-  expect(container.children[499].dataset.focus).toBe('timeline-e-499');
+  expect(container.children[250].classes.has('duration-unknown')).toBe(true);
+  expect(container.children[499].dataset.entryId).toBe('e-499');
   expect(container.children[499].attributes['aria-pressed']).toBe('true');
   expect(container.children[499].attributes['aria-label']).toContain(
     'Duration 0:01. Starts Unknown',

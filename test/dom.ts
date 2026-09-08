@@ -2,6 +2,7 @@
 // rows and timeline blocks and read back what they rendered, no browser.
 export class Element {
   children: Element[] = [];
+  parentNode: Element | null = null;
   dataset: Record<string, string> = {};
   style: Record<string, string> = {};
   attributes: Record<string, string> = {};
@@ -13,8 +14,6 @@ export class Element {
     },
   };
   ownerDocument = { createElement: (tag: string) => new Element(tag) };
-  scrollTop = 0;
-  scrollLeft = 0;
   disabled = false;
   inert = false;
   hidden = true;
@@ -28,21 +27,32 @@ export class Element {
   onchange = () => {};
   constructor(readonly tag = 'div') {}
   append(...nodes: Element[]) {
-    this.children.push(...nodes);
+    for (const node of nodes) this.insertBefore(node, null);
   }
-  replaceChildren(...nodes: Element[]) {
-    this.children = nodes;
+  /** Moves a node that already has a parent, as in a real DOM. */
+  insertBefore(node: Element, reference: Element | null) {
+    node.remove();
+    const index = reference ? this.children.indexOf(reference) : this.children.length;
+
+    this.children.splice(index, 0, node);
+    node.parentNode = this;
+  }
+  remove() {
+    if (!this.parentNode) return;
+
+    const siblings = this.parentNode.children;
+
+    siblings.splice(siblings.indexOf(this), 1);
+    this.parentNode = null;
   }
   setAttribute(name: string, value: string) {
     this.attributes[name] = value;
   }
-  /** Descendants matching a comma-separated tag list, in document order. */
-  querySelectorAll(selector = 'input, button'): Element[] {
-    const tags = selector.split(',').map((tag) => tag.trim());
-
+  /** Every input and button descendant, in document order. */
+  controls(): Element[] {
     return this.children.flatMap((node) => [
-      ...(tags.includes(node.tag) ? [node] : []),
-      ...node.querySelectorAll(selector),
+      ...(['input', 'button'].includes(node.tag) ? [node] : []),
+      ...node.controls(),
     ]);
   }
 }

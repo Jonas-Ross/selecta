@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { runInNewContext } from 'node:vm';
 import { expect, it, vi } from 'vitest';
+import { observeSize } from '../ui/resize.js';
 
 it('reports intrinsic card height with rounding room, including growth under a viewport cap', () => {
   let contentHeight = 801.25;
@@ -20,29 +19,23 @@ it('reports intrinsic card height with rounding room, including growth under a v
   const observeMutations = vi.fn();
   const disconnect = vi.fn();
   const onSize = vi.fn();
-  const source = readFileSync(new URL('../ui/resize.js', import.meta.url), 'utf8');
-  const stop = runInNewContext(
-    `${source.replace('export function', 'function')}; observeSize(element, onSize);`,
-    {
-      element,
-      onSize,
-      requestAnimationFrame: (fn: () => void) => frames.push(fn),
-      ResizeObserver: class {
-        constructor(fn: () => void) {
-          notify = fn;
-        }
-        observe = observe;
-        disconnect = disconnect;
-      },
-      MutationObserver: class {
-        constructor(fn: () => void) {
-          mutate = fn;
-        }
-        observe = observeMutations;
-        disconnect = disconnect;
-      },
+  const stop = observeSize(element, onSize, {
+    requestAnimationFrame: (fn: () => void) => frames.push(fn),
+    ResizeObserver: class {
+      constructor(fn: () => void) {
+        notify = fn;
+      }
+      observe = observe;
+      disconnect = disconnect;
     },
-  );
+    MutationObserver: class {
+      constructor(fn: () => void) {
+        mutate = fn;
+      }
+      observe = observeMutations;
+      disconnect = disconnect;
+    },
+  });
 
   expect(observe).toHaveBeenCalledWith(element);
   expect(observeMutations).toHaveBeenCalledWith(

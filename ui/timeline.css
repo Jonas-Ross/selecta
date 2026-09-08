@@ -40,8 +40,7 @@
   display: flex;
   min-width: 100%;
 }
-/* Outranks the card's generic button states (hover, disabled). */
-#timeline .timeline-entry {
+.timeline-entry {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -91,28 +90,10 @@
 .timeline-entry[aria-pressed='true'] .timeline-block {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
+/* The hue comes from timeline.js, which owns the artist palette. */
 .timeline-artist {
   height: 23px;
-  border-top: 3px solid var(--artist-color);
-}
-/* Six fixed hues: enough to tell neighbours apart, never a claim of identity. */
-.timeline-artist[data-color='0'] {
-  --artist-color: light-dark(#38647f, #85b4d0);
-}
-.timeline-artist[data-color='1'] {
-  --artist-color: light-dark(#785b8f, #b6a0cd);
-}
-.timeline-artist[data-color='2'] {
-  --artist-color: light-dark(#8a602d, #ccae7d);
-}
-.timeline-artist[data-color='3'] {
-  --artist-color: light-dark(#366f5e, #8cbfaf);
-}
-.timeline-artist[data-color='4'] {
-  --artist-color: light-dark(#905562, #d39aaa);
-}
-.timeline-artist[data-color='5'] {
-  --artist-color: light-dark(#656c2a, #b8c180);
+  border-top: 3px solid;
 }
 .timeline-tempo,
 .timeline-key {

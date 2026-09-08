@@ -20,7 +20,7 @@ Timeline blocks share one proportional scale. An unknown duration is a fixed-wid
 
 Appearance defaults to **Follow host**. Copper, Cobalt, Ember, Moss and Oxblood override colors while following host light/dark mode; OLED forces black. The app-only appearance helper stores this preference independently of draft revisions and model context. Existing cards read it when reopened. Changing appearance preserves typed feedback; storage errors are reported without retries.
 
-The card uses a shadow tree to isolate host CSS. Transient requests make the editor inert without dimming controls. Unchanged row nodes survive asynchronous context delivery so reorder motion can finish; motion respects reduced-motion preferences.
+The card uses a shadow tree to isolate host CSS. Transient requests make the editor inert without dimming controls. Rows and timeline blocks are keyed by entry ID and updated in place, so a selection, a reorder or asynchronous context delivery never replaces a node that is still moving; motion respects reduced-motion preferences.
 
 Codex caps inline cards at 720 CSS pixels. The track list absorbs the viewport constraint while feedback, save and status remain visible. Size reporting measures natural height independently of the capped viewport. Track details and status have bounded overflow. The user confirmed the host-style/flicker fixes and cap-aware layout before choosing Setlist.
 

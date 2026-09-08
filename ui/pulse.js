@@ -17,7 +17,7 @@ new MutationObserver(() => {
     const next = new Map();
 
     for (const [index, row] of rows.entries()) {
-      const id = row.querySelector('input')?.dataset.focus;
+      const id = row.dataset.entryId;
       const top = row.offsetTop;
 
       next.set(id, top);

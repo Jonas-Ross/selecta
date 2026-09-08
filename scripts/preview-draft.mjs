@@ -30,14 +30,30 @@ const handlers = new PlaylistDraftTools({
   drafts: () => new DraftStore(join(directory, 'drafts.db')),
 });
 let draftId;
-const SCENARIOS = ['standard', 'missing', 'long'];
+const TRACK_IDS = ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX', 'T-ROADS', 'T-MIDNIGHT', 'T-TEARDROP'];
+// One record per fixture: the page lists them, /reset loads one by key.
+const standard = { label: 'Repeated tracks', name: 'After the last train', trackIds: TRACK_IDS };
+const SCENARIOS = {
+  standard,
+  missing: {
+    ...standard,
+    label: 'Missing duration',
+    snapshot: (snapshot) => {
+      delete snapshot.tracks.find((track) => track.persistentId === 'T-ANGEL').durationSeconds;
+    },
+  },
+  long: {
+    label: '500 entries',
+    name: 'The very last train (500 entries)',
+    trackIds: Array.from({ length: 500 }, (_, i) => TRACK_IDS[i % TRACK_IDS.length]),
+  },
+};
 
-async function reset(scenario = 'standard') {
+async function reset(key) {
+  const scenario = SCENARIOS[key];
   const snapshot = structuredClone(fixture);
 
-  if (scenario === 'missing')
-    delete snapshot.tracks.find((track) => track.persistentId === 'T-ANGEL').durationSeconds;
-
+  scenario.snapshot?.(snapshot);
   cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
   // Synthetic feature values for UI verification, never fetched or written live.
   cache.saveAudioFeatures([
@@ -54,19 +70,10 @@ async function reset(scenario = 'standard') {
     },
   ]);
   draftId = randomUUID();
-  const trackIds = ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX', 'T-ROADS', 'T-MIDNIGHT', 'T-TEARDROP'];
-
-  await handlers.show({
-    draft_id: draftId,
-    name: scenario === 'long' ? 'The very last train (500 entries)' : 'After the last train',
-    track_ids:
-      scenario === 'long'
-        ? Array.from({ length: 500 }, (_, i) => trackIds[i % trackIds.length])
-        : trackIds,
-  });
+  await handlers.show({ draft_id: draftId, name: scenario.name, track_ids: scenario.trackIds });
 }
 
-await reset();
+await reset('standard');
 const port = Number(process.env.SELECTA_PREVIEW_PORT ?? 8766);
 const origin = `http://127.0.0.1:${port}`;
 const files = (await readdir(new URL('ui/', root))).map((file) => `ui/${file}`);
@@ -108,7 +115,7 @@ const server = createServer(async (req, res) => {
       if (req.url === '/reset') {
         const { scenario = 'standard' } = JSON.parse(body || '{}');
 
-        if (!SCENARIOS.includes(scenario)) {
+        if (!Object.hasOwn(SCENARIOS, scenario)) {
           res.writeHead(400).end();
 
           return;
@@ -194,8 +201,12 @@ const server = createServer(async (req, res) => {
 
     const html = await readFile(new URL('../ui/preview.html', import.meta.url), 'utf8');
 
+    const options = Object.entries(SCENARIOS)
+      .map(([key, { label }]) => `<option value="${key}">${label}</option>`)
+      .join('');
+
     res.setHeader('Content-Type', 'text/html');
-    res.end(html.replace('__DRAFT_ID__', draftId));
+    res.end(html.replace('__DRAFT_ID__', draftId).replace('<!--__SCENARIOS__-->', options));
   } catch (error) {
     console.error(error);
     res.writeHead(500).end('Preview request failed. See terminal.');
