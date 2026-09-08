@@ -1,7 +1,7 @@
 // Development-only fixture host. Never imports the live Music.app bridge or
 // opens the user's cache. The production bundle runs inside a standard iframe.
 import { createServer } from 'node:http';
-import { readFile, stat, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, readdir, stat, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -10,7 +10,6 @@ import { promisify } from 'node:util';
 import { SelectaCache } from '../dist/cache/index.js';
 import { DraftStore } from '../dist/drafts/store.js';
 import { PlaylistDraftTools } from '../dist/tools/playlist_draft.js';
-import { z } from 'zod';
 
 const root = new URL('../', import.meta.url);
 const directory = await mkdtemp(join(tmpdir(), 'selecta-preview-'));
@@ -31,14 +30,13 @@ const handlers = new PlaylistDraftTools({
   drafts: () => new DraftStore(join(directory, 'drafts.db')),
 });
 let draftId;
+const SCENARIOS = ['standard', 'missing', 'long'];
 
 async function reset(scenario = 'standard') {
   const snapshot = structuredClone(fixture);
 
-  if (scenario === 'missing') {
+  if (scenario === 'missing')
     delete snapshot.tracks.find((track) => track.persistentId === 'T-ANGEL').durationSeconds;
-    snapshot.tracks.find((track) => track.persistentId === 'T-ROADS').durationSeconds = 0;
-  }
 
   cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
   // Synthetic feature values for UI verification, never fetched or written live.
@@ -71,17 +69,7 @@ async function reset(scenario = 'standard') {
 await reset();
 const port = Number(process.env.SELECTA_PREVIEW_PORT ?? 8766);
 const origin = `http://127.0.0.1:${port}`;
-const files = [
-  'ui/playlist-draft.html',
-  'ui/playlist-draft.js',
-  'ui/pulse.css',
-  'ui/pulse.js',
-  'ui/dom.js',
-  'ui/resize.js',
-  'ui/setlist.css',
-  'ui/timeline.js',
-  'ui/timeline.css',
-];
+const files = (await readdir(new URL('ui/', root))).map((file) => `ui/${file}`);
 const version = async () =>
   (await Promise.all(files.map(async (file) => (await stat(new URL(file, root))).mtimeMs))).join(
     '-',
@@ -118,19 +106,15 @@ const server = createServer(async (req, res) => {
       res.setHeader('Content-Type', 'application/json');
 
       if (req.url === '/reset') {
-        const parsed = z
-          .strictObject({ scenario: z.enum(['standard', 'missing', 'long']).default('standard') })
-          .safeParse(body ? JSON.parse(body) : {});
+        const { scenario = 'standard' } = JSON.parse(body || '{}');
 
-        if (!parsed.success) {
-          res
-            .writeHead(400)
-            .end(JSON.stringify({ error: 'invalid_input', hint: parsed.error.message }));
+        if (!SCENARIOS.includes(scenario)) {
+          res.writeHead(400).end();
 
           return;
         }
 
-        await reset(parsed.data.scenario);
+        await reset(scenario);
         res.end(JSON.stringify({ draft_id: draftId }));
 
         return;
