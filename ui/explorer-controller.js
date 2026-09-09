@@ -210,10 +210,14 @@ export async function connectExplorer(app, { host, el, observeSize, applyHostSty
   el('request').oninput = controls;
   el('ask').onclick = () =>
     action(async () => {
-      await app.sendMessage({
+      const result = await app.sendMessage({
         role: 'user',
         content: [{ type: 'text', text: curationMessage(state, selected, el('request').value) }],
       });
+
+      if (result.isError)
+        throw new Error('Host rejected the request. Your request and selected seeds are kept.');
+
       status('Request handed to the host. If it appears in the composer, press Send.');
     });
   el('refresh').onclick = () =>

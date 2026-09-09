@@ -9,7 +9,7 @@ const track = z.object({
   album: z.string().optional(),
   year: z.number().optional(),
   genre: z.string().optional(),
-  duration_seconds: z.number().positive().optional(),
+  duration_seconds: z.number().nonnegative().optional(),
   signal: z.object({
     play_count: count,
     loved: z.literal(true).optional(),

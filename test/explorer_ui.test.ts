@@ -11,6 +11,7 @@ import { connectExplorer } from '../ui/explorer-controller.js';
 import { handleLibraryExplorer } from '../src/tools/library_explorer.js';
 import { makeToolDeps } from './helpers.js';
 import { elementLookup, Element } from './dom.js';
+import fixture from './fixtures/library.json' with { type: 'json' };
 
 const closers: (() => void)[] = [];
 
@@ -35,7 +36,7 @@ async function setup() {
     getHostContext: () => ({ theme: 'dark' }),
     sendSizeChanged: vi.fn(async () => {}),
     updateModelContext: vi.fn(async () => {}),
-    sendMessage: vi.fn(async () => {}),
+    sendMessage: vi.fn(async () => ({})),
     callServerTool: vi.fn(async ({ name, arguments: args }) => {
       if (name !== 'show_library_explorer') throw new Error(`Unexpected tool: ${name}`);
 
@@ -102,6 +103,27 @@ it('maps decade toggles to the shared inclusive year filters', () => {
   });
 });
 
+it.each([0, 0.3])(
+  'renders a page with a cached duration rounded from %s seconds',
+  async (durationSeconds) => {
+    const { deps, el } = await setup();
+
+    deps.cacheInstance.refreshFromSnapshot(
+      { ...fixture, tracks: [{ ...fixture.tracks[0], durationSeconds }], playlists: [] },
+      { durationMs: 1 },
+    );
+    const result = await handleLibraryExplorer({}, deps);
+
+    expect(result).toHaveProperty('tracks.0.duration_seconds', 0);
+    expect(unpackExplorer({ structuredContent: result }).tracks[0].duration_seconds).toBe(0);
+    await el('reload').onclick();
+    expect(el('tracks').querySelectorAll('input')).toHaveLength(1);
+    expect(el('summary').textContent).toContain('1 tracks');
+    expect(el('status').dataset.error).toBe('false');
+    expect(el('browse').inert).toBe(false);
+  },
+);
+
 it('preserves checkbox nodes on selection and carries seeds across pages into the explicit message', async () => {
   const { el, app, state } = await setup();
   const check = el('tracks').querySelectorAll('input')[0];
@@ -120,6 +142,40 @@ it('preserves checkbox nodes on selection and carries seeds across pages into th
   expect(app.sendMessage.mock.calls[0][0].content[0].text).toContain('Make a slow opening');
   expect(el('status').textContent).toContain('composer');
 });
+
+it.each([
+  ['host rejection', { isError: true }, 'Host rejected the request'],
+  ['transport failure', new Error('Host disconnected'), 'Host disconnected'],
+])(
+  'keeps the request and seeds after %s and retries only on another click',
+  async (_name, failure, message) => {
+    const { el, app, state } = await setup();
+
+    el('tracks').querySelectorAll('input')[0].onchange();
+    el('request').value = 'Make a slow opening';
+
+    if (failure instanceof Error) app.sendMessage.mockRejectedValueOnce(failure);
+    else app.sendMessage.mockResolvedValueOnce(failure);
+
+    await el('ask').onclick();
+    expect(app.sendMessage).toHaveBeenCalledTimes(1);
+    expect(el('status').textContent).toContain(message);
+    expect(el('status').dataset.error).toBe('true');
+    expect(el('request').value).toBe('Make a slow opening');
+    expect(el('tracks').querySelectorAll('input')[0].checked).toBe(true);
+    expect(el('selection-label').textContent).toBe('1 seed track selected');
+    expect(el('ask').disabled).toBe(false);
+    expect(app.sendMessage.mock.calls[0][0].content[0].text).toContain(
+      state.tracks[0].persistent_id,
+    );
+
+    await el('ask').onclick();
+    expect(app.sendMessage).toHaveBeenCalledTimes(2);
+    expect(app.sendMessage.mock.calls[1]).toEqual(app.sendMessage.mock.calls[0]);
+    expect(el('status').textContent).toContain('composer');
+    expect(el('status').dataset.error).toBe('false');
+  },
+);
 
 it('clears selection on a successful filter change and ignores a replayed original result', async () => {
   const { el, app, state } = await setup();
