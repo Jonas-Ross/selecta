@@ -19,7 +19,7 @@ afterEach(() => {
   closers.splice(0).forEach((close) => close());
 });
 
-async function setup() {
+async function setup(initialResult?: object | null) {
   const deps = makeToolDeps();
 
   closers.push(() => deps.cacheInstance.close());
@@ -31,7 +31,7 @@ async function setup() {
     ontoolinput: vi.fn(),
     onhostcontextchanged: vi.fn(),
     connect: vi.fn(async () => {
-      app.ontoolresult(result);
+      if (initialResult !== null) app.ontoolresult(initialResult ?? result);
     }),
     getHostContext: () => ({ theme: 'dark' }),
     sendSizeChanged: vi.fn(async () => {}),
@@ -57,6 +57,49 @@ async function setup() {
 async function settled(el: ReturnType<typeof elementLookup>) {
   await vi.waitFor(() => expect(el('browse').inert).toBe(false));
 }
+
+it.each([
+  [
+    {
+      structuredContent: {
+        error: 'cache_unavailable',
+        hint: 'Reconnect Selecta to open the cache.',
+      },
+      isError: true,
+    },
+    'Reconnect Selecta to open the cache.',
+  ],
+  [
+    { structuredContent: {} },
+    'Invalid library response. Reconnect Selecta, then reload this view.',
+  ],
+])(
+  'preserves an initial result error delivered during connection and allows reload',
+  async (result, message) => {
+    const { el, app } = await setup(result);
+
+    expect(el('status').textContent).toBe(message);
+    expect(el('status').dataset.error).toBe('true');
+    expect(el('browse').inert).toBe(true);
+    expect(el('ask').disabled).toBe(true);
+    expect(el('reload').disabled).toBe(false);
+    expect(app.callServerTool).not.toHaveBeenCalled();
+
+    await el('reload').onclick();
+    expect(app.callServerTool).toHaveBeenCalledTimes(1);
+    expect(el('status').dataset.error).toBe('false');
+    expect(el('browse').inert).toBe(false);
+  },
+);
+
+it('shows waiting status only when connection finishes without an initial result', async () => {
+  const { el, app } = await setup(null);
+
+  expect(el('status').textContent).toContain('Waiting for library data');
+  expect(el('status').dataset.error).toBe('false');
+  expect(el('reload').disabled).toBe(false);
+  expect(app.callServerTool).not.toHaveBeenCalled();
+});
 
 it('keeps exact IDs for separate copies and limits selection without silently dropping seeds', async () => {
   const { state } = await setup();

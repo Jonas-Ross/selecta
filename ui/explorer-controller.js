@@ -13,6 +13,7 @@ export async function connectExplorer(app, { host, el, observeSize, applyHostSty
   let busy = false;
   let connected = false;
   let initialInput = {};
+  let receivedResult = false;
   let interacted = false;
   let contextDelivery = Promise.resolve();
   const recentCutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
@@ -257,6 +258,8 @@ export async function connectExplorer(app, { host, el, observeSize, applyHostSty
     // Host replays must not replace a slice or selection the user has changed.
     if (interacted) return;
 
+    receivedResult = true;
+
     try {
       accept(unpackExplorer(result));
       status('Choose a slice or select tracks, then describe what to make.');
@@ -277,7 +280,7 @@ export async function connectExplorer(app, { host, el, observeSize, applyHostSty
     });
     controls();
 
-    if (!state)
+    if (!receivedResult)
       status('Waiting for library data. Use Reload view if the original result is unavailable.');
   } catch (error) {
     status(
