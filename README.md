@@ -71,11 +71,11 @@ claude mcp add --scope user selecta -- node /ABSOLUTE/PATH/TO/selecta/dist/index
 
 Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vibe. Preview it first."*
 
-For visual iteration without reconnecting MCP, run `npm run preview:draft` and open [the local design preview](http://127.0.0.1:8766). It uses the same widget with fixture data, simulated saves, live reload, and width/surface controls.
+For visual iteration without reconnecting MCP, run `npm run preview` and open [the consolidated design gallery](http://127.0.0.1:8767). The gallery shows the draft and explorer together with independent fixtures, simulated writes, live reload, and shared width/surface controls.
 
 ## Tools
 
-Twenty tools, in four groups. The first group answers from the local cache and never touches Music.app; the second writes to Music.app; the third keeps the cache current and holds the agent's own notes.
+Tools are grouped by workflow. The first group answers from the local cache and never touches Music.app; the second writes to Music.app; the third keeps the cache current and holds the agent's own notes.
 
 ### Reading
 
@@ -86,6 +86,16 @@ Twenty tools, in four groups. The first group answers from the local cache and n
 | `get_track_context` | What sits around a track in your own playlists: same-artist tracks, the playlists it's in, and the tracks that co-occur with it. Accepts up to 20 seeds at once for a combined co-occurrence view. Single-seed calls include the track's play history across refreshes. You can leave specific playlists out, or skip any above a given size, before it counts; the response says which playlists were considered and which were dropped. |
 | `inspect_tracklist` | Sanity-check an ordered draft before previewing or creating it: runtime, repeated IDs, duplicate copies of the same song, artist counts, per-track signal, and where BPM and key data is missing. Facts only, no judgement. |
 | `list_playlists` | Your playlists, with kind (`user`/`smart`/`subscription`/`folder`) and track counts. Filter by kind or name. |
+
+### Interactive library explorer
+
+| Tool | What it does |
+|---|---|
+| `show_library_explorer` | Opens clickable decade and raw-genre charts over the owned library, with the same filters as `search` and `library_overview`, stable paginated results, and seed selection for an explicit curation request. Cache-only. |
+
+Ask your agent to **open the library explorer**. Click a decade or genre, toggle **Never played**, **Loved**, or **Added in 30 days**, and optionally select seed tracks. Describe the playlist you want, then **Ask agent**. The request includes exact selected IDs and active filters. With no selection, it refers to the full filtered slice, including tracks beyond the visible page. It requests a proposal; it does not create or play a playlist. Claude Desktop Code may place the request in its composer for you to send.
+
+**Reload view** rereads the existing cache. **Refresh library** explicitly rereads Music.app through the existing refresh tool. Both clear temporary selection; paging and sorting preserve it. Counts, cache age, unknown metadata and chart overflow remain visible. For a fixture preview, run `npm run preview` and open [the consolidated design gallery](http://127.0.0.1:8767). See [the explorer contract and host checks](docs/library-explorer.md).
 
 ### Interactive drafts
 
@@ -102,7 +112,7 @@ Drafts live in `~/Library/Application Support/Selecta/drafts.db`, separate from 
 
 **Save to Music.app** explicitly creates a real playlist. A save attempt is recorded before the Music.app call and its result is retained, including partial-write errors. Pending outcomes after interruption are uncertain and cannot be retried automatically; inspect Music.app before choosing further action. A changed name or track order/list can be saved as a new revision after a completed attempt. Selection and feedback changes alone do not re-enable save. Playback and preview-slot controls are outside this widget.
 
-After updating Selecta, run `npm ci && npm run build` in the checkout your connector runs. The build bundles the widget and SDK into `dist/ui/playlist-draft.html`; no CDN or separate service is needed. Restart/reconnect Selecta in your MCP client so it discovers the four new tools, and reopen the card (Claude may need a full app restart to clear cached resources). Existing core tools still work in hosts without MCP Apps. See [draft smoke checks](docs/playlist-drafts.md) for verification and current desktop-test status.
+After updating Selecta, run `npm ci && npm run build` in the checkout your connector runs. The build bundles the widgets and SDK into `dist/ui/playlist-draft.html` and `dist/ui/library-explorer.html`; no CDN or separate service is needed. Restart/reconnect Selecta in your MCP client so it discovers the interactive tools, and reopen the card (Claude may need a full app restart to clear cached resources). Existing core tools still work in hosts without MCP Apps. See [draft smoke checks](docs/playlist-drafts.md) for verification and current desktop-test status.
 
 ### Writing to Music.app
 

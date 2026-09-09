@@ -26,9 +26,9 @@ Codex caps inline cards at 720 CSS pixels. The track list absorbs the viewport c
 
 ## Local preview
 
-Run `npm run preview:draft`, then open `http://127.0.0.1:8766`. `SELECTA_PREVIEW_PORT` selects another port. This loopback fixture host loads the production widget, an in-memory fixture library and a temporary draft store. It never loads the live Music.app bridge or user cache. Saves are simulated; feedback appears under **Latest interaction**.
+Run `npm run preview`, then open `http://127.0.0.1:8767`. `SELECTA_PREVIEW_PORT` selects another port. One gallery shows the production draft and explorer widgets together, side by side when space permits and stacked in narrow windows. Each has its own in-memory fixture library, fixture reset and interaction log; resetting the explorer does not change the draft. Draft state lives in a temporary store. The gallery never loads the live Music.app bridge or user cache. Saves are simulated; feedback appears under **Draft interaction**.
 
-Width controls offer 760px, 553px and 390px cards. Surface controls include dark, light, Claude-like and Codex-style injected CSS with its 720px height cap. Select a **Fixture**, then **Reset fixture** to load repeated tracks, a missing duration, or 500 entries; feature values in the preview are synthetic. Source edits reload the card; persisted fixture edits survive, but unsaved text does not. Ctrl+C stops the preview and removes its temporary store. This is a development tool, not a standalone product.
+Shared **Maximum card width** controls offer 760px, 553px and 390px; cards shrink to fit the available column. **Surface** controls include dark, light, Claude-like and Codex-style injected CSS with its 720px height cap. Use the draft's **Fixture** selector, then **Reset draft**, to load repeated tracks, a missing duration, or 500 entries. Feature values are synthetic. Source edits reload both cards; persisted fixture edits survive, but unsaved text and temporary explorer selection do not. Ctrl+C stops the preview and removes its temporary store. This is a development tool, not a standalone product.
 
 ## Validation and host smoke
 

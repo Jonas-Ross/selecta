@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Selecta · Design preview</title>
+    <title>Selecta · Design gallery</title>
     <style>
       * {
         box-sizing: border-box;
@@ -19,19 +19,16 @@
           sans-serif;
       }
       .toolbar {
-        padding: 18px 28px;
+        padding: 18px 24px;
         border-bottom: 1px solid #ffffff12;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 18px;
+        gap: 16px;
         flex-wrap: wrap;
       }
-      .toolbar strong {
-        font-weight: 600;
-      }
       .toolbar span {
-        color: #898b99;
+        color: #989aa8;
         font-size: 12px;
         margin-left: 10px;
       }
@@ -48,103 +45,197 @@
         background: #23242b;
         border: 1px solid #ffffff16;
         border-radius: 7px;
-        padding: 7px 10px;
+        padding: 7px 8px;
+        max-width: 100%;
+      }
+      button {
+        cursor: pointer;
+      }
+      :focus-visible {
+        outline: 2px solid #a6b1e7;
+        outline-offset: 3px;
       }
       main {
         padding: 24px 20px;
       }
+      .gallery {
+        --preview-width: 553px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, var(--preview-width)));
+        justify-content: center;
+        align-items: start;
+        gap: 28px;
+      }
       .stage {
-        max-width: 760px;
-        margin: 0 auto;
+        min-width: 0;
+      }
+      .stage header {
+        min-height: 108px;
+      }
+      h1 {
+        font-size: 18px;
+        letter-spacing: -0.4px;
+        margin: 0 0 5px;
+      }
+      .description {
+        color: #a6a7b1;
+        font-size: 11px;
+        margin: 0 0 14px;
+      }
+      label {
+        color: #a9aab4;
+        font-size: 11px;
+      }
+      .fixture {
+        flex-wrap: nowrap;
+        margin-bottom: 15px;
+      }
+      .fixture select {
+        min-width: 0;
+        flex: 1;
+        font-size: 11px;
+      }
+      .fixture button {
+        flex-shrink: 0;
+        font-size: 11px;
       }
       iframe {
         display: block;
         width: 100%;
+        height: 720px;
         border: 1px solid #ffffff12;
         border-radius: 16px;
         background: #202125;
-        height: 820px;
-        box-shadow: 0 18px 70px #0003;
-      }
-      .caption {
-        color: #858795;
-        font-size: 11px;
-        margin: 14px 0;
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
       }
       details {
-        max-width: 760px;
-        margin: 20px auto;
-        color: #898b99;
+        margin: 14px 0;
+        color: #a6a7b1;
+        font-size: 11px;
+      }
+      summary {
+        cursor: pointer;
+        padding: 4px 0;
       }
       pre {
         white-space: pre-wrap;
         overflow-wrap: anywhere;
+        max-height: 300px;
+        overflow: auto;
         font:
           11px ui-monospace,
           monospace;
-        padding: 16px;
+        padding: 12px;
         background: #1c1d23;
         border-radius: 8px;
       }
       .hint {
-        color: #858795;
+        color: #a6a7b1;
         font-size: 11px;
         text-align: center;
-        margin: 26px 0;
+        margin: 24px 0 0;
       }
-      label {
-        font-size: 11px;
-        color: #a9aab4;
+      @media (max-width: 700px) {
+        .gallery {
+          grid-template-columns: minmax(0, var(--preview-width));
+          gap: 24px;
+        }
+        .stage header {
+          min-height: auto;
+        }
       }
     </style>
   </head>
   <body>
     <div class="toolbar">
-      <div><strong>Selecta</strong><span>Design preview</span></div>
+      <div><strong>Selecta</strong><span>Design gallery</span></div>
       <div class="controls">
-        <label for="width">Width</label
+        <label for="width">Maximum card width</label
         ><select id="width">
-          <option value="760">Wide · 760</option>
-          <option value="553">Card · 553</option>
-          <option value="390">Narrow · 390</option></select
-        ><label for="theme">Surface</label
+          <option value="760">760px</option>
+          <option value="553" selected>553px</option>
+          <option value="390">390px</option>
+        </select>
+        <label for="theme">Surface</label
         ><select id="theme">
           <option value="dark">Dark</option>
           <option value="light">Light</option>
           <option value="claude">Claude-like</option>
-          <option value="codex" selected>Codex-style injection</option></select
-        ><label for="scenario">Fixture</label
-        ><select id="scenario">
-          <!--__SCENARIOS__--></select
-        ><button id="reset">Reset fixture</button>
+          <option value="codex" selected>Codex-style injection</option>
+        </select>
       </div>
     </div>
-
     <main>
-      <div class="stage" id="stage">
-        <iframe id="card" title="Playlist draft preview" src="/widget?host=codex"></iframe>
-        <div class="caption">
-          <span id="space">Setlist · same widget as the MCP card</span
-          ><span>Fixture library / simulated save</span>
-        </div>
+      <div class="gallery" id="gallery">
+        <section class="stage" aria-labelledby="draft-title">
+          <header>
+            <h1 id="draft-title">Playlist draft</h1>
+            <p class="description">Arrange a sequence and give feedback. Saves are simulated.</p>
+            <div class="controls fixture">
+              <label for="draft-scenario">Fixture</label
+              ><select id="draft-scenario" aria-label="Draft fixture">
+                <!--__DRAFT_SCENARIOS__--></select
+              ><button id="draft-reset">Reset draft</button>
+            </div>
+          </header>
+          <iframe
+            id="draft-card"
+            title="Playlist draft preview"
+            src="/widget/draft?host=codex"
+          ></iframe>
+          <details>
+            <summary>Draft interaction</summary>
+            <pre id="draft-event">
+Select tracks, edit the sequence or send feedback to inspect the payload here.</pre>
+          </details>
+        </section>
+        <section class="stage" aria-labelledby="explorer-title">
+          <header>
+            <h1 id="explorer-title">Library explorer</h1>
+            <p class="description">
+              Browse library slices and choose seeds. Refreshes are simulated.
+            </p>
+            <div class="controls fixture">
+              <label for="explorer-scenario">Fixture</label
+              ><select id="explorer-scenario" aria-label="Explorer fixture">
+                <!--__EXPLORER_SCENARIOS__--></select
+              ><button id="explorer-reset">Reset explorer</button>
+            </div>
+          </header>
+          <iframe
+            id="explorer-card"
+            title="Library explorer preview"
+            src="/widget/explorer?host=codex"
+          ></iframe>
+          <details>
+            <summary>Explorer interaction</summary>
+            <pre id="explorer-event">
+Select seed tracks and ask the agent to inspect the request here.</pre>
+          </details>
+        </section>
       </div>
-      <details>
-        <summary>Latest interaction</summary>
-        <pre id="event">Select tracks and send explicit feedback, or reorder with the arrows.</pre>
-      </details>
       <p class="hint">
-        Edit ui/playlist-draft.html or ui/playlist-draft.js. The card reloads automatically.
+        Production widgets with independent fixture libraries. UI edits reload both cards. Nothing
+        reaches Music.app.
       </p>
     </main>
     <script>
       let draftId = '__DRAFT_ID__';
-      const card = document.getElementById('card');
-      const reloadCard = () => {
-        card.src = '/widget?host=' + document.getElementById('theme').value;
+      const widgets = ['draft', 'explorer'];
+      const card = (widget) => document.getElementById(`${widget}-card`);
+      const log = (widget, data) => {
+        document.getElementById(`${widget}-event`).textContent = JSON.stringify(data, null, 2);
       };
+      const reloadCard = (widget) => {
+        card(widget).src = `/widget/${widget}?host=${document.getElementById('theme').value}`;
+      };
+      async function call(widget, params) {
+        const response = await fetch(`/call/${widget}`, {
+          method: 'POST',
+          body: JSON.stringify(params),
+        });
+        if (!response.ok) throw Error('Fixture request failed');
+        return response.json();
+      }
       function hostContext() {
         const surface = document.getElementById('theme').value;
         return {
@@ -162,45 +253,43 @@
             : {}),
         };
       }
-      addEventListener('message', async ({ data, source }) => {
-        if (source !== card.contentWindow) return;
-        if (!data?.jsonrpc) return;
+      addEventListener('message', async ({ data, source, origin }) => {
+        const widget = widgets.find((key) => source === card(key).contentWindow);
+        if (!widget || origin !== location.origin || !data?.jsonrpc) return;
         let result = {};
         try {
           if (data.method === 'ui/initialize')
             result = {
               protocolVersion: data.params.protocolVersion,
-              hostInfo: { name: 'Selecta design preview', version: '1' },
+              hostInfo: { name: 'Selecta design gallery', version: '1' },
               hostCapabilities: { serverTools: {}, updateModelContext: {}, message: { text: {} } },
               hostContext: hostContext(),
             };
           else if (data.method === 'ui/notifications/initialized') {
-            source.postMessage(
-              {
-                jsonrpc: '2.0',
-                method: 'ui/notifications/tool-input',
-                params: { arguments: { draft_id: draftId } },
-              },
-              location.origin,
-            );
+            const notification =
+              widget === 'explorer'
+                ? {
+                    method: 'ui/notifications/tool-result',
+                    params: await call(widget, { name: 'show_library_explorer', arguments: {} }),
+                  }
+                : {
+                    method: 'ui/notifications/tool-input',
+                    params: { arguments: { draft_id: draftId } },
+                  };
+            source.postMessage({ jsonrpc: '2.0', ...notification }, location.origin);
             return;
-          } else if (data.method === 'tools/call') {
-            const response = await fetch('/call', {
-              method: 'POST',
-              body: JSON.stringify(data.params),
-            });
-            if (!response.ok) throw Error('Fixture request failed');
-            result = await response.json();
-          } else if (data.method === 'ui/message' || data.method === 'ui/update-model-context')
-            document.getElementById('event').textContent = JSON.stringify(data.params, null, 2);
+          } else if (data.method === 'tools/call') result = await call(widget, data.params);
+          else if (data.method === 'ui/message' || data.method === 'ui/update-model-context')
+            log(widget, data.params);
           else if (data.method === 'ui/notifications/size-changed')
-            card.style.height =
+            card(widget).style.height =
               (document.getElementById('theme').value === 'codex'
                 ? Math.min(720, Math.ceil(data.params.height))
                 : Math.ceil(data.params.height)) + 'px';
           if (data.id !== undefined)
             source.postMessage({ jsonrpc: '2.0', id: data.id, result }, location.origin);
         } catch (error) {
+          log(widget, { error: error.message });
           if (data.id !== undefined)
             source.postMessage(
               { jsonrpc: '2.0', id: data.id, error: { code: -32603, message: error.message } },
@@ -208,24 +297,40 @@
             );
         }
       });
-      document.getElementById('width').onchange = (e) =>
-        (document.getElementById('stage').style.maxWidth = e.target.value + 'px');
-      document.getElementById('theme').onchange = () => {
-        reloadCard();
-      };
-      document.getElementById('reset').onclick = async () => {
-        const result = await fetch('/reset', {
-          method: 'POST',
-          body: JSON.stringify({ scenario: document.getElementById('scenario').value }),
-        }).then((r) => r.json());
-        draftId = result.draft_id;
-        reloadCard();
-      };
+      document.getElementById('width').onchange = (event) =>
+        document
+          .getElementById('gallery')
+          .style.setProperty('--preview-width', event.target.value + 'px');
+      document.getElementById('theme').onchange = () => widgets.forEach(reloadCard);
+      for (const widget of widgets)
+        document.getElementById(`${widget}-reset`).onclick = async () => {
+          const button = document.getElementById(`${widget}-reset`);
+          button.disabled = true;
+          try {
+            const response = await fetch(`/reset/${widget}`, {
+              method: 'POST',
+              body: JSON.stringify({
+                scenario: document.getElementById(`${widget}-scenario`).value,
+              }),
+            });
+            if (!response.ok) throw Error('Fixture reset failed');
+            const result = await response.json();
+            if (widget === 'draft') draftId = result.draft_id;
+            log(widget, {
+              reset: document.getElementById(`${widget}-scenario`).selectedOptions[0].text,
+            });
+            reloadCard(widget);
+          } catch (error) {
+            log(widget, { error: error.message });
+          } finally {
+            button.disabled = false;
+          }
+        };
       let current;
       setInterval(async () => {
         try {
           const next = await fetch('/version').then((r) => r.text());
-          if (current && next !== current) reloadCard();
+          if (current && next !== current) widgets.forEach(reloadCard);
           current = next;
         } catch {}
       }, 1000);

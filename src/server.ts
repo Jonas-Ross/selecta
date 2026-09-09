@@ -4,6 +4,7 @@
 // isError so the model treats them as actionable failures.
 
 import { registerDraftApp } from './draft_app.js';
+import { registerExplorerApp } from './explorer_app.js';
 import { APP_VERSION } from './version.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolDeps } from './tools/common.js';
@@ -231,6 +232,7 @@ export function createServer(deps: ToolDeps): McpServer {
   );
 
   registerDraftApp(server, drafts, toDraftResult);
+  registerExplorerApp(server, deps, toDraftResult);
 
   return server;
 }

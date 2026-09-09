@@ -323,7 +323,7 @@ function orderClause(
 ): { sql: string; params: Record<string, unknown> } {
   switch (filters.sort) {
     case 'most_played':
-      return { sql: 'ORDER BY t.play_count DESC', params: {} };
+      return { sql: 'ORDER BY t.play_count DESC, t.persistent_id', params: {} };
     case 'least_played':
       return { sql: 'ORDER BY t.play_count ASC, t.persistent_id', params: {} };
     case 'recently_added':
@@ -819,6 +819,7 @@ export function createQueries(db: Database) {
     searchTracks(filters: SearchFilters): { rows: SearchResultRow[]; total: number } {
       const { from, whereSql, params } = buildTrackFilter(filters);
       const limit = Math.min(filters.limit ?? 50, 500);
+      const offset = Math.max(0, Math.trunc(filters.offset ?? 0));
 
       if (!filters.dedupe) {
         const total = (
@@ -826,8 +827,10 @@ export function createQueries(db: Database) {
         ).n;
         const order = orderClause(filters);
         const rows = db
-          .prepare(`SELECT ${TRACK_COLUMNS} ${from} ${whereSql} ${order.sql} LIMIT @limit`)
-          .all({ ...params, ...order.params, limit }) as TrackRow[];
+          .prepare(
+            `SELECT ${TRACK_COLUMNS} ${from} ${whereSql} ${order.sql} LIMIT @limit OFFSET @offset`,
+          )
+          .all({ ...params, ...order.params, limit, offset }) as TrackRow[];
 
         return { rows, total };
       }
@@ -855,9 +858,9 @@ export function createQueries(db: Database) {
           `SELECT ${TRACK_COLUMNS}, w.groupIds
            FROM (${winners}) w JOIN tracks t ON t.persistent_id = w.pid
            WHERE w.rn = 1
-           ${order.sql} LIMIT @limit`,
+           ${order.sql} LIMIT @limit OFFSET @offset`,
         )
-        .all({ ...params, ...order.params, limit }) as (TrackRow & { groupIds: string })[];
+        .all({ ...params, ...order.params, limit, offset }) as (TrackRow & { groupIds: string })[];
 
       return {
         rows: rows.map(({ groupIds, ...row }) => {
