@@ -15,6 +15,8 @@ Tools on top, three external/storage peers below — cache, bridge, and enrich a
 - **`src/bridge/`** — wraps Music.app. Builds JXA snippets, shells out via `osascript -l JavaScript`, parses JSON. Read `docs/music-app.md` before touching the playlist edit scripts: scripted entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn).
 - **`src/enrich/`** — wraps the external metadata sources (MusicBrainz→AcousticBrainz, Deezer; free, no API keys). Sources self-throttle to each host's documented limit (MusicBrainz 1 req/s, AcousticBrainz 10 req/10s; throttles start "as if a call just happened" so run boundaries can't burst); every attempted track gets a terminal status (`ok`/`no_data`/`no_match`) so dead ends are never retried. A source failure (AcousticBrainz throws intermittent 5xx) skips that 25-track chunk — nothing saved for it, tracks stay pending for a later run, skip reported in the summary — and the run continues; no request is ever reissued within a run. Runs only when explicitly invoked (`enrich_features` tool, `enrich` CLI) — never as a side effect of refresh. Coverage is partial by nature: a live probe of this library measured roughly 57% of tracks with bpm and 37% with key, weakest on 2022+ releases.
 
+All MCP widgets share the `npm run preview` design gallery. Add future widget previews there rather than creating separate preview servers or commands.
+
 Shared types live in `src/types/`; the cross-cutting error envelope in `src/types/errors.ts`.
 
 ## Commands
@@ -30,6 +32,7 @@ Shared types live in `src/types/`; the cross-cutting error envelope in `src/type
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |
 | `npm run smoke` | End-to-end smoke against the real library (builds first) |
 | `npm run verify:echo` | Live iCloud-echo reconciliation harness |
+| `npm run preview` | Consolidated draft and explorer fixture gallery at `http://127.0.0.1:8767` |
 | `npm run dev` | Run the MCP server over stdio |
 | `node dist/index.js status` | Read-only cache integrity, freshness, counts, and enrichment diagnostics |
 | `node dist/index.js doctor` | `status` plus a read-only Music.app availability and Automation probe |

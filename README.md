@@ -71,7 +71,7 @@ claude mcp add --scope user selecta -- node /ABSOLUTE/PATH/TO/selecta/dist/index
 
 Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vibe. Preview it first."*
 
-For visual iteration without reconnecting MCP, run `npm run preview:draft` and open [the local design preview](http://127.0.0.1:8766). It uses the same widget with fixture data, simulated saves, live reload, and width/surface controls.
+For visual iteration without reconnecting MCP, run `npm run preview` and open [the consolidated design gallery](http://127.0.0.1:8767). The gallery shows the draft and explorer together with independent fixtures, simulated writes, live reload, and shared width/surface controls.
 
 ## Tools
 
@@ -95,7 +95,7 @@ Tools are grouped by workflow. The first group answers from the local cache and 
 
 Ask your agent to **open the library explorer**. Click a decade or genre, toggle **Never played**, **Loved**, or **Added in 30 days**, and optionally select seed tracks. Describe the playlist you want, then **Ask agent**. The request includes exact selected IDs and active filters. With no selection, it refers to the full filtered slice, including tracks beyond the visible page. It requests a proposal; it does not create or play a playlist. Claude Desktop Code may place the request in its composer for you to send.
 
-**Reload view** rereads the existing cache. **Refresh library** explicitly rereads Music.app through the existing refresh tool. Both clear temporary selection; paging and sorting preserve it. Counts, cache age, unknown metadata and chart overflow remain visible. For a fixture preview, run `npm run preview:explorer` and open [the local explorer preview](http://127.0.0.1:8767). See [the explorer contract and host checks](docs/library-explorer.md).
+**Reload view** rereads the existing cache. **Refresh library** explicitly rereads Music.app through the existing refresh tool. Both clear temporary selection; paging and sorting preserve it. Counts, cache age, unknown metadata and chart overflow remain visible. For a fixture preview, run `npm run preview` and open [the consolidated design gallery](http://127.0.0.1:8767). See [the explorer contract and host checks](docs/library-explorer.md).
 
 ### Interactive drafts
 

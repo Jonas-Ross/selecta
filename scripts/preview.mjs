@@ -7,21 +7,24 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { z } from 'zod';
+import { CallToolRequestParamsSchema } from '@modelcontextprotocol/sdk/types.js';
 import { SelectaCache } from '../dist/cache/index.js';
 import { DraftStore } from '../dist/drafts/store.js';
 import { handleLibraryExplorer } from '../dist/tools/library_explorer.js';
 import { PlaylistDraftTools } from '../dist/tools/playlist_draft.js';
 
-const explorer = process.argv.includes('--explorer');
 const root = new URL('../', import.meta.url);
 const directory = await mkdtemp(join(tmpdir(), 'selecta-preview-'));
-const cache = SelectaCache.open(':memory:');
+const caches = { draft: SelectaCache.open(':memory:'), explorer: SelectaCache.open(':memory:') };
+const resources = { draft: 'playlist-draft', explorer: 'library-explorer' };
+const ResetInput = z.strictObject({ scenario: z.string() });
 const fixture = JSON.parse(
   await readFile(new URL('../test/fixtures/library.json', import.meta.url), 'utf8'),
 );
 
 const handlers = new PlaylistDraftTools({
-  cache: () => cache,
+  cache: () => caches.draft,
   bridge: {
     createPlaylist: async ({ trackIds }) => ({
       persistentId: `PREVIEW-${randomUUID()}`,
@@ -35,34 +38,36 @@ let draftId;
 const TRACK_IDS = ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX', 'T-ROADS', 'T-MIDNIGHT', 'T-TEARDROP'];
 // One record per fixture: the page lists them, /reset loads one by key.
 const standard = { label: 'Repeated tracks', name: 'After the last train', trackIds: TRACK_IDS };
-const SCENARIOS = explorer
-  ? {
-      standard: { label: 'Library slices', count: 156 },
-      missing: { label: 'Missing metadata', count: 30, missing: true },
-      long: { label: '1,000 tracks / 65 genres', count: 1000, genres: true },
-      empty: { label: 'Empty library', count: 0 },
-    }
-  : {
-      standard,
-      missing: {
-        ...standard,
-        label: 'Missing duration',
-        snapshot: (snapshot) => {
-          delete snapshot.tracks.find((track) => track.persistentId === 'T-ANGEL').durationSeconds;
-        },
+const scenarios = {
+  explorer: {
+    standard: { label: 'Library slices', count: 156 },
+    missing: { label: 'Missing metadata', count: 30, missing: true },
+    long: { label: '1,000 tracks / 65 genres', count: 1000, genres: true },
+    empty: { label: 'Empty library', count: 0 },
+  },
+  draft: {
+    standard,
+    missing: {
+      ...standard,
+      label: 'Missing duration',
+      snapshot: (snapshot) => {
+        delete snapshot.tracks.find((track) => track.persistentId === 'T-ANGEL').durationSeconds;
       },
-      long: {
-        label: '500 entries',
-        name: 'The very last train (500 entries)',
-        trackIds: Array.from({ length: 500 }, (_, i) => TRACK_IDS[i % TRACK_IDS.length]),
-      },
-    };
+    },
+    long: {
+      label: '500 entries',
+      name: 'The very last train (500 entries)',
+      trackIds: Array.from({ length: 500 }, (_, i) => TRACK_IDS[i % TRACK_IDS.length]),
+    },
+  },
+};
 
-async function reset(key) {
-  const scenario = SCENARIOS[key];
+async function reset(widget, key) {
+  const scenario = scenarios[widget][key];
+  const cache = caches[widget];
   const snapshot = structuredClone(fixture);
 
-  if (explorer) {
+  if (widget === 'explorer') {
     const capturedAt = Date.now();
 
     snapshot.capturedAt = new Date(capturedAt).toISOString();
@@ -112,14 +117,29 @@ async function reset(key) {
   await handlers.show({ draft_id: draftId, name: scenario.name, track_ids: scenario.trackIds });
 }
 
-await reset('standard');
-const port = Number(process.env.SELECTA_PREVIEW_PORT ?? (explorer ? 8767 : 8766));
+await reset('draft', 'standard');
+await reset('explorer', 'standard');
+const port = Number(process.env.SELECTA_PREVIEW_PORT ?? 8767);
 const origin = `http://127.0.0.1:${port}`;
 const files = (await readdir(new URL('ui/', root))).map((file) => `ui/${file}`);
 const version = async () =>
   (await Promise.all(files.map(async (file) => (await stat(new URL(file, root))).mtimeMs))).join(
     '-',
   );
+// Both iframes request their bundles together. Share the build so one request
+// cannot read an output while another build is still writing it.
+let building;
+
+function buildWidgets() {
+  building ??= promisify(execFile)(process.execPath, ['scripts/build-ui.mjs'], {
+    cwd: root,
+  }).finally(() => {
+    building = undefined;
+  });
+
+  return building;
+}
+
 const server = createServer(async (req, res) => {
   try {
     if (req.headers.host !== `127.0.0.1:${port}`) {
@@ -151,30 +171,44 @@ const server = createServer(async (req, res) => {
 
       res.setHeader('Content-Type', 'application/json');
 
-      if (req.url === '/reset') {
-        const { scenario = 'standard' } = JSON.parse(body || '{}');
+      const route = /^\/(reset|call)\/(draft|explorer)$/.exec(req.url);
 
-        if (!Object.hasOwn(SCENARIOS, scenario)) {
-          res.writeHead(400).end();
-
-          return;
-        }
-
-        await reset(scenario);
-        res.end(JSON.stringify({ draft_id: draftId }));
-
-        return;
-      }
-
-      if (req.url !== '/call') {
+      if (!route) {
         res.writeHead(404).end();
 
         return;
       }
 
-      const { name, arguments: args } = JSON.parse(body);
+      const [, operation, widget] = route;
+      const cache = caches[widget];
+      let input;
 
-      if (explorer) {
+      try {
+        input = (operation === 'reset' ? ResetInput : CallToolRequestParamsSchema).parse(
+          JSON.parse(body),
+        );
+      } catch {
+        res.writeHead(400).end();
+
+        return;
+      }
+
+      if (operation === 'reset') {
+        if (!Object.hasOwn(scenarios[widget], input.scenario)) {
+          res.writeHead(400).end();
+
+          return;
+        }
+
+        await reset(widget, input.scenario);
+        res.end(JSON.stringify(widget === 'draft' ? { draft_id: draftId } : {}));
+
+        return;
+      }
+
+      const { name, arguments: args } = input;
+
+      if (widget === 'explorer') {
         let value;
 
         if (name === 'show_library_explorer')
@@ -236,20 +270,19 @@ const server = createServer(async (req, res) => {
 
     const url = new URL(req.url, origin);
 
-    if (url.pathname === '/widget') {
-      await promisify(execFile)(process.execPath, ['scripts/build-ui.mjs'], { cwd: root });
+    const widget = Object.keys(resources).find((key) => url.pathname === `/widget/${key}`);
+
+    if (widget) {
+      await buildWidgets();
       res.setHeader('Content-Type', 'text/html');
-      let widget = await readFile(
-        new URL(
-          `../dist/ui/${explorer ? 'library-explorer' : 'playlist-draft'}.html`,
-          import.meta.url,
-        ),
+      let widgetHtml = await readFile(
+        new URL(`../dist/ui/${resources[widget]}.html`, import.meta.url),
         'utf8',
       );
 
       if (url.searchParams.get('host') === 'codex') {
         // Representative conflicting renderer rules, not a copy of host CSS.
-        widget = widget.replace(
+        widgetHtml = widgetHtml.replace(
           '</head>',
           `<style>
           :root { --accent: #223344; --muted: #777777; background: #111111 !important; }
@@ -259,7 +292,7 @@ const server = createServer(async (req, res) => {
         );
       }
 
-      res.end(widget);
+      res.end(widgetHtml);
 
       return;
     }
@@ -272,32 +305,17 @@ const server = createServer(async (req, res) => {
 
     const html = await readFile(new URL('../ui/preview.html', import.meta.url), 'utf8');
 
-    const options = Object.entries(SCENARIOS)
-      .map(([key, { label }]) => `<option value="${key}">${label}</option>`)
-      .join('');
+    const options = (widget) =>
+      Object.entries(scenarios[widget])
+        .map(([key, { label }]) => `<option value="${key}">${label}</option>`)
+        .join('');
 
     res.setHeader('Content-Type', 'text/html');
     res.end(
       html
-        .replace('__DRAFT_ID__', draftId ?? '')
-        .replace('<!--__SCENARIOS__-->', options)
-        .replace('__EXPLORER__', String(explorer))
-        .replace(
-          'Playlist draft preview',
-          explorer ? 'Library explorer preview' : 'Playlist draft preview',
-        )
-        .replace(
-          'Setlist · same widget as the MCP card',
-          explorer
-            ? 'Library explorer · production widget'
-            : 'Setlist · same widget as the MCP card',
-        )
-        .replace(
-          'Fixture library / simulated save',
-          explorer
-            ? 'Synthetic fixture library / simulated refresh'
-            : 'Fixture library / simulated save',
-        ),
+        .replace('__DRAFT_ID__', draftId)
+        .replace('<!--__DRAFT_SCENARIOS__-->', options('draft'))
+        .replace('<!--__EXPLORER_SCENARIOS__-->', options('explorer')),
     );
   } catch (error) {
     console.error(error);
@@ -314,7 +332,8 @@ server.listen(port, '127.0.0.1', () =>
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.once(signal, () =>
     server.close(async () => {
-      cache.close();
+      for (const cache of Object.values(caches)) cache.close();
+
       await rm(directory, { recursive: true, force: true });
       process.exit(0);
     }),
