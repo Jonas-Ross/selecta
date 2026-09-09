@@ -9,8 +9,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { SelectaCache } from '../dist/cache/index.js';
 import { DraftStore } from '../dist/drafts/store.js';
+import { handleLibraryExplorer } from '../dist/tools/library_explorer.js';
 import { PlaylistDraftTools } from '../dist/tools/playlist_draft.js';
 
+const explorer = process.argv.includes('--explorer');
 const root = new URL('../', import.meta.url);
 const directory = await mkdtemp(join(tmpdir(), 'selecta-preview-'));
 const cache = SelectaCache.open(':memory:');
@@ -33,25 +35,62 @@ let draftId;
 const TRACK_IDS = ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX', 'T-ROADS', 'T-MIDNIGHT', 'T-TEARDROP'];
 // One record per fixture: the page lists them, /reset loads one by key.
 const standard = { label: 'Repeated tracks', name: 'After the last train', trackIds: TRACK_IDS };
-const SCENARIOS = {
-  standard,
-  missing: {
-    ...standard,
-    label: 'Missing duration',
-    snapshot: (snapshot) => {
-      delete snapshot.tracks.find((track) => track.persistentId === 'T-ANGEL').durationSeconds;
-    },
-  },
-  long: {
-    label: '500 entries',
-    name: 'The very last train (500 entries)',
-    trackIds: Array.from({ length: 500 }, (_, i) => TRACK_IDS[i % TRACK_IDS.length]),
-  },
-};
+const SCENARIOS = explorer
+  ? {
+      standard: { label: 'Library slices', count: 156 },
+      missing: { label: 'Missing metadata', count: 30, missing: true },
+      long: { label: '1,000 tracks / 65 genres', count: 1000, genres: true },
+      empty: { label: 'Empty library', count: 0 },
+    }
+  : {
+      standard,
+      missing: {
+        ...standard,
+        label: 'Missing duration',
+        snapshot: (snapshot) => {
+          delete snapshot.tracks.find((track) => track.persistentId === 'T-ANGEL').durationSeconds;
+        },
+      },
+      long: {
+        label: '500 entries',
+        name: 'The very last train (500 entries)',
+        trackIds: Array.from({ length: 500 }, (_, i) => TRACK_IDS[i % TRACK_IDS.length]),
+      },
+    };
 
 async function reset(key) {
   const scenario = SCENARIOS[key];
   const snapshot = structuredClone(fixture);
+
+  if (explorer) {
+    const capturedAt = Date.now();
+
+    snapshot.capturedAt = new Date(capturedAt).toISOString();
+    snapshot.tracks = Array.from({ length: scenario.count }, (_, i) => {
+      const original = fixture.tracks[i % fixture.tracks.length];
+      const row = {
+        ...original,
+        persistentId: `E-${i}`,
+        playCount: i % 4 === 0 ? 0 : i % 53,
+        dateAdded: new Date(capturedAt - (i % 90) * 86_400_000).toISOString(),
+        year: 1970 + ((i * 7) % 57),
+      };
+
+      if (scenario.genres) row.genre = `Raw genre ${i % 65}`;
+
+      if (scenario.missing || i % 17 === 0) {
+        delete row.genre;
+        delete row.year;
+        delete row.durationSeconds;
+      }
+
+      return row;
+    });
+    snapshot.playlists = [];
+    cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+
+    return;
+  }
 
   scenario.snapshot?.(snapshot);
   cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
@@ -74,7 +113,7 @@ async function reset(key) {
 }
 
 await reset('standard');
-const port = Number(process.env.SELECTA_PREVIEW_PORT ?? 8766);
+const port = Number(process.env.SELECTA_PREVIEW_PORT ?? (explorer ? 8767 : 8766));
 const origin = `http://127.0.0.1:${port}`;
 const files = (await readdir(new URL('ui/', root))).map((file) => `ui/${file}`);
 const version = async () =>
@@ -134,6 +173,35 @@ const server = createServer(async (req, res) => {
       }
 
       const { name, arguments: args } = JSON.parse(body);
+
+      if (explorer) {
+        let value;
+
+        if (name === 'show_library_explorer')
+          value = await handleLibraryExplorer(args, { cache: () => cache });
+        else if (name === 'refresh_library')
+          value = {
+            track_count: cache.getOverview({}).totalTracks,
+            playlist_count: 0,
+            refreshed_at: new Date().toISOString(),
+          };
+        else {
+          res.writeHead(400).end();
+
+          return;
+        }
+
+        res.end(
+          JSON.stringify({
+            content: [{ type: 'text', text: JSON.stringify(value) }],
+            structuredContent: value,
+            isError: !!value.error,
+          }),
+        );
+
+        return;
+      }
+
       const method = {
         playlist_draft_appearance: 'appearance',
         get_playlist_draft: 'get',
@@ -172,7 +240,10 @@ const server = createServer(async (req, res) => {
       await promisify(execFile)(process.execPath, ['scripts/build-ui.mjs'], { cwd: root });
       res.setHeader('Content-Type', 'text/html');
       let widget = await readFile(
-        new URL('../dist/ui/playlist-draft.html', import.meta.url),
+        new URL(
+          `../dist/ui/${explorer ? 'library-explorer' : 'playlist-draft'}.html`,
+          import.meta.url,
+        ),
         'utf8',
       );
 
@@ -206,7 +277,28 @@ const server = createServer(async (req, res) => {
       .join('');
 
     res.setHeader('Content-Type', 'text/html');
-    res.end(html.replace('__DRAFT_ID__', draftId).replace('<!--__SCENARIOS__-->', options));
+    res.end(
+      html
+        .replace('__DRAFT_ID__', draftId ?? '')
+        .replace('<!--__SCENARIOS__-->', options)
+        .replace('__EXPLORER__', String(explorer))
+        .replace(
+          'Playlist draft preview',
+          explorer ? 'Library explorer preview' : 'Playlist draft preview',
+        )
+        .replace(
+          'Setlist · same widget as the MCP card',
+          explorer
+            ? 'Library explorer · production widget'
+            : 'Setlist · same widget as the MCP card',
+        )
+        .replace(
+          'Fixture library / simulated save',
+          explorer
+            ? 'Synthetic fixture library / simulated refresh'
+            : 'Fixture library / simulated save',
+        ),
+    );
   } catch (error) {
     console.error(error);
     res.writeHead(500).end('Preview request failed. See terminal.');
@@ -215,7 +307,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(port, '127.0.0.1', () =>
   console.log(
-    `Draft design preview: ${origin}\nFixture data only. UI edits reload automatically. Ctrl+C to stop.`,
+    `Selecta design preview: ${origin}\nFixture data only. UI edits reload automatically. Ctrl+C to stop.`,
   ),
 );
 

@@ -21,7 +21,8 @@
     "format": "oxlint --fix && oxfmt",
     "format:check": "oxfmt --check",
     "check": "npm test && npm run lint && npm run format:check",
-    "preview:draft": "npm run build && node scripts/preview-draft.mjs"
+    "preview:draft": "npm run build && node scripts/preview-draft.mjs",
+    "preview:explorer": "npm run build && node scripts/preview-draft.mjs --explorer"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "1.7.5",

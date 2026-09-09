@@ -197,6 +197,16 @@ export class SelectaCache {
     return this.queries.overviewStats(filters, recentSince);
   }
 
+  /** One read snapshot keeps charts, page and freshness consistent with each
+   * other even when another client refreshes the shared cache concurrently. */
+  exploreTracks(filters: SearchFilters, recentSince = recentSinceIso()) {
+    return this.db.transaction(() => ({
+      stats: this.getOverview(filters, recentSince),
+      ...this.searchTracks(filters),
+      cacheAgeHours: this.getCacheAgeHours(),
+    }))();
+  }
+
   /** A track's play_history windows, newest first. */
   getTrackPlayHistory(trackPersistentId: string, limit: number): PlayHistoryWindow[] {
     return this.queries.getTrackPlayHistory(trackPersistentId, limit);

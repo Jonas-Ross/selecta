@@ -29,6 +29,16 @@ export class Element {
   append(...nodes: Element[]) {
     for (const node of nodes) this.insertBefore(node, null);
   }
+  replaceChildren(...nodes: Element[]) {
+    while (this.children.length) this.children[0].remove();
+
+    this.append(...nodes);
+  }
+  querySelectorAll(selector: string): Element[] {
+    if (selector !== 'input') throw new Error(`Unsupported test selector: ${selector}`);
+
+    return this.controls().filter((node) => node.tag === 'input');
+  }
   /** Moves a node that already has a parent, as in a real DOM. */
   insertBefore(node: Element, reference: Element | null) {
     node.remove();

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+  </head>
+  <body style="margin: 0; padding: 0">
+    <template id="selecta-template">
+      <style>
+        /*__EXPLORER__*/
+      </style>
+      <main id="explorer">
+        <header>
+          <div>
+            <h1>Your library</h1>
+            <p id="summary">Explore the music you own.</p>
+          </div>
+          <button id="reload" title="Reread this view from the existing cache">Reload view</button>
+        </header>
+        <div class="freshness">
+          <span id="age">Waiting for library data…</span
+          ><button id="refresh">Refresh library</button>
+        </div>
+        <section id="browse" aria-label="Library filters and results">
+          <form id="search-form" class="search">
+            <input
+              id="query"
+              aria-label="Search title, artist or album"
+              placeholder="Search title, artist or album"
+              maxlength="300"
+            /><button type="submit">Search</button>
+          </form>
+          <div class="quick" aria-label="Quick filters">
+            <button id="never" aria-pressed="false">Never played</button
+            ><button id="loved" aria-pressed="false">Loved</button
+            ><button id="recent" aria-pressed="false">Added in 30 days</button>
+          </div>
+          <div id="active" class="active" aria-label="Active filters"></div>
+          <details id="distributions" open>
+            <summary>Explore by decade &amp; genre</summary>
+            <div class="charts">
+              <section>
+                <h2>Release decade</h2>
+                <div id="decades" class="decades"></div>
+                <p id="year-note" class="note"></p>
+              </section>
+              <section>
+                <h2>Raw genre</h2>
+                <div id="genres" class="genres"></div>
+                <p id="genre-note" class="note"></p>
+              </section>
+            </div>
+            <details>
+              <summary>Specific genre or years</summary>
+              <form id="facet-form" class="facet-form">
+                <label
+                  >Genre<input id="genre" placeholder="Exact raw genre" maxlength="300" /></label
+                ><label>From year<input id="year-min" type="number" step="1" /></label
+                ><label>To year<input id="year-max" type="number" step="1" /></label
+                ><button type="submit">Apply</button>
+              </form>
+            </details>
+          </details>
+          <div class="results-head">
+            <h2 id="results-label">Matching tracks</h2>
+            <label
+              >Order
+              <select id="sort">
+                <option value="recently_added">Recently added</option>
+                <option value="least_played">Least played</option>
+                <option value="most_played">Most played</option>
+              </select></label
+            >
+          </div>
+          <div id="tracks" class="tracks" role="group" aria-label="Matching tracks"></div>
+          <div class="paging">
+            <span id="page-label"></span>
+            <div><button id="previous">Previous</button><button id="next">Next</button></div>
+          </div>
+        </section>
+        <footer>
+          <div class="selection-head">
+            <strong id="selection-label">Choose a slice or select seed tracks</strong
+            ><button id="clear-selection" hidden>Clear selection</button>
+          </div>
+          <div id="selection" class="selection" aria-label="Selected seeds"></div>
+          <div class="request">
+            <input
+              id="request"
+              aria-label="Curation request"
+              placeholder="What would you like to make from this?"
+              maxlength="2000"
+            /><button id="ask" class="primary" disabled>Ask agent</button>
+          </div>
+          <p id="status" role="status" aria-live="polite">
+            Selection stays in this card until you ask the agent.
+          </p>
+          <details class="facts">
+            <summary>About these facts</summary>
+            <p id="activity"></p>
+            <p>
+              Counts cover the filtered slice. Genres are raw tags; clicking matches
+              case-insensitively, like search. Unknown years and genres are excluded from charts.
+              Runtime sums known durations. Copies stay separate. Selection is temporary and clears
+              when filters change or the view reloads.
+            </p>
+          </details>
+        </footer>
+      </main>
+    </template>
+    <script type="module">
+      /*__APP__*/
+    </script>
+  </body>
+</html>

@@ -133,13 +133,14 @@
       </div>
       <details>
         <summary>Latest interaction</summary>
-        <pre id="event">Select tracks and send explicit feedback, or reorder with the arrows.</pre>
+        <pre id="event">Select tracks and send a request to inspect its exact context here.</pre>
       </details>
       <p class="hint">
-        Edit ui/playlist-draft.html or ui/playlist-draft.js. The card reloads automatically.
+        UI source edits reload the card automatically. Fixture interactions never reach Music.app.
       </p>
     </main>
     <script>
+      const explorer = __EXPLORER__;
       let draftId = '__DRAFT_ID__';
       const card = document.getElementById('card');
       const reloadCard = () => {
@@ -175,6 +176,21 @@
               hostContext: hostContext(),
             };
           else if (data.method === 'ui/notifications/initialized') {
+            if (explorer) {
+              const response = await fetch('/call', {
+                method: 'POST',
+                body: JSON.stringify({ name: 'show_library_explorer', arguments: {} }),
+              });
+              source.postMessage(
+                {
+                  jsonrpc: '2.0',
+                  method: 'ui/notifications/tool-result',
+                  params: await response.json(),
+                },
+                location.origin,
+              );
+              return;
+            }
             source.postMessage(
               {
                 jsonrpc: '2.0',

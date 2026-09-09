@@ -1,0 +1,465 @@
+:host {
+  color-scheme: light dark;
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  --surface: var(--color-background-primary, light-dark(#fcfcfd, #202125));
+  --text: var(--color-text-primary, light-dark(#23252b, #f1f1f4));
+  --muted: var(--color-text-secondary, light-dark(#60636d, #a6a7b1));
+  --line: color-mix(in srgb, var(--text) 15%, transparent);
+  --soft: color-mix(in srgb, var(--text) 5%, var(--surface));
+  --chart: light-dark(#536299, #a6b1e7);
+  --selected: color-mix(in srgb, var(--chart) 18%, var(--surface));
+  display: block;
+}
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+#explorer {
+  color: var(--text);
+  background: var(--surface);
+  padding: 18px 20px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+h1 {
+  font-size: 21px;
+  letter-spacing: -0.6px;
+  line-height: 1.15;
+  margin: 0 0 5px;
+}
+h2 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+}
+p {
+  margin: 0;
+  color: var(--muted);
+}
+header,
+.freshness,
+.results-head,
+.paging,
+.selection-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+header {
+  align-items: flex-start;
+}
+header > div {
+  min-width: 0;
+}
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+}
+button:hover:not(:disabled) {
+  background: var(--soft);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button[aria-pressed='true'] {
+  background: var(--selected);
+  border-color: var(--chart);
+}
+:focus-visible {
+  outline: 2px solid var(--chart);
+  outline-offset: 2px;
+}
+input,
+select {
+  min-width: 0;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 9px;
+}
+input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.freshness {
+  font-size: 10px;
+  color: var(--muted);
+  margin: 10px 0;
+}
+.freshness button {
+  border: 0;
+  min-height: 24px;
+  padding: 2px 0;
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.search,
+.request {
+  display: flex;
+  gap: 7px;
+}
+.search input,
+.request input {
+  flex: 1;
+  width: 0;
+}
+.quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 9px 0;
+}
+.quick button {
+  border-radius: 16px;
+  font-size: 11px;
+}
+.active {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 68px;
+  overflow: auto;
+  margin-bottom: 8px;
+}
+.active button {
+  font-size: 10px;
+  border: 0;
+  padding: 3px 6px;
+  min-height: 24px;
+  background: var(--soft);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 5px 0;
+}
+.charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 8px 0;
+}
+.charts section {
+  min-width: 0;
+}
+.charts h2 {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.decades {
+  height: 104px;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  overflow-x: auto;
+}
+.decade {
+  min-width: 42px;
+  flex: 1;
+  border: 0;
+  padding: 0 3px;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.decade .bar {
+  width: 100%;
+  max-width: 32px;
+  height: calc(var(--fraction) * 64px);
+  min-height: 2px;
+  background: var(--chart);
+  border-radius: 3px 3px 0 0;
+  opacity: 0.72;
+}
+.decade[aria-pressed='true'] .bar {
+  opacity: 1;
+}
+.genres {
+  height: 104px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.genre {
+  position: relative;
+  isolation: isolate;
+  flex-shrink: 0;
+  border: 0;
+  min-height: 25px;
+  padding: 4px 6px;
+  font-size: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  text-align: left;
+}
+.genre::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0 auto 0 0;
+  width: calc(var(--fraction) * 100%);
+  border-radius: 3px;
+  background: var(--selected);
+}
+.genre span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.genre span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+.note {
+  font-size: 9px;
+  margin-top: 6px;
+}
+.facet-form {
+  display: flex;
+  align-items: end;
+  gap: 6px;
+  margin: 4px 0 9px;
+}
+.facet-form label {
+  font-size: 9px;
+  color: var(--muted);
+  min-width: 0;
+  width: 22%;
+}
+.facet-form label:first-child {
+  flex: 1;
+}
+.facet-form input {
+  display: block;
+  width: 100%;
+  margin-top: 3px;
+  padding: 5px;
+}
+.facet-form button {
+  font-size: 10px;
+}
+.results-head {
+  border-top: 1px solid var(--line);
+  padding: 10px 0 7px;
+}
+.results-head label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.results-head select {
+  padding: 4px 5px;
+  font-size: 10px;
+}
+.tracks {
+  max-height: 225px;
+  min-height: 70px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.track {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 8px 4px;
+  min-height: 49px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.track + .track {
+  border-top: 1px solid var(--line);
+}
+.track:has(input:checked) {
+  background: var(--selected);
+}
+.track input {
+  accent-color: var(--chart);
+  margin: 0;
+  width: 14px;
+  height: 14px;
+}
+.track-title {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-detail {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-numbers {
+  color: var(--muted);
+  text-align: right;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.empty {
+  padding: 20px 5px;
+}
+.paging {
+  padding: 6px 0 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.paging button {
+  min-height: 25px;
+  font-size: 10px;
+  padding: 3px 7px;
+}
+.paging > div {
+  display: flex;
+  gap: 5px;
+}
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.selection-head {
+  font-size: 11px;
+  margin-bottom: 7px;
+}
+.selection-head strong {
+  font-weight: 500;
+}
+.selection-head button {
+  border: 0;
+  font-size: 10px;
+  padding: 0;
+  min-height: 20px;
+}
+.selection {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-height: 57px;
+  overflow: auto;
+  margin-bottom: 6px;
+}
+.selection button {
+  font-size: 10px;
+  padding: 3px 6px;
+  min-height: 24px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.primary {
+  background: var(--text);
+  color: var(--surface);
+  border-color: var(--text);
+  font-weight: 600;
+}
+.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 85%, var(--surface));
+}
+#status {
+  font-size: 10px;
+  margin: 7px 0 3px;
+  max-height: 50px;
+  overflow: auto;
+}
+#status[data-error='true'] {
+  color: light-dark(#b42318, #ff8f85);
+}
+.facts {
+  font-size: 10px;
+}
+.facts summary {
+  font-size: 10px;
+}
+.facts p {
+  margin: 5px 0;
+}
+@media (max-width: 440px) {
+  #explorer {
+    padding: 14px 12px 10px;
+  }
+  .charts {
+    gap: 12px;
+  }
+  .decade {
+    min-width: 36px;
+  }
+  .results-head label {
+    gap: 3px;
+  }
+  header button {
+    font-size: 10px;
+  }
+}
+
+/* Keep the request visible when the host caps the iframe. The browse region
+   can scroll even when expanded facts or narrow wrapping use the spare space. */
+#explorer {
+  display: flex;
+  flex-direction: column;
+  max-height: 100dvh;
+}
+#explorer > * {
+  flex-shrink: 0;
+}
+#browse {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 1;
+  min-height: 0;
+  overflow: auto;
+}
+#browse > * {
+  flex-shrink: 0;
+}
+#browse > .tracks {
+  flex-shrink: 1;
+  min-height: 70px;
+}
+.facts[open] {
+  max-height: 100px;
+  overflow: auto;
+}
+:host([data-measuring]) #explorer {
+  max-height: none;
+}
+
+@media (max-width: 600px) {
+  .decade {
+    min-width: 26px;
+    padding-inline: 1px;
+  }
+  .decades {
+    gap: 3px;
+  }
+}

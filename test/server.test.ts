@@ -5,8 +5,9 @@
 import { describe, it, expect } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createServer } from '../src/server.js';
-import { SelectaCache } from '../src/cache/index.js';
+// Use the production module graph so bundled resource URLs resolve from dist.
+import { createServer } from '../dist/server.js';
+import { SelectaCache } from '../dist/cache/index.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 import { makeBridge } from './helpers.js';
 import packageInfo from '../package.json' with { type: 'json' };
@@ -73,6 +74,7 @@ describe('MCP server over in-memory transport', () => {
       'set_loved',
       'set_note',
       'set_rating',
+      'show_library_explorer',
       'show_playlist_draft',
     ]);
     // Tool descriptions are first-class — they must survive the wire.
@@ -114,6 +116,35 @@ describe('MCP server over in-memory transport', () => {
     expect(body.track_fields).toContain('genre');
     expect(body.track_fields).toContain('signal.date_added');
     expect(body.tracks[0].track[0]).toBe('T-TEARDROP');
+  });
+
+  it('serves a bundled explorer resource and useful JSON without an Apps-capable client', async () => {
+    const client = await connectedClient();
+    const { tools } = await client.listTools();
+    const explorer = tools.find((tool) => tool.name === 'show_library_explorer')!;
+
+    expect(explorer.annotations?.readOnlyHint).toBe(true);
+    expect(explorer._meta).toMatchObject({
+      ui: { resourceUri: 'ui://selecta/library-explorer.html' },
+    });
+    const result = await client.callTool({
+      name: explorer.name,
+      arguments: { filters: { loved: true }, limit: 1 },
+    });
+    const value = JSON.parse(textOf(result));
+
+    expect(value.tracks).toHaveLength(1);
+    expect(value.total_matches).toBe(2);
+    expect(value.next_offset).toBe(1);
+    expect(result.structuredContent).toEqual(value);
+    const resource = await client.readResource({ uri: 'ui://selecta/library-explorer.html' });
+
+    expect(resource.contents[0].mimeType).toBe('text/html;profile=mcp-app');
+    expect(resource.contents[0].text).toContain('Your library');
+    expect(resource.contents[0].text).not.toContain('/*__APP__*/');
+    expect(resource.contents[0].text).not.toContain('/*__EXPLORER__*/');
+    expect(resource.contents[0].text).not.toMatch(/(?:src|href)="https?:/);
+    await client.close();
   });
 
   it('marks structured error envelopes with isError', async () => {

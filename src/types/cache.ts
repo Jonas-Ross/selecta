@@ -212,6 +212,7 @@ export type SearchFilters = {
   // quality score. search-only, like `sort`.
   dedupe?: boolean;
   limit?: number; // default 50, max 500
+  offset?: number; // explorer paging; use a deterministic sort
   // How to order results. Omitted → relevance (with query) else most-played.
   // A neutral lens, not a ranking opinion: lets the model escape the
   // most-played pool when building a varied playlist. search-only (overview
