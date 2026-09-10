@@ -8,28 +8,8 @@ import { z } from 'zod';
 import { defaultDbPath } from '../cache/db.js';
 import { BridgeError } from '../types/errors.js';
 
-export const Appearance = z.enum(['host', 'copper', 'cobalt', 'ember', 'moss', 'oxblood', 'oled']);
-
-export const Entry = z.strictObject({
-  entry_id: z.string().uuid(),
-  track_id: z.string().min(1),
-});
-export const Draft = z.strictObject({
-  draft_id: z.string().uuid(),
-  revision: z.number().int().positive(),
-  name: z.string().trim().min(1).max(300),
-  entries: z.array(Entry).min(1).max(500),
-  selected_entry_ids: z.array(z.string().uuid()).max(500),
-  feedback: z.string().max(2000),
-  save: z
-    .strictObject({
-      revision: z.number().int().positive(),
-      status: z.enum(['pending', 'finished']),
-      result: z.record(z.string(), z.unknown()).optional(),
-    })
-    .optional(),
-});
-export type Draft = z.infer<typeof Draft>;
+import { Appearance, Entry, Draft } from './contracts.js';
+export { Appearance, Entry, Draft } from './contracts.js';
 
 /** Drafts sit next to whichever library cache the process was pointed at. */
 export function draftDbPath(libraryDbPath: string = defaultDbPath()): string {
