@@ -5,6 +5,7 @@ import { LibraryFilters, toSearchFilters, validateFilterRanges } from './library
 import { parseInput, toErrorEnvelope } from './errors.js';
 import { toApiTrack } from '../domain/track_projections.js';
 import type { ToolDeps } from './deps.js';
+import { roundCacheAge } from './freshness.js';
 import { shapeOverview } from '../domain/library_overview.js';
 
 export const explorerInputShape = {
@@ -51,7 +52,7 @@ export async function handleLibraryExplorer(raw: unknown, deps: ToolDeps) {
     );
     const overview = shapeOverview(stats, {
       filtered: Object.keys(filters).length > 0,
-      cacheAgeHours: cacheAgeHours === null ? null : Math.round(cacheAgeHours * 100) / 100,
+      cacheAgeHours: roundCacheAge(cacheAgeHours),
       recentSince,
     });
 

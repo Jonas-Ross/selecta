@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { roundCacheAge } from '../src/tools/freshness.js';
 import { capDistribution } from '../src/domain/distributions.js';
 import { summarizeIds } from '../src/domain/id_list.js';
 import { RECENT_WINDOW_DAYS, recentSinceIso } from '../src/domain/recent_activity.js';
@@ -154,4 +155,13 @@ describe('shared recent window', () => {
       deps.cacheInstance.close();
     }
   });
+});
+
+it.each([
+  [null, null],
+  [0, 0],
+  [1.234, 1.23],
+  [1.236, 1.24],
+] as const)('rounds captured cache age %s without reading another snapshot', (age, expected) => {
+  expect(roundCacheAge(age)).toBe(expected);
 });
