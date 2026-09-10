@@ -6,16 +6,10 @@
 import { z } from 'zod';
 import type { NoteSubject } from '../types/cache.js';
 import type { SelectaError } from '../types/errors.js';
-import {
-  NOTE_MAX_LENGTH,
-  apiNoteFromRow,
-  missingTrackIdsError,
-  parseInput,
-  resolvePlaylist,
-  toErrorEnvelope,
-  type ApiNote,
-  type ToolDeps,
-} from './common.js';
+import { NOTE_MAX_LENGTH, apiNoteFromRow, type ApiNote } from '../domain/track_projections.js';
+import { missingTrackIdsError, resolvePlaylist } from '../operations/resources.js';
+import { parseInput, toErrorEnvelope } from './errors.js';
+import type { ToolDeps } from './deps.js';
 
 export const setNoteInputShape = {
   subject: z.enum(['track', 'playlist']).describe('What the ID names.'),

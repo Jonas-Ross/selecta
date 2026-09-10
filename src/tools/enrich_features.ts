@@ -6,7 +6,8 @@
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
 import { enrichPendingTracks, type TargetedEnrichmentOutcome } from '../enrich/index.js';
-import { parseInput, toErrorEnvelope, validationError, type ToolDeps } from './common.js';
+import { parseInput, toErrorEnvelope, validationError } from './errors.js';
+import type { ToolDeps } from './deps.js';
 
 const DEFAULT_LIMIT = 25;
 const MAX_BATCH_SIZE = 50;

@@ -135,6 +135,23 @@ it('validates host payloads and uses plain JSON when structured content is absen
   ).toThrow('Reconnect');
 });
 
+it('keeps the recent-added cutoff fixed at connection time using the shared rolling window', async () => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-10T12:34:56.789Z'));
+
+  try {
+    const { el, app } = await setup();
+
+    clock.mockReturnValue(Date.parse('2026-09-11T12:34:56.789Z'));
+    await el('recent').onclick();
+    expect(app.callServerTool).toHaveBeenLastCalledWith({
+      name: 'show_library_explorer',
+      arguments: expect.objectContaining({ filters: { added_after: '2026-08-11T12:34:56.789Z' } }),
+    });
+  } finally {
+    clock.mockRestore();
+  }
+});
+
 it('maps decade toggles to the shared inclusive year filters', () => {
   expect(decadeFilters({ loved: true }, '1990s')).toEqual({
     loved: true,

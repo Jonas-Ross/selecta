@@ -7,8 +7,8 @@ import { registerDraftApp } from './draft_app.js';
 import { registerExplorerApp } from './explorer_app.js';
 import { APP_VERSION } from './version.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ToolDeps } from './tools/common.js';
-import { isSelectaError } from './tools/common.js';
+import type { ToolDeps } from './tools/deps.js';
+import { isSelectaError } from './tools/errors.js';
 import { handleSearch, searchInputShape, SEARCH_DESCRIPTION } from './tools/search.js';
 import {
   handleGetTrackContext,

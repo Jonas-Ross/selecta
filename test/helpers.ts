@@ -4,7 +4,7 @@
 
 import { expect, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
-import type { ToolDeps } from '../src/tools/common.js';
+import type { ToolDeps } from '../src/tools/deps.js';
 import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
 import type { AudioFeaturesRow } from '../src/types/cache.js';
 import type { SelectaError } from '../src/types/errors.js';

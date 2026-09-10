@@ -7,17 +7,10 @@ import { PLAYLIST_WRITE_TRACK_LIMIT } from '../types/bridge.js';
 import type { SelectaError } from '../types/errors.js';
 import type { SelectaCache } from '../cache/index.js';
 import type { PlaylistRow } from '../types/cache.js';
-import {
-  NOTE_MAX_LENGTH,
-  apiNoteFromRow,
-  missingTrackIdsError,
-  parseInput,
-  resolvePlaylist,
-  toErrorEnvelope,
-  validationError,
-  type ApiNote,
-  type ToolDeps,
-} from './common.js';
+import { NOTE_MAX_LENGTH, apiNoteFromRow, type ApiNote } from '../domain/track_projections.js';
+import { missingTrackIdsError, resolvePlaylist } from '../operations/resources.js';
+import { parseInput, toErrorEnvelope, validationError } from './errors.js';
+import type { ToolDeps } from './deps.js';
 import { PREVIEW_PLAYLIST_NAME } from './preview_playlist.js';
 
 export const createPlaylistInputShape = {

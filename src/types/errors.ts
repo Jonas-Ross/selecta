@@ -4,6 +4,8 @@
 // bridge/ — because every other layer consumes these too and must not depend
 // on the bridge package.
 
+import { summarizeIds } from '../domain/id_list.js';
+
 export type ErrorCode =
   | 'draft_not_found'
   | 'draft_revision_conflict'
@@ -33,13 +35,11 @@ export function trackNotFoundError(
   missingIds: string[],
   context: { label?: string; consequence?: string } = {},
 ): SelectaError {
-  const shown = missingIds.slice(0, 5).join(', ');
-  const more = missingIds.length > 5 ? ` (+${missingIds.length - 5} more)` : '';
   const consequence = context.consequence != null ? ` ${context.consequence}` : '';
 
   return {
     error: 'track_not_found',
-    hint: `${context.label ?? 'Not in the cache'}: ${shown}${more}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library.${consequence}`,
+    hint: `${context.label ?? 'Not in the cache'}: ${summarizeIds(missingIds)}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library.${consequence}`,
   };
 }
 

@@ -7,13 +7,9 @@ import { withOperation } from '../operations/lock.js';
 
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
-import {
-  parseInput,
-  resolveEditablePlaylist,
-  toErrorEnvelope,
-  validationError,
-  type ToolDeps,
-} from './common.js';
+import { parseInput, toErrorEnvelope, validationError } from './errors.js';
+import { resolveEditablePlaylist } from '../operations/resources.js';
+import type { ToolDeps } from './deps.js';
 
 export const reorderTracksInputShape = {
   playlist_id: z

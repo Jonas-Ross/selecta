@@ -3,21 +3,20 @@
 // user's own playlists. With seed_ids, one aggregated co-occurrence view
 // across the whole seed set instead of N single-seed calls.
 
+import { summarizeIds } from '../domain/id_list.js';
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
 import type { CoOccurrenceFilters, PlaylistRef, SourcePlaylistAudit } from '../types/cache.js';
 import {
   COMPACT_TRACK_FIELDS,
-  missingTrackIdsError,
-  parseInput,
   projectApiTrack,
-  toErrorEnvelope,
-  roundedCacheAge,
-  validationError,
   type ApiTrack,
   type CompactApiTrack,
-  type ToolDeps,
-} from './common.js';
+} from '../domain/track_projections.js';
+import { missingTrackIdsError } from '../operations/resources.js';
+import { parseInput, toErrorEnvelope, validationError } from './errors.js';
+import { roundedCacheAge } from './freshness.js';
+import type { ToolDeps } from './deps.js';
 
 const MAX_SEEDS = 20;
 const MAX_EXCLUDED_PLAYLISTS = 500;
@@ -129,12 +128,6 @@ type ContextFiltersInput = {
   exclude_playlist_ids?: string[];
   max_playlist_tracks?: number;
 };
-
-function summarizeIds(ids: string[]): string {
-  const more = ids.length > 5 ? ` (+${ids.length - 5} more)` : '';
-
-  return `${ids.slice(0, 5).join(', ')}${more}`;
-}
 
 function resolveCoOccurrenceFilters(
   input: ContextFiltersInput,

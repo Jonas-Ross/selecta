@@ -1,3 +1,4 @@
+import { recentSinceIso } from '../src/domain/recent_activity.ts';
 import {
   unpackRefresh,
   unpackExplorer,
@@ -16,7 +17,7 @@ export async function connectExplorer(app, { host, el, observeSize, applyHostSty
   let receivedResult = false;
   let interacted = false;
   let contextDelivery = Promise.resolve();
-  const recentCutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const recentCutoff = recentSinceIso();
   const status = (message, error = false) => {
     el('status').textContent = message;
     el('status').dataset.error = String(error);

@@ -4,14 +4,10 @@ import { withOperation } from '../operations/lock.js';
 import { z } from 'zod';
 import { PLAYLIST_WRITE_TRACK_LIMIT } from '../types/bridge.js';
 import type { SelectaError } from '../types/errors.js';
-import {
-  apiNoteFromRow,
-  missingTrackIdsError,
-  parseInput,
-  toErrorEnvelope,
-  type ApiNote,
-  type ToolDeps,
-} from './common.js';
+import { apiNoteFromRow, type ApiNote } from '../domain/track_projections.js';
+import { missingTrackIdsError } from '../operations/resources.js';
+import { parseInput, toErrorEnvelope } from './errors.js';
+import type { ToolDeps } from './deps.js';
 
 import { PREVIEW_PLAYLIST_NAME } from '../operations/playlist.js';
 export { PREVIEW_PLAYLIST_NAME };
