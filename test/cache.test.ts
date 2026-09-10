@@ -370,8 +370,8 @@ describe('overviewStats', () => {
   });
 });
 
-// iCloud-echo reconciliation (docs/music-app.md, iCloud sync): creation
-// receipts + planSyncReconciliation + the apply helpers.
+// Sync reconciliation (docs/music-app.md, iCloud sync): creation receipts,
+// ambiguity reporting, and safe rekeys.
 // Sync-reconciliation fixtures, shared by the reconciliation and notes suites:
 // a playlist Selecta created, and snapshots as the next refresh would see it.
 const CREATED_ID = 'P-CREATED';
@@ -494,23 +494,6 @@ describe('sync reconciliation', () => {
     ]);
   });
 
-  it('applyDuplicateRemoval drops the deleted copy and remaps the receipt', () => {
-    const cache = cacheAfterCreate();
-
-    cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-ECHO' }), {
-      durationMs: 1,
-    });
-    cache.applyDuplicateRemoval(CREATED_ID, CREATED_ID, 'P-ECHO');
-
-    const rows = cache.listPlaylists({ nameQuery: NAME });
-
-    expect(rows.map((p) => p.persistentId)).toEqual(['P-ECHO']);
-    // The creation-time ID stays resolvable: searches against it hit the survivor.
-    const { rows: tracks } = cache.searchTracks({ inPlaylist: CREATED_ID });
-
-    expect(tracks.map((t) => t.persistentId).sort()).toEqual([...TRACKS].sort());
-  });
-
   it('applyRekey keeps the creation-time ID resolvable after an iCloud rekey', () => {
     const cache = cacheAfterCreate();
 
@@ -520,6 +503,27 @@ describe('sync reconciliation', () => {
     const { rows } = cache.searchTracks({ inPlaylist: CREATED_ID });
 
     expect(rows.map((t) => t.persistentId).sort()).toEqual([...TRACKS].sort());
+  });
+
+  it('keeps historical receipt aliases readable without rewriting them', () => {
+    const cache = refreshed();
+
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-SURVIVOR' }), { durationMs: 1 });
+    // A receipt persisted by the retired duplicate-removal policy.
+    cache.db
+      .prepare(`INSERT INTO playlist_creations
+      (created_persistent_id, current_persistent_id, name, track_ids_json, created_at)
+      VALUES (?, ?, ?, ?, ?)`)
+      .run(CREATED_ID, 'P-SURVIVOR', NAME, JSON.stringify(TRACKS), '2025-01-01T00:00:00.000Z');
+    const receipts = cache.db.prepare('SELECT * FROM playlist_creations').all();
+    const note = cache.setNote('playlist', 'P-SURVIVOR', 'historical survivor note');
+
+    expect(cache.resolvePlaylistId(CREATED_ID)).toBe('P-SURVIVOR');
+    expect(cache.searchTracks({ inPlaylist: CREATED_ID }).rows).toHaveLength(TRACKS.length);
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-SURVIVOR' }), { durationMs: 1 });
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+    expect(cache.db.prepare('SELECT * FROM playlist_creations').all()).toEqual(receipts);
+    expect(cache.getNote('playlist', 'P-SURVIVOR')).toEqual(note);
   });
 
   it('getOverview scopes by a creation-time ID after a rekey (resolve path)', () => {
@@ -931,16 +935,28 @@ describe('notes', () => {
     expect(cache.getPlaylist('P-LIVE')!.noteBody).toBe('draft 3: softer close');
   });
 
-  it('moves to the surviving twin when an echo duplicate is removed', () => {
+  it('explicit deletion retires rekeyed receipts without moving notes to an identical copy', () => {
     const cache = cacheAfterCreate();
 
-    cache.setNote('playlist', 'P-CREATED', 'arc approved');
-    cache.refreshFromSnapshot(snapshotWith({ id: 'P-CREATED' }, { id: 'P-ECHO' }), {
+    cache.setNote('playlist', CREATED_ID, 'original note');
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
+    cache.applyRekey(CREATED_ID, CREATED_ID, 'P-REKEYED');
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }, { id: 'P-COPY' }), {
       durationMs: 1,
     });
-    cache.applyDuplicateRemoval('P-CREATED', 'P-CREATED', 'P-ECHO');
-    expect(cache.getNote('playlist', 'P-CREATED')).toBeNull();
-    expect(cache.getNote('playlist', 'P-ECHO')!.body).toBe('arc approved');
+    const copyNote = cache.setNote('playlist', 'P-COPY', 'intentional copy');
+
+    cache.deletePlaylistRow('P-REKEYED');
+
+    expect(cache.getNote('playlist', 'P-REKEYED')).toBeNull();
+    expect(cache.getNote('playlist', 'P-COPY')).toEqual(copyNote);
+    expect(cache.getPlaylistTrackIds('P-COPY')).toEqual(TRACKS);
+    expect(cache.getCreationName(CREATED_ID)).toBeNull();
+    expect(cache.resolvePlaylistId(CREATED_ID)).toBe(CREATED_ID);
+    // A later read must not attach the deleted playlist's alias to the copy.
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-COPY' }), { durationMs: 1 });
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+    expect(cache.getNote('playlist', 'P-COPY')).toEqual(copyNote);
   });
 
   it('goes with the playlist on deletePlaylistRow', () => {

@@ -106,8 +106,8 @@ export type PlaylistRef = { id: string; name: string };
 
 // A row in playlist_creations: the receipt for a playlist Selecta created.
 // createdPersistentId is the ID Music.app returned at creation and never
-// changes; currentPersistentId tracks the canonical ID after iCloud rekeys
-// or echo-duplicate reconciliation.
+// changes; currentPersistentId tracks the canonical ID after iCloud rekeys.
+// Aliases persisted by older reconciliation policies remain valid.
 export type PlaylistCreationRow = {
   createdPersistentId: string;
   currentPersistentId: string;
@@ -117,9 +117,9 @@ export type PlaylistCreationRow = {
 };
 
 // Reconciliation plan entries computed after a refresh (docs/music-app.md,
-// iCloud sync). 'rekey' = iCloud reassigned the ID, single copy
-// survives; 'duplicate' = an echo twin appeared — keep the iCloud-keyed copy,
-// delete the rest.
+// iCloud sync). 'rekey' = the old ID is absent and a single eligible copy
+// remains; 'ambiguous' = same-name copies need explicit user choice.
+// A plan never authorizes deletion based on name or content similarity.
 export type ReconcileAction =
   | { kind: 'rekey'; createdId: string; name: string; fromId: string; toId: string }
   | { kind: 'ambiguous'; name: string; playlistIds: string[] };

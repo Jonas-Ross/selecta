@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -62,6 +62,27 @@ describe('readStatus', () => {
     });
     expect(report.audio_features!.coverage.bpm.percent).toBeGreaterThan(0);
     expect(statSync(dbPath).mtimeMs).toBe(before.mtimeMs);
+  });
+
+  it('reads historical nonzero removal and failure counts without rewriting stored data', () => {
+    const { dbPath, refreshedAt } = seededDatabase();
+    const cache = SelectaCache.open(dbPath);
+    const historical =
+      'legacy refresh; sync_reconciliation={"rekeys":1,"duplicates_removed":3,"failures":2}; retained note';
+
+    cache.db
+      .prepare('UPDATE refresh_log SET notes = ? WHERE refreshed_at = ?')
+      .run(historical, refreshedAt);
+    cache.close();
+    const before = readFileSync(dbPath);
+    const report = readStatus(dbPath);
+
+    expect(report.cache!.last_reconciliation).toEqual({
+      refreshed_at: refreshedAt,
+      summary: { rekeys: 1, duplicates_removed: 3, failures: 2 },
+    });
+    expect(report.cache!.last_refresh!.notes).toBe(historical);
+    expect(readFileSync(dbPath)).toEqual(before);
   });
 
   it('reports a missing cache without creating a file', () => {

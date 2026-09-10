@@ -31,13 +31,10 @@ import { recentSinceIso } from '../domain/recent_activity.js';
 export { defaultDbPath } from './db.js';
 
 // How long after creation a receipt can drive iCloud-sync reconciliation
-// (docs/music-app.md, iCloud sync). Echo twins arrive ~10s–3min after
-// creation; the window bounds receipt-based rekey inference, so a
-// later intentional copy of the same playlist is never touched. Generous vs.
-// the observed echo latency to cover slow refresh habits, small vs.
-// "intentional duplicate" timescales. Lives here because the refresh prune
-// uses the same window: a playlist note is shielded from pruning only while
-// its receipt could still move it to a rekeyed ID.
+// (docs/music-app.md, iCloud sync). The window bounds receipt-based rekey
+// inference; multiple same-name copies remain ambiguous regardless of age.
+// Refresh pruning uses the same window: a missing playlist's note is shielded
+// only while its receipt could still move it to a rekeyed ID.
 export const RECONCILE_WINDOW_MINUTES = 60;
 
 export type RefreshResult = {
@@ -167,9 +164,9 @@ export class SelectaCache {
 
   /**
    * Canonicalize an externally supplied playlist ID. A creation-time ID may
-   * have been rekeyed by iCloud sync or reconciled away as an echo duplicate;
-   * if the literal ID is gone, follow the creation receipt to the canonical
-   * ID. Any consumer of model-supplied playlist IDs should route through this.
+   * have been rekeyed by iCloud sync. If the literal ID is gone, follow the
+   * creation receipt to the canonical ID, including aliases stored by older
+   * reconciliation policies. Consumers of model-supplied IDs route through this.
    */
   resolvePlaylistId(persistentId: string): string {
     if (this.queries.playlistExists(persistentId)) return persistentId;
@@ -376,9 +373,7 @@ export class SelectaCache {
    * drop its row, membership, and note, and retire any creation receipt
    * pointing at it — otherwise the next refresh's sync reconciliation could
    * rekey the dead receipt onto an iCloud-resurrected copy and undo the
-   * deliberate delete. (Echo dedupe keeps its receipts — it remaps them via
-   * applyDuplicateRemoval instead.) Track rows are untouched — only the
-   * playlist goes.
+   * deliberate delete. Track rows are untouched — only the playlist goes.
    */
   deletePlaylistRow(persistentId: string): void {
     const run = this.db.transaction(() => {
@@ -391,7 +386,7 @@ export class SelectaCache {
 
   /**
    * Record a creation receipt for a playlist Selecta just created. Drives
-   * refresh-time iCloud-echo reconciliation and ID-rekey aliasing.
+   * refresh-time ambiguity reporting and ID-rekey aliasing.
    */
   recordPlaylistCreation(createdId: string, name: string, trackIds: string[]): void {
     this.queries.recordPlaylistCreation({
@@ -506,22 +501,6 @@ export class SelectaCache {
     const run = this.db.transaction(() => {
       this.queries.movePlaylistNote(fromId, toId);
       this.queries.setCreationCurrentId(createdId, toId);
-    });
-
-    run();
-  }
-
-  /**
-   * Patch the cache after the bridge deleted an echo duplicate: move any note
-   * from the deleted copy to the survivor, drop the deleted playlist's rows,
-   * and point the creation receipt at the survivor.
-   */
-  applyDuplicateRemoval(createdId: string, deletedId: string, keptId: string): void {
-    const run = this.db.transaction(() => {
-      // Move before delete: deletePlaylistRow takes the note with the row.
-      this.queries.movePlaylistNote(deletedId, keptId);
-      this.queries.deletePlaylistRow(deletedId);
-      this.queries.setCreationCurrentId(createdId, keptId);
     });
 
     run();

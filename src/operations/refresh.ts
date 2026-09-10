@@ -8,6 +8,8 @@ import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
 export type SyncReconciliation = {
   ambiguous: { name: string; playlist_ids: string[] }[];
   rekeys: { name: string; from_id: string; to_id: string }[];
+  // Legacy wire fields: refresh reports ambiguous copies and never deletes them.
+  // Keep these arrays empty for clients that already consume this shape.
   duplicates_removed: { name: string; deleted_id: string; kept_id: string }[];
   failures: { name: string; playlist_id: string; error: string }[];
 };
