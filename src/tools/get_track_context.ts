@@ -5,17 +5,17 @@
 
 import { summarizeIds } from '../types/errors.js';
 import { z } from 'zod';
-import type { SelectaError } from '../types/errors.js';
-import type { CoOccurrenceFilters, PlaylistRef, SourcePlaylistAudit } from '../types/cache.js';
+import { trackNotFoundError, type SelectaError } from '../types/errors.js';
+import type { SelectaCache } from '../cache/index.js';
+import type { PlaylistRef, SourcePlaylistAudit } from '../types/cache.js';
 import {
   COMPACT_TRACK_FIELDS,
   projectApiTrack,
   type ApiTrack,
   type CompactApiTrack,
 } from '../domain/track_projections.js';
-import { missingTrackIdsError } from '../operations/resources.js';
 import { parseInput, toErrorEnvelope, validationError } from './errors.js';
-import { readRoundedCacheAge } from './freshness.js';
+import { roundCacheAge } from './freshness.js';
 import type { ToolDeps } from './deps.js';
 
 const MAX_SEEDS = 20;
@@ -124,40 +124,7 @@ const PLAY_HISTORY_CAP = 12;
 
 export const GET_TRACK_CONTEXT_DESCRIPTION = `Curatorial context from the user's own (hand-made) playlists — the strongest "belongs together" signal available. Exactly one of track_id / seed_ids. Single seed (track_id): the seed with signal, its play_history (per-refresh play/skip deltas, newest first, up to ${PLAY_HISTORY_CAP} windows — recent-rotation evidence; empty just means no refresh bracketed any listening yet), up to ${SAME_ARTIST_CAP} same-artist tracks (by play count), the playlists containing it, and up to ${CO_OCCURRENCE_CAP} co-occurring tracks ranked by shared-playlist count. Multiple seeds (seed_ids, up to ${MAX_SEEDS}): one call instead of N — up to ${MULTI_CO_OCCURRENCE_CAP} candidates, each with total_shared_playlist_count (co-occurrence summed across the seed set) and seeds_matched (how many seeds it appears alongside); seeds themselves are excluded, and same_artist/appearing_in_playlists are single-seed only. Set compact true for broad single- or multi-seed discovery. Every compact track is a fixed value row aligned positionally with top-level track_fields; null means unavailable. Rows keep persistent_id, title, artist, album, year, genre, duration_seconds, the complete comparison signal (including date_added), and audio features; only location_kind is omitted. Candidate rows sit under track beside their context facts. To avoid repeating playlist names, compact output adds playlist_legend entries shaped {id, name} and replaces shared_playlist_names with zero-based playlist_refs into that legend. On co-occurring candidates, playlist_refs always means shared playlists. The legend preserves exact names and persistent playlist IDs for follow-up calls. Full output keeps track objects and shared_playlist_names. Compact mode never changes ordering or silently truncates results. exclude_playlist_ids and max_playlist_tracks are optional factual source-playlist filters chosen by you and applied before aggregation; there is no automatic utility detection, hidden threshold, weighting, or similarity score. source_playlists audits user playlists containing a seed before filters (considered) and removed by either filter (excluded); shared-playlist facts contain included sources only. Counts are library facts, not a recommendation — ranking is yours. All tracks carry enriched audio features (bpm, musical_key, danceability) where known — use them to judge tempo/key fit around the seeds — and any note you stored earlier via set_note, verbatim. Call after resolving seeds via search and playlist IDs via list_playlists. On track_not_found or an unknown excluded playlist ID the cache may be stale; consider refresh_library.`;
 
-type ContextFiltersInput = {
-  exclude_playlist_ids?: string[];
-  max_playlist_tracks?: number;
-};
-
-function resolveCoOccurrenceFilters(
-  input: ContextFiltersInput,
-  deps: ToolDeps,
-): CoOccurrenceFilters | SelectaError {
-  const cache = deps.cache();
-  const requestedIds = [...new Set(input.exclude_playlist_ids ?? [])];
-  const resolvedIds = requestedIds.map((id) => cache.resolvePlaylistId(id));
-  const playlists = resolvedIds.map((id) => cache.getPlaylist(id));
-  const missingIds = requestedIds.filter((_, i) => playlists[i] === null);
-
-  if (missingIds.length > 0) {
-    return validationError(
-      `exclude_playlist_ids not in the cache: ${summarizeIds(missingIds)}. Use IDs from list_playlists; if the library changed, run refresh_library.`,
-    );
-  }
-
-  const nonUserIds = requestedIds.filter((_, i) => playlists[i]!.kind !== 'user');
-
-  if (nonUserIds.length > 0) {
-    return validationError(
-      `exclude_playlist_ids must name user playlists: ${summarizeIds(nonUserIds)}. Smart, subscription, folder, and special playlists never contribute to co-occurrence.`,
-    );
-  }
-
-  return {
-    excludePlaylistIds: [...new Set(resolvedIds)],
-    maxPlaylistTracks: input.max_playlist_tracks,
-  };
-}
+type ResolvedContext = Extract<ReturnType<SelectaCache['contextSnapshot']>, { kind: 'resolved' }>;
 
 function playlistLegend(tracks: { sharedPlaylists: PlaylistRef[] }[]): {
   entries: PlaylistRef[];
@@ -181,21 +148,13 @@ function playlistLegend(tracks: { sharedPlaylists: PlaylistRef[] }[]): {
 }
 
 function multiSeedContext(
-  seed_ids: string[],
-  filters: CoOccurrenceFilters,
+  context: ResolvedContext,
   compact: boolean,
-  deps: ToolDeps,
-): MultiSeedContextOutput | CompactMultiSeedContextOutput | SelectaError {
-  const cache = deps.cache();
-  const seedIds = [...new Set(seed_ids)];
-  const seedRows = seedIds.map((id) => cache.getTrack(id));
-
-  if (seedRows.includes(null)) return missingTrackIdsError(cache, seedIds)!;
-
-  const coOccurrence = cache.getCoOccurrence(seedIds, filters, MULTI_CO_OCCURRENCE_CAP);
+): MultiSeedContextOutput | CompactMultiSeedContextOutput {
+  const { seeds, coOccurrence, cacheAgeHours } = context;
   const common = {
     source_playlists: coOccurrence.sourcePlaylists,
-    cache_age_hours: readRoundedCacheAge(deps),
+    cache_age_hours: roundCacheAge(cacheAgeHours),
   };
 
   if (compact) {
@@ -204,7 +163,7 @@ function multiSeedContext(
     return {
       ...common,
       track_fields: COMPACT_TRACK_FIELDS,
-      seeds: seedRows.map((row) => projectApiTrack(row!, true)),
+      seeds: seeds.map((row) => projectApiTrack(row, true)),
       co_occurring_tracks: coOccurrence.tracks.map((track, index) => ({
         track: projectApiTrack(track, true),
         total_shared_playlist_count: track.totalSharedPlaylistCount,
@@ -217,7 +176,7 @@ function multiSeedContext(
 
   return {
     ...common,
-    seeds: seedRows.map((row) => projectApiTrack(row!, false)),
+    seeds: seeds.map((row) => projectApiTrack(row, false)),
     co_occurring_tracks: coOccurrence.tracks.map((track) => ({
       ...projectApiTrack(track, false),
       total_shared_playlist_count: track.totalSharedPlaylistCount,
@@ -248,40 +207,53 @@ export async function handleGetTrackContext(
   }
 
   try {
-    const filters = resolveCoOccurrenceFilters(parsed.data, deps);
-
-    if ('error' in filters) return filters;
-
     const compact = parsed.data.compact === true;
+    const context = deps.cache().contextSnapshot({
+      seedIds: seed_ids ?? [track_id!],
+      singleSeed: seed_ids == null,
+      filters: {
+        excludePlaylistIds: parsed.data.exclude_playlist_ids,
+        maxPlaylistTracks: parsed.data.max_playlist_tracks,
+      },
+      sameArtistLimit: SAME_ARTIST_CAP,
+      coOccurrenceLimit: seed_ids == null ? CO_OCCURRENCE_CAP : MULTI_CO_OCCURRENCE_CAP,
+      playHistoryLimit: PLAY_HISTORY_CAP,
+    });
 
-    if (seed_ids != null) return multiSeedContext(seed_ids, filters, compact, deps);
+    if (context.kind === 'invalid_playlists') {
+      if (context.missingIds.length > 0) {
+        return validationError(
+          `exclude_playlist_ids not in the cache: ${summarizeIds(context.missingIds)}. Use IDs from list_playlists; if the library changed, run refresh_library.`,
+        );
+      }
 
-    const cache = deps.cache();
-    const seed = cache.getTrack(track_id!);
+      return validationError(
+        `exclude_playlist_ids must name user playlists: ${summarizeIds(context.nonUserIds)}. Smart, subscription, folder, and special playlists never contribute to co-occurrence.`,
+      );
+    }
 
-    if (!seed) {
+    if (context.kind === 'missing_tracks') {
+      if (seed_ids != null) return trackNotFoundError(context.missingIds);
+
       return {
         error: 'track_not_found',
         hint: `No track with persistent ID ${track_id} in the cache. Cache may be stale — try refresh_library.`,
       };
     }
 
-    const sameArtist =
-      seed.artist != null
-        ? cache
-            .getTracksByArtist(seed.artist, SAME_ARTIST_CAP + 1)
-            .filter((t) => t.persistentId !== seed.persistentId)
-            .slice(0, SAME_ARTIST_CAP)
-        : [];
+    if (seed_ids != null) return multiSeedContext(context, compact);
 
-    const coOccurrence = cache.getCoOccurrence([seed.persistentId], filters, CO_OCCURRENCE_CAP);
+    const { sameArtist, coOccurrence, cacheAgeHours } = context;
+    const seed = context.seeds[0]!;
     const common = {
-      play_history: cache
-        .getTrackPlayHistory(seed.persistentId, PLAY_HISTORY_CAP)
-        .map((w) => ({ at: w.refreshedAt, plays: w.playCountDelta, skips: w.skipCountDelta })),
-      appearing_in_playlists: cache.getPlaylistsContainingTrack(seed.persistentId),
+      play_history: context.playHistory.map((w) => ({
+        at: w.refreshedAt,
+        plays: w.playCountDelta,
+        skips: w.skipCountDelta,
+      })),
+      appearing_in_playlists: context.appearingInPlaylists,
       source_playlists: coOccurrence.sourcePlaylists,
-      cache_age_hours: readRoundedCacheAge(deps),
+      cache_age_hours: roundCacheAge(cacheAgeHours),
     };
 
     if (compact) {

@@ -1,5 +1,6 @@
 // Pure ordered-track facts once the cache boundary has resolved every ID.
 import { createHash } from 'node:crypto';
+import { occurrencePositions } from './occurrence_positions.js';
 import { songIdentityKey } from '../cache/song_identity.js';
 import type { TrackRow } from '../types/cache.js';
 import { toApiTrack, toInspectedTrack, type InspectedTrack } from './track_projections.js';
@@ -48,19 +49,6 @@ export type TracklistInspection = {
 
 export function orderedTrackIdsFingerprint(trackIds: string[]): string {
   return `sha256:${createHash('sha256').update(JSON.stringify(trackIds), 'utf8').digest('hex')}`;
-}
-
-function positionsById(rows: TrackRow[]): Map<string, number[]> {
-  const positions = new Map<string, number[]>();
-
-  rows.forEach((row, position) => {
-    const existing = positions.get(row.persistentId);
-
-    if (existing) existing.push(position);
-    else positions.set(row.persistentId, [position]);
-  });
-
-  return positions;
 }
 
 function duplicateOwnedCopies(
@@ -169,7 +157,7 @@ function featureFacts(rows: TrackRow[]): {
 /** Pure aggregation once the cache boundary has resolved every input ID. */
 export function buildTracklistInspection(rows: TrackRow[]): TracklistInspection {
   const trackIds = rows.map((row) => row.persistentId);
-  const positions = positionsById(rows);
+  const positions = occurrencePositions(trackIds);
   const runtimeMissing = rows.filter((row) => row.durationSeconds == null);
   const { artistCounts, unknownArtistCount } = artistOccurrences(rows);
   const { coverage, gaps } = featureFacts(rows);

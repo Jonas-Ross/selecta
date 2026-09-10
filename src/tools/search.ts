@@ -10,7 +10,7 @@ import {
 } from '../domain/track_projections.js';
 import { libraryFilterShape, toSearchFilters, validateFilterRanges } from './library_filters.js';
 import { parseInput, toErrorEnvelope, validationError } from './errors.js';
-import { readRoundedCacheAge } from './freshness.js';
+import { roundCacheAge } from './freshness.js';
 import type { ToolDeps } from './deps.js';
 
 // The faceted filters are shared with library_overview (library_filters.libraryFilterShape);
@@ -89,36 +89,21 @@ export async function handleSearch(
   }
 
   try {
-    const { rows, total } = deps.cache().searchTracks({
+    const { rows, total, playlistPositions, cacheAgeHours } = deps.cache().searchSnapshot({
       ...toSearchFilters(input),
       limit: input.limit,
       sort: input.sort,
       dedupe: input.dedupe,
     });
-    const positions = new Map<string, number[]>();
-
-    if (input.sort === 'playlist_order' && input.in_playlist != null) {
-      const cache = deps.cache();
-
-      cache
-        .getPlaylistTrackIds(cache.resolvePlaylistId(input.in_playlist))
-        .forEach((id, position) => {
-          const list = positions.get(id) ?? [];
-
-          list.push(position);
-          positions.set(id, list);
-        });
-    }
-
     const entryPositions = (id: string, alternates: string[] = []) =>
       input.sort === 'playlist_order'
         ? {
             playlist_positions: [id, ...alternates]
-              .flatMap((key) => positions.get(key) ?? [])
+              .flatMap((key) => playlistPositions.get(key) ?? [])
               .sort((a, b) => a - b),
           }
         : {};
-    const common = { total_matches: total, cache_age_hours: readRoundedCacheAge(deps) };
+    const common = { total_matches: total, cache_age_hours: roundCacheAge(cacheAgeHours) };
 
     if (input.compact === true) {
       return {

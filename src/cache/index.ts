@@ -28,6 +28,7 @@ import { openDatabase } from './db.js';
 import { planSyncReconciliation } from './reconciliation.js';
 import { createQueries, type Queries } from './queries.js';
 import { recentSinceIso } from '../domain/recent_activity.js';
+import { occurrencePositions } from '../domain/occurrence_positions.js';
 
 export { defaultDbPath } from './db.js';
 
@@ -183,6 +184,21 @@ export class SelectaCache {
     return this.queries.searchTracks(filters);
   }
 
+  /** Keep aliases, rows, totals, entry positions and freshness in one read snapshot. */
+  searchSnapshot(filters: SearchFilters) {
+    return this.db.transaction(() => {
+      const result = this.searchTracks(filters);
+      const playlistPositions =
+        filters.sort === 'playlist_order' && filters.inPlaylist != null
+          ? occurrencePositions(
+              this.getPlaylistTrackIds(this.resolvePlaylistId(filters.inPlaylist)),
+            )
+          : new Map<string, number[]>();
+
+      return { ...result, playlistPositions, cacheAgeHours: this.getCacheAgeHours() };
+    })();
+  }
+
   /**
    * Aggregate shape of the library, or of the slice the filters describe.
    * recentSince bounds the recentActivity sums; defaults to the shared
@@ -194,6 +210,14 @@ export class SelectaCache {
     }
 
     return this.queries.overviewStats(filters, recentSince);
+  }
+
+  /** All grouped scans and freshness describe the same version of the library. */
+  overviewSnapshot(filters: SearchFilters, recentSince = recentSinceIso()) {
+    return this.db.transaction(() => ({
+      stats: this.getOverview(filters, recentSince),
+      cacheAgeHours: this.getCacheAgeHours(),
+    }))();
   }
 
   /** One read snapshot keeps charts, page and freshness consistent with each
@@ -228,6 +252,32 @@ export class SelectaCache {
     return this.queries.getTrack(persistentId);
   }
 
+  /** Resolve each distinct ID once, then restore every ordered occurrence.
+   * Missing IDs are unique and retain first-seen order; rows contain only
+   * resolved occurrences. Callers can reject misses without reading again. */
+  resolveTracks(trackIds: readonly string[]) {
+    return this.db.transaction(() => {
+      const byId = new Map<string, TrackRow | null>();
+      const missingIds: string[] = [];
+
+      for (const id of new Set(trackIds)) {
+        const row = this.getTrack(id);
+
+        byId.set(id, row);
+
+        if (row === null) missingIds.push(id);
+      }
+
+      const rows = trackIds.flatMap((id) => {
+        const row = byId.get(id);
+
+        return row == null ? [] : [row];
+      });
+
+      return { rows, missingIds, cacheAgeHours: this.getCacheAgeHours() };
+    })();
+  }
+
   getTracksByArtist(artist: string, limit?: number): TrackRow[] {
     return this.queries.getTracksByArtist(artist, limit);
   }
@@ -243,6 +293,61 @@ export class SelectaCache {
     limit?: number,
   ): CoOccurrenceResult {
     return this.queries.getCoOccurrence(seedIds, filters, limit);
+  }
+
+  /** Snapshot resource validation together with the facts it authorizes.
+   * Return unresolved IDs as data so tools keep ownership of wire errors. */
+  contextSnapshot(opts: {
+    seedIds: string[];
+    singleSeed: boolean;
+    filters: CoOccurrenceFilters;
+    sameArtistLimit: number;
+    coOccurrenceLimit: number;
+    playHistoryLimit: number;
+  }) {
+    return this.db.transaction(() => {
+      const requestedIds = [...new Set(opts.filters.excludePlaylistIds ?? [])];
+      const resolvedIds = requestedIds.map((id) => this.resolvePlaylistId(id));
+      const playlists = resolvedIds.map((id) => this.getPlaylist(id));
+      const missingIds = requestedIds.filter((_, i) => playlists[i] === null);
+      const nonUserIds = requestedIds.filter(
+        (_, i) => playlists[i] != null && playlists[i].kind !== 'user',
+      );
+
+      if (missingIds.length > 0 || nonUserIds.length > 0) {
+        return { kind: 'invalid_playlists' as const, missingIds, nonUserIds };
+      }
+
+      const seedIds = [...new Set(opts.seedIds)];
+      const resolution = this.resolveTracks(seedIds);
+
+      if (resolution.missingIds.length > 0) {
+        return { kind: 'missing_tracks' as const, missingIds: resolution.missingIds };
+      }
+
+      const seed = opts.singleSeed ? resolution.rows[0] : undefined;
+      const sameArtist =
+        seed?.artist != null
+          ? this.getTracksByArtist(seed.artist, opts.sameArtistLimit + 1)
+              .filter((row) => row.persistentId !== seed.persistentId)
+              .slice(0, opts.sameArtistLimit)
+          : [];
+      const coOccurrence = this.getCoOccurrence(
+        seedIds,
+        { ...opts.filters, excludePlaylistIds: [...new Set(resolvedIds)] },
+        opts.coOccurrenceLimit,
+      );
+
+      return {
+        kind: 'resolved' as const,
+        seeds: resolution.rows,
+        sameArtist,
+        coOccurrence,
+        playHistory: seed ? this.getTrackPlayHistory(seed.persistentId, opts.playHistoryLimit) : [],
+        appearingInPlaylists: seed ? this.getPlaylistsContainingTrack(seed.persistentId) : [],
+        cacheAgeHours: resolution.cacheAgeHours,
+      };
+    })();
   }
 
   /** Persisted per-host backoff; setting it can only extend the deadline. */
