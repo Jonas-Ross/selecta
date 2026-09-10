@@ -11,7 +11,7 @@ export type TrackRow = {
   genre: string | null;
   year: number | null;
   durationSeconds: number | null;
-  // The effective tempo, resolved in SQL (EFFECTIVE_BPM in cache/queries.ts):
+  // The effective tempo, resolved in SQL (EFFECTIVE_BPM in cache/queries/shared.ts):
   // the enriched audio_features value when present, else the native Music.app
   // tag. The raw native tag stays in the tracks.bpm column.
   bpm: number | null;
@@ -125,7 +125,7 @@ export type ReconcileAction =
   | { kind: 'ambiguous'; name: string; playlistIds: string[] };
 
 // getCoOccurrence row, aggregated over the seed set (semantics in
-// cache/queries.ts). Counts are library facts, not a score.
+// cache/queries/discovery.ts). Counts are library facts, not a score.
 export type CoOccurringTrack = TrackRow & {
   totalSharedPlaylistCount: number; // Σ over seeds of distinct shared user playlists
   seedsMatched: number; // how many seeds it co-occurs with
@@ -208,7 +208,7 @@ export type SearchFilters = {
   excludeTracks?: string[]; // persistent IDs
   // Collapse rows that are the same song (same normalized title + artist) to
   // one canonical representative. Presentation, not ranking: the winner is a
-  // deterministic tiebreak (DEDUPE_TIEBREAK in cache/queries.ts), never a
+  // deterministic tiebreak (DEDUPE_TIEBREAK in cache/queries/discovery.ts), never a
   // quality score. search-only, like `sort`.
   dedupe?: boolean;
   limit?: number; // default 50, max 500
