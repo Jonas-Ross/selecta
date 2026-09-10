@@ -65,6 +65,7 @@ message rejection leaves feedback in the draft and allows another explicit
 Send feedback action. Local unsent typing survives result replay and recovery.
 
 `npm run typecheck:ui` checks the draft entry point, controller, pure state module
-and controller tests without emitting files; `npm run check` includes it. Existing
+and controller tests without emitting files; the normal build includes it, so
+`npm run check` and the hosted build/test jobs also enforce it. Existing
 rendering modules and their keyed DOM tests remain in place. These checks and the
 fixture gallery do not establish that an actual client has loaded the new bundle.

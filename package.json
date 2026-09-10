@@ -11,7 +11,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc && node scripts/build-ui.mjs",
+    "build": "tsc && npm run typecheck:ui && node scripts/build-ui.mjs",
     "test": "npm run build && vitest run --tags-filter='!integration'",
     "test:integration": "vitest run --tags-filter=integration",
     "smoke": "npm run build && node scripts/smoke.mjs",
@@ -19,7 +19,7 @@
     "lint": "oxlint",
     "format": "oxlint --fix && oxfmt",
     "format:check": "oxfmt --check",
-    "check": "npm test && npm run typecheck:ui && npm run lint && npm run format:check",
+    "check": "npm test && npm run lint && npm run format:check",
     "preview": "npm run build && node scripts/preview.mjs",
     "typecheck:ui": "tsc -p tsconfig.ui.json"
   },
