@@ -434,10 +434,16 @@ it('releases the claim after a failure that provably preceded any write', async 
   const original = await draft();
 
   vi.mocked(deps.bridge.createPlaylist).mockRejectedValueOnce(
-    new BridgeError('automation_permission_denied', 'denied'),
+    new BridgeError(
+      'track_not_found',
+      'validated missing-track guard',
+      undefined,
+      undefined,
+      'not_started',
+    ),
   );
   expect(await tools.save({ draft_id: original.draft_id, revision: 1 })).toMatchObject({
-    error: 'automation_permission_denied',
+    error: 'track_not_found',
     draft: { revision: 3 },
   });
   expect(store.get(original.draft_id).save).toBeUndefined();

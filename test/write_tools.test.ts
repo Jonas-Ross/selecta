@@ -362,7 +362,9 @@ describe('create_playlist', () => {
       ['ambiguous', 'validation_error', 'ambiguous: P-A, P-B'],
     ] as const)('reports a %s slot before anything is created', async (_case, code, hint) => {
       const deps = await depsAfterFirstPreview(
-        vi.fn().mockRejectedValue(new BridgeError(code, 'refused live', hint)),
+        vi
+          .fn()
+          .mockRejectedValue(new BridgeError(code, 'refused live', hint, undefined, 'not_started')),
       );
       const err = asError(
         await handleCreatePlaylist({ name: 'Approved', source_playlist_id: 'P-PREVIEW' }, deps),

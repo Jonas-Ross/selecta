@@ -60,7 +60,14 @@ describe.each(writes)('$name validated outcomes', ({ name, invoke }) => {
     await expect(invoke()).rejects.toMatchObject({
       errorCode: 'jxa_error',
       message: expect.stringContaining('Music.app: invalid payload'),
-      partialWrite: undefined,
+      partialWrite:
+        name === 'replace'
+          ? undefined
+          : 'persistentId' in payload
+            ? { playlist_id: 'P', observed_track_ids: ['A'] }
+            : payload.partialWrite?.persistentId === 'P'
+              ? { playlist_id: 'P' }
+              : undefined,
     });
   });
 

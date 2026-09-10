@@ -54,6 +54,8 @@ export class BridgeError extends Error {
     message: string,
     public readonly hint?: string,
     public readonly partialWrite?: SelectaError['partial_write'],
+    // Only a validated script guard before mutation may establish this proof.
+    public readonly writePhase?: 'not_started',
   ) {
     super(message);
     this.name = 'BridgeError';

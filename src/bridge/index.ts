@@ -11,6 +11,31 @@ async function runJxa<T>(script: string, schema: z.ZodType<T>): Promise<T> {
   return parsePayload(schema, await runUncheckedJxa(script), 'Music.app', 'jxa_error');
 }
 
+/** Preserve diagnostic target evidence when full creation readback is malformed. */
+async function runCreationJxa<T>(script: string, schema: z.ZodType<T>): Promise<T> {
+  const raw = await runUncheckedJxa(script);
+
+  try {
+    return parsePayload(schema, raw, 'Music.app', 'jxa_error');
+  } catch (error) {
+    const target = schemas.creationFailureTarget.safeParse(raw);
+
+    if (!target.success) throw error;
+
+    const observed = schemas.ids.safeParse(target.data.trackPersistentIds);
+
+    throw new BridgeError(
+      'jxa_error',
+      'Music.app: invalid payload for creation with known target',
+      'The creation response was invalid but includes a target ID. Inspect this playlist and refresh_library; do not repeat the write.',
+      {
+        playlist_id: target.data.persistentId,
+        ...(observed.success ? { observed_track_ids: observed.data } : {}),
+      },
+    );
+  }
+}
+
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
 import { buildListLibraryTrackIdsScript, buildReadLibraryScript } from './scripts/read_library.js';
 import { buildFindPlaylistByNameScript } from './scripts/find_playlist_by_name.js';
@@ -56,11 +81,11 @@ export const bridge: Bridge = {
     return result;
   },
   async createPlaylist(input): Promise<PlaylistWriteResult> {
-    return parseWriteResult(await runJxa(buildCreatePlaylistScript(input), schemas.write));
+    return parseWriteResult(await runCreationJxa(buildCreatePlaylistScript(input), schemas.write));
   },
   async clonePlaylist(input): Promise<PlaylistCloneResult> {
     return parseCloneResult(
-      await runJxa(buildClonePlaylistScript(input), schemas.clone),
+      await runCreationJxa(buildClonePlaylistScript(input), schemas.clone),
       input.reservedSourceName,
     );
   },
@@ -169,11 +194,13 @@ function parseEditResult(
 // Shared handling for the RESOLVE_TRACKS sentinel: scripts that resolve
 // tracks return { missingTrackIds } — without writing anything — when any
 // requested ID is absent from the live library (stale cache).
-function throwMissingTracks(missing: string[]): never {
+function throwMissingTracks(missing: string[], writePhase?: 'not_started'): never {
   throw new BridgeError(
     'track_not_found',
     `Music.app has no tracks with persistent IDs: ${missing.join(', ')}`,
     'These IDs are in the cache but not the live library — the cache is stale. Run refresh_library and re-resolve the tracks.',
+    undefined,
+    writePhase,
   );
 }
 
@@ -234,9 +261,10 @@ function throwPartialWrite(
 }
 
 function parseWriteResult(result: z.infer<typeof schemas.write>): PlaylistWriteResult {
-  if ('missingTrackIds' in result) throwMissingTracks(result.missingTrackIds);
+  if ('missingTrackIds' in result) throwMissingTracks(result.missingTrackIds, 'not_started');
 
-  if ('partialWrite' in result) throwPartialWrite(result.partialWrite);
+  if ('partialWrite' in result && result.partialWrite !== undefined)
+    throwPartialWrite(result.partialWrite);
 
   return result;
 }
@@ -245,13 +273,16 @@ function parseCloneResult(
   result: z.infer<typeof schemas.clone>,
   reservedSourceName?: string,
 ): PlaylistCloneResult {
-  if ('partialWrite' in result) throwPartialWrite(result.partialWrite);
+  if ('partialWrite' in result && result.partialWrite !== undefined)
+    throwPartialWrite(result.partialWrite);
 
   if ('playlistNotFound' in result && reservedSourceName !== undefined) {
     throw new BridgeError(
       'playlist_not_found',
       `Music.app has neither that persistent ID nor a plain user playlist named "${reservedSourceName}".`,
       `The "${reservedSourceName}" slot no longer exists in Music.app. Call preview_playlist again to rebuild it, then clone that result. Nothing was created.`,
+      undefined,
+      'not_started',
     );
   }
 
@@ -260,6 +291,8 @@ function parseCloneResult(
       'playlist_not_found',
       'Music.app has no source playlist with that persistent ID.',
       'The source playlist is not in the live library — run refresh_library and re-resolve it via list_playlists.',
+      undefined,
+      'not_started',
     );
   }
 
@@ -270,6 +303,8 @@ function parseCloneResult(
       'validation_error',
       `Music.app has ${persistentIds.length} plain user playlists named "${name}": ${persistentIds.join(', ')}.`,
       `The "${name}" slot is ambiguous — Selecta will not guess which copy the user auditioned. Run refresh_library and clone the intended copy by its list_playlists ID, or delete the extra copy with delete_playlist and retry. Nothing was created.`,
+      undefined,
+      'not_started',
     );
   }
 
@@ -278,6 +313,8 @@ function parseCloneResult(
       'playlist_not_editable',
       `Source is a ${result.sourceKind} playlist, not a plain user playlist.`,
       'Clone only a non-empty plain user playlist; generated, smart, subscription, special, and folder sources are intentionally rejected.',
+      undefined,
+      'not_started',
     );
   }
 
@@ -286,6 +323,8 @@ function parseCloneResult(
       'validation_error',
       `Source playlist has ${result.invalidSourceTrackCount} live entries; expected 1-${PLAYLIST_WRITE_TRACK_LIMIT}.`,
       `Choose a non-empty plain user playlist with at most ${PLAYLIST_WRITE_TRACK_LIMIT} entries. Nothing was created.`,
+      undefined,
+      'not_started',
     );
   }
 
@@ -294,6 +333,8 @@ function parseCloneResult(
       'track_not_found',
       `Live source playlist contains unavailable track IDs: ${result.missingTrackIds.join(', ')}`,
       'Remove or replace the unavailable entries in the source playlist before trying again. refresh_library cannot repair entries missing from the live library; do not retry the same source unchanged.',
+      undefined,
+      'not_started',
     );
   }
 
