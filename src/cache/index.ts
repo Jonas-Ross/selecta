@@ -25,6 +25,7 @@ import type {
   TrackRow,
 } from '../types/cache.js';
 import { openDatabase } from './db.js';
+import { planSyncReconciliation } from './reconciliation.js';
 import { createQueries, type Queries } from './queries.js';
 import { recentSinceIso } from '../domain/recent_activity.js';
 
@@ -244,27 +245,20 @@ export class SelectaCache {
     return this.queries.getCoOccurrence(seedIds, filters, limit);
   }
 
+  /** Persisted per-host backoff; setting it can only extend the deadline. */
+  getSourceCooldown(host: string): number | null {
+    return this.queries.getSourceCooldown(host);
+  }
+
+  setSourceCooldown(host: string, until: number): void {
+    this.queries.setSourceCooldown(host, until);
+  }
+
   /**
    * Persist one enrichment batch atomically. Rows live outside the tracks
    * refresh cycle (see schema.ts) — a refresh never rewrites them, only prunes
    * rows whose track left the library.
    */
-  getSourceCooldown(host: string): number | null {
-    const row = this.db
-      .prepare('SELECT until_ms FROM enrichment_cooldowns WHERE host = ?')
-      .get(host) as { until_ms: number } | undefined;
-
-    return row?.until_ms ?? null;
-  }
-
-  setSourceCooldown(host: string, until: number): void {
-    this.db
-      .prepare(
-        'INSERT INTO enrichment_cooldowns (host, until_ms) VALUES (?, ?) ON CONFLICT(host) DO UPDATE SET until_ms = MAX(until_ms, excluded.until_ms)',
-      )
-      .run(host, until);
-  }
-
   saveAudioFeatures(rows: AudioFeaturesRow[]): void {
     const run = this.db.transaction(() => {
       for (const row of rows) {
@@ -448,49 +442,16 @@ export class SelectaCache {
   }): ReconcileAction[] {
     const now = opts.now ?? new Date();
     const since = new Date(now.getTime() - opts.windowMinutes * 60_000).toISOString();
-    const creations = this.queries.getCreationsSince(since);
-    const actions: ReconcileAction[] = [];
+    const inputs = this.queries.getCreationsSince(since).map((creation) => ({
+      creation,
+      candidates: this.queries.getUserPlaylistIdsByName(creation.name).map((id) => ({
+        id,
+        trackIds: this.queries.getPlaylistTrackIds(id),
+      })),
+      currentExists: this.queries.playlistExists(creation.currentPersistentId),
+    }));
 
-    for (const creation of creations) {
-      const wanted = JSON.stringify(creation.trackIds);
-      const sameNameIds = this.queries.getUserPlaylistIdsByName(creation.name);
-      const matchIds = sameNameIds.filter(
-        (id) => JSON.stringify(this.queries.getPlaylistTrackIds(id)) === wanted,
-      );
-      const currentId = creation.currentPersistentId;
-      // A reserved slot rekeys by name alone, so several same-name copies
-      // are ambiguous regardless of sequence; any other receipt rekeys to
-      // the single exact-sequence match.
-      const rekeyId = opts.reservedSlotNames?.includes(creation.name)
-        ? sameNameIds.length === 1
-          ? sameNameIds[0]!
-          : null
-        : matchIds.length === 1
-          ? matchIds[0]!
-          : null;
-
-      if (
-        rekeyId !== null &&
-        rekeyId !== currentId &&
-        sameNameIds.length === 1 &&
-        !this.queries.playlistExists(currentId)
-      ) {
-        actions.push({
-          kind: 'rekey',
-          createdId: creation.createdPersistentId,
-          name: creation.name,
-          fromId: currentId,
-          toId: rekeyId,
-        });
-      } else if (
-        sameNameIds.length >= 2 &&
-        !actions.some((a) => a.kind === 'ambiguous' && a.name === creation.name)
-      ) {
-        actions.push({ kind: 'ambiguous', name: creation.name, playlistIds: sameNameIds });
-      }
-    }
-
-    return actions;
+    return planSyncReconciliation(inputs, opts.reservedSlotNames);
   }
 
   /**
