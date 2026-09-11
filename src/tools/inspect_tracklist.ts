@@ -5,10 +5,9 @@ import {
   type TracklistInspection,
 } from '../domain/tracklist_inspection.js';
 import { z } from 'zod';
-import type { SelectaError } from '../types/errors.js';
-import { missingTrackIdsError } from '../operations/resources.js';
+import { trackNotFoundError, type SelectaError } from '../types/errors.js';
 import { parseInput, toErrorEnvelope } from './errors.js';
-import { readRoundedCacheAge } from './freshness.js';
+import { roundCacheAge } from './freshness.js';
 import type { ToolDeps } from './deps.js';
 
 const MAX_TRACKS = 500;
@@ -38,19 +37,13 @@ export async function handleInspectTracklist(
   if (!parsed.ok) return parsed.error;
 
   try {
-    const cache = deps.cache();
-    const uniqueTrackIds = [...new Set(parsed.data.track_ids)];
-    const cacheMiss = missingTrackIdsError(cache, uniqueTrackIds);
+    const { rows, missingIds, cacheAgeHours } = deps.cache().resolveTracks(parsed.data.track_ids);
 
-    if (cacheMiss) return cacheMiss;
-
-    // Resolution is deliberately separate from aggregation: a miss returns
-    // above before the pure builder can produce even a partial inspection.
-    const rows = parsed.data.track_ids.map((id) => cache.getTrack(id)!);
+    if (missingIds.length > 0) return trackNotFoundError(missingIds);
 
     return {
       ...buildTracklistInspection(rows),
-      cache_age_hours: readRoundedCacheAge(deps),
+      cache_age_hours: roundCacheAge(cacheAgeHours),
     };
   } catch (err) {
     return toErrorEnvelope(err);

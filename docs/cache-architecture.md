@@ -5,6 +5,11 @@ that combines cross-module writes, such as playlist deletion with receipt
 retirement or a note move with a receipt rekey. Query helpers must not commit
 those operations independently.
 
+Compound read responses resolve raw facts, playlist positions and freshness
+within one deferred read transaction, including resource validation. A concurrent
+WAL writer may commit a refresh while the response finishes its original snapshot.
+End the transaction before wire projection or external I/O.
+
 Refresh-wide pruning stays together in `queries/library.ts`, including dependent
 features and notes. This keeps deletion order and the receipt window protecting
 missing playlist notes under one owner.
