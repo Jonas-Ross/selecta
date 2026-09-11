@@ -118,9 +118,7 @@ export function createDraftController(
     render();
   }
 
-  function receive(result: unknown, expectedId?: string) {
-    const decoded = decodeDraftResult(result);
-
+  function receive(decoded: ReturnType<typeof decodeDraftResult>, expectedId?: string) {
     // Accept valid receipts even when the operation failed. Never erase partial
     // write details merely because the host marked the result as an error.
     let acceptanceError: string | undefined;
@@ -228,10 +226,12 @@ export function createDraftController(
       if (!state || !draftId) return;
 
       receive(
-        await app.callServerTool({
-          name: 'edit_playlist_draft',
-          arguments: { draft_id: draftId, revision: state.draft.revision, ...patch },
-        }),
+        decodeDraftResult(
+          await app.callServerTool({
+            name: 'edit_playlist_draft',
+            arguments: { draft_id: draftId, revision: state.draft.revision, ...patch },
+          }),
+        ),
         draftId,
       );
       status(`Draft revision ${state.draft.revision} saved locally.`, 'ok');
@@ -244,7 +244,9 @@ export function createDraftController(
 
     await action(async () => {
       receive(
-        await app.callServerTool({ name: 'get_playlist_draft', arguments: { draft_id: id } }),
+        decodeDraftResult(
+          await app.callServerTool({ name: 'get_playlist_draft', arguments: { draft_id: id } }),
+        ),
         id,
       );
 
@@ -288,10 +290,12 @@ export function createDraftController(
 
       if (feedback !== state.draft.feedback)
         receive(
-          await app.callServerTool({
-            name: 'edit_playlist_draft',
-            arguments: { draft_id: draftId, revision: state.draft.revision, feedback },
-          }),
+          decodeDraftResult(
+            await app.callServerTool({
+              name: 'edit_playlist_draft',
+              arguments: { draft_id: draftId, revision: state.draft.revision, feedback },
+            }),
+          ),
           draftId,
         );
 
@@ -327,7 +331,7 @@ export function createDraftController(
         name: 'save_playlist_draft',
         arguments: { draft_id: draftId, revision },
       });
-      const data = receive(result, draftId);
+      const data = receive(decodeDraftResult(result), draftId);
       const saved = recoveredStatus(state.draft);
 
       status(
@@ -359,10 +363,12 @@ export function createDraftController(
   app.ontoolresult = (result) => {
     clearTimeout(resultFallback);
     receivedResult = true;
-    failedResult = !!decodeDraftResult(result).error;
+    const decoded = decodeDraftResult(result);
+
+    failedResult = !!decoded.error;
 
     try {
-      receive(result);
+      receive(decoded);
 
       // A replayed result after reload can be stale; the store holds the latest.
       if (connected) void recover(draftId);
@@ -370,7 +376,7 @@ export function createDraftController(
       status(errorMessage(error), 'error');
 
       // A failed show created nothing to recover; a stripped result did.
-      if (draftId && connected && !decodeDraftResult(result).error) void recover(draftId);
+      if (draftId && connected && !decoded.error) void recover(draftId);
     }
   };
 
