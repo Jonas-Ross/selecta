@@ -4,7 +4,7 @@ A local MCP server that exposes the user's Apple Music library to AI agents thro
 
 `AGENTS.md` is a symlink to this file. `docs/music-app.md` records what Music.app actually does when scripted.
 `docs/cache-migrations.md` covers schema upgrades and the backup policy for future destructive migrations.
-`docs/cache-architecture.md` maps query modules, reconciliation planning, and transaction ownership.
+`docs/cache-architecture.md` records transaction boundaries and refresh-pruning ownership.
 
 ## Architecture
 
