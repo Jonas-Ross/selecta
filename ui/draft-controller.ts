@@ -186,7 +186,7 @@ export function createDraftController(
     if (!state) return;
 
     renderDraft(el, {
-      ...state,
+      draft: state.draft,
       inspection: state.inspection,
       inspection_error: state.inspection_error,
       busy,
