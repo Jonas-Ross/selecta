@@ -45,6 +45,7 @@ describe.each(writes)('$name validated outcomes', ({ name, invoke }) => {
     { partialWrite: { persistentId: '' } },
     { partialWrite: { persistentId: 'P', trackPersistentIds: [123] } },
     { missingTrackIds: [] },
+    // Otherwise valid for each write operation: trackCount disagrees with the one observed ID.
     {
       persistentId: 'P',
       trackCount: 2,
