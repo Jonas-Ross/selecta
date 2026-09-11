@@ -603,25 +603,25 @@ it('does not write twice during one pending save action', async () => {
   expect(f.el('save').disabled).toBe(true);
 });
 
-it('keeps malformed outcome fields visible as uncertainty rather than success', () => {
-  const draft = initial().draft;
-
-  expect(
-    recoveredStatus({
-      ...draft,
-      save: {
-        revision: 1,
-        status: 'finished',
-        result: { playlist_id: 'target', order_matches_request: 'unknown' },
-      },
-    }),
-  ).toEqual({
-    text: expect.stringContaining('"order_matches_request":"unknown"'),
-    tone: 'pending',
+it.each([
+  { playlist_id: 'target', order_matches_request: 'unknown' },
+  { playlist_id: 'target', error: 'operation_cleanup_failed', creation_committed: 'true' },
+])('keeps malformed outcome fields visible as uncertainty rather than success: %j', (result) => {
+  const status = recoveredStatus({
+    ...initial().draft,
+    save: { revision: 1, status: 'finished', result },
   });
+
+  expect(status.tone).toBe('pending');
+  expect(status.text).toContain('Save outcome needs inspection.');
+  expect(status.text).toContain(JSON.stringify(result));
+  expect(status.text).not.toContain('Playlist creation committed');
+});
+
+it('retains partial-write details in a pending outcome', () => {
   expect(
     recoveredStatus({
-      ...draft,
+      ...initial().draft,
       save: {
         revision: 1,
         status: 'pending',
