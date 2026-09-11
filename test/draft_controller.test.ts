@@ -630,3 +630,44 @@ it('keeps malformed outcome fields visible as uncertainty rather than success', 
     }).text,
   ).toContain('partial');
 });
+
+it('keeps committed creation and stale-lock guidance visible through save recovery', async () => {
+  const f = fixture();
+
+  await f.start();
+  const data = initial();
+  const result = {
+    playlist_id: 'created',
+    name: data.draft.name,
+    track_count: 2,
+    error: 'operation_cleanup_failed',
+    creation_committed: true,
+    lock_path: '/fixture/library.db.music.lock',
+    hint: 'Creation committed to Music.app and the cache. Stop Selecta processes and inspect the stale lock at /fixture/library.db.music.lock. No refresh or repeat creation is needed.',
+    note: { body: 'Keep this note', created_at: '2026-09-10', updated_at: '2026-09-10' },
+    partial_write: { playlist_id: 'created', observed_track_ids: ['same', 'same'] },
+  };
+  const draft: Draft = {
+    ...data.draft,
+    revision: 3,
+    save: { revision: 1, status: 'finished', result },
+  };
+
+  f.app.callServerTool.mockResolvedValueOnce(
+    wire({ draft, saved_revision: 1, result, ...result }, true),
+  );
+  await f.el('save').onclick();
+  expect(f.el('status').textContent).toContain(result.hint);
+  expect(f.el('status').textContent).toContain('Keep this note');
+  expect(f.el('save').disabled).toBe(true);
+  f.setCurrent({ ...data, draft });
+  await f.controller.recover(id);
+  expect(f.el('status').textContent).toContain('creation committed');
+  expect(f.el('status').textContent).toContain(result.lock_path);
+  expect(f.el('status').textContent).not.toContain('Save failed');
+  expect(f.el('status').dataset.tone).toBe('error');
+  await f.el('save').onclick();
+  expect(
+    f.app.callServerTool.mock.calls.filter(([request]) => request.name === 'save_playlist_draft'),
+  ).toHaveLength(1);
+});

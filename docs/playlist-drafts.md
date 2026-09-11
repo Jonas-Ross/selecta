@@ -60,7 +60,9 @@ identity and inspection order, while retaining unknown receipt fields.
 
 Recovery distinguishes pending/unknown outcomes, successful finished saves and
 finished errors. A mismatched observed order remains an outcome requiring
-inspection. Failed saves keep draft and partial-write receipts visible. Host
+inspection. A committed creation with failed lock cleanup retains its committed
+status and stale-lock guidance, while marking the cleanup error for attention.
+Failed saves keep draft and partial-write receipts visible. Host
 message rejection leaves feedback in the draft and allows another explicit
 Send feedback action. Local unsent typing survives result replay and recovery.
 Tool input supplies a recovery hint only until the card accepts a draft result.

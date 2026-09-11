@@ -71,4 +71,5 @@ export const DraftSaveOutcome = z.looseObject({
   hint: z.string().optional(),
   playlist_id: z.string().min(1).optional(),
   order_matches_request: z.boolean().optional(),
+  creation_committed: z.boolean().optional(),
 });

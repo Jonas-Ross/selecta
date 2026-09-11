@@ -132,11 +132,16 @@ export function recoveredStatus(draft: Draft): { text: string; tone: 'ok' | 'err
   const parsed = DraftSaveOutcome.safeParse(save.result);
   const outcome = parsed.success ? parsed.data : undefined;
 
-  if (typeof outcome?.error === 'string')
+  if (typeof outcome?.error === 'string') {
+    const summary = outcome.creation_committed
+      ? 'Playlist creation committed; cleanup needs attention.'
+      : 'Save failed.';
+
     return {
-      text: `Save failed. ${typeof outcome.hint === 'string' ? outcome.hint : outcome.error} ${JSON.stringify(outcome)}`,
+      text: `${summary} ${typeof outcome.hint === 'string' ? outcome.hint : outcome.error} ${JSON.stringify(outcome)}`,
       tone: 'error',
     };
+  }
 
   if (
     typeof outcome?.playlist_id === 'string' &&
