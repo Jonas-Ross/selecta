@@ -1,15 +1,12 @@
+import { capDistribution } from '../domain/distributions.js';
 import { z } from 'zod';
-import { recentSinceIso } from '../cache/queries.js';
-import {
-  LibraryFilters,
-  parseInput,
-  toApiTrack,
-  toErrorEnvelope,
-  toSearchFilters,
-  validateFilterRanges,
-  type ToolDeps,
-} from './common.js';
-import { shapeOverview } from './library_overview.js';
+import { recentSinceIso } from '../domain/recent_activity.js';
+import { LibraryFilters, toSearchFilters, validateFilterRanges } from './library_filters.js';
+import { parseInput, toErrorEnvelope } from './errors.js';
+import { toApiTrack } from '../domain/track_projections.js';
+import type { ToolDeps } from './deps.js';
+import { roundCacheAge } from './freshness.js';
+import { shapeOverview } from '../domain/library_overview.js';
 
 export const explorerInputShape = {
   filters: LibraryFilters.optional().describe(
@@ -55,9 +52,11 @@ export async function handleLibraryExplorer(raw: unknown, deps: ToolDeps) {
     );
     const overview = shapeOverview(stats, {
       filtered: Object.keys(filters).length > 0,
-      cacheAgeHours: cacheAgeHours === null ? null : Math.round(cacheAgeHours * 100) / 100,
+      cacheAgeHours: roundCacheAge(cacheAgeHours),
       recentSince,
     });
+
+    const decades = capDistribution(overview.decades, 30);
 
     return {
       filters,
@@ -67,11 +66,8 @@ export async function handleLibraryExplorer(raw: unknown, deps: ToolDeps) {
       total_matches: total,
       next_offset: offset + rows.length < total ? offset + rows.length : null,
       tracks: rows.map(toApiTrack),
-      overview: { ...overview, decades: overview.decades.slice(0, 30) },
-      decades_other: {
-        distinct: Math.max(0, stats.decades.length - 30),
-        tracks: stats.decades.slice(30).reduce((n, d) => n + d.count, 0),
-      },
+      overview: { ...overview, decades: decades.shown },
+      decades_other: decades.other,
       missing: {
         genre: total - stats.genres.reduce((n, g) => n + g.count, 0),
         year: total - stats.decades.reduce((n, d) => n + d.count, 0),

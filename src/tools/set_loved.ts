@@ -4,7 +4,9 @@ import { withOperation } from '../operations/lock.js';
 
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
-import { missingTrackIdsError, parseInput, toErrorEnvelope, type ToolDeps } from './common.js';
+import { missingTrackIdsError } from '../operations/resources.js';
+import { parseInput, toErrorEnvelope } from './errors.js';
+import type { ToolDeps } from './deps.js';
 
 export const setLovedInputShape = {
   track_ids: z

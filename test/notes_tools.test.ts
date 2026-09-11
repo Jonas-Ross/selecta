@@ -27,8 +27,8 @@ import {
   COMPACT_TRACK_FIELDS,
   NOTE_MAX_LENGTH,
   type ApiNote,
-  type ToolDeps,
-} from '../src/tools/common.js';
+} from '../src/domain/track_projections.js';
+import type { ToolDeps } from '../src/tools/deps.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 import { ISO_TIMESTAMP, asError, makeToolDeps } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };

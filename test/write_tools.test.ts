@@ -11,7 +11,7 @@ import {
   type PreviewPlaylistOutput,
 } from '../src/tools/preview_playlist.js';
 import { handleGetTrackContext, type TrackContextOutput } from '../src/tools/get_track_context.js';
-import type { ToolDeps } from '../src/tools/common.js';
+import type { ToolDeps } from '../src/tools/deps.js';
 import {
   PLAYLIST_WRITE_TRACK_LIMIT,
   type Bridge,

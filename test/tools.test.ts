@@ -12,20 +12,20 @@ import {
   type TrackContextOutput,
 } from '../src/tools/get_track_context.js';
 import { handleListPlaylists, type ListPlaylistsOutput } from '../src/tools/list_playlists.js';
+import { handleLibraryOverview } from '../src/tools/library_overview.js';
 import {
-  handleLibraryOverview,
   shapeOverview,
   GENRE_CAP,
   type LibraryOverviewOutput,
-} from '../src/tools/library_overview.js';
+} from '../src/domain/library_overview.js';
 import type { OverviewStats } from '../src/types/cache.js';
 import { handleRefreshLibrary, type RefreshLibraryOutput } from '../src/tools/refresh_library.js';
 import {
   COMPACT_TRACK_FIELDS,
   type ApiTrack,
   type CompactApiTrack,
-  type ToolDeps,
-} from '../src/tools/common.js';
+} from '../src/domain/track_projections.js';
+import type { ToolDeps } from '../src/tools/deps.js';
 import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
 import { asError, bumpedSnapshot, featuresRow, makeBridge } from './helpers.js';

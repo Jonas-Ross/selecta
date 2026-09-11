@@ -6,7 +6,7 @@ import {
   registerAppTool,
   RESOURCE_MIME_TYPE,
 } from '@modelcontextprotocol/ext-apps/server';
-import type { ToolDeps } from './tools/common.js';
+import type { ToolDeps } from './tools/deps.js';
 import {
   explorerInputShape,
   EXPLORER_DESCRIPTION,

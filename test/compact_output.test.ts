@@ -11,7 +11,7 @@ import {
   type TrackContextOutput,
 } from '../src/tools/get_track_context.js';
 import { handleSearch, type CompactSearchOutput, type SearchOutput } from '../src/tools/search.js';
-import type { ToolDeps } from '../src/tools/common.js';
+import type { ToolDeps } from '../src/tools/deps.js';
 import type { LibrarySnapshot, RawTrack } from '../src/types/bridge.js';
 import { makeBridge } from './helpers.js';
 

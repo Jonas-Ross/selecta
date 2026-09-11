@@ -4,13 +4,8 @@ import { Appearance, DraftStore, type Draft } from '../drafts/store.js';
 import { BridgeError, type ErrorCode } from '../types/errors.js';
 import { handleInspectTracklist, inspectTracklistInputShape } from './inspect_tracklist.js';
 import { handleCreatePlaylist } from './create_playlist.js';
-import {
-  isSelectaError,
-  parseInput,
-  toErrorEnvelope,
-  validationError,
-  type ToolDeps,
-} from './common.js';
+import { isSelectaError, parseInput, toErrorEnvelope, validationError } from './errors.js';
+import type { ToolDeps } from './deps.js';
 
 export const showDraftInputShape = {
   draft_id: z

@@ -7,7 +7,7 @@ import { enrichPendingTracks, type FetchLike } from '../src/enrich/index.js';
 import { durationCompatible, luceneEscape, primaryArtist, stripFeat } from '../src/enrich/match.js';
 import { USER_AGENT, withUserAgent } from '../src/enrich/sources.js';
 import { handleEnrichFeatures, type EnrichFeaturesOutput } from '../src/tools/enrich_features.js';
-import type { ToolDeps } from '../src/tools/common.js';
+import type { ToolDeps } from '../src/tools/deps.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 import { asError, featuresRow, makeBridge } from './helpers.js';
 import packageInfo from '../package.json' with { type: 'json' };

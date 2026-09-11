@@ -2,6 +2,8 @@
 // the cache facade never write SQL inline. createQueries prepares statements
 // once per connection; the facade in index.ts owns transactions.
 
+import { recentSinceIso } from '../domain/recent_activity.js';
+
 import type { Database, Statement } from 'better-sqlite3';
 import type { RawPlaylist, RawTrack, TrackLovedState, TrackRatingState } from '../types/bridge.js';
 import type {
@@ -149,15 +151,6 @@ function buildCoOccurrenceSourceFilter(filters: CoOccurrenceFilters): {
 // library_overview returns a fact, not a ranking, so the artist cap only exists
 // to bound tokens; artistsTotal carries the full breadth past it.
 const TOP_ARTISTS_LIMIT = 25;
-
-// The shared "recent" window for play-history surfaces (issue #31): the
-// recent_plays sort lens and library_overview's recent_activity both look back
-// this far, so "recent" means one thing everywhere the model sees it.
-export const RECENT_WINDOW_DAYS = 30;
-
-export function recentSinceIso(): string {
-  return new Date(Date.now() - RECENT_WINDOW_DAYS * 86_400_000).toISOString();
-}
 
 // The faceted WHERE clause shared by searchTracks and overviewStats: identical
 // predicates over the same rowset, so a search and an overview of that search

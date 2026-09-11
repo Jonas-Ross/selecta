@@ -4,20 +4,16 @@ import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
 import {
   COMPACT_TRACK_FIELDS,
-  libraryFilterShape,
-  parseInput,
   projectApiTrack,
-  toErrorEnvelope,
-  toSearchFilters,
-  validateFilterRanges,
-  validationError,
-  roundedCacheAge,
   type ApiTrack,
   type CompactApiTrack,
-  type ToolDeps,
-} from './common.js';
+} from '../domain/track_projections.js';
+import { libraryFilterShape, toSearchFilters, validateFilterRanges } from './library_filters.js';
+import { parseInput, toErrorEnvelope, validationError } from './errors.js';
+import { readRoundedCacheAge } from './freshness.js';
+import type { ToolDeps } from './deps.js';
 
-// The faceted filters are shared with library_overview (common.libraryFilterShape);
+// The faceted filters are shared with library_overview (library_filters.libraryFilterShape);
 // search adds the result cap.
 export const searchInputShape = {
   ...libraryFilterShape,
@@ -122,7 +118,7 @@ export async function handleSearch(
               .sort((a, b) => a - b),
           }
         : {};
-    const common = { total_matches: total, cache_age_hours: roundedCacheAge(deps) };
+    const common = { total_matches: total, cache_age_hours: readRoundedCacheAge(deps) };
 
     if (input.compact === true) {
       return {

@@ -28,18 +28,23 @@ export type SelectaError = {
   hint: string; // model-facing; short, actionable
 };
 
+/** Bound an ID list in error hints while retaining the exact overflow count. */
+export function summarizeIds(ids: string[]): string {
+  const more = ids.length > 5 ? ` (+${ids.length - 5} more)` : '';
+
+  return `${ids.slice(0, 5).join(', ')}${more}`;
+}
+
 /** Build the one model-facing error format for cached track-ID misses. */
 export function trackNotFoundError(
   missingIds: string[],
   context: { label?: string; consequence?: string } = {},
 ): SelectaError {
-  const shown = missingIds.slice(0, 5).join(', ');
-  const more = missingIds.length > 5 ? ` (+${missingIds.length - 5} more)` : '';
   const consequence = context.consequence != null ? ` ${context.consequence}` : '';
 
   return {
     error: 'track_not_found',
-    hint: `${context.label ?? 'Not in the cache'}: ${shown}${more}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library.${consequence}`,
+    hint: `${context.label ?? 'Not in the cache'}: ${summarizeIds(missingIds)}. Use persistent IDs exactly as returned by search/get_track_context; if the library changed, run refresh_library.${consequence}`,
   };
 }
 

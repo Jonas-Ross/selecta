@@ -218,7 +218,7 @@ export type SearchFilters = {
   // most-played pool when building a varied playlist. search-only (overview
   // aggregates, so it never sets this). 'playlist_order' is only valid with
   // inPlaylist set — the tool layer enforces that. 'recent_plays' orders by
-  // play deltas recorded in the last RECENT_WINDOW_DAYS (cache/queries.ts) —
+  // play deltas recorded in the last RECENT_WINDOW_DAYS (domain/recent_activity.ts) —
   // recent rotation, not lifetime count.
   sort?:
     | 'most_played'

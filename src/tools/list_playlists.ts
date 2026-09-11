@@ -2,14 +2,10 @@
 
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
-import {
-  parseInput,
-  toApiNote,
-  toErrorEnvelope,
-  roundedCacheAge,
-  type ApiNote,
-  type ToolDeps,
-} from './common.js';
+import { parseInput, toErrorEnvelope } from './errors.js';
+import { toApiNote, type ApiNote } from '../domain/track_projections.js';
+import { readRoundedCacheAge } from './freshness.js';
+import type { ToolDeps } from './deps.js';
 
 export const listPlaylistsInputShape = {
   kind: z
@@ -60,7 +56,7 @@ export async function handleListPlaylists(
         parent_id: p.parentPersistentId ?? undefined,
         note: toApiNote(p),
       })),
-      cache_age_hours: roundedCacheAge(deps),
+      cache_age_hours: readRoundedCacheAge(deps),
     };
   } catch (err) {
     return toErrorEnvelope(err);

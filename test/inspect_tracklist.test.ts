@@ -5,10 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
 import {
   handleInspectTracklist,
-  orderedTrackIdsFingerprint,
   type InspectTracklistOutput,
 } from '../src/tools/inspect_tracklist.js';
-import type { ToolDeps } from '../src/tools/common.js';
+import { orderedTrackIdsFingerprint } from '../src/domain/tracklist_inspection.js';
+import type { ToolDeps } from '../src/tools/deps.js';
 import type { LibrarySnapshot, RawTrack } from '../src/types/bridge.js';
 import type { AudioFeaturesRow } from '../src/types/cache.js';
 import { asError, makeBridge } from './helpers.js';
