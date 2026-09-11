@@ -47,3 +47,30 @@ Before marking the PR ready:
 3. Reorder, reopen and reload; confirm saved selection, order and feedback recover. Verify stale edits fail and missing drafts show recovery guidance.
 4. Check Appearance, narrow sizing and the open feedback drawer in the actual host. Save only with explicit authorization for the real playlist write.
 5. Expand the timeline, toggle the tempo/key lanes, and select the second repeated occurrence from its block. Confirm the list and feedback target agree, then reorder and reload. Check horizontal scrolling and keyboard selection in a narrow card and the 500-entry fixture in both supported hosts.
+
+## Controller and host data
+
+`ui/playlist-draft.js` wires the host SDK and DOM into `createDraftController`.
+The controller is directly importable without connecting a host. Pure decoding,
+revision acceptance, feedback retention and recovery status live in
+`ui/draft-state.ts`. Browser-safe schemas in `src/drafts/contracts.ts` are shared
+with the store; the widget imports no SQLite or filesystem code. The decoder
+validates host responses before accepting draft state, including occurrence
+identity and inspection order, while retaining unknown receipt fields.
+
+Recovery distinguishes pending/unknown outcomes, successful finished saves and
+finished errors. A mismatched observed order remains an outcome requiring
+inspection. A committed creation with failed lock cleanup retains its committed
+status and stale-lock guidance, while marking the cleanup error for attention.
+Failed saves keep draft and partial-write receipts visible. Host
+message rejection leaves feedback in the draft and allows another explicit
+Send feedback action. Local unsent typing survives result replay and recovery.
+Tool input supplies a recovery hint only until the card accepts a draft result.
+Later input notifications cannot retarget that initialized draft; a validated
+result or explicit recovery establishes a different draft.
+
+`npm run typecheck:ui` checks the draft entry point, controller, pure state module
+and controller tests without emitting files; the normal build includes it, so
+`npm run check` and the hosted build/test jobs also enforce it. Existing
+rendering modules and their keyed DOM tests remain in place. These checks and the
+fixture gallery do not establish that an actual client has loaded the new bundle.

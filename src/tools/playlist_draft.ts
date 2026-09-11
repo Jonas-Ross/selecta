@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { Appearance, DraftStore, type Draft } from '../drafts/store.js';
+import { DraftStore } from '../drafts/store.js';
+import { Appearance, type Draft } from '../drafts/contracts.js';
 import { BridgeError } from '../types/errors.js';
 import { handleInspectTracklist, inspectTracklistInputShape } from './inspect_tracklist.js';
 import { creationResponse } from '../domain/playlist_creation.js';

@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": [
+    "ui/playlist-draft.js",
+    "ui/draft-controller.ts",
+    "ui/draft-state.ts",
+    "test/draft_controller.test.ts"
+  ]
+}
