@@ -1050,9 +1050,8 @@ describe('refresh_library', () => {
   });
 });
 
-// Refresh-time iCloud-echo reconciliation: a recently created playlist that
-// comes back twinned in the next snapshot gets its duplicate deleted via the
-// bridge, surgically removed from the cache, and reported — never silently.
+// Refresh reports ambiguous copies without Music.app writes and applies safe
+// cache-only rekeys. Legacy removal/failure fields remain serialized and empty.
 describe('refresh_library sync reconciliation', () => {
   const TRACKS = ['T-TEARDROP', 'T-ROADS'];
 
@@ -1107,6 +1106,42 @@ describe('refresh_library sync reconciliation', () => {
     expect(rows.map((p) => p.persistentId)).toEqual(['P-CREATED', 'P-ECHO']);
   });
 
+  it('preserves intentional same-name copies, their notes, receipts, and legacy wire fields', async () => {
+    const copies = echoSnapshot(['P-CREATED', 'P-FIRST', 'P-SECOND']);
+    const deps = depsAfterCreate({ readLibrary: vi.fn().mockResolvedValue(copies) });
+    const cache = deps.cacheInstance;
+
+    cache.refreshFromSnapshot(copies, { durationMs: 1 });
+    cache.recordPlaylistCreation('P-FIRST', 'Rearview', TRACKS);
+    const notes = ['P-CREATED', 'P-FIRST', 'P-SECOND'].map((id) =>
+      cache.setNote('playlist', id, `separate note for ${id}`),
+    );
+    const receipts = cache.db.prepare('SELECT * FROM playlist_creations ORDER BY 1').all();
+    const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+
+    expect(JSON.parse(JSON.stringify(out)).sync_reconciliation).toEqual({
+      rekeys: [],
+      duplicates_removed: [],
+      failures: [],
+      ambiguous: [{ name: 'Rearview', playlist_ids: ['P-CREATED', 'P-FIRST', 'P-SECOND'] }],
+    });
+
+    for (const note of notes) {
+      expect(cache.getNote('playlist', note.subjectId)).toEqual(note);
+      expect(cache.getPlaylistTrackIds(note.subjectId)).toEqual(TRACKS);
+    }
+
+    expect(cache.db.prepare('SELECT * FROM playlist_creations ORDER BY 1').all()).toEqual(receipts);
+    expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
+    expect(
+      cache.db
+        .prepare('SELECT notes FROM refresh_log WHERE refreshed_at = ?')
+        .get(out.refreshed_at),
+    ).toEqual({
+      notes: 'sync_reconciliation={"rekeys":0,"duplicates_removed":0,"failures":0}',
+    });
+  });
+
   it('reports a rekey without touching Music.app', async () => {
     const deps = depsAfterCreate({
       readLibrary: vi.fn().mockResolvedValue(echoSnapshot(['P-REKEYED'])),
@@ -1114,9 +1149,12 @@ describe('refresh_library sync reconciliation', () => {
 
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
 
-    expect(out.sync_reconciliation!.rekeys).toEqual([
-      { name: 'Rearview', from_id: 'P-CREATED', to_id: 'P-REKEYED' },
-    ]);
+    expect(JSON.parse(JSON.stringify(out)).sync_reconciliation).toEqual({
+      rekeys: [{ name: 'Rearview', from_id: 'P-CREATED', to_id: 'P-REKEYED' }],
+      ambiguous: [],
+      duplicates_removed: [],
+      failures: [],
+    });
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
     // The ID create_playlist returned still resolves for searches.
     const { rows } = deps.cacheInstance.searchTracks({ inPlaylist: 'P-CREATED' });
@@ -1156,7 +1194,7 @@ describe('refresh_library sync reconciliation', () => {
 
     expect(out.sync_reconciliation!.failures).toEqual([]);
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
-    // Cache untouched for the failed delete: both copies still visible.
+    // No delete was attempted: both copies remain visible.
     expect(deps.cacheInstance.listPlaylists({ nameQuery: 'Rearview' })).toHaveLength(2);
   });
 

@@ -15,7 +15,6 @@
     "test": "npm run build && vitest run --tags-filter='!integration'",
     "test:integration": "vitest run --tags-filter=integration",
     "smoke": "npm run build && node scripts/smoke.mjs",
-    "verify:echo": "npm run build && node scripts/verify-echo.mjs",
     "dev": "node dist/index.js",
     "lint": "oxlint",
     "format": "oxlint --fix && oxfmt",

@@ -13,10 +13,7 @@ async function runJxa<T>(script: string, schema: z.ZodType<T>): Promise<T> {
 
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
 import { buildListLibraryTrackIdsScript, buildReadLibraryScript } from './scripts/read_library.js';
-import {
-  buildFindPlaylistByNameScript,
-  buildListPlaylistsByNameScript,
-} from './scripts/find_playlist_by_name.js';
+import { buildFindPlaylistByNameScript } from './scripts/find_playlist_by_name.js';
 import {
   buildCreatePlaylistScript,
   buildClonePlaylistScript,
@@ -323,12 +320,4 @@ export async function deletePlaylistsByName(name: string): Promise<number> {
   return parseDeleteResult(
     await runJxa(buildDeletePlaylistsByNameScript({ name }), schemas.deleted),
   );
-}
-
-// Test/diagnostic support: every playlist with this name (ID + track count).
-// The echo-verification script polls this to watch a sync echo arrive.
-export async function listPlaylistsByName(
-  name: string,
-): Promise<{ persistentId: string; trackCount: number }[]> {
-  return runJxa(buildListPlaylistsByNameScript({ name }), schemas.namedPlaylists);
 }

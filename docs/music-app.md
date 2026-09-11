@@ -23,11 +23,15 @@ What Music.app actually does when you script it. Learned on a real iCloud-synced
 
 **Echo twins.** iCloud sometimes duplicates a freshly created playlist as sync settles — same tracks, different persistent ID. Nondeterministic: observed ~10s after one scripted create, absent for the identical call minutes later. It does this to Apple's own playlists too, so it's not something scripting causes.
 
-> **2026-07 correction:** most *scripted-create* twins were self-inflicted — until #15 slice 2, the JXA wrapper executed every script body twice (see the run-handler bullet under JXA), so each create made two real same-name playlists in one call. That deterministic source is fixed. The reconciliation machinery stays: iCloud's own echoes (observed on Apple playlists scripting never touched) and post-create ID rekeys are real regardless.
+> **2026-07 correction:** most *scripted-create* twins were self-inflicted — until #15 slice 2, the JXA wrapper executed every script body twice (see the run-handler bullet under JXA), so each create made two real same-name playlists in one call. That deterministic source is fixed. iCloud's own echoes (observed on Apple playlists scripting never touched) and post-create ID rekeys are real regardless; current reconciliation reports ambiguous copies and applies only safe rekeys.
 
 Selecta records creation receipts and uses refresh to recognize unambiguous rekeys within 60 minutes. The old ID must be absent and exactly one same-name user playlist must remain; ordinary playlists must also match the receipt's ordered entries. The reserved preview can rekey by name because the user may have edited it while auditioning.
 
 **Identical contents do not prove an echo.** A user can intentionally create the same name and sequence, including outside Selecta. Refresh never deletes playlists: it reports matching copies in `sync_reconciliation.ambiguous` so the model can ask which to keep before an explicit `delete_playlist`. CLI `refresh` and MCP `refresh_library` use the same operation. A surviving edited playlist is never rekeyed onto an untouched copy.
+
+`duplicates_removed` and `failures` remain empty in refresh responses and zero in new diagnostic summaries for compatibility. Historical summaries and receipt aliases remain readable without migration.
+
+The old `npm run verify:echo` create/poll/delete probe was removed because its single-survivor assertion depended on automatic duplicate removal. Use `npm test` for fixture coverage. To inspect a live sync event, explicitly run `refresh` and inspect `sync_reconciliation.ambiguous`; deciding which copy to delete remains a separate user action.
 
 Positional edits compare the full cached order with the script's pre-edit read and refuse drift before writing. `search` with `sort: playlist_order` returns `playlist_positions` per track: actual entry positions, preserving duplicate occurrences and gaps for unavailable entries. Never use result-array indices as playlist positions. A failed bulk property read aborts refresh; it must not clear signal or reset counter baselines. Full refresh and rating writes both expose only `ratingKind: user` ratings.
 

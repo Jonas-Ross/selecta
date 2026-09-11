@@ -107,7 +107,6 @@ export const ratingResult = z.union([
   z.object({ tracks: z.array(rated), preWriteTracks: z.array(rated) }),
 ]);
 export const deleted = z.union([notEditable, z.object({ deleted: count.max(100) })]);
-export const namedPlaylists = z.array(z.object({ persistentId: id, trackCount: count }));
 export const diagnostic = z.object({
   running: z.literal(true),
   automationAuthorized: z.literal(true),

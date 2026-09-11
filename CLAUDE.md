@@ -31,7 +31,6 @@ Shared storage and bridge types live in `src/types/`; the cross-cutting error en
 | `npm run format:check` | oxfmt check; `npm run format` applies lint fixes, then formats |
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |
 | `npm run smoke` | End-to-end smoke against the real library (builds first) |
-| `npm run verify:echo` | Live iCloud-echo reconciliation harness |
 | `npm run preview` | Consolidated draft and explorer fixture gallery at `http://127.0.0.1:8767` |
 | `npm run dev` | Run the MCP server over stdio |
 | `node dist/index.js status` | Read-only cache integrity, freshness, counts, and enrichment diagnostics |
