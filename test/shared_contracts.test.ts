@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { roundCacheAge } from '../src/tools/freshness.js';
 import { capDistribution } from '../src/domain/distributions.js';
 import { RECENT_WINDOW_DAYS, recentSinceIso } from '../src/domain/recent_activity.js';
-import { recentSinceIso as queryCutoff } from '../src/cache/queries.js';
 import { summarizeIds, trackNotFoundError } from '../src/types/errors.js';
 import { handleGetTrackContext } from '../src/tools/get_track_context.js';
 import { handleLibraryOverview } from '../src/tools/library_overview.js';
@@ -108,7 +107,6 @@ describe('shared recent window', () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse(now));
     expect(RECENT_WINDOW_DAYS).toBe(30);
     expect(recentSinceIso()).toBe(expected);
-    expect(queryCutoff()).toBe(expected);
   });
 
   it('shares the exact cutoff across overview, explorer and recent-play sorting', async () => {

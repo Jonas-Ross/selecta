@@ -25,7 +25,8 @@ import type {
   TrackRow,
 } from '../types/cache.js';
 import { openDatabase } from './db.js';
-import { createQueries, recentSinceIso, type Queries } from './queries.js';
+import { createQueries, type Queries } from './queries.js';
+import { recentSinceIso } from '../domain/recent_activity.js';
 
 export { defaultDbPath } from './db.js';
 

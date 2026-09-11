@@ -3,7 +3,6 @@
 // once per connection; the facade in index.ts owns transactions.
 
 import { recentSinceIso } from '../domain/recent_activity.js';
-export { RECENT_WINDOW_DAYS, recentSinceIso } from '../domain/recent_activity.js';
 
 import type { Database, Statement } from 'better-sqlite3';
 import type { RawPlaylist, RawTrack, TrackLovedState, TrackRatingState } from '../types/bridge.js';
