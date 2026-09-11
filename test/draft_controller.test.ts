@@ -373,10 +373,17 @@ it.each([
 
 it('accepts error receipts and keeps unknown receipt fields and pending guard visible', async () => {
   const f = fixture();
+  const data = initial();
 
+  data.draft.entries = Array.from({ length: 500 }, (_, index) => ({
+    entry_id: `00000000-0000-4000-8001-${String(index + 1).padStart(12, '0')}`,
+    track_id: 'same',
+  }));
+  data.inspection!.track_count = 500;
+  data.inspection!.tracks = data.draft.entries.map(() => ({ persistent_id: 'same' }));
+  f.setCurrent(data);
   await f.start();
   f.el('feedback').value = 'unsent';
-  const data = initial();
   const receipt = {
     draft: { ...data.draft, revision: 2, save: { revision: 1, status: 'pending' } },
     error: 'cache_unavailable',
@@ -394,6 +401,11 @@ it('accepts error receipts and keeps unknown receipt fields and pending guard vi
   expect(f.el('status').textContent).toContain('Receipt persistence failed');
   expect(f.el('status').textContent).toContain('future_receipt_field');
   expect(f.el('status').textContent).toContain('created');
+  expect(f.el('status').textContent).toContain('"partial_write"');
+  expect(f.el('status').textContent).toContain('"saved_revision":1');
+  expect(f.el('status').textContent).not.toContain('"entries"');
+  expect(f.el('status').textContent).not.toContain('"draft"');
+  expect(f.el('status').textContent).not.toContain('future_top_level');
   expect(f.el('feedback').value).toBe('unsent');
   expect(decodeDraftResult(wire(receipt, true)).data?.future_top_level).toBe('retained');
 });
@@ -417,6 +429,7 @@ it('preserves receipts in an invalid failed save without accepting its malformed
   expect(f.el('revision').textContent).toBe('Revision 1');
   expect(f.el('status').textContent).toContain('partial');
   expect(f.el('status').textContent).toContain('Inspect target');
+  expect(f.el('status').textContent).not.toContain('"draft"');
 });
 
 it('retains palette, host theme and typing through appearance changes and errors', async () => {
@@ -512,6 +525,7 @@ it('shows the receipt when a failed save also fails semantic occurrence validati
   expect(f.el('status').textContent).toContain('Inspect Music.app');
   expect(f.el('status').textContent).toContain('observed_track_ids');
   expect(f.el('status').textContent).toContain('partial');
+  expect(f.el('status').textContent).not.toContain('"entries"');
 });
 
 it.each([

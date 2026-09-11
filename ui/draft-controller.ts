@@ -139,9 +139,11 @@ export function createDraftController(
     }
 
     if (decoded.error || acceptanceError) {
-      const receipt = decoded.receipt;
+      const { result, partial_write, saved_revision } = decoded.receipt;
       const details =
-        receipt.result || receipt.partial_write ? ` Receipt: ${JSON.stringify(receipt)}` : '';
+        result !== undefined || partial_write !== undefined || saved_revision !== undefined
+          ? ` Receipt: ${JSON.stringify({ result, partial_write, saved_revision })}`
+          : '';
 
       throw new Error([decoded.error, acceptanceError].filter(Boolean).join(' ') + details);
     }
