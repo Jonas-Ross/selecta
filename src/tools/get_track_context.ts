@@ -15,7 +15,7 @@ import {
 } from '../domain/track_projections.js';
 import { missingTrackIdsError } from '../operations/resources.js';
 import { parseInput, toErrorEnvelope, validationError } from './errors.js';
-import { roundedCacheAge } from './freshness.js';
+import { readRoundedCacheAge } from './freshness.js';
 import type { ToolDeps } from './deps.js';
 
 const MAX_SEEDS = 20;
@@ -195,7 +195,7 @@ function multiSeedContext(
   const coOccurrence = cache.getCoOccurrence(seedIds, filters, MULTI_CO_OCCURRENCE_CAP);
   const common = {
     source_playlists: coOccurrence.sourcePlaylists,
-    cache_age_hours: roundedCacheAge(deps),
+    cache_age_hours: readRoundedCacheAge(deps),
   };
 
   if (compact) {
@@ -281,7 +281,7 @@ export async function handleGetTrackContext(
         .map((w) => ({ at: w.refreshedAt, plays: w.playCountDelta, skips: w.skipCountDelta })),
       appearing_in_playlists: cache.getPlaylistsContainingTrack(seed.persistentId),
       source_playlists: coOccurrence.sourcePlaylists,
-      cache_age_hours: roundedCacheAge(deps),
+      cache_age_hours: readRoundedCacheAge(deps),
     };
 
     if (compact) {

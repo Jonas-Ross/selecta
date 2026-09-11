@@ -10,7 +10,7 @@ import {
 } from '../domain/track_projections.js';
 import { libraryFilterShape, toSearchFilters, validateFilterRanges } from './library_filters.js';
 import { parseInput, toErrorEnvelope, validationError } from './errors.js';
-import { roundedCacheAge } from './freshness.js';
+import { readRoundedCacheAge } from './freshness.js';
 import type { ToolDeps } from './deps.js';
 
 // The faceted filters are shared with library_overview (library_filters.libraryFilterShape);
@@ -118,7 +118,7 @@ export async function handleSearch(
               .sort((a, b) => a - b),
           }
         : {};
-    const common = { total_matches: total, cache_age_hours: roundedCacheAge(deps) };
+    const common = { total_matches: total, cache_age_hours: readRoundedCacheAge(deps) };
 
     if (input.compact === true) {
       return {

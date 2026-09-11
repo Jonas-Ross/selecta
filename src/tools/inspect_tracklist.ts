@@ -8,7 +8,7 @@ import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
 import { missingTrackIdsError } from '../operations/resources.js';
 import { parseInput, toErrorEnvelope } from './errors.js';
-import { roundedCacheAge } from './freshness.js';
+import { readRoundedCacheAge } from './freshness.js';
 import type { ToolDeps } from './deps.js';
 
 const MAX_TRACKS = 500;
@@ -50,7 +50,7 @@ export async function handleInspectTracklist(
 
     return {
       ...buildTracklistInspection(rows),
-      cache_age_hours: roundedCacheAge(deps),
+      cache_age_hours: readRoundedCacheAge(deps),
     };
   } catch (err) {
     return toErrorEnvelope(err);

@@ -6,6 +6,6 @@ export function roundCacheAge(age: number | null): number | null {
 }
 
 /** Read freshness when a handler has not already captured it in a snapshot. */
-export function roundedCacheAge(deps: ToolDeps): number | null {
+export function readRoundedCacheAge(deps: ToolDeps): number | null {
   return roundCacheAge(deps.cache().getCacheAgeHours());
 }

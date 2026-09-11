@@ -13,7 +13,7 @@ import {
   validateFilterRanges,
 } from './library_filters.js';
 import { parseInput, toErrorEnvelope } from './errors.js';
-import { roundedCacheAge } from './freshness.js';
+import { readRoundedCacheAge } from './freshness.js';
 import type { ToolDeps } from './deps.js';
 
 // Same faceted filters as search, minus `limit` (an overview aggregates the
@@ -40,7 +40,7 @@ export async function handleLibraryOverview(
 
     return shapeOverview(deps.cache().getOverview(toSearchFilters(input), recentSince), {
       filtered: Object.keys(input).length > 0,
-      cacheAgeHours: roundedCacheAge(deps),
+      cacheAgeHours: readRoundedCacheAge(deps),
       recentSince,
     });
   } catch (err) {
