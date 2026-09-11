@@ -500,6 +500,25 @@ export class SelectaCache {
     });
   }
 
+  /** Commit a confirmed creation and its related local state after the external call. */
+  persistPlaylistCreation(input: {
+    playlist: PlaylistWriteResult;
+    name: string;
+    note?: string;
+    rekey?: { staleId: string; live: { persistentId: string; name: string; trackIds: string[] } };
+  }): NoteRow | undefined {
+    return this.db.transaction(() => {
+      const { playlist, name, note, rekey } = input;
+
+      this.upsertPlaylistAfterWrite(playlist, name, playlist.trackPersistentIds);
+      this.recordPlaylistCreation(playlist.persistentId, name, playlist.trackPersistentIds);
+
+      if (rekey) this.applyLiveRekey(rekey.staleId, rekey.live);
+
+      return note === undefined ? undefined : this.setNote('playlist', playlist.persistentId, note);
+    })();
+  }
+
   /** The name on a creation receipt, by the ID Selecta created it under. */
   getCreationName(createdId: string): string | null {
     return this.queries.getCreationName(createdId);

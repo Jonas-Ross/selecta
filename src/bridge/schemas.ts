@@ -57,10 +57,32 @@ export const writeSuccess = z.object({
 const consistentCount = (v: z.infer<typeof writeSuccess>) =>
   v.trackCount === v.trackPersistentIds.length;
 
+// A rejection cannot prove no write if the payload also contains target evidence.
+// Unknown unrelated fields still strip normally. These constraints are limited
+// to creation, whose rejection can release a durable draft-save claim.
+const noCreationTarget = {
+  persistentId: z.never().optional(),
+  trackCount: z.never().optional(),
+  trackPersistentIds: z.never().optional(),
+  partialWrite: z.never().optional(),
+};
+const creationMissing = missing.extend(noCreationTarget);
+
+// Diagnostics only: after full create/clone validation fails, preserve a
+// separately validated target identity, never promote it to successful state.
+const creationTarget = z.object({ persistentId: id, trackPersistentIds: z.unknown().optional() });
+
+export const creationFailureTarget = z.union([
+  z.object({ partialWrite: creationTarget }).transform((value) => value.partialWrite),
+  creationTarget,
+]);
+
 export const write = z.union([
-  missing,
+  creationMissing,
   partialWriteResult,
-  writeSuccess.refine(consistentCount, { path: ['trackCount'] }),
+  writeSuccess
+    .extend({ partialWrite: z.never().optional() })
+    .refine(consistentCount, { path: ['trackCount'] }),
 ]);
 export const replace = z.union([
   missing,
@@ -70,13 +92,20 @@ export const replace = z.union([
 ]);
 export const clone = z.union([
   partialWriteResult,
-  missing,
-  notFound,
-  z.object({ ambiguousSource: z.object({ name: z.string(), persistentIds: ids.min(2) }) }),
-  z.object({ sourceNotUser: z.literal(true), sourceKind: kind }),
-  z.object({ invalidSourceTrackCount: count }),
+  creationMissing,
+  notFound.extend(noCreationTarget),
+  z
+    .object({ ambiguousSource: z.object({ name: z.string(), persistentIds: ids.min(2) }) })
+    .extend(noCreationTarget),
+  z.object({ sourceNotUser: z.literal(true), sourceKind: kind }).extend(noCreationTarget),
+  z.object({ invalidSourceTrackCount: count }).extend(noCreationTarget),
   writeSuccess
-    .extend({ sourcePersistentId: id, sourceName: z.string(), sourceTrackPersistentIds: ids })
+    .extend({
+      sourcePersistentId: id,
+      sourceName: z.string(),
+      sourceTrackPersistentIds: ids,
+      partialWrite: z.never().optional(),
+    })
     .refine(consistentCount, { path: ['trackCount'] }),
 ]);
 export const edit = z.union([

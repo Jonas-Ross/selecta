@@ -7,6 +7,7 @@
 export type ErrorCode =
   | 'draft_not_found'
   | 'draft_revision_conflict'
+  | 'operation_cleanup_failed' // creation committed, but its operation lock could not be removed
   | 'operation_busy'
   | 'automation_permission_denied' // macOS denied Music.app automation
   | 'music_app_not_running' // Music.app isn't open
@@ -54,10 +55,17 @@ export class BridgeError extends Error {
     message: string,
     public readonly hint?: string,
     public readonly partialWrite?: SelectaError['partial_write'],
+    // Only a validated script guard before mutation may establish this proof.
+    public readonly writePhase?: 'not_started',
   ) {
     super(message);
     this.name = 'BridgeError';
   }
+}
+
+/** Use only for a validated guard that returned before any external mutation. */
+export function preWriteError(code: ErrorCode, message: string, hint?: string): BridgeError {
+  return new BridgeError(code, message, hint, undefined, 'not_started');
 }
 
 // Canonical model-facing hints, one per ErrorCode — the single source of
@@ -69,6 +77,8 @@ export const defaultHints: Record<ErrorCode, string> = {
     'No local draft with that ID. Check the original draft_id or ask the agent to open a new draft explicitly.',
   draft_revision_conflict:
     'The draft has changed. Use get_playlist_draft and reconcile your edits before continuing.',
+  operation_cleanup_failed:
+    'Creation committed to Music.app and the cache, but its operation lock could not be removed. Follow the returned lock-path recovery instructions; do not repeat creation.',
   operation_busy: 'Another operation is active. Wait for it to finish before trying again.',
   automation_permission_denied:
     'macOS has not granted Music.app automation access. Ask the user to enable it in System Settings → Privacy & Security → Automation.',
@@ -85,3 +95,17 @@ export const defaultHints: Record<ErrorCode, string> = {
   enrichment_error:
     'An external metadata source failed (network down or rate-limiting). Completed chunks of this run are already saved — call enrich_features again later to continue.',
 };
+
+/** Unknown failures rethrow unless an operation explicitly supplies a fallback. */
+export function toErrorEnvelope(error: unknown, fallback?: SelectaError): SelectaError {
+  if (error instanceof BridgeError)
+    return {
+      error: error.errorCode,
+      hint: error.hint ?? defaultHints[error.errorCode],
+      ...(error.partialWrite ? { partial_write: error.partialWrite } : {}),
+    };
+
+  if (fallback) return { ...fallback, hint: `${fallback.hint} ${String(error)}` };
+
+  throw error;
+}

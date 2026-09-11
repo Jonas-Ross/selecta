@@ -74,6 +74,33 @@ describe('runJxa', () => {
     await expectErrorCode(runJxa('noop'), 'music_app_not_running');
   });
 
+  it.each([
+    {
+      stderr: 'execution error: Not authorized to send Apple events. (-1743)',
+      code: 'automation_permission_denied',
+    },
+    { stderr: "execution error: Application isn't running. (-600)", code: 'music_app_not_running' },
+  ])('does not infer creation phase from whole-process stderr: $code', async ({ stderr, code }) => {
+    // Controlled executor output verifies classification, not Music.app behavior.
+    // The same stderr contains no information about which Apple event failed.
+    const { bridge } = await import('../src/bridge/index.js');
+
+    stubExecFile({ error: new Error('Command failed'), stderr });
+
+    for (const attempt of [
+      () => bridge.createPlaylist({ name: 'Mix', trackIds: ['T1'] }),
+      () => bridge.clonePlaylist({ name: 'Mix', sourcePlaylistId: 'P1' }),
+    ]) {
+      await expect(attempt()).rejects.toMatchObject({
+        errorCode: code,
+        writePhase: undefined,
+        partialWrite: undefined,
+      });
+    }
+
+    expect(mockExecFile).toHaveBeenCalledTimes(2);
+  });
+
   it('maps any other non-zero exit to jxa_error', async () => {
     stubExecFile({
       error: new Error('Command failed'),

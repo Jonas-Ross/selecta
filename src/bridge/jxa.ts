@@ -11,6 +11,8 @@ const PERMISSION_SIGNATURE = /errAEPrivilegeError|-1743|not authorized/i;
 // App isn't running / can't be launched. -600 is procNotFound.
 const NOT_RUNNING_SIGNATURE = /-600|isn['’]?t running|not running|can['’]?t be found/i;
 
+// Whole-process stderr identifies the error, not which Apple event failed.
+// These codes never prove that creation stopped before Music.make.
 function mapJxaError(stderr: string): ErrorCode {
   if (PERMISSION_SIGNATURE.test(stderr)) return 'automation_permission_denied';
 
