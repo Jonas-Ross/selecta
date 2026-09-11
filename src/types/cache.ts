@@ -181,6 +181,40 @@ export type OverviewStats = {
   recentActivity: RecentActivity; // deltas recorded since the caller's cutoff
 };
 
+// Compound reads return raw cache facts; tools own wire projections and errors.
+export type SearchSnapshot = {
+  rows: SearchResultRow[];
+  total: number;
+  playlistPositions: Map<string, number[]>;
+  cacheAgeHours: number | null;
+};
+
+export type OverviewSnapshot = {
+  stats: OverviewStats;
+  cacheAgeHours: number | null;
+};
+
+export type TrackResolution = {
+  rows: TrackRow[];
+  missingIds: string[];
+  cacheAgeHours: number | null;
+};
+
+export type ResolvedTrackContext = {
+  kind: 'resolved';
+  seeds: TrackRow[];
+  sameArtist: TrackRow[];
+  coOccurrence: CoOccurrenceResult;
+  playHistory: PlayHistoryWindow[];
+  appearingInPlaylists: PlaylistRef[];
+  cacheAgeHours: number | null;
+};
+
+export type TrackContextSnapshot =
+  | { kind: 'invalid_playlists'; missingIds: string[]; nonUserIds: string[] }
+  | { kind: 'missing_tracks'; missingIds: string[] }
+  | ResolvedTrackContext;
+
 // Faceted search filters. All optional, combined as AND.
 // rating here is Music.app's 0..100 scale — the tool layer converts from 1..5.
 // Shared by searchTracks and overviewStats (overview ignores `limit`).

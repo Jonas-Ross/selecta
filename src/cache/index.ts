@@ -15,6 +15,7 @@ import type {
   NoteRow,
   NoteSubject,
   PendingTrack,
+  OverviewSnapshot,
   OverviewStats,
   PlayHistoryWindow,
   PlaylistRef,
@@ -22,6 +23,9 @@ import type {
   ReconcileAction,
   SearchFilters,
   SearchResultRow,
+  SearchSnapshot,
+  TrackContextSnapshot,
+  TrackResolution,
   TrackRow,
 } from '../types/cache.js';
 import { openDatabase } from './db.js';
@@ -185,7 +189,7 @@ export class SelectaCache {
   }
 
   /** Keep aliases, rows, totals, entry positions and freshness in one read snapshot. */
-  searchSnapshot(filters: SearchFilters) {
+  searchSnapshot(filters: SearchFilters): SearchSnapshot {
     return this.db.transaction(() => {
       const result = this.searchTracks(filters);
       const playlistPositions =
@@ -213,7 +217,7 @@ export class SelectaCache {
   }
 
   /** All grouped scans and freshness describe the same version of the library. */
-  overviewSnapshot(filters: SearchFilters, recentSince = recentSinceIso()) {
+  overviewSnapshot(filters: SearchFilters, recentSince = recentSinceIso()): OverviewSnapshot {
     return this.db.transaction(() => ({
       stats: this.getOverview(filters, recentSince),
       cacheAgeHours: this.getCacheAgeHours(),
@@ -255,7 +259,7 @@ export class SelectaCache {
   /** Resolve each distinct ID once, then restore every ordered occurrence.
    * Missing IDs are unique and retain first-seen order; rows contain only
    * resolved occurrences. Callers can reject misses without reading again. */
-  resolveTracks(trackIds: readonly string[]) {
+  resolveTracks(trackIds: readonly string[]): TrackResolution {
     return this.db.transaction(() => {
       const byId = new Map<string, TrackRow | null>();
       const missingIds: string[] = [];
@@ -304,7 +308,7 @@ export class SelectaCache {
     sameArtistLimit: number;
     coOccurrenceLimit: number;
     playHistoryLimit: number;
-  }) {
+  }): TrackContextSnapshot {
     return this.db.transaction(() => {
       const requestedIds = [...new Set(opts.filters.excludePlaylistIds ?? [])];
       const resolvedIds = requestedIds.map((id) => this.resolvePlaylistId(id));
