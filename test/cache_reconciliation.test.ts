@@ -41,6 +41,19 @@ describe('pure reconciliation planner', () => {
     expect(planSyncReconciliation([receipt({ currentExists: true })], ['Mix'])).toEqual([]);
   });
 
+  it('reports ordinary same-name candidates as ambiguous even with exactly one sequence match', () => {
+    const input = receipt({
+      candidates: [
+        { id: 'MATCH', trackIds: ['A', 'B', 'A'] },
+        { id: 'OTHER', trackIds: ['A', 'A', 'B'] },
+      ],
+    });
+
+    expect(planSyncReconciliation([input])).toEqual([
+      { kind: 'ambiguous', name: 'Mix', playlistIds: ['MATCH', 'OTHER'] },
+    ]);
+  });
+
   it('retains receipt order and reports each ambiguous name once without changing inputs', () => {
     const ambiguous = receipt({
       candidates: [
