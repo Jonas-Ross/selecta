@@ -307,9 +307,7 @@ function parseCloneResult(
 // the integration suite uses this to pick seed tracks without paying for a
 // full readLibrary snapshot.
 export async function listLibraryTrackIds(): Promise<string[]> {
-  const result = await runJxa(buildListLibraryTrackIdsScript(), schemas.ids);
-
-  return result;
+  return runJxa(buildListLibraryTrackIdsScript(), schemas.ids);
 }
 
 // Test-support: resolve a playlist's persistent ID by name. Used by the opt-in
