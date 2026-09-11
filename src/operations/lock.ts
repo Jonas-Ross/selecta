@@ -4,6 +4,21 @@ import { BridgeError } from '../types/errors.js';
 
 const memoryLocks = new WeakMap<object, Set<string>>();
 
+/** A settled action can survive this failure; the named lock still needs recovery. */
+export class OperationCleanupError extends Error {
+  constructor(
+    readonly lockPath: string,
+    cause: unknown,
+  ) {
+    super(`Could not remove operation lock ${lockPath}: ${String(cause)}`, { cause });
+    this.name = 'OperationCleanupError';
+  }
+
+  get recoveryHint(): string {
+    return `Stop all Selecta processes and inspect Music.app for pending writes before removing ${this.lockPath}. Never remove a live owner's lock.`;
+  }
+}
+
 /** Keep the read/await/write cycle exclusive across CLI and MCP processes. */
 export async function withOperation<T>(
   cache: SelectaCache,
@@ -47,7 +62,13 @@ export async function withOperation<T>(
       throw new BridgeError('cache_unavailable', 'Cannot acquire operation lock');
     }
 
-    release = () => rmSync(location, { recursive: true });
+    release = () => {
+      try {
+        rmSync(location, { recursive: true });
+      } catch (error) {
+        throw new OperationCleanupError(location, error);
+      }
+    };
 
     try {
       writeFileSync(`${location}/owner`, `pid=${process.pid}\n`, { mode: 0o600 });

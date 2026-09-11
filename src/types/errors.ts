@@ -7,6 +7,7 @@
 export type ErrorCode =
   | 'draft_not_found'
   | 'draft_revision_conflict'
+  | 'operation_cleanup_failed' // creation committed, but its operation lock could not be removed
   | 'operation_busy'
   | 'automation_permission_denied' // macOS denied Music.app automation
   | 'music_app_not_running' // Music.app isn't open
@@ -71,6 +72,8 @@ export const defaultHints: Record<ErrorCode, string> = {
     'No local draft with that ID. Check the original draft_id or ask the agent to open a new draft explicitly.',
   draft_revision_conflict:
     'The draft has changed. Use get_playlist_draft and reconcile your edits before continuing.',
+  operation_cleanup_failed:
+    'Creation committed to Music.app and the cache, but its operation lock could not be removed. Follow the returned lock-path recovery instructions; do not repeat creation.',
   operation_busy: 'Another operation is active. Wait for it to finish before trying again.',
   automation_permission_denied:
     'macOS has not granted Music.app automation access. Ask the user to enable it in System Settings → Privacy & Security → Automation.',

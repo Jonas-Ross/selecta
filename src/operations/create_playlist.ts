@@ -7,7 +7,7 @@ import type { SelectaCache } from '../cache/index.js';
 import { PLAYLIST_WRITE_TRACK_LIMIT, type Bridge } from '../types/bridge.js';
 import type { PlaylistRow } from '../types/cache.js';
 import { BridgeError, defaultHints, type SelectaError } from '../types/errors.js';
-import { withOperation } from './lock.js';
+import { OperationCleanupError, withOperation } from './lock.js';
 import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
 import { missingTrackIdsError, resolvePlaylist } from './resources.js';
 
@@ -32,7 +32,7 @@ function persistenceFailure(observed: CreationObservation, error: unknown): Crea
         playlist_id: observed.playlist.persistentId,
         observed_track_ids: observed.playlist.trackPersistentIds,
       },
-      hint: `Music.app returned the playlist, but local persistence or operation finalization failed: ${String(error)}. Inspect this target and run refresh_library to reconcile the cache; do not repeat the write.`,
+      hint: `Music.app returned the playlist, but local persistence failed: ${String(error)}. Inspect this target and run refresh_library to reconcile the cache; do not repeat the write.`,
     },
   };
 }
@@ -42,6 +42,7 @@ export async function createPlaylist(
   input: CreatePlaylistInput,
   deps: { cache: () => SelectaCache; bridge: Bridge },
 ): Promise<CreationOutcome> {
+  // release() runs in finally and can replace the callback's return value.
   let settled: CreationOutcome | undefined;
 
   try {
@@ -54,13 +55,33 @@ export async function createPlaylist(
     });
   } catch (error) {
     if (settled) {
-      if ('observed' in settled) return persistenceFailure(settled.observed, error);
+      const lockPath = error instanceof OperationCleanupError ? error.lockPath : undefined;
+      const cleanupHint =
+        error instanceof OperationCleanupError
+          ? `${error.message}. ${error.recoveryHint}`
+          : `Local operation cleanup failed: ${String(error)}.`;
+
+      if (settled.status === 'observed_success')
+        return {
+          ...settled,
+          status: 'committed_cleanup_failed',
+          lockPath,
+          error: {
+            error: 'operation_cleanup_failed',
+            partial_write: {
+              playlist_id: settled.observed.playlist.persistentId,
+              observed_track_ids: settled.observed.playlist.trackPersistentIds,
+            },
+            hint: `Creation committed to Music.app and the cache, including its receipt and any note. ${cleanupHint} No refresh or repeat creation is needed for this committed result.`,
+          },
+        };
 
       return {
         ...settled,
+        lockPath,
         error: {
           ...settled.error,
-          hint: `${settled.error.hint} Local operation finalization also failed: ${String(error)}. Inspect the operation lock before further writes.`,
+          hint: `${settled.error.hint} ${cleanupHint}`,
         },
       };
     }

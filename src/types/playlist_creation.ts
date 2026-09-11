@@ -25,7 +25,19 @@ export type CreationObservation = {
 };
 
 export type CreationOutcome =
-  | { status: 'rejected_before_write'; error: SelectaError }
-  | { status: 'write_uncertain'; error: SelectaError }
+  | { status: 'rejected_before_write'; error: SelectaError; lockPath?: string }
+  | { status: 'write_uncertain'; error: SelectaError; lockPath?: string }
   | { status: 'observed_success'; observed: CreationObservation; note?: NoteRow }
-  | { status: 'persistence_failed'; observed: CreationObservation; error: SelectaError };
+  | {
+      status: 'committed_cleanup_failed';
+      observed: CreationObservation;
+      note?: NoteRow;
+      error: SelectaError;
+      lockPath?: string;
+    }
+  | {
+      status: 'persistence_failed';
+      observed: CreationObservation;
+      error: SelectaError;
+      lockPath?: string;
+    };

@@ -18,13 +18,33 @@ export type CreatePlaylistOutput = {
   };
 };
 
+export type CreationFailureResponse = SelectaError & { lock_path?: string };
+export type CommittedCreationCleanupResponse = CreatePlaylistOutput &
+  CreationFailureResponse & {
+    error: 'operation_cleanup_failed';
+    creation_committed: true;
+  };
+export type CreatePlaylistResponse =
+  | CreatePlaylistOutput
+  | CreationFailureResponse
+  | CommittedCreationCleanupResponse;
+
 /** Wire projection shared by the direct and draft-save adapters. */
-export function creationResponse(outcome: CreationOutcome): CreatePlaylistOutput | SelectaError {
-  if (outcome.status !== 'observed_success') return outcome.error;
+export function creationResponse(outcome: CreationOutcome): CreatePlaylistResponse {
+  if (outcome.status !== 'observed_success' && outcome.status !== 'committed_cleanup_failed') {
+    return { ...outcome.error, ...(outcome.lockPath ? { lock_path: outcome.lockPath } : {}) };
+  }
 
   const { playlist, name, expectedTrackIds, source } = outcome.observed;
 
   return {
+    ...(outcome.status === 'committed_cleanup_failed'
+      ? {
+          ...outcome.error,
+          creation_committed: true,
+          ...(outcome.lockPath ? { lock_path: outcome.lockPath } : {}),
+        }
+      : {}),
     playlist_id: playlist.persistentId,
     name,
     track_count: playlist.trackCount,
