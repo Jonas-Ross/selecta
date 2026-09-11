@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPlaylist } from '../src/operations/create_playlist.js';
 import { withOperation } from '../src/operations/lock.js';
 import { PREVIEW_PLAYLIST_NAME } from '../src/operations/playlist.js';
-import { BridgeError } from '../src/types/errors.js';
+import { BridgeError, defaultHints } from '../src/types/errors.js';
 import { handleCreatePlaylist } from '../src/tools/create_playlist.js';
 import { makeToolDeps } from './helpers.js';
 
@@ -250,3 +250,21 @@ describe('clone persistence and preview rekey', () => {
     expect(deps.cacheInstance.getNote('playlist', 'P-NEW')?.body).toBe('new note');
   });
 });
+
+it.each(['automation_permission_denied', 'music_app_not_running'] as const)(
+  'keeps uncertain %s recovery guidance consistent without changing read defaults',
+  async (code) => {
+    vi.mocked(deps.bridge.createPlaylist).mockRejectedValue(
+      new BridgeError(code, 'executor error'),
+    );
+    const result = await createPlaylist({ name: 'Mix', trackIds: requested }, deps);
+
+    expect(result).toMatchObject({ status: 'write_uncertain' });
+
+    if (!('error' in result)) throw new Error('Expected uncertain result');
+
+    expect(result.error.hint).toContain('Inspect Music.app; do not repeat the write');
+    expect(result.error.hint).not.toContain('before retrying');
+    expect(defaultHints.music_app_not_running).toContain('before retrying');
+  },
+);

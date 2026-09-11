@@ -199,12 +199,21 @@ async function createUnderLock(
         : { error: 'cache_unavailable', hint: 'Creation was rejected before calling Music.app.' },
     );
 
+    // These read-oriented defaults suggest retrying; creation needs inspection
+    // first because an executor error carries no event-phase evidence.
+    const failureHint =
+      envelope.error === 'music_app_not_running'
+        ? 'Music.app was unavailable during the creation attempt.'
+        : envelope.error === 'automation_permission_denied'
+          ? 'Music.app automation was denied during the creation attempt.'
+          : envelope.hint;
+
     return {
       status: preWrite ? 'rejected_before_write' : 'write_uncertain',
       error: !preWrite
         ? {
             ...envelope,
-            hint: `${envelope.hint} Creation may have started. Inspect Music.app; do not repeat the write.`,
+            hint: `${failureHint} Creation may have started. Inspect Music.app; do not repeat the write.`,
           }
         : envelope,
     };
