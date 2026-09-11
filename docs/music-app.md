@@ -29,7 +29,7 @@ Selecta records creation receipts and uses refresh to recognize unambiguous reke
 
 **Identical contents do not prove an echo.** A user can intentionally create the same name and sequence, including outside Selecta. Refresh never deletes playlists: it reports matching copies in `sync_reconciliation.ambiguous` so the model can ask which to keep before an explicit `delete_playlist`. CLI `refresh` and MCP `refresh_library` use the same operation. A surviving edited playlist is never rekeyed onto an untouched copy.
 
-For compatibility, refresh still serializes empty `duplicates_removed` and `failures` arrays whenever `sync_reconciliation` is present, and stores zero counts for those fields in new diagnostic summaries. Diagnostics continue reading historical nonzero counts without rewriting stored data. Existing receipt aliases remain readable; removing the unused duplicate-removal helper does not migrate receipts or notes. Explicit deletion prunes the deleted playlist's note and retires receipts pointing at it; it does not transfer memory to a same-name copy.
+`duplicates_removed` and `failures` remain empty in refresh responses and zero in new diagnostic summaries for compatibility. Historical summaries and receipt aliases remain readable without migration.
 
 The old `npm run verify:echo` create/poll/delete probe was removed because its single-survivor assertion depended on automatic duplicate removal. Use `npm test` for fixture coverage. To inspect a live sync event, explicitly run `refresh` and inspect `sync_reconciliation.ambiguous`; deciding which copy to delete remains a separate user action.
 
