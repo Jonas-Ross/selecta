@@ -507,6 +507,8 @@ describe('sync reconciliation', () => {
 
   it('keeps historical receipt aliases readable without rewriting them', () => {
     const cache = refreshed();
+    const now = new Date();
+    const createdAt = new Date(now.getTime() - 30 * 60_000).toISOString();
 
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-SURVIVOR' }), { durationMs: 1 });
     // A receipt persisted by the retired duplicate-removal policy.
@@ -514,16 +516,23 @@ describe('sync reconciliation', () => {
       .prepare(`INSERT INTO playlist_creations
       (created_persistent_id, current_persistent_id, name, track_ids_json, created_at)
       VALUES (?, ?, ?, ?, ?)`)
-      .run(CREATED_ID, 'P-SURVIVOR', NAME, JSON.stringify(TRACKS), '2025-01-01T00:00:00.000Z');
+      .run(CREATED_ID, 'P-SURVIVOR', NAME, JSON.stringify(TRACKS), createdAt);
     const receipts = cache.db.prepare('SELECT * FROM playlist_creations').all();
     const note = cache.setNote('playlist', 'P-SURVIVOR', 'historical survivor note');
 
     expect(cache.resolvePlaylistId(CREATED_ID)).toBe('P-SURVIVOR');
     expect(cache.searchTracks({ inPlaylist: CREATED_ID }).rows).toHaveLength(TRACKS.length);
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-SURVIVOR' }), { durationMs: 1 });
-    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([]);
+    expect(cache.getRecentCreationNames(60, now)).toEqual([NAME]);
+    expect(cache.planSyncReconciliation({ windowMinutes: 60, now })).toEqual([]);
     expect(cache.db.prepare('SELECT * FROM playlist_creations').all()).toEqual(receipts);
     expect(cache.getNote('playlist', 'P-SURVIVOR')).toEqual(note);
+
+    // Prove the legacy receipt participates in planning rather than aging out.
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-NEXT' }), { durationMs: 1 });
+    expect(cache.planSyncReconciliation({ windowMinutes: 60, now })).toEqual([
+      { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: 'P-SURVIVOR', toId: 'P-NEXT' },
+    ]);
   });
 
   it('getOverview scopes by a creation-time ID after a rekey (resolve path)', () => {
