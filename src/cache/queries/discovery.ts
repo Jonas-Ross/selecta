@@ -1,5 +1,6 @@
 // Connection-owned query statements. Transactions belong to SelectaCache.
 import type { Database } from 'better-sqlite3';
+import { recentSinceIso } from '../../domain/recent_activity.js';
 import type {
   CoOccurrenceFilters,
   CoOccurrenceResult,
@@ -111,7 +112,6 @@ const DEDUPE_TIEBREAK = `
 // totals never see params they don't use (better-sqlite3 rejects those).
 function orderClause(
   filters: SearchFilters,
-  recentSinceIso: () => string,
   rankRef = 'f.rank',
 ): { sql: string; params: Record<string, unknown> } {
   switch (filters.sort) {
@@ -159,7 +159,7 @@ function orderClause(
   }
 }
 
-export function createDiscoveryQueries(db: Database, recentSinceIso: () => string) {
+export function createDiscoveryQueries(db: Database) {
   db.function(SONG_IDENTITY_SQL_FUNCTION, { deterministic: true }, songIdentityKey);
 
   const playlistExistsStmt = db.prepare('SELECT 1 FROM playlists WHERE persistent_id = ?');
@@ -216,7 +216,7 @@ export function createDiscoveryQueries(db: Database, recentSinceIso: () => strin
         const total = (
           db.prepare(`SELECT COUNT(*) AS n ${from} ${whereSql}`).get(params) as { n: number }
         ).n;
-        const order = orderClause(filters, recentSinceIso);
+        const order = orderClause(filters);
         const rows = db
           .prepare(
             `SELECT ${TRACK_COLUMNS} ${from} ${whereSql} ${order.sql} LIMIT @limit OFFSET @offset`,
@@ -243,7 +243,7 @@ export function createDiscoveryQueries(db: Database, recentSinceIso: () => strin
                group_concat(t.persistent_id) OVER (PARTITION BY ${DEDUPE_KEY}) AS groupIds
         ${from} ${whereSql}
       `;
-      const order = orderClause(filters, recentSinceIso, 'w.ftsRank');
+      const order = orderClause(filters, 'w.ftsRank');
       const rows = db
         .prepare(
           `SELECT ${TRACK_COLUMNS}, w.groupIds
