@@ -54,7 +54,7 @@ import {
   buildReorderTracksScript,
 } from './scripts/edit_playlist.js';
 import { buildSetLovedScript, buildSetRatingScript } from './scripts/track_signal.js';
-import { BridgeError } from '../types/errors.js';
+import { BridgeError, preWriteError } from '../types/errors.js';
 import {
   type Bridge,
   type LibrarySnapshot,
@@ -195,13 +195,13 @@ function parseEditResult(
 // tracks return { missingTrackIds } — without writing anything — when any
 // requested ID is absent from the live library (stale cache).
 function throwMissingTracks(missing: string[], writePhase?: 'not_started'): never {
-  throw new BridgeError(
-    'track_not_found',
-    `Music.app has no tracks with persistent IDs: ${missing.join(', ')}`,
-    'These IDs are in the cache but not the live library — the cache is stale. Run refresh_library and re-resolve the tracks.',
-    undefined,
-    writePhase,
-  );
+  const message = `Music.app has no tracks with persistent IDs: ${missing.join(', ')}`;
+  const hint =
+    'These IDs are in the cache but not the live library — the cache is stale. Run refresh_library and re-resolve the tracks.';
+
+  if (writePhase === 'not_started') throw preWriteError('track_not_found', message, hint);
+
+  throw new BridgeError('track_not_found', message, hint);
 }
 
 function parseSignalResult(
@@ -277,64 +277,52 @@ function parseCloneResult(
     throwPartialWrite(result.partialWrite);
 
   if ('playlistNotFound' in result && reservedSourceName !== undefined) {
-    throw new BridgeError(
+    throw preWriteError(
       'playlist_not_found',
       `Music.app has neither that persistent ID nor a plain user playlist named "${reservedSourceName}".`,
       `The "${reservedSourceName}" slot no longer exists in Music.app. Call preview_playlist again to rebuild it, then clone that result. Nothing was created.`,
-      undefined,
-      'not_started',
     );
   }
 
   if ('playlistNotFound' in result) {
-    throw new BridgeError(
+    throw preWriteError(
       'playlist_not_found',
       'Music.app has no source playlist with that persistent ID.',
       'The source playlist is not in the live library — run refresh_library and re-resolve it via list_playlists.',
-      undefined,
-      'not_started',
     );
   }
 
   if ('ambiguousSource' in result) {
     const { name, persistentIds } = result.ambiguousSource;
 
-    throw new BridgeError(
+    throw preWriteError(
       'validation_error',
       `Music.app has ${persistentIds.length} plain user playlists named "${name}": ${persistentIds.join(', ')}.`,
       `The "${name}" slot is ambiguous — Selecta will not guess which copy the user auditioned. Run refresh_library and clone the intended copy by its list_playlists ID, or delete the extra copy with delete_playlist and retry. Nothing was created.`,
-      undefined,
-      'not_started',
     );
   }
 
   if ('sourceNotUser' in result) {
-    throw new BridgeError(
+    throw preWriteError(
       'playlist_not_editable',
       `Source is a ${result.sourceKind} playlist, not a plain user playlist.`,
       'Clone only a non-empty plain user playlist; generated, smart, subscription, special, and folder sources are intentionally rejected.',
-      undefined,
-      'not_started',
     );
   }
 
   if ('invalidSourceTrackCount' in result) {
-    throw new BridgeError(
+    throw preWriteError(
       'validation_error',
       `Source playlist has ${result.invalidSourceTrackCount} live entries; expected 1-${PLAYLIST_WRITE_TRACK_LIMIT}.`,
       `Choose a non-empty plain user playlist with at most ${PLAYLIST_WRITE_TRACK_LIMIT} entries. Nothing was created.`,
-      undefined,
-      'not_started',
     );
   }
 
   if ('missingTrackIds' in result) {
-    throw new BridgeError(
+    throw preWriteError(
       'track_not_found',
       `Live source playlist contains unavailable track IDs: ${result.missingTrackIds.join(', ')}`,
       'Remove or replace the unavailable entries in the source playlist before trying again. refresh_library cannot repair entries missing from the live library; do not retry the same source unchanged.',
-      undefined,
-      'not_started',
     );
   }
 

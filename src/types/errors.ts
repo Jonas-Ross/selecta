@@ -63,6 +63,11 @@ export class BridgeError extends Error {
   }
 }
 
+/** Use only for a validated guard that returned before any external mutation. */
+export function preWriteError(code: ErrorCode, message: string, hint?: string): BridgeError {
+  return new BridgeError(code, message, hint, undefined, 'not_started');
+}
+
 // Canonical model-facing hints, one per ErrorCode — the single source of
 // truth. The bridge throws with only an error code; consumers
 // resolve the hint as `err.hint ?? defaultHints[err.errorCode]`, so a per-call
