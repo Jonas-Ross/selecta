@@ -3,7 +3,7 @@
 // user's own playlists. With seed_ids, one aggregated co-occurrence view
 // across the whole seed set instead of N single-seed calls.
 
-import { summarizeIds } from '../domain/id_list.js';
+import { summarizeIds } from '../types/errors.js';
 import { z } from 'zod';
 import type { SelectaError } from '../types/errors.js';
 import type { CoOccurrenceFilters, PlaylistRef, SourcePlaylistAudit } from '../types/cache.js';

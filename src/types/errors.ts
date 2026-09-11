@@ -4,8 +4,6 @@
 // bridge/ — because every other layer consumes these too and must not depend
 // on the bridge package.
 
-import { summarizeIds } from '../domain/id_list.js';
-
 export type ErrorCode =
   | 'draft_not_found'
   | 'draft_revision_conflict'
@@ -29,6 +27,13 @@ export type SelectaError = {
   partial_write?: { playlist_id: string; observed_track_ids?: string[] };
   hint: string; // model-facing; short, actionable
 };
+
+/** Bound an ID list in error hints while retaining the exact overflow count. */
+export function summarizeIds(ids: string[]): string {
+  const more = ids.length > 5 ? ` (+${ids.length - 5} more)` : '';
+
+  return `${ids.slice(0, 5).join(', ')}${more}`;
+}
 
 /** Build the one model-facing error format for cached track-ID misses. */
 export function trackNotFoundError(

@@ -1,10 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { roundCacheAge } from '../src/tools/freshness.js';
 import { capDistribution } from '../src/domain/distributions.js';
-import { summarizeIds } from '../src/domain/id_list.js';
 import { RECENT_WINDOW_DAYS, recentSinceIso } from '../src/domain/recent_activity.js';
 import { recentSinceIso as queryCutoff } from '../src/cache/queries.js';
-import { trackNotFoundError } from '../src/types/errors.js';
+import { summarizeIds, trackNotFoundError } from '../src/types/errors.js';
 import { handleGetTrackContext } from '../src/tools/get_track_context.js';
 import { handleLibraryOverview } from '../src/tools/library_overview.js';
 import { handleLibraryExplorer } from '../src/tools/library_explorer.js';
