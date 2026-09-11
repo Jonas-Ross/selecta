@@ -1,4 +1,4 @@
-import type { CreationOutcome } from '../operations/create_playlist.js';
+import type { CreationOutcome } from '../types/playlist_creation.js';
 import type { SelectaError } from '../types/errors.js';
 import { apiNoteFromRow, type ApiNote } from './track_projections.js';
 

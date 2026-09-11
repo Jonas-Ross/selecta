@@ -1,42 +1,15 @@
+import type {
+  CreatePlaylistInput,
+  CreationObservation,
+  CreationOutcome,
+} from '../types/playlist_creation.js';
 import type { SelectaCache } from '../cache/index.js';
-import {
-  PLAYLIST_WRITE_TRACK_LIMIT,
-  type Bridge,
-  type PlaylistWriteResult,
-} from '../types/bridge.js';
-import type { NoteRow, PlaylistRow } from '../types/cache.js';
+import { PLAYLIST_WRITE_TRACK_LIMIT, type Bridge } from '../types/bridge.js';
+import type { PlaylistRow } from '../types/cache.js';
 import { BridgeError, defaultHints, type SelectaError } from '../types/errors.js';
 import { withOperation } from './lock.js';
 import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
 import { missingTrackIdsError, resolvePlaylist } from './resources.js';
-
-export type CreatePlaylistInput = {
-  name: string;
-  description?: string;
-  note?: string;
-} & (
-  | { trackIds: string[]; sourcePlaylistId?: never }
-  | { sourcePlaylistId: string; trackIds?: never }
-);
-
-export type CreationObservation = {
-  playlist: PlaylistWriteResult;
-  name: string;
-  expectedTrackIds: string[];
-  source?: {
-    playlistId: string;
-    name: string;
-    trackIds: string[];
-    requestedId: string;
-    cachedId: string;
-  };
-};
-
-export type CreationOutcome =
-  | { status: 'rejected_before_write'; error: SelectaError }
-  | { status: 'write_uncertain'; error: SelectaError }
-  | { status: 'observed_success'; observed: CreationObservation; note?: NoteRow }
-  | { status: 'persistence_failed'; observed: CreationObservation; error: SelectaError };
 
 function errorEnvelope(error: unknown, fallback: SelectaError): SelectaError {
   if (!(error instanceof BridgeError))
