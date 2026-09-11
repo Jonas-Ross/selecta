@@ -12,7 +12,7 @@ const writes = [
     name: 'clone',
     invoke: () => bridge.clonePlaylist({ name: 'Mix', sourcePlaylistId: 'SOURCE' }),
   },
-];
+] as const;
 
 describe.each(writes)('$name validated outcomes', ({ name, invoke }) => {
   it.each([
@@ -41,33 +41,50 @@ describe.each(writes)('$name validated outcomes', ({ name, invoke }) => {
   });
 
   it.each([
-    { partialWrite: null },
-    { partialWrite: { persistentId: '' } },
-    { partialWrite: { persistentId: 'P', trackPersistentIds: [123] } },
-    { missingTrackIds: [] },
+    {
+      reason: 'null partial receipt',
+      payload: { partialWrite: null },
+      expected: { create: undefined, replace: undefined, clone: undefined },
+    },
+    {
+      reason: 'empty target ID',
+      payload: { partialWrite: { persistentId: '' } },
+      expected: { create: undefined, replace: undefined, clone: undefined },
+    },
+    {
+      reason: 'invalid observed IDs',
+      payload: { partialWrite: { persistentId: 'P', trackPersistentIds: [123] } },
+      expected: { create: { playlist_id: 'P' }, replace: undefined, clone: { playlist_id: 'P' } },
+    },
+    {
+      reason: 'empty missing-track guard',
+      payload: { missingTrackIds: [] },
+      expected: { create: undefined, replace: undefined, clone: undefined },
+    },
     // Otherwise valid for each write operation: trackCount disagrees with the one observed ID.
     {
-      persistentId: 'P',
-      trackCount: 2,
-      trackPersistentIds: ['A'],
-      created: false,
-      sourcePersistentId: 'SOURCE',
-      sourceName: 'Source',
-      sourceTrackPersistentIds: ['A'],
+      reason: 'trackCount differs from observed entry count',
+      payload: {
+        persistentId: 'P',
+        trackCount: 2,
+        trackPersistentIds: ['A'],
+        created: false,
+        sourcePersistentId: 'SOURCE',
+        sourceName: 'Source',
+        sourceTrackPersistentIds: ['A'],
+      },
+      expected: {
+        create: { playlist_id: 'P', observed_track_ids: ['A'] },
+        replace: undefined,
+        clone: { playlist_id: 'P', observed_track_ids: ['A'] },
+      },
     },
-  ])('rejects malformed responses at the Music.app boundary: %j', async (payload) => {
+  ])('rejects $reason at the Music.app boundary', async ({ payload, expected }) => {
     vi.mocked(runJxa).mockResolvedValue(payload);
     await expect(invoke()).rejects.toMatchObject({
       errorCode: 'jxa_error',
       message: expect.stringContaining('Music.app: invalid payload'),
-      partialWrite:
-        name === 'replace'
-          ? undefined
-          : 'persistentId' in payload
-            ? { playlist_id: 'P', observed_track_ids: ['A'] }
-            : payload.partialWrite?.persistentId === 'P'
-              ? { playlist_id: 'P' }
-              : undefined,
+      partialWrite: expected[name],
     });
   });
 
