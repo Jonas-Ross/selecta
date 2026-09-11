@@ -116,8 +116,6 @@ export function createDraftController(
     el('feedback').value = next.feedback;
     draftId = state.draft.draft_id;
     render();
-
-    return next.accepted;
   }
 
   function receive(result: unknown, expectedId?: string) {
