@@ -350,6 +350,8 @@ export function createDraftController(
   let resultFallback: ReturnType<typeof setTimeout> | undefined;
 
   app.ontoolinput = ({ arguments: args }) => {
+    // Input is only a recovery hint; late notifications must not retarget edits
+    // from a draft already accepted from a validated result.
     if (state || typeof args?.draft_id !== 'string') return;
 
     draftId = args.draft_id;

@@ -482,6 +482,24 @@ it('recovers input-only delivery after the grace period and makes no write', asy
   expect(f.calls.map((call) => call.name)).toEqual(['get_playlist_draft']);
 });
 
+it('keeps edits on the accepted draft when a late input names another draft', async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+
+  await f.start();
+  f.el('feedback').value = 'Keep my current draft';
+  f.app.ontoolinput?.({ arguments: { draft_id: '00000000-0000-4000-8000-000000000002' } });
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(f.calls).toHaveLength(0);
+  await f.el('keep-feedback').onclick();
+  expect(f.calls).toEqual([
+    {
+      name: 'edit_playlist_draft',
+      arguments: { draft_id: id, revision: 1, feedback: 'Keep my current draft' },
+    },
+  ]);
+});
+
 it('clears an old inspection error when a fresh inspection resolves the tracks', async () => {
   const f = fixture();
   const data = initial();

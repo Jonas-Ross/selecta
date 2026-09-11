@@ -63,6 +63,9 @@ finished errors. A mismatched observed order remains an outcome requiring
 inspection. Failed saves keep draft and partial-write receipts visible. Host
 message rejection leaves feedback in the draft and allows another explicit
 Send feedback action. Local unsent typing survives result replay and recovery.
+Tool input supplies a recovery hint only until the card accepts a draft result.
+Later input notifications cannot retarget that initialized draft; a validated
+result or explicit recovery establishes a different draft.
 
 `npm run typecheck:ui` checks the draft entry point, controller, pure state module
 and controller tests without emitting files; the normal build includes it, so
