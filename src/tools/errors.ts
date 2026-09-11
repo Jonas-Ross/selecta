@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { BridgeError, defaultHints, type SelectaError } from '../types/errors.js';
+import { toErrorEnvelope as sharedErrorEnvelope, type SelectaError } from '../types/errors.js';
 
 export function validationError(hint: string): SelectaError {
   return { error: 'validation_error', hint };
@@ -26,15 +26,7 @@ export function parseInput<T>(
 
 /** Convert a thrown BridgeError to the wire envelope; rethrow anything else. */
 export function toErrorEnvelope(err: unknown): SelectaError {
-  if (err instanceof BridgeError) {
-    return {
-      error: err.errorCode,
-      hint: err.hint ?? defaultHints[err.errorCode],
-      ...(err.partialWrite ? { partial_write: err.partialWrite } : {}),
-    };
-  }
-
-  throw err;
+  return sharedErrorEnvelope(err);
 }
 
 export function isSelectaError(value: object): value is SelectaError {

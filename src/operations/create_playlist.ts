@@ -6,21 +6,10 @@ import type {
 import type { SelectaCache } from '../cache/index.js';
 import { PLAYLIST_WRITE_TRACK_LIMIT, type Bridge } from '../types/bridge.js';
 import type { PlaylistRow } from '../types/cache.js';
-import { BridgeError, defaultHints, type SelectaError } from '../types/errors.js';
+import { BridgeError, toErrorEnvelope, type SelectaError } from '../types/errors.js';
 import { OperationCleanupError, withOperation } from './lock.js';
 import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
 import { missingTrackIdsError, resolvePlaylist } from './resources.js';
-
-function errorEnvelope(error: unknown, fallback: SelectaError): SelectaError {
-  if (!(error instanceof BridgeError))
-    return { ...fallback, hint: `${fallback.hint} ${String(error)}` };
-
-  return {
-    error: error.errorCode,
-    hint: error.hint ?? defaultHints[error.errorCode],
-    ...(error.partialWrite ? { partial_write: error.partialWrite } : {}),
-  };
-}
 
 function persistenceFailure(observed: CreationObservation, error: unknown): CreationOutcome {
   return {
@@ -88,7 +77,7 @@ export async function createPlaylist(
 
     return {
       status: 'rejected_before_write',
-      error: errorEnvelope(error, {
+      error: toErrorEnvelope(error, {
         error: 'cache_unavailable',
         hint: 'Creation was rejected before calling Music.app.',
       }),
@@ -189,7 +178,7 @@ async function createUnderLock(
     const preWrite =
       !attempted ||
       (error instanceof BridgeError && error.writePhase === 'not_started' && !error.partialWrite);
-    const envelope = errorEnvelope(
+    const envelope = toErrorEnvelope(
       error,
       attempted
         ? {

@@ -95,3 +95,17 @@ export const defaultHints: Record<ErrorCode, string> = {
   enrichment_error:
     'An external metadata source failed (network down or rate-limiting). Completed chunks of this run are already saved — call enrich_features again later to continue.',
 };
+
+/** Unknown failures rethrow unless an operation explicitly supplies a fallback. */
+export function toErrorEnvelope(error: unknown, fallback?: SelectaError): SelectaError {
+  if (error instanceof BridgeError)
+    return {
+      error: error.errorCode,
+      hint: error.hint ?? defaultHints[error.errorCode],
+      ...(error.partialWrite ? { partial_write: error.partialWrite } : {}),
+    };
+
+  if (fallback) return { ...fallback, hint: `${fallback.hint} ${String(error)}` };
+
+  throw error;
+}
