@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { z } from 'zod';
-import { CallToolRequestParamsSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestParamsSchema } from '@modelcontextprotocol/core';
 import { SelectaCache } from '../dist/cache/index.js';
 import { DraftStore } from '../dist/drafts/store.js';
 import { handleLibraryExplorer } from '../dist/tools/library_explorer.js';

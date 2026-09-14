@@ -1,8 +1,7 @@
 // Additive MCP Apps registration: the widget resource and the tools whose
 // results render in it. The plain draft tools register in server.ts.
 import { readFile } from 'node:fs/promises';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
 import {
   registerAppResource,
   registerAppTool,
