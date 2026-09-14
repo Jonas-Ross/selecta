@@ -390,6 +390,21 @@
           padding-top: 14px;
           gap: 12px;
         }
+        .draft-preview {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding-top: 8px;
+        }
+        #start-preview {
+          flex-shrink: 0;
+        }
+        #preview-status {
+          margin: 0;
+          font-size: 11px;
+          color: var(--muted);
+          line-height: 1.4;
+        }
         #save {
           border-color: var(--line);
           font-size: 11px;
@@ -666,6 +681,10 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-5 5 5-5 5 5" /></svg>
               </button>
             </div>
+          </section>
+          <section class="draft-preview" aria-label="Draft preview">
+            <button id="start-preview">Start preview</button>
+            <p id="preview-status" role="status"></p>
           </section>
           <footer>
             <button

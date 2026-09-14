@@ -26,6 +26,12 @@ const fixture = JSON.parse(
 const handlers = new PlaylistDraftTools({
   cache: () => caches.draft,
   bridge: {
+    replacePlaylist: async ({ trackIds }) => ({
+      persistentId: 'FIXTURE-PREVIEW',
+      trackCount: trackIds.length,
+      trackPersistentIds: trackIds,
+      created: false,
+    }),
     createPlaylist: async ({ trackIds }) => ({
       persistentId: `PREVIEW-${randomUUID()}`,
       trackCount: trackIds.length,
@@ -258,6 +264,7 @@ const server = createServer(async (req, res) => {
         get_playlist_draft: 'get',
         edit_playlist_draft: 'edit',
         save_playlist_draft: 'save',
+        preview_playlist_draft: 'preview',
       }[name];
 
       if (!method) {

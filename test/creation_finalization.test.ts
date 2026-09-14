@@ -269,3 +269,39 @@ it.each([false, true])(
     expect(bridge.openPreview).toHaveBeenCalledOnce();
   },
 );
+
+it('retains linked preview cleanup failure and target across subsequent draft reads', async () => {
+  const store = new DraftStore(join(dir, 'drafts.db'));
+  const bridge = makeBridge({
+    replacePlaylist: vi.fn(async ({ trackIds }) => ({
+      persistentId: 'P-PREVIEW',
+      trackCount: trackIds.length,
+      trackPersistentIds: trackIds,
+      created: false,
+    })),
+  });
+  const tools = new PlaylistDraftTools({ cache: () => cache, bridge, drafts: () => store });
+  const draft = store.create(randomUUID(), 'Fixture', ids);
+
+  failCleanup();
+  expect(await tools.preview({ draft_id: draft.draft_id, revision: draft.revision })).toMatchObject(
+    {
+      preview: {
+        status: 'error',
+        result: {
+          error: 'operation_cleanup_failed',
+          playlist_id: 'P-PREVIEW',
+          observed_track_ids: ids,
+          lock_path: `${realpathSync(cache.db.name)}.music.lock`,
+        },
+      },
+    },
+  );
+  expect(await tools.get({ draft_id: draft.draft_id })).toMatchObject({
+    preview: {
+      status: 'error',
+      result: { error: 'operation_cleanup_failed', observed_track_ids: ids },
+    },
+  });
+  expect(existsSync(`${cache.db.name}.music.lock`)).toBe(true);
+});

@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { Draft, DraftResponse, DraftSaveOutcome, type DraftView } from '../src/drafts/contracts.js';
+import {
+  Draft,
+  DraftResponse,
+  DraftSaveOutcome,
+  type DraftView,
+  type PreviewState,
+} from '../src/drafts/contracts.js';
 
 const record = z.record(z.string(), z.unknown());
 const envelope = z.object({
@@ -67,6 +73,21 @@ export function acceptDraftResponse(
 
   const same = previous?.draft.draft_id === draft.draft_id;
 
+  if (
+    same &&
+    previous.preview?.status === 'error' &&
+    (data.preview?.version ?? 0) <= previous.preview.version &&
+    data.preview?.generation === previous.preview.generation
+  )
+    data = { ...data, preview: previous.preview };
+
+  if (
+    same &&
+    draft.revision === previous.draft.revision &&
+    (data.preview?.version ?? 0) < (previous.preview?.version ?? 0)
+  )
+    return { state: previous, feedback: typed, accepted: false };
+
   if (same && draft.revision < previous.draft.revision)
     return { state: previous, feedback: typed, accepted: false };
 
@@ -106,7 +127,13 @@ export function acceptDraftResponse(
     same && (draft.revision === previous.draft.revision || typed !== previous.draft.feedback);
 
   return {
-    state: { ...data, draft, inspection, inspection_error },
+    state: {
+      ...data,
+      draft,
+      inspection,
+      inspection_error,
+      preview: data.preview ?? (same ? previous.preview : undefined),
+    },
     feedback: keepTyped ? typed : draft.feedback,
     accepted: true,
   };
@@ -115,7 +142,7 @@ export function acceptDraftResponse(
 export function draftContext(state: DraftView) {
   const { draft_id, revision, entries, selected_entry_ids, feedback } = state.draft;
 
-  return { draft_id, revision, entries, selected_entry_ids, feedback };
+  return { draft_id, revision, entries, selected_entry_ids, feedback, preview: state.preview };
 }
 
 export function recoveredStatus(draft: Draft): { text: string; tone: 'ok' | 'error' | 'pending' } {
@@ -154,4 +181,22 @@ export function recoveredStatus(draft: Draft): { text: string; tone: 'ok' | 'err
     text: `Save outcome needs inspection. ${JSON.stringify(save.result ?? 'Outcome unknown; inspect Music.app before any further write.')}`,
     tone: 'pending',
   };
+}
+
+export function previewStatus(preview?: PreviewState): string {
+  switch (preview?.status) {
+    case 'current':
+      return 'Preview current at last write · Requested track edits update Music.app.';
+    case 'out_of_date':
+      return 'Preview out of date · Local draft kept. Start preview to synchronize explicitly.';
+    case 'pending':
+      return 'Preview synchronization pending or interrupted · Inspect before recovery.';
+    case 'conflict':
+      return 'Preview conflict · Local draft kept. Reconcile Music.app changes with the agent.';
+    case 'error':
+    case 'uncertain':
+      return 'Preview needs attention · Local draft kept. Inspect the outcome with the agent; no automatic retry.';
+    default:
+      return 'Preview inactive · Start preview to audition and link requested track edits.';
+  }
 }

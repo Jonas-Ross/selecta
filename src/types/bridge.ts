@@ -127,9 +127,12 @@ export interface Bridge {
     reservedSourceName?: string;
   }): Promise<PlaylistCloneResult>;
 
+  readPreview(input: { name: string; expectedTrackIds: string[] }): Promise<PlaylistWriteResult>;
+
   replacePlaylist(input: {
     name: string; // find-or-create by name, clear, repopulate
     trackIds: string[];
+    expectedTrackIds?: string[]; // live order guard in the same replacement call
   }): Promise<PlaylistReplaceResult>;
 
   // Delete one explicitly selected plain user playlist; 0 if already gone.

@@ -92,7 +92,12 @@ export const write = z.union([
     .extend({ partialWrite: z.never().optional() })
     .refine(consistentCount, { path: ['trackCount'] }),
 ]);
+export const previewRead = z.union([
+  z.object({ previewConflict: z.literal(true) }),
+  writeSuccess.refine(consistentCount, { path: ['trackCount'] }),
+]);
 export const replace = z.union([
+  z.object({ previewConflict: z.literal(true) }).extend(noCreationTarget),
   missing,
   partialWriteResult,
   z.object({ ambiguousPreview: z.literal(true) }),

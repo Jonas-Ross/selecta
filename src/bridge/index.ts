@@ -36,6 +36,7 @@ async function runCreationJxa<T>(script: string, schema: z.ZodType<T>): Promise<
   }
 }
 
+import { buildReadPreviewScript } from './scripts/read_preview.js';
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
 import { buildOpenPreviewScript } from './scripts/open_preview.js';
 import { buildListLibraryTrackIdsScript, buildReadLibraryScript } from './scripts/read_library.js';
@@ -126,8 +127,28 @@ export const bridge: Bridge = {
       input.reservedSourceName,
     );
   },
+  async readPreview(input): Promise<PlaylistWriteResult> {
+    const result = await runJxa(buildReadPreviewScript(input), schemas.previewRead);
+
+    if ('previewConflict' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'The inspected preview order or slot identity no longer matches.',
+      );
+
+    return result;
+  },
   async replacePlaylist(input): Promise<PlaylistReplaceResult> {
     const result = await runJxa(buildReplacePlaylistScript(input), schemas.replace);
+
+    if ('previewConflict' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'Live preview differs from the expected order.',
+        undefined,
+        undefined,
+        'not_started',
+      );
 
     if ('ambiguousPreview' in result)
       throw new BridgeError(

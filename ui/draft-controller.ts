@@ -12,7 +12,9 @@ import {
   draftContext,
   errorMessage,
   recoveredStatus,
+  previewStatus,
 } from './draft-state.js';
+import { watchDraftFreshness } from './draft-freshness.js';
 import { renderDraft } from './render.js';
 
 type HostContext = NonNullable<ReturnType<App['getHostContext']>>;
@@ -36,9 +38,17 @@ export type DraftElements = {
   'timeline-key': HTMLInputElement;
   options: HTMLDetailsElement;
   status: HTMLElement;
+  'preview-status': HTMLElement;
   'feedback-panel': HTMLElement;
 } & Record<
-  'recover' | 'reload' | 'keep-feedback' | 'send' | 'save' | 'feedback-toggle' | 'open-preview',
+  | 'recover'
+  | 'reload'
+  | 'keep-feedback'
+  | 'send'
+  | 'save'
+  | 'feedback-toggle'
+  | 'start-preview'
+  | 'open-preview',
   HTMLButtonElement
 >;
 export interface DraftDependencies {
@@ -46,6 +56,7 @@ export interface DraftDependencies {
   ui: Pick<ShadowRoot, 'activeElement' | 'addEventListener'>;
   el: <K extends keyof DraftElements>(id: K) => DraftElements[K];
   observeSize: (host: HTMLElement, report: (height: number) => void) => unknown;
+  freshnessActive?: () => boolean;
   applyHostStyleVariables: (
     variables: NonNullable<NonNullable<HostContext['styles']>['variables']>,
   ) => void;
@@ -54,7 +65,14 @@ export interface DraftDependencies {
 /** Host and DOM are injected; importing the controller has no connection side effects. */
 export function createDraftController(
   app: DraftHost,
-  { host, ui, el, observeSize, applyHostStyleVariables }: DraftDependencies,
+  {
+    host,
+    ui,
+    el,
+    observeSize,
+    applyHostStyleVariables,
+    freshnessActive = () => false,
+  }: DraftDependencies,
 ) {
   let state: DraftView | undefined;
   let draftId: string | undefined;
@@ -62,6 +80,41 @@ export function createDraftController(
   let connected = false;
   let receivedResult = false;
   let failedResult = false;
+  let disposed = false;
+  let stopObserving: unknown;
+  let actionEpoch = 0;
+  const freshness = watchDraftFreshness({
+    active: () => !disposed && connected && freshnessActive(),
+    read: async () => {
+      if (busy || !draftId || !state) return;
+
+      const id = draftId;
+      const epoch = actionEpoch;
+      const before = JSON.stringify(state);
+      // A completed foreground action may leave both identity and revision
+      // unchanged. Its epoch supersedes every outcome of this older read.
+      const obsolete = () => disposed || busy || id !== draftId || epoch !== actionEpoch;
+
+      try {
+        const decoded = decodeDraftResult(
+          await app.callServerTool({ name: 'get_playlist_draft', arguments: { draft_id: id } }),
+        );
+
+        if (obsolete()) return;
+
+        receive(decoded, id);
+
+        if (JSON.stringify(state) !== before) await publish();
+      } catch (error) {
+        if (!obsolete()) throw error;
+      }
+    },
+    failed: (error) =>
+      status(
+        `Live draft updates paused: ${errorMessage(error)}. Use Reload latest to resume.`,
+        'error',
+      ),
+  });
   // tone: 'ok' | 'error' | 'pending' | undefined (neutral). The dot in front of
   // the line is what makes a failed save look different from a restored draft.
   const status = (text: string, tone?: 'ok' | 'error' | 'pending') => {
@@ -115,7 +168,13 @@ export function createDraftController(
     state = next.state;
     el('feedback').value = next.feedback;
     draftId = state.draft.draft_id;
+    const focused = ui.activeElement as HTMLElement | null;
+
     render();
+
+    // A keyed DOM move can blur a surviving row control. Capture immediately
+    // before rendering so a focus change during the awaited read wins.
+    if (focused?.isConnected) focused.focus({ preventScroll: true });
   }
 
   function receive(decoded: ReturnType<typeof decodeDraftResult>, expectedId?: string) {
@@ -157,6 +216,8 @@ export function createDraftController(
   }
 
   async function publish() {
+    const epoch = actionEpoch;
+
     try {
       await app.updateModelContext({
         content: [
@@ -167,6 +228,8 @@ export function createDraftController(
         ],
       });
     } catch {
+      if (disposed || epoch !== actionEpoch) return;
+
       status(
         'Draft saved locally. Context delivery failed; use Send feedback or ask the agent to get this draft.',
         'error',
@@ -185,6 +248,11 @@ export function createDraftController(
   function render() {
     if (!state) return;
 
+    el('preview-status').textContent = previewStatus(state.preview);
+    el('start-preview').disabled =
+      busy ||
+      !!state.inspection_error ||
+      ['pending', 'conflict', 'error', 'uncertain'].includes(state.preview?.status ?? '');
     renderDraft(el, {
       draft: state.draft,
       inspection: state.inspection,
@@ -194,6 +262,9 @@ export function createDraftController(
       edit,
     });
     el('open-preview').disabled = busy || !connected || state.draft.entries.length === 0;
+
+    if (state.preview && !['inactive', 'current'].includes(state.preview.status))
+      el('save').disabled = true;
   }
 
   async function action(fn: () => Promise<void>) {
@@ -202,6 +273,7 @@ export function createDraftController(
     // Nodes survive the render, so the inert editor can hand focus straight back.
     const focused = ui.activeElement;
 
+    actionEpoch++;
     busy = true;
     render();
 
@@ -251,6 +323,9 @@ export function createDraftController(
         id,
       );
 
+      await publish();
+      freshness.resume(true);
+
       if (state) {
         const recovered = recoveredStatus(state.draft);
 
@@ -282,6 +357,23 @@ export function createDraftController(
   el('recover').onclick = () => recover(el('recover-id').value.trim());
   el('reload').onclick = () => recover(draftId);
   el('keep-feedback').onclick = () => edit({ feedback: el('feedback').value });
+  el('start-preview').onclick = () =>
+    action(async () => {
+      if (!state || !draftId) return;
+
+      const data = receive(
+        decodeDraftResult(
+          await app.callServerTool({
+            name: 'preview_playlist_draft',
+            arguments: { draft_id: draftId, revision: state.draft.revision },
+          }),
+        ),
+        draftId,
+      );
+
+      status(previewStatus(data.preview), data.preview?.status === 'current' ? 'ok' : 'pending');
+      await publish();
+    });
 
   el('open-preview').onclick = () =>
     action(async () => {
@@ -393,6 +485,9 @@ export function createDraftController(
   };
 
   app.ontoolresult = (result) => {
+    if (disposed) return;
+
+    actionEpoch++;
     clearTimeout(resultFallback);
     receivedResult = true;
     const decoded = decodeDraftResult(result);
@@ -417,8 +512,11 @@ export function createDraftController(
   async function connect() {
     try {
       await app.connect();
+
+      if (disposed) return;
+
       connected = true;
-      observeSize(host, (height) => {
+      stopObserving = observeSize(host, (height) => {
         void app
           .sendSizeChanged({ height })
           .catch((error) => console.error('Card sizing failed', error));
@@ -431,6 +529,7 @@ export function createDraftController(
       if (draftId && (!receivedResult || !failedResult)) await recover(draftId);
 
       await loadAppearance();
+      freshness.resume();
     } catch (error) {
       status(
         `Host connection failed: ${errorMessage(error)}. Reopen this card after reconnecting Selecta.`,
@@ -439,5 +538,14 @@ export function createDraftController(
     }
   }
 
-  return { connect, edit, recover };
+  function dispose() {
+    disposed = true;
+    connected = false;
+    freshness.dispose();
+    clearTimeout(resultFallback);
+
+    if (typeof stopObserving === 'function') stopObserving();
+  }
+
+  return { connect, edit, recover, dispose, resumeFreshness: () => freshness.resume() };
 }

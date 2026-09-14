@@ -87,6 +87,8 @@ import {
   getDraftInputShape,
   editDraftInputShape,
   revisionInputShape,
+  previewDraftInputShape,
+  PREVIEW_DRAFT_DESCRIPTION,
   GET_DRAFT_DESCRIPTION,
   EDIT_DRAFT_DESCRIPTION,
   SAVE_DRAFT_DESCRIPTION,
@@ -231,9 +233,19 @@ export function createServer(deps: ToolDeps): McpServer {
     {
       description: EDIT_DRAFT_DESCRIPTION,
       inputSchema: editDraftInputShape,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     },
     async (args) => toDraftResult(await drafts.edit(args)),
+  );
+
+  server.registerTool(
+    'preview_playlist_draft',
+    {
+      description: PREVIEW_DRAFT_DESCRIPTION,
+      inputSchema: previewDraftInputShape,
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async (args) => toDraftResult(await drafts.preview(args)),
   );
 
   server.registerTool(
