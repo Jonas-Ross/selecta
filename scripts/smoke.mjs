@@ -5,8 +5,8 @@
 // only trace left is the (by-design) "Selecta Preview" slot. Not part of the
 // test suite: run with `npm run smoke` and eyeball the output.
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { Client } from '@modelcontextprotocol/client';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 

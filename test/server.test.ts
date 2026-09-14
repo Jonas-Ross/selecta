@@ -3,8 +3,7 @@
 // without Music.app or a child process.
 
 import { describe, it, expect } from 'vitest';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 // Use the production module graph so bundled resource URLs resolve from dist.
 import { createServer } from '../dist/server.js';
 import { SelectaCache } from '../dist/cache/index.js';

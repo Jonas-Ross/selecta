@@ -1,3 +1,4 @@
+import { McpUiHostStylesSchema } from '@modelcontextprotocol/ext-apps';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   createDraftController,
@@ -443,7 +444,7 @@ it('retains palette, host theme and typing through appearance changes and errors
   expect(f.el('host').style.colorScheme).toBe('dark');
   f.app.onhostcontextchanged?.({
     theme: 'light',
-    styles: { variables: { '--color-text-primary': 'red' } },
+    styles: McpUiHostStylesSchema.parse({ variables: { '--color-text-primary': 'red' } }),
   });
   expect(f.el('host').style.colorScheme).toBe('dark');
   expect(f.applyHostStyleVariables).toHaveBeenCalled();

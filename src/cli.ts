@@ -2,7 +2,7 @@
 // starts the MCP server, and stdout contains only protocol traffic or one JSON
 // result from an explicit CLI verb.
 
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { Command, InvalidArgumentError } from 'commander';
 import { refreshLibrary } from './operations/refresh.js';
 import { bridge as defaultBridge } from './bridge/index.js';
