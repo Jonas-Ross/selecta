@@ -1,3 +1,4 @@
+import { buildReadPreviewScript } from '../src/bridge/scripts/read_preview.js';
 import { runInNewContext } from 'node:vm';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { bridge } from '../src/bridge/index.js';
@@ -260,4 +261,58 @@ describe('observed write outcomes', () => {
     ).rejects.toMatchObject({ errorCode: 'validation_error' });
     expect(music.delete).not.toHaveBeenCalled();
   });
+});
+
+it.each([{ live: [B, A] }, { live: [A] }, { live: [] }])(
+  'guards live preview order before clearing: %j',
+  ({ live }) => {
+    const tracks = { length: live.length, persistentID: () => live };
+    const slot = { smart: () => false, class: () => 'userPlaylist', tracks };
+    const music = {
+      userPlaylists: { whose: () => () => [slot] },
+      libraryPlaylists: [{ tracks: { whose: () => () => [{}] } }],
+      delete: vi.fn(),
+      make: vi.fn(),
+    };
+    const raw = JSON.parse(
+      runInNewContext(
+        buildReplacePlaylistScript({
+          name: 'Selecta Preview',
+          trackIds: [B],
+          expectedTrackIds: [A, B],
+        }),
+        { Application: () => music },
+      ),
+    );
+
+    expect(raw).toEqual({ previewConflict: true });
+    expect(music.delete).not.toHaveBeenCalled();
+    expect(music.make).not.toHaveBeenCalled();
+  },
+);
+it('maps a validated preview conflict to a non-mutating bridge rejection', async () => {
+  vi.mocked(runJxa).mockResolvedValueOnce({ previewConflict: true });
+  await expect(
+    bridge.replacePlaylist({ name: 'Selecta Preview', trackIds: [B], expectedTrackIds: [A] }),
+  ).rejects.toMatchObject({ errorCode: 'preview_conflict', writePhase: 'not_started' });
+});
+
+it('adoption reads the reserved live order without any mutation, including repeats', () => {
+  const ids = [B, A, A];
+  const slot = {
+    smart: () => false,
+    class: () => 'userPlaylist',
+    persistentID: () => 'P-LIVE',
+    tracks: { length: ids.length, persistentID: () => ids },
+  };
+  const music = { userPlaylists: { whose: () => () => [slot] }, delete: vi.fn(), make: vi.fn() };
+  const raw = JSON.parse(
+    runInNewContext(buildReadPreviewScript({ name: 'Selecta Preview', expectedTrackIds: ids }), {
+      Application: () => music,
+    }),
+  );
+
+  expect(raw).toEqual({ persistentId: 'P-LIVE', trackCount: 3, trackPersistentIds: ids });
+  expect(music.delete).not.toHaveBeenCalled();
+  expect(music.make).not.toHaveBeenCalled();
 });

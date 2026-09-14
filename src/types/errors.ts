@@ -5,6 +5,7 @@
 // on the bridge package.
 
 export type ErrorCode =
+  | 'preview_conflict'
   | 'draft_not_found'
   | 'draft_revision_conflict'
   | 'operation_cleanup_failed' // creation committed, but its operation lock could not be removed
@@ -73,6 +74,8 @@ export function preWriteError(code: ErrorCode, message: string, hint?: string): 
 // resolve the hint as `err.hint ?? defaultHints[err.errorCode]`, so a per-call
 // `hint` is reserved for overrides "when more context is available."
 export const defaultHints: Record<ErrorCode, string> = {
+  preview_conflict:
+    'The preview changed. Preserve local edits, inspect Music.app and reconcile before an explicit recovery; do not retry automatically.',
   draft_not_found:
     'No local draft with that ID. Check the original draft_id or ask the agent to open a new draft explicitly.',
   draft_revision_conflict:

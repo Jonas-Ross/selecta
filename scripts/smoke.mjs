@@ -42,6 +42,7 @@ const required = [
   'show_playlist_draft',
   'get_playlist_draft',
   'edit_playlist_draft',
+  'preview_playlist_draft',
   'save_playlist_draft',
   'refresh_library',
   'library_overview',

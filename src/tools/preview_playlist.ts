@@ -1,12 +1,14 @@
-import { withOperation } from '../operations/lock.js';
+import { DraftStore } from '../drafts/store.js';
+import { replacePreview, type PreviewAttempt } from '../operations/preview_playlist.js';
+import { OperationCleanupError, withOperation } from '../operations/lock.js';
 // preview_playlist — overwrite the single dedicated audition slot in Music.app.
 
 import { z } from 'zod';
 import { PLAYLIST_WRITE_TRACK_LIMIT } from '../types/bridge.js';
-import type { SelectaError } from '../types/errors.js';
+import { toErrorEnvelope, type SelectaError } from '../types/errors.js';
 import { apiNoteFromRow, type ApiNote } from '../domain/track_projections.js';
 import { missingTrackIdsError } from '../operations/resources.js';
-import { parseInput, toErrorEnvelope } from './errors.js';
+import { parseInput } from './errors.js';
 import type { ToolDeps } from './deps.js';
 
 import { PREVIEW_PLAYLIST_NAME } from '../operations/playlist.js';
@@ -29,7 +31,7 @@ export type PreviewPlaylistOutput = {
   note?: ApiNote;
 };
 
-export const PREVIEW_PLAYLIST_DESCRIPTION = `Overwrite the single "${PREVIEW_PLAYLIST_NAME}" playlist in Music.app with these tracks so the user can audition a draft before committing. The slot is reused on every call (stable playlist, contents replaced) — previous preview contents are discarded without warning. When the user approves, pass this result's playlist_id to create_playlist as source_playlist_id; it clones the current live preview order without resending track IDs. That playlist_id stays valid even if iCloud rekeys a first-ever slot while the user auditions — create_playlist re-resolves the slot by its reserved name. Same track ID rules as create_playlist: unknown IDs fail with track_not_found and nothing is written. iCloud sync occasionally twins the slot after creation; this is not a failed call. Multiple slots produce validation_error before any overwrite; refresh_library reports the copies without deleting them, so ask the user which copy to keep. order_matches_request: false means observed destination entries differ from the request; inspect before another edit. partial_write on an error preserves the target ID when population/readback failed; refresh and inspect before retrying. Any set_note memory on the preview slot comes back as note.`;
+export const PREVIEW_PLAYLIST_DESCRIPTION = `Overwrite the single "${PREVIEW_PLAYLIST_NAME}" playlist in Music.app with these tracks so the user can audition a draft before committing. This raw tool disconnects any linked draft preview. For active draft iteration use preview_playlist_draft once, then edit_playlist_draft carries requested track changes through without another confirmation. The slot is reused on every call (stable playlist, contents replaced) — previous preview contents are discarded without warning. When the user approves, pass this result's playlist_id to create_playlist as source_playlist_id; it clones the current live preview order without resending track IDs. That playlist_id stays valid even if iCloud rekeys a first-ever slot while the user auditions — create_playlist re-resolves the slot by its reserved name. Same track ID rules as create_playlist: unknown IDs fail with track_not_found and nothing is written. iCloud sync occasionally twins the slot after creation; this is not a failed call. Multiple slots produce validation_error before any overwrite; refresh_library reports the copies without deleting them, so ask the user which copy to keep. order_matches_request: false means observed destination entries differ from the request; inspect before another edit. partial_write on an error preserves the target ID when population/readback failed; refresh and inspect before retrying. Any set_note memory on the preview slot comes back as note.`;
 
 export async function handlePreviewPlaylist(
   raw: unknown,
@@ -41,6 +43,8 @@ export async function handlePreviewPlaylist(
 
   const { track_ids } = parsed.data;
 
+  let settled: PreviewAttempt | undefined;
+
   try {
     const cache = deps.cache();
 
@@ -49,34 +53,33 @@ export async function handlePreviewPlaylist(
 
       if (cacheMiss) return cacheMiss;
 
-      const result = await deps.bridge.replacePlaylist({
-        name: PREVIEW_PLAYLIST_NAME,
-        trackIds: track_ids,
-      });
+      // Invalidate before the attempt, including uncertain/partial writes.
+      (deps.drafts?.() ?? new DraftStore()).unlinkPreview();
+      settled = await replacePreview(track_ids, undefined, deps);
 
-      cache.upsertPlaylistAfterWrite(result, PREVIEW_PLAYLIST_NAME, result.trackPersistentIds);
-
-      // A first-ever slot is a fresh playlist, so iCloud may rekey it: the same
-      // receipt create_playlist records keeps this playlist_id resolvable
-      // (docs/music-app.md, iCloud sync). An overwrite created nothing.
-      if (result.created) {
-        cache.recordPlaylistCreation(
-          result.persistentId,
-          PREVIEW_PLAYLIST_NAME,
-          result.trackPersistentIds,
-        );
-      }
+      if (settled.error) return settled as SelectaError;
 
       return {
-        playlist_id: result.persistentId,
-        track_count: result.trackCount,
-        ...(JSON.stringify(result.trackPersistentIds) !== JSON.stringify(track_ids)
-          ? { order_matches_request: false }
-          : {}),
-        note: apiNoteFromRow(cache.getNote('playlist', result.persistentId)),
+        playlist_id: settled.playlist_id!,
+        track_count: settled.track_count!,
+        ...(settled.order_matches_request === false ? { order_matches_request: false } : {}),
+        note: apiNoteFromRow(cache.getNote('playlist', settled.playlist_id!)),
       };
     });
   } catch (err) {
-    return toErrorEnvelope(err);
+    return {
+      ...settled,
+      ...toErrorEnvelope(err, {
+        error: 'cache_unavailable',
+        hint: 'Preview failed; inspect the retained receipt before an explicit recovery.',
+      }),
+      ...(err instanceof OperationCleanupError
+        ? {
+            error: 'operation_cleanup_failed' as const,
+            lock_path: err.lockPath,
+            hint: err.recoveryHint,
+          }
+        : {}),
+    };
   }
 }

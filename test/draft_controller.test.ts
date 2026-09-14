@@ -52,7 +52,7 @@ class Control extends Element {
   querySelector = vi.fn();
 }
 
-function fixture() {
+function fixture(freshness = false) {
   const nodes = new Map<string, Control>();
   const el = (id: string) => {
     if (!nodes.has(id)) nodes.set(id, new Control());
@@ -98,6 +98,7 @@ function fixture() {
   // controller/rendering. This cast is the fixture's DOM adapter, not host data.
   const controller = createDraftController(app, {
     host: el('host'),
+    freshnessActive: () => freshness,
     ui,
     el,
     observeSize: vi.fn(),
@@ -671,6 +672,60 @@ it('keeps committed creation and stale-lock guidance visible through save recove
   expect(
     f.app.callServerTool.mock.calls.filter(([request]) => request.name === 'save_playlist_draft'),
   ).toHaveLength(1);
+});
+
+it('background draft reads preserve dirty feedback, selection and the currently focused surviving control', async () => {
+  vi.useFakeTimers();
+  const f = fixture(true);
+
+  await f.start();
+  const feedback = f.el('feedback');
+
+  feedback.value = 'unsent';
+  const changed = initial();
+
+  changed.draft.revision = 2;
+  changed.draft.entries = [...changed.draft.entries].reverse();
+  changed.draft.selected_entry_ids = [entries[1].entry_id];
+  f.setCurrent(changed);
+  Object.defineProperty(feedback, 'isConnected', { value: true });
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(feedback.value).toBe('unsent');
+  expect(feedback.focus).toHaveBeenLastCalledWith({ preventScroll: true });
+  expect(f.app.updateModelContext).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      content: [expect.objectContaining({ text: expect.stringContaining('"revision":2') })],
+    }),
+  );
+  expect(f.el('tracks').children[0].dataset.entryId).toBe(entries[1].entry_id);
+  f.controller.dispose();
+});
+
+it('discarded in-flight background reads cannot overwrite an explicit local action', async () => {
+  vi.useFakeTimers();
+  const f = fixture(true);
+
+  await f.start();
+  let finish!: (result: ReturnType<typeof wire>) => void;
+
+  f.app.callServerTool.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  const newer = initial();
+
+  newer.draft.revision = 3;
+  newer.draft.name = 'Accepted newer';
+  f.setCurrent(newer);
+  await f.controller.edit({ name: 'Accepted newer' });
+  finish(wire(initial()));
+  await vi.advanceTimersByTimeAsync(1);
+  expect(f.el('name').textContent).toBe('Accepted newer');
+  expect(f.el('revision').textContent).toBe('Revision 4');
+  f.controller.dispose();
 });
 
 it('opens only on explicit action using the full draft order, without saving or sending feedback', async () => {

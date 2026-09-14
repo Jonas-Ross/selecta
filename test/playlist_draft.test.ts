@@ -108,7 +108,11 @@ describe('playlist drafts', () => {
     });
     const reopened = new PlaylistDraftTools({ ...deps, drafts: () => new DraftStore(store.path) });
 
-    expect(await reopened.get({ draft_id: original.draft_id })).toEqual(edited);
+    const { local_edit_saved: _saved, ...view } = edited as typeof edited & {
+      local_edit_saved: boolean;
+    };
+
+    expect(await reopened.get({ draft_id: original.draft_id })).toEqual(view);
     expect(
       await tools.edit({ draft_id: original.draft_id, revision: 1, entries: original.entries }),
     ).toMatchObject({ error: 'draft_revision_conflict' });

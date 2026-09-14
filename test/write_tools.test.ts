@@ -19,7 +19,7 @@ import {
   type RawPlaylist,
 } from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
-import { asError, makeBridge } from './helpers.js';
+import { asError, makeBridge, makeDraftStore } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
@@ -58,7 +58,9 @@ function makeDeps(
     ...bridgeOverrides,
   });
 
-  return { cache: () => cache, bridge, cacheInstance: cache };
+  const drafts = makeDraftStore();
+
+  return { cache: () => cache, bridge, cacheInstance: cache, drafts: () => drafts };
 }
 
 function withSourcePlaylist(source: RawPlaylist): LibrarySnapshot {

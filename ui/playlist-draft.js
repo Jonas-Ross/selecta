@@ -24,10 +24,24 @@ const draftElement = (id) => {
   return /** @type {import('./draft-controller.js').DraftElements[K]} */ (element);
 };
 
-await createDraftController(app, {
+const controller = createDraftController(app, {
   host,
   ui,
   el: draftElement,
   observeSize,
   applyHostStyleVariables,
-}).connect();
+  freshnessActive: () => document.visibilityState === 'visible' && host.isConnected,
+});
+
+window.addEventListener('focus', controller.resumeFreshness);
+document.addEventListener('visibilitychange', controller.resumeFreshness);
+window.addEventListener(
+  'pagehide',
+  () => {
+    controller.dispose();
+    window.removeEventListener('focus', controller.resumeFreshness);
+    document.removeEventListener('visibilitychange', controller.resumeFreshness);
+  },
+  { once: true },
+);
+await controller.connect();

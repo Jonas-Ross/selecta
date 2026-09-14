@@ -2,13 +2,23 @@
 // adding a Bridge method means one edit in this file, not one per test file
 // (adding the #15 edit methods touched four copies before this existed).
 
-import { expect, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DraftStore } from '../src/drafts/store.js';
+import { afterEach, expect, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
 import type { ToolDeps } from '../src/tools/deps.js';
 import type { Bridge, LibrarySnapshot } from '../src/types/bridge.js';
 import type { AudioFeaturesRow } from '../src/types/cache.js';
 import type { SelectaError } from '../src/types/errors.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
+
+const draftDirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of draftDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
 
 export const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
@@ -24,7 +34,22 @@ export function makeToolDeps(
 
   cache.refreshFromSnapshot(fixture as LibrarySnapshot, { durationMs: 1 });
 
-  return { cache: () => cache, bridge: makeBridge(bridgeOverrides), cacheInstance: cache };
+  const drafts = makeDraftStore();
+
+  return {
+    cache: () => cache,
+    bridge: makeBridge(bridgeOverrides),
+    cacheInstance: cache,
+    drafts: () => drafts,
+  };
+}
+
+export function makeDraftStore(): DraftStore {
+  const dir = mkdtempSync(join(tmpdir(), 'selecta-test-drafts-'));
+
+  draftDirs.push(dir);
+
+  return new DraftStore(join(dir, 'drafts.db'));
 }
 
 /** The snapshot with per-track play/skip counters moved — the play-history stimulus. */
@@ -51,6 +76,8 @@ export function bumpedSnapshot(
 export function makeBridge(overrides: Partial<Bridge> = {}): Bridge {
   return {
     openPreview: vi.fn().mockRejectedValue(new Error('not used')),
+
+    readPreview: vi.fn().mockRejectedValue(new Error('not used')),
     readPlaylist: vi.fn().mockRejectedValue(new Error('not used')),
     readLibrary: vi.fn().mockRejectedValue(new Error('not used')),
     createPlaylist: vi.fn().mockRejectedValue(new Error('not used')),

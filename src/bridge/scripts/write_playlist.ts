@@ -39,7 +39,7 @@ const WRITE_RESULT_HELPER = `
 // happens to share it. The reserved preview slot is identified by name, so
 // both the slot overwrite and the slot recovery below go through this. Each
 // candidate costs two Apple events, so callers that need only one pass max.
-const PLAIN_USER_PLAYLISTS_NAMED = `
+export const PLAIN_USER_PLAYLISTS_NAMED = `
   function plainUserPlaylistsNamed(name, max) {
     const matches = Music.userPlaylists.whose({ name: name })();
     const found = [];
@@ -141,7 +141,11 @@ export function buildClonePlaylistScript(args: {
   );
 }
 
-export function buildReplacePlaylistScript(args: { name: string; trackIds: string[] }): string {
+export function buildReplacePlaylistScript(args: {
+  name: string;
+  trackIds: string[];
+  expectedTrackIds?: string[];
+}): string {
   return wrapJxaScript(
     args,
     `
@@ -151,6 +155,12 @@ export function buildReplacePlaylistScript(args: { name: string; trackIds: strin
       // ID across overwrites.
       const slots = plainUserPlaylistsNamed(args.name, 2);
       if (slots.length > 1) return JSON.stringify({ ambiguousPreview: true });
+      if (args.expectedTrackIds !== undefined) {
+        if (slots.length === 0) return JSON.stringify({ previewConflict: true });
+        const liveIds = slots[0].tracks.length === 0 ? [] : slots[0].tracks.persistentID();
+        if (JSON.stringify(liveIds) !== JSON.stringify(args.expectedTrackIds))
+          return JSON.stringify({ previewConflict: true });
+      }
       const created = slots.length === 0;
       const pl = created
         ? Music.make({ new: 'playlist', withProperties: { name: args.name } })

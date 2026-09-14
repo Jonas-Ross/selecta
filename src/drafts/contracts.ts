@@ -51,8 +51,30 @@ export const DraftInspection = z.looseObject({
   unknown_artist_count: count,
   feature_coverage: z.looseObject({ bpm: z.looseObject({ missing_count: count }) }),
 });
+export const PreviewState = z.strictObject({
+  generation: z.string().uuid(),
+  version: count,
+  owner: z.string().uuid().optional(),
+  status: z.enum([
+    'inactive',
+    'current',
+    'out_of_date',
+    'pending',
+    'conflict',
+    'error',
+    'uncertain',
+  ]),
+  content_revision: count.optional(),
+  playlist_id: z.string().min(1).optional(),
+  baseline: z.array(z.string().min(1)).optional(),
+  token: z.string().uuid().optional(),
+  result: record.optional(),
+});
+export type PreviewState = z.infer<typeof PreviewState>;
+
 export const DraftResponse = z.looseObject({
   draft: Draft.optional(),
+  preview: PreviewState.optional(),
   inspection: DraftInspection.optional(),
   inspection_error: DraftError.optional(),
   error: z.string().optional(),
