@@ -125,3 +125,25 @@ describe('JXA wrapper', () => {
     expect(script).not.toMatch(/function\s+run\s*\(/);
   });
 });
+
+describe('preview navigation script contract', () => {
+  it('guards identity and exact order before revealing, with no playback or mutation commands', async () => {
+    const { buildOpenPreviewScript } = await import('../src/bridge/scripts/open_preview.js');
+    const script = buildOpenPreviewScript({ expectedTrackIds: ['A', 'B', 'A'] });
+
+    for (const guard of ['playlistNotFound', 'notEditable', 'ambiguousPreview', 'orderDrifted']) {
+      expect(script.indexOf(guard)).toBeGreaterThan(-1);
+      expect(script.indexOf(guard)).toBeLessThan(script.indexOf('Music.reveal(pl)'));
+    }
+
+    expect(script).toContain("String(pl.class()) === 'userPlaylist' && !pl.smart()");
+    expect(script.indexOf('const slots = matches.filter')).toBeLessThan(
+      script.indexOf('slots.length !== 1'),
+    );
+    expect(script).toContain('JSON.stringify(ids) !== JSON.stringify(args.expectedTrackIds)');
+    expect(script).toContain('Music.activate()');
+    expect(script).not.toMatch(
+      /Music\.(play\(|playpause\(|nextTrack\(|previousTrack\(|make\(|delete\(|duplicate\()/,
+    );
+  });
+});

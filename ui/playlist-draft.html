@@ -132,6 +132,13 @@
           color: var(--muted);
           font-variant-numeric: tabular-nums;
         }
+        .preview-access {
+          margin: 0 0 14px;
+        }
+        #open-preview {
+          border-color: var(--line);
+          font-size: 11px;
+        }
         details {
           font-size: 12px;
           color: var(--muted);
@@ -611,6 +618,15 @@
           </button>
         </div>
         <main id="editor" hidden>
+          <div class="preview-access">
+            <button
+              id="open-preview"
+              disabled
+              title="Open the existing Selecta Preview; does not replace tracks or start playback"
+            >
+              Open preview in Music.app ↗
+            </button>
+          </div>
           <details id="timeline-panel" open>
             <summary>Sequence timeline</summary>
             <div class="timeline-options">

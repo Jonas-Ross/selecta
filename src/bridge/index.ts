@@ -37,6 +37,7 @@ async function runCreationJxa<T>(script: string, schema: z.ZodType<T>): Promise<
 }
 
 import { buildReadPlaylistScript } from './scripts/read_playlist.js';
+import { buildOpenPreviewScript } from './scripts/open_preview.js';
 import { buildListLibraryTrackIdsScript, buildReadLibraryScript } from './scripts/read_library.js';
 import { buildFindPlaylistByNameScript } from './scripts/find_playlist_by_name.js';
 import {
@@ -70,6 +71,42 @@ import {
 } from '../types/bridge.js';
 
 export const bridge: Bridge = {
+  async openPreview(input) {
+    const result = await runJxa(buildOpenPreviewScript(input), schemas.openPreview);
+
+    if ('playlistNotFound' in result)
+      throw new BridgeError(
+        'playlist_not_found',
+        'Selecta Preview does not exist.',
+        'Start preview iteration before opening it in Music.app.',
+      );
+
+    if ('ambiguousPreview' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Selecta Preview is ambiguous.',
+        'Multiple playlists have the reserved name. Ask the user which copy to keep. Nothing was opened.',
+      );
+
+    if ('notEditable' in result)
+      throw new BridgeError(
+        'playlist_not_editable',
+        'Selecta Preview is not a plain user playlist.',
+        'The reserved name belongs to an unsupported playlist. Nothing was opened.',
+      );
+
+    if ('orderDrifted' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Selecta Preview differs from this draft.',
+        'Reconcile the current preview and draft before opening. Nothing was replaced or opened.',
+      );
+
+    if (result.trackCount !== input.expectedTrackIds.length)
+      throw new BridgeError('jxa_error', 'Music.app returned an inconsistent preview count.');
+
+    return result;
+  },
   async readPlaylist(persistentId: string): Promise<RawPlaylist> {
     const result = await runJxa(buildReadPlaylistScript({ persistentId }), schemas.playlist);
 
