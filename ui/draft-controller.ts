@@ -1,5 +1,5 @@
 import type { App } from '@modelcontextprotocol/ext-apps';
-import type { z } from 'zod';
+import { z } from 'zod';
 import {
   Appearance,
   type Draft,
@@ -38,7 +38,7 @@ export type DraftElements = {
   status: HTMLElement;
   'feedback-panel': HTMLElement;
 } & Record<
-  'recover' | 'reload' | 'keep-feedback' | 'send' | 'save' | 'feedback-toggle',
+  'recover' | 'reload' | 'keep-feedback' | 'send' | 'save' | 'feedback-toggle' | 'open-preview',
   HTMLButtonElement
 >;
 export interface DraftDependencies {
@@ -193,6 +193,7 @@ export function createDraftController(
       lanes,
       edit,
     });
+    el('open-preview').disabled = busy || !connected || state.draft.entries.length === 0;
   }
 
   async function action(fn: () => Promise<void>) {
@@ -281,6 +282,35 @@ export function createDraftController(
   el('recover').onclick = () => recover(el('recover-id').value.trim());
   el('reload').onclick = () => recover(draftId);
   el('keep-feedback').onclick = () => edit({ feedback: el('feedback').value });
+
+  el('open-preview').onclick = () =>
+    action(async () => {
+      if (!state || state.draft.entries.length === 0) return;
+
+      const trackIds = state.draft.entries.map((entry) => entry.track_id);
+
+      status('Opening Selecta Preview in Music.app…', 'pending');
+      const decoded = decodeDraftResult(
+        await app.callServerTool({
+          name: 'open_preview',
+          arguments: { track_ids: trackIds },
+        }),
+      );
+
+      if (decoded.error) throw new Error(decoded.error);
+
+      const receipt = z
+        .object({
+          opened: z.literal(true),
+          playlist_id: z.string().min(1),
+          track_count: z.literal(trackIds.length),
+        })
+        .safeParse(decoded.receipt);
+
+      if (!receipt.success) throw new Error('Music.app did not confirm opening the preview.');
+
+      status('Opened Selecta Preview in Music.app. Use Music to play and skip tracks.', 'ok');
+    });
 
   el('send').onclick = () => {
     const feedback = el('feedback').value;

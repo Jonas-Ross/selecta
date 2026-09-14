@@ -257,3 +257,26 @@ describe('track ID list boundary', () => {
     },
   );
 });
+
+describe('guarded preview navigation', () => {
+  const invoke = () => bridge.openPreview({ expectedTrackIds: ['A', 'B', 'A'] });
+
+  it.each([
+    [{ playlistNotFound: true }, 'playlist_not_found'],
+    [{ ambiguousPreview: true }, 'validation_error'],
+    [{ notEditable: true }, 'playlist_not_editable'],
+    [{ orderDrifted: true }, 'validation_error'],
+    [{ persistentId: '', trackCount: 3 }, 'jxa_error'],
+    [{ persistentId: 'P', trackCount: 2 }, 'jxa_error'],
+    [{ persistentId: 'P', trackCount: 3, orderDrifted: true }, 'jxa_error'],
+  ])('rejects sentinel or malformed response %j', async (payload, errorCode) => {
+    vi.mocked(runJxa).mockResolvedValue(payload);
+    await expect(invoke()).rejects.toMatchObject({ errorCode });
+    expect(runJxa).toHaveBeenCalledOnce();
+  });
+
+  it('returns validated identity and occurrence count', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ persistentId: 'P', trackCount: 3 });
+    await expect(invoke()).resolves.toEqual({ persistentId: 'P', trackCount: 3 });
+  });
+});

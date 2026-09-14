@@ -46,6 +46,14 @@ const missing = z.object({ missingTrackIds: ids.min(1) });
 const notFound = z.object({ playlistNotFound: z.literal(true) });
 const notEditable = z.object({ notEditable: z.literal(true) });
 
+export const openPreview = z.union([
+  z.strictObject({ playlistNotFound: z.literal(true) }),
+  z.strictObject({ notEditable: z.literal(true) }),
+  z.strictObject({ ambiguousPreview: z.literal(true) }),
+  z.strictObject({ orderDrifted: z.literal(true) }),
+  z.strictObject({ persistentId: id, trackCount: count.positive() }),
+]);
+
 export const partialWriteResult = z.object({
   partialWrite: z.object({ persistentId: id, trackPersistentIds: ids.optional() }),
 });

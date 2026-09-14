@@ -672,3 +672,64 @@ it('keeps committed creation and stale-lock guidance visible through save recove
     f.app.callServerTool.mock.calls.filter(([request]) => request.name === 'save_playlist_draft'),
   ).toHaveLength(1);
 });
+
+it('opens only on explicit action using the full draft order, without saving or sending feedback', async () => {
+  const f = fixture();
+
+  await f.start();
+  expect(f.calls).toEqual([]);
+  f.app.callServerTool.mockResolvedValueOnce(
+    wire({ opened: true, playlist_id: 'P', track_count: 2 }),
+  );
+  await f.el('open-preview').onclick();
+  expect(
+    f.app.callServerTool.mock.calls.filter(
+      ([request]) =>
+        request.name !== 'playlist_draft_appearance' && request.name !== 'get_playlist_draft',
+    ),
+  ).toEqual([[{ name: 'open_preview', arguments: { track_ids: ['same', 'same'] } }]]);
+  expect(f.app.callServerTool).toHaveBeenLastCalledWith({
+    name: 'open_preview',
+    arguments: { track_ids: ['same', 'same'] },
+  });
+  expect(f.el('status').textContent).toContain('Opened Selecta Preview');
+  expect(f.app.sendMessage).not.toHaveBeenCalled();
+});
+
+it.each([
+  wire({ error: 'validation_error', hint: 'Reconcile the preview first.' }, true),
+  wire({ opened: true, playlist_id: 'P', track_count: 1 }),
+  wire({ opened: false }),
+])('surfaces failed or malformed Open receipts without claiming success', async (response) => {
+  const f = fixture();
+
+  await f.start();
+  f.app.callServerTool.mockResolvedValueOnce(response);
+  await f.el('open-preview').onclick();
+  expect(f.el('status').dataset.tone).toBe('error');
+  expect(f.el('status').textContent).not.toContain('Opened Selecta Preview');
+  expect(f.el('open-preview').disabled).toBe(false);
+});
+
+it('blocks duplicate Open clicks while awaiting Music.app', async () => {
+  const f = fixture();
+
+  await f.start();
+  let finish!: (value: ReturnType<typeof wire>) => void;
+
+  f.app.callServerTool.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const first = f.el('open-preview').onclick();
+  const count = f.app.callServerTool.mock.calls.length;
+
+  expect(f.el('open-preview').disabled).toBe(true);
+  await f.el('open-preview').onclick();
+  expect(f.app.callServerTool.mock.calls.length).toBe(count);
+  finish(wire({ opened: true, playlist_id: 'P', track_count: 2 }));
+  await first;
+  expect(f.el('open-preview').disabled).toBe(false);
+});

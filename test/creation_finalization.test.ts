@@ -228,3 +228,44 @@ it.each([false, true])(
     expect(bridge.createPlaylist).toHaveBeenCalledTimes(1);
   },
 );
+
+it.each([false, true])(
+  'preserves preview navigation outcome when lock cleanup fails, bridge failure %s',
+  async (bridgeFails) => {
+    const { handleOpenPreview } = await import('../src/tools/open_preview.js');
+    const bridge = makeBridge({
+      openPreview: vi.fn().mockImplementation(async () => {
+        if (bridgeFails)
+          throw new BridgeError('automation_permission_denied', 'denied', 'Automation denied.');
+
+        return { persistentId: 'P-OPEN', trackCount: ids.length };
+      }),
+    });
+
+    failCleanup();
+    const result = await handleOpenPreview({ track_ids: ids }, { cache: () => cache, bridge });
+
+    expect(result).toMatchObject({
+      error: bridgeFails ? 'automation_permission_denied' : 'operation_cleanup_failed',
+      lock_path: `${realpathSync(cache.db.name)}.music.lock`,
+      hint: expect.stringContaining('Stop all Selecta processes'),
+    });
+    expect(result).toHaveProperty(
+      'hint',
+      expect.stringContaining('cleanup cause: permission denied'),
+    );
+
+    if (bridgeFails) {
+      expect(result).toHaveProperty('hint', expect.stringContaining('Automation denied.'));
+      expect(result).not.toHaveProperty('opened');
+    } else {
+      expect(result).toMatchObject({
+        opened: true,
+        playlist_id: 'P-OPEN',
+        track_count: ids.length,
+      });
+    }
+
+    expect(bridge.openPreview).toHaveBeenCalledOnce();
+  },
+);

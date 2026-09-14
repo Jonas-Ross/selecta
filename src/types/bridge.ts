@@ -98,6 +98,12 @@ export type TrackSignalResult<State> = {
 };
 
 export interface Bridge {
+  // Explicit UI navigation only; full live order must match, including repeats.
+  openPreview(input: { expectedTrackIds: string[] }): Promise<{
+    persistentId: string;
+    trackCount: number;
+  }>;
+
   // Single-playlist read; used by integration tests and debugging.
   readPlaylist(persistentId: string): Promise<RawPlaylist>;
 

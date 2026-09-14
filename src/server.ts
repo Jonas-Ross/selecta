@@ -4,6 +4,11 @@
 // isError so the model treats them as actionable failures.
 
 import { registerDraftApp } from './draft_app.js';
+import {
+  handleOpenPreview,
+  OPEN_PREVIEW_DESCRIPTION,
+  openPreviewInputShape,
+} from './tools/open_preview.js';
 import { registerExplorerApp } from './explorer_app.js';
 import { APP_VERSION } from './version.js';
 import { McpServer } from '@modelcontextprotocol/server';
@@ -142,6 +147,16 @@ export function createServer(deps: ToolDeps): McpServer {
     'preview_playlist',
     { description: PREVIEW_PLAYLIST_DESCRIPTION, inputSchema: previewPlaylistInputShape },
     async (args) => toToolResult(await handlePreviewPlaylist(args, deps)),
+  );
+
+  server.registerTool(
+    'open_preview',
+    {
+      description: OPEN_PREVIEW_DESCRIPTION,
+      inputSchema: openPreviewInputShape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) => toToolResult(await handleOpenPreview(args, deps)),
   );
 
   server.registerTool(

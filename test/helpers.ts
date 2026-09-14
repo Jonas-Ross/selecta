@@ -50,6 +50,7 @@ export function bumpedSnapshot(
 
 export function makeBridge(overrides: Partial<Bridge> = {}): Bridge {
   return {
+    openPreview: vi.fn().mockRejectedValue(new Error('not used')),
     readPlaylist: vi.fn().mockRejectedValue(new Error('not used')),
     readLibrary: vi.fn().mockRejectedValue(new Error('not used')),
     createPlaylist: vi.fn().mockRejectedValue(new Error('not used')),

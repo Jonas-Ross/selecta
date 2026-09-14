@@ -14,7 +14,7 @@ The open feedback field retains its height when focus moves elsewhere. Regressio
 
 After Music.app returns a destination, membership, creation receipt, optional note and any preview-source rekey commit in one cache transaction. If that transaction fails, all these local changes roll back and `result.partial_write` retains the known target ID and observed ordered IDs. If recording the draft outcome also fails, the response retains that result and the durable pending claim blocks replay after reopening. A committed creation whose operation lock cannot be removed returns `operation_cleanup_failed` with `creation_committed: true`, its normal creation fields, saved note (when provided), observed receipt and `lock_path`. The draft stores these committed facts alongside the cleanup warning; no refresh or repeat creation is needed. Stop all Selecta processes and inspect pending writes before removing the named stale lock. When persistence also failed, both failure causes and the target/order remain in the response. An interrupted pending save never clears automatically: inspect Music.app and repair local storage/operation ownership before choosing recovery.
 
-After a completed attempt, changing the name or ordered track list permits a new explicitly requested save. Selection and feedback alone retain the save guard. For partial or uncertain outcomes, inspect the target before deciding that a new draft revision is safe to save. No audition integration is included.
+After a completed attempt, changing the name or ordered track list permits a new explicitly requested save. Selection and feedback alone retain the save guard. For partial or uncertain outcomes, inspect the target before deciding that a new draft revision is safe to save. Playback controls and live now-playing observation remain outside this card.
 
 ## Layout and appearance
 
@@ -28,9 +28,15 @@ The card uses a shadow tree to isolate host CSS. Transient requests make the edi
 
 Codex caps inline cards at 720 CSS pixels. The track list absorbs the viewport constraint while feedback, save and status remain visible. Size reporting measures natural height independently of the capped viewport. Track details and status have bounded overflow. The user confirmed the host-style/flicker fixes and cap-aware layout before choosing Setlist.
 
+## Preview navigation
+
+**Open preview in Music.app** calls `open_preview` with the complete draft order, including repeated IDs. It reveals exactly one reserved plain-user preview whose live sequence matches, then brings Music forward. It does not replace the preview or start playback. Start preview iteration with the agent before opening; reconcile missing, ambiguous or stale targets explicitly. Saving remains separate. See [Music.app field notes](music-app.md#opening-the-preview-from-a-draft) for the live Open smoke and remaining #89 playback scope.
+
+The browser fixture check verified Open error delivery and the 390px card layout. After rebuilding and reconnecting each supported MCP host, open a draft matching an existing preview, click Open and confirm Music reveals that playlist without starting playback. A draft with a different order must report a mismatch without changing Music. These actual-host checks remain pending.
+
 ## Local preview
 
-Run `npm run preview`, then open `http://127.0.0.1:8767`. `SELECTA_PREVIEW_PORT` selects another port. One gallery shows the production draft and explorer widgets together, side by side when space permits and stacked in narrow windows. Each has its own in-memory fixture library, fixture reset and interaction log; resetting the explorer does not change the draft. Draft state lives in a temporary store. The gallery never loads the live Music.app bridge or user cache. Saves are simulated; feedback appears under **Draft interaction**.
+Run `npm run preview`, then open `http://127.0.0.1:8767`. `SELECTA_PREVIEW_PORT` selects another port. One gallery shows the production draft and explorer widgets together, side by side when space permits and stacked in narrow windows. Each has its own in-memory fixture library, fixture reset and interaction log; resetting the explorer does not change the draft. Draft state lives in a temporary store. The gallery never loads the live Music.app bridge or user cache. Saves are simulated; Open reports that this fixture cannot access Music.app; feedback appears under **Draft interaction**.
 
 Shared **Maximum card width** controls offer 760px, 553px and 390px; cards shrink to fit the available column. **Surface** controls include dark, light, Claude-like and Codex-style injected CSS with its 720px height cap. Use the draft's **Fixture** selector, then **Reset draft**, to load repeated tracks, a missing duration, or 500 entries. Feature values are synthetic. Source edits reload both cards; persisted fixture edits survive, but unsaved text and temporary explorer selection do not. Ctrl+C stops the preview and removes its temporary store. This is a development tool, not a standalone product.
 

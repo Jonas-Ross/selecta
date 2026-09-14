@@ -236,6 +236,23 @@ const server = createServer(async (req, res) => {
         return;
       }
 
+      if (name === 'open_preview') {
+        const value = {
+          error: 'fixture_only',
+          hint: 'Fixture only: the live card opens Selecta Preview in Music.app. This gallery does not access Music.app.',
+        };
+
+        res.end(
+          JSON.stringify({
+            content: [{ type: 'text', text: JSON.stringify(value) }],
+            structuredContent: value,
+            isError: true,
+          }),
+        );
+
+        return;
+      }
+
       const method = {
         playlist_draft_appearance: 'appearance',
         get_playlist_draft: 'get',
