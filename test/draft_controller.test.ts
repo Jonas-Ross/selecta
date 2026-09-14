@@ -788,3 +788,167 @@ it('blocks duplicate Open clicks while awaiting Music.app', async () => {
   await first;
   expect(f.el('open-preview').disabled).toBe(false);
 });
+
+it.each(['reload', 'edit'] as const)(
+  'ignores an obsolete polling rejection after successful foreground %s and continues polling',
+  async (foreground) => {
+    vi.useFakeTimers();
+    const f = fixture(true);
+
+    await f.start();
+    let reject!: (error: Error) => void;
+
+    f.app.callServerTool.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, fail) => {
+          reject = fail;
+        }),
+    );
+    await vi.advanceTimersByTimeAsync(3000);
+
+    if (foreground === 'reload') await f.controller.recover(id);
+    else await f.controller.edit({ name: 'Foreground succeeded' });
+
+    const success = f.el('status').textContent;
+    const reads = f.calls.length;
+
+    reject(new Error('obsolete offline error'));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(f.el('status').textContent).toBe(success);
+    expect(f.el('status').dataset.tone).toBe('ok');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(f.calls.length).toBe(reads + 1);
+    f.controller.dispose();
+  },
+);
+
+it('ignores a superseded polling error envelope even when the draft identity and revision are unchanged', async () => {
+  vi.useFakeTimers();
+  const f = fixture(true);
+
+  await f.start();
+  let finish!: (result: ReturnType<typeof wire>) => void;
+
+  f.app.callServerTool.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  await f.controller.recover(id);
+  const success = f.el('status').textContent;
+
+  finish(wire({ error: 'cache_unavailable', hint: 'obsolete read failed' }, true));
+  await vi.advanceTimersByTimeAsync(1);
+  expect(f.el('status').textContent).toBe(success);
+  const reads = f.calls.length;
+
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(f.calls.length).toBe(reads + 1);
+  f.controller.dispose();
+});
+
+it('shows and pauses a current polling failure until explicit successful reload', async () => {
+  vi.useFakeTimers();
+  const f = fixture(true);
+
+  await f.start();
+  f.app.callServerTool.mockRejectedValueOnce(new Error('current offline error'));
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(f.el('status').textContent).toContain('Live draft updates paused: current offline error');
+  const reads = f.calls.length;
+
+  f.controller.resumeFreshness();
+  await vi.advanceTimersByTimeAsync(9000);
+  expect(f.calls.length).toBe(reads);
+  await f.controller.recover(id);
+  expect(f.el('status').dataset.tone).toBe('ok');
+  const resumed = f.calls.length;
+
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(f.calls.length).toBe(resumed + 1);
+  f.controller.dispose();
+});
+
+it('keeps newer cache inspection after a same-revision reload supersedes a successful poll', async () => {
+  vi.useFakeTimers();
+  const f = fixture(true);
+
+  await f.start();
+  let finish!: (result: ReturnType<typeof wire>) => void;
+
+  f.app.callServerTool.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  const refreshed = initial();
+
+  refreshed.inspection!.runtime.known_seconds = 201;
+  f.setCurrent(refreshed);
+  await f.controller.recover(id);
+  const summary = f.el('summary').textContent;
+
+  finish(wire(initial()));
+  await vi.advanceTimersByTimeAsync(1);
+  expect(f.el('summary').textContent).toBe(summary);
+  f.controller.dispose();
+});
+
+it('does not replace foreground success with a delayed background context-delivery failure', async () => {
+  vi.useFakeTimers();
+  const f = fixture(true);
+
+  await f.start();
+  const changed = initial();
+
+  changed.draft.revision = 2;
+  f.setCurrent(changed);
+  let reject!: (error: Error) => void;
+
+  f.app.updateModelContext.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  await f.controller.edit({ name: 'Newer foreground' });
+  const success = f.el('status').textContent;
+
+  reject(new Error('old context delivery failed'));
+  await vi.advanceTimersByTimeAsync(1);
+  expect(f.el('status').textContent).toBe(success);
+  const reads = f.calls.length;
+
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(f.calls.length).toBe(reads + 1);
+  f.controller.dispose();
+});
+
+it('ignores an in-flight polling rejection after disposal without rendering or scheduling more reads', async () => {
+  vi.useFakeTimers();
+  const f = fixture(true);
+
+  await f.start();
+  let reject!: (error: Error) => void;
+
+  f.app.callServerTool.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  f.controller.dispose();
+  const status = f.el('status').textContent;
+  const reads = f.calls.length;
+
+  reject(new Error('disposed read failed'));
+  await vi.advanceTimersByTimeAsync(9000);
+  expect(f.el('status').textContent).toBe(status);
+  expect(f.calls.length).toBe(reads);
+});

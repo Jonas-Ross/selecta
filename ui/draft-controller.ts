@@ -82,22 +82,32 @@ export function createDraftController(
   let failedResult = false;
   let disposed = false;
   let stopObserving: unknown;
+  let actionEpoch = 0;
   const freshness = watchDraftFreshness({
     active: () => !disposed && connected && freshnessActive(),
     read: async () => {
       if (busy || !draftId || !state) return;
 
       const id = draftId;
+      const epoch = actionEpoch;
       const before = JSON.stringify(state);
-      const decoded = decodeDraftResult(
-        await app.callServerTool({ name: 'get_playlist_draft', arguments: { draft_id: id } }),
-      );
+      // A completed foreground action may leave both identity and revision
+      // unchanged. Its epoch supersedes every outcome of this older read.
+      const obsolete = () => disposed || busy || id !== draftId || epoch !== actionEpoch;
 
-      if (disposed || busy || id !== draftId) return;
+      try {
+        const decoded = decodeDraftResult(
+          await app.callServerTool({ name: 'get_playlist_draft', arguments: { draft_id: id } }),
+        );
 
-      receive(decoded, id);
+        if (obsolete()) return;
 
-      if (JSON.stringify(state) !== before) await publish();
+        receive(decoded, id);
+
+        if (JSON.stringify(state) !== before) await publish();
+      } catch (error) {
+        if (!obsolete()) throw error;
+      }
     },
     failed: (error) =>
       status(
@@ -206,6 +216,8 @@ export function createDraftController(
   }
 
   async function publish() {
+    const epoch = actionEpoch;
+
     try {
       await app.updateModelContext({
         content: [
@@ -216,6 +228,8 @@ export function createDraftController(
         ],
       });
     } catch {
+      if (disposed || epoch !== actionEpoch) return;
+
       status(
         'Draft saved locally. Context delivery failed; use Send feedback or ask the agent to get this draft.',
         'error',
@@ -259,6 +273,7 @@ export function createDraftController(
     // Nodes survive the render, so the inert editor can hand focus straight back.
     const focused = ui.activeElement;
 
+    actionEpoch++;
     busy = true;
     render();
 
@@ -470,6 +485,9 @@ export function createDraftController(
   };
 
   app.ontoolresult = (result) => {
+    if (disposed) return;
+
+    actionEpoch++;
     clearTimeout(resultFallback);
     receivedResult = true;
     const decoded = decodeDraftResult(result);
