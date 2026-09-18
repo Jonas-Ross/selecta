@@ -8,6 +8,7 @@ import { handleAddTracks, type AddTracksOutput } from '../src/tools/add_tracks.j
 import { handleRemoveTracks, type RemoveTracksOutput } from '../src/tools/remove_tracks.js';
 import { handleReorderTracks, type ReorderTracksOutput } from '../src/tools/reorder_tracks.js';
 import { handleDeletePlaylist, type DeletePlaylistOutput } from '../src/tools/delete_playlist.js';
+import type { SelectaCache } from '../src/cache/index.js';
 import type { PlaylistEditResult } from '../src/types/bridge.js';
 import { BridgeError } from '../src/types/errors.js';
 import { asError, makeToolDeps } from './helpers.js';
@@ -25,6 +26,20 @@ function editResult(
     preEditTrackPersistentIds: ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX'],
     ...extra,
   };
+}
+
+/**
+ * Record a receipt for `createdId` and rekey it onto `toId` the way a
+ * note-conflicting sync reconciliation would (see cache.test.ts "notes" for
+ * the full refresh-driven version): `toId` must already hold its own note so
+ * movePlaylistNote refuses to move the receipt's, which is what marks the
+ * receipt edit_conflict.
+ */
+function markEditConflict(cache: SelectaCache, createdId: string, toId: string): void {
+  cache.recordPlaylistCreation(createdId, 'Draft', ['T-TEARDROP']);
+  cache.setNote('playlist', toId, "the destination's own note");
+  cache.setNote('playlist', createdId, 'selecta draft, about to lose the race');
+  cache.applyRekey(createdId, createdId, toId);
 }
 
 describe('add_tracks', () => {
@@ -119,6 +134,41 @@ describe('add_tracks', () => {
       'T-ANGEL',
       'T-GLORYBOX',
     ]);
+  });
+
+  it('refuses a creation ID whose rekey landed on a pre-existing playlist', async () => {
+    const deps = makeToolDeps();
+
+    markEditConflict(deps.cacheInstance, 'P-DRAFT', 'P-TRIPHOP');
+    const err = asError(
+      await handleAddTracks({ playlist_id: 'P-DRAFT', track_ids: ['T-ROADS'] }, deps),
+    );
+
+    expect(err.error).toBe('playlist_rekey_conflict');
+    expect(err.hint).toContain('P-DRAFT');
+    expect(deps.bridge.addPlaylistTracks).not.toHaveBeenCalled();
+  });
+
+  it('still edits through a creation ID after a non-conflicting rekey', async () => {
+    const finalIds = ['T-TEARDROP', 'T-ANGEL', 'T-GLORYBOX', 'T-ROADS'];
+    const deps = makeToolDeps({
+      addPlaylistTracks: vi.fn().mockResolvedValue(editResult(finalIds)),
+    });
+
+    deps.cacheInstance.recordPlaylistCreation('P-DRAFT', 'Draft', ['T-TEARDROP']);
+    expect(deps.cacheInstance.applyRekey('P-DRAFT', 'P-DRAFT', 'P-TRIPHOP')).toEqual({
+      noteConflict: false,
+    });
+
+    const out = (await handleAddTracks(
+      { playlist_id: 'P-DRAFT', track_ids: ['T-ROADS'] },
+      deps,
+    )) as AddTracksOutput;
+
+    expect(out.playlist_id).toBe('P-TRIPHOP');
+    expect(deps.bridge.addPlaylistTracks).toHaveBeenCalledWith(
+      expect.objectContaining({ playlistId: 'P-TRIPHOP' }),
+    );
   });
 });
 
@@ -227,6 +277,18 @@ describe('remove_tracks', () => {
       'T-ANGEL',
       'T-GLORYBOX',
     ]);
+  });
+
+  it('refuses a creation ID whose rekey landed on a pre-existing playlist', async () => {
+    const deps = makeToolDeps();
+
+    markEditConflict(deps.cacheInstance, 'P-DRAFT', 'P-TRIPHOP');
+    const err = asError(
+      await handleRemoveTracks({ playlist_id: 'P-DRAFT', track_ids: ['T-ANGEL'] }, deps),
+    );
+
+    expect(err.error).toBe('playlist_rekey_conflict');
+    expect(deps.bridge.removePlaylistTracks).not.toHaveBeenCalled();
   });
 });
 
@@ -363,6 +425,16 @@ describe('reorder_tracks', () => {
       'T-GLORYBOX',
     ]);
   });
+
+  it('refuses a creation ID whose rekey landed on a pre-existing playlist', async () => {
+    const deps = makeToolDeps();
+
+    markEditConflict(deps.cacheInstance, 'P-DRAFT', 'P-TRIPHOP');
+    const err = asError(await handleReorderTracks({ playlist_id: 'P-DRAFT', order: [0] }, deps));
+
+    expect(err.error).toBe('playlist_rekey_conflict');
+    expect(deps.bridge.reorderPlaylistTracks).not.toHaveBeenCalled();
+  });
 });
 
 describe('delete_playlist', () => {
@@ -420,6 +492,17 @@ describe('delete_playlist', () => {
 
     expect(err.error).toBe('playlist_not_editable');
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
+  });
+
+  it('refuses a creation ID whose rekey landed on a pre-existing playlist', async () => {
+    const deps = makeToolDeps();
+
+    markEditConflict(deps.cacheInstance, 'P-DRAFT', 'P-TRIPHOP');
+    const err = asError(await handleDeletePlaylist({ playlist_id: 'P-DRAFT' }, deps));
+
+    expect(err.error).toBe('playlist_rekey_conflict');
+    expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
+    expect(deps.cacheInstance.getPlaylist('P-TRIPHOP')).not.toBeNull();
   });
 
   it('maps a live miss (deleted: 0) to playlist_not_found and keeps the cache row', async () => {

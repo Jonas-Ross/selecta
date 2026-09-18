@@ -37,8 +37,10 @@ export function createPlaylistsQueries(
     FROM playlist_creations WHERE created_at >= ? ORDER BY created_at
   `);
 
+  // edit_conflict rides with current_persistent_id: whatever last set the
+  // receipt's canonical ID also states whether that resolution is trusted.
   const setCreationCurrentIdStmt = db.prepare(
-    'UPDATE playlist_creations SET current_persistent_id = ? WHERE created_persistent_id = ?',
+    'UPDATE playlist_creations SET current_persistent_id = ?, edit_conflict = ? WHERE created_persistent_id = ?',
   );
 
   const deleteCreationsByCurrentIdStmt = db.prepare(
@@ -49,8 +51,15 @@ export function createPlaylistsQueries(
     'SELECT current_persistent_id AS currentId, name FROM playlist_creations WHERE created_persistent_id = ?',
   );
 
+  const hasEditConflictStmt = db.prepare(
+    'SELECT 1 FROM playlist_creations WHERE created_persistent_id = ? AND edit_conflict = 1',
+  );
+
+  // A live rekey (write-time, from an authoritative Music.app readback, not a
+  // fuzzy name/tracklist match) supersedes any earlier conflict on the
+  // repointed receipts.
   const repointCreationsByCurrentIdStmt = db.prepare(
-    'UPDATE playlist_creations SET current_persistent_id = ? WHERE current_persistent_id = ?',
+    'UPDATE playlist_creations SET current_persistent_id = ?, edit_conflict = 0 WHERE current_persistent_id = ?',
   );
 
   const deletePlaylistRowStmt = db.prepare('DELETE FROM playlists WHERE persistent_id = ?');
@@ -97,8 +106,12 @@ export function createPlaylistsQueries(
       }));
     },
 
-    setCreationCurrentId(createdId: string, currentId: string): void {
-      setCreationCurrentIdStmt.run(currentId, createdId);
+    setCreationCurrentId(createdId: string, currentId: string, editConflict: boolean): void {
+      setCreationCurrentIdStmt.run(currentId, editConflict ? 1 : 0, createdId);
+    },
+
+    hasEditConflict(createdId: string): boolean {
+      return hasEditConflictStmt.get(createdId) !== undefined;
     },
 
     deleteCreationsByCurrentId(persistentId: string): void {

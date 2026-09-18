@@ -36,7 +36,7 @@ export type AddTracksOutput = {
   track_count: number;
 };
 
-export const ADD_TRACKS_DESCRIPTION = `Add owned tracks to an existing user playlist in Music.app, appending or inserting at a 0-based position. This writes to the user's library. Tracks already in the playlist are added AGAIN (Music.app allows duplicate entries) — check the playlist first via search with in_playlist if that's not wanted. Only plain user playlists are editable: smart/subscription/folder targets fail with playlist_not_editable. Fails with playlist_not_found or track_not_found (nothing is written) on unknown IDs — re-resolve via list_playlists/search, or refresh_library if the cache is stale. Inserting far from the end of a very large playlist is slow (one Music.app event per displaced track).`;
+export const ADD_TRACKS_DESCRIPTION = `Add owned tracks to an existing user playlist in Music.app, appending or inserting at a 0-based position. This writes to the user's library. Tracks already in the playlist are added AGAIN (Music.app allows duplicate entries) — check the playlist first via search with in_playlist if that's not wanted. Only plain user playlists are editable: smart/subscription/folder targets fail with playlist_not_editable. Fails with playlist_not_found or track_not_found (nothing is written) on unknown IDs — re-resolve via list_playlists/search, or refresh_library if the cache is stale. Also fails with playlist_rekey_conflict when a creation receipt's rekey landed on a playlist that already existed under a different ID — re-resolve via list_playlists/search rather than retry the same ID. Inserting far from the end of a very large playlist is slow (one Music.app event per displaced track).`;
 
 export async function handleAddTracks(
   raw: unknown,

@@ -409,6 +409,25 @@ function cacheAfterCreate(): SelectaCache {
   return cache;
 }
 
+/**
+ * A cache primed for a note-conflicting rekey of CREATED_ID onto 'P-OLD', a
+ * pre-existing same-name playlist with its own note — reconciliation is
+ * ready to plan the rekey, but applyRekey is left to the caller so tests can
+ * inspect the plan first.
+ */
+function cachePrimedForConflictedRekey(): SelectaCache {
+  const cache = cacheAfterCreate();
+
+  cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-OLD' }), { durationMs: 1 });
+  cache.setNote('playlist', 'P-OLD', "the 2019 version — Jonas's, leave alone");
+  cache.setNote('playlist', CREATED_ID, 'selecta draft 3');
+  // iCloud drops Selecta's copy; the older one matches the receipt exactly,
+  // so it looks like a rekey.
+  cache.refreshFromSnapshot(snapshotWith({ id: 'P-OLD' }), { durationMs: 1 });
+
+  return cache;
+}
+
 describe('sync reconciliation', () => {
   it('plans nothing when the created playlist survives cleanly (LOW BEAMS case)', () => {
     const cache = cacheAfterCreate();
@@ -937,23 +956,19 @@ describe('notes', () => {
   // The rekey target can be the user's own older copy, so overwriting its note
   // destroys memory about a playlist that still exists.
   it('never overwrites a note already on the playlist a rekey lands on', () => {
-    const cache = cacheAfterCreate();
+    const cache = cachePrimedForConflictedRekey();
 
-    cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-OLD' }), { durationMs: 1 });
-
-    const older = cache.setNote('playlist', 'P-OLD', "the 2019 version — Jonas's, leave alone");
-
-    cache.setNote('playlist', CREATED_ID, 'selecta draft 3');
-    // iCloud drops Selecta's copy; the older one matches the receipt exactly,
-    // so it looks like a rekey.
-    cache.refreshFromSnapshot(snapshotWith({ id: 'P-OLD' }), { durationMs: 1 });
     expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
       { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: CREATED_ID, toId: 'P-OLD' },
     ]);
     cache.applyRekey(CREATED_ID, CREATED_ID, 'P-OLD');
 
-    expect(cache.getNote('playlist', 'P-OLD')).toEqual(older);
-    expect(cache.getPlaylist('P-OLD')!.noteBody).toBe(older.body);
+    expect(cache.getNote('playlist', 'P-OLD')!.body).toBe(
+      "the 2019 version — Jonas's, leave alone",
+    );
+    expect(cache.getPlaylist('P-OLD')!.noteBody).toBe("the 2019 version — Jonas's, leave alone");
+    // The same collision marks the receipt so edit tools refuse it too.
+    expect(cache.hasEditConflict(CREATED_ID)).toBe(true);
   });
 
   // Only a destination defending its own note is a collision.
@@ -963,10 +978,31 @@ describe('notes', () => {
     cache.setNote('playlist', CREATED_ID, 'stays put');
     expect(cache.applyRekey(CREATED_ID, CREATED_ID, CREATED_ID)).toEqual({ noteConflict: false });
     expect(cache.getNote('playlist', CREATED_ID)!.body).toBe('stays put');
+    expect(cache.hasEditConflict(CREATED_ID)).toBe(false);
 
     cache.clearNote('playlist', CREATED_ID);
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
     expect(cache.applyRekey(CREATED_ID, CREATED_ID, 'P-REKEYED')).toEqual({ noteConflict: false });
+    expect(cache.hasEditConflict(CREATED_ID)).toBe(false);
+  });
+
+  it('has no edit conflict for a receipt that was never rekeyed', () => {
+    const cache = cacheAfterCreate();
+
+    expect(cache.hasEditConflict(CREATED_ID)).toBe(false);
+    expect(cache.hasEditConflict('never-seen')).toBe(false);
+  });
+
+  // A live rekey resolves the ID authoritatively from Music.app itself, not
+  // by fuzzy name/tracklist matching — it supersedes an earlier conflict.
+  it('clears a receipt edit conflict once a live rekey resolves it', () => {
+    const cache = cachePrimedForConflictedRekey();
+
+    cache.applyRekey(CREATED_ID, CREATED_ID, 'P-OLD');
+    expect(cache.hasEditConflict(CREATED_ID)).toBe(true);
+
+    cache.applyLiveRekey('P-OLD', { persistentId: 'P-LIVE', name: NAME, trackIds: TRACKS });
+    expect(cache.hasEditConflict(CREATED_ID)).toBe(false);
   });
 
   it('never overwrites a note on the destination of a write-time rekey', () => {

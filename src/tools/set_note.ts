@@ -7,7 +7,11 @@ import { z } from 'zod';
 import type { NoteSubject } from '../types/cache.js';
 import type { SelectaError } from '../types/errors.js';
 import { NOTE_MAX_LENGTH, apiNoteFromRow, type ApiNote } from '../domain/track_projections.js';
-import { missingTrackIdsError, resolvePlaylist } from '../operations/resources.js';
+import {
+  missingTrackIdsError,
+  playlistEditConflictError,
+  resolvePlaylist,
+} from '../operations/resources.js';
 import { parseInput, toErrorEnvelope } from './errors.js';
 import type { ToolDeps } from './deps.js';
 
@@ -33,7 +37,7 @@ export type SetNoteOutput =
   | { subject: NoteSubject; id: string; note: ApiNote }
   | { subject: NoteSubject; id: string; cleared: true };
 
-export const SET_NOTE_DESCRIPTION = `Save your own note on a track or playlist so it survives this session — verbatim model memory, one note per subject ("great opener", "too abrasive for dinner sets", "use this version, not the remaster", or playlist-level feedback like "user approved the arc; preferred the plain name over the poetic working title"). Writing replaces the previous note wholesale, so fold in what you want to keep; an empty body clears it. Notes come back unchanged as a note field ({body, created_at, updated_at}) on search results, get_track_context, inspect_tracklist, list_playlists, and preview_playlist — Selecta never filters, sorts, or matches on them; what they mean is yours to decide. Cache-only: nothing is written to Music.app, and notes survive refresh_library and iCloud playlist rekeys — except onto a playlist that already has its own note, which always keeps it while the moving note is dropped; at refresh that rekey reports note_conflict: true, and at write time it is silent, so re-read via list_playlists rather than assuming a note travelled. Fails with track_not_found / playlist_not_found (nothing stored) on an unknown ID — don't retry with the same input; re-resolve the ID via search or list_playlists, or refresh_library if the library changed. Returns the stored note with timestamps, or cleared: true.`;
+export const SET_NOTE_DESCRIPTION = `Save your own note on a track or playlist so it survives this session — verbatim model memory, one note per subject ("great opener", "too abrasive for dinner sets", "use this version, not the remaster", or playlist-level feedback like "user approved the arc; preferred the plain name over the poetic working title"). Writing replaces the previous note wholesale, so fold in what you want to keep; an empty body clears it. Notes come back unchanged as a note field ({body, created_at, updated_at}) on search results, get_track_context, inspect_tracklist, list_playlists, and preview_playlist — Selecta never filters, sorts, or matches on them; what they mean is yours to decide. Cache-only: nothing is written to Music.app, and notes survive refresh_library and iCloud playlist rekeys — except onto a playlist that already has its own note, which always keeps it while the moving note is dropped; at refresh that rekey reports note_conflict: true, and at write time it is silent, so re-read via list_playlists rather than assuming a note travelled. Fails with track_not_found / playlist_not_found (nothing stored) on an unknown ID — don't retry with the same input; re-resolve the ID via search or list_playlists, or refresh_library if the library changed. Also fails with playlist_rekey_conflict when a playlist ID's creation receipt rekeyed onto a pre-existing playlist that reported note_conflict: true — re-resolve via list_playlists rather than risk overwriting that playlist's own note. Returns the stored note with timestamps, or cleared: true.`;
 
 export async function handleSetNote(
   raw: unknown,
@@ -54,6 +58,13 @@ export async function handleSetNote(
 
       if (cacheMiss) return cacheMiss;
     } else {
+      // A conflicted receipt's own note already lost the race in
+      // movePlaylistNote; refuse rather than let an explicit set_note
+      // overwrite the destination's unrelated note.
+      const conflict = playlistEditConflictError(cache, id);
+
+      if (conflict) return conflict;
+
       // Key playlist notes by canonical ID so reconciliation can follow rekeys.
       const resolved = resolvePlaylist(cache, id);
 
