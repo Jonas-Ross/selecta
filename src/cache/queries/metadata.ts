@@ -1,7 +1,8 @@
 // Connection-owned query statements. Transactions belong to SelectaCache.
-import type { Database } from 'better-sqlite3';
+import type { Database, Statement } from 'better-sqlite3';
 import type {
   AudioFeaturesRow,
+  FeatureSource,
   NoteMoveOutcome,
   NoteRow,
   NoteSubject,
@@ -47,38 +48,57 @@ export function createMetadataQueries(db: Database) {
 
   const upsertAudioFeaturesStmt = db.prepare(`
     INSERT OR REPLACE INTO audio_features
-      (track_persistent_id, bpm, musical_key, danceability, sources,
-       mb_recording_mbid, deezer_track_id, status, fetched_at)
-    VALUES (@trackPersistentId, @bpm, @musicalKey, @danceability, @sources,
-            @mbRecordingMbid, @deezerTrackId, @status, @fetchedAt)
+      (track_persistent_id, bpm, bpm_confidence, bpm_maturity, musical_key,
+       camelot, key_confidence, key_maturity, danceability, sources,
+       mb_recording_mbid, deezer_track_id, status, catalog_status,
+       analysis_status, fetched_at)
+    VALUES (@trackPersistentId, @bpm, @bpmConfidence, @bpmMaturity, @musicalKey,
+            @camelot, @keyConfidence, @keyMaturity, @danceability, @sources,
+            @mbRecordingMbid, @deezerTrackId, @status, @catalogStatus,
+            @analysisStatus, @fetchedAt)
   `);
 
   const getAudioFeaturesStmt = db.prepare(`
     SELECT track_persistent_id AS trackPersistentId, bpm,
-           musical_key AS musicalKey, danceability, sources,
+           bpm_confidence AS bpmConfidence, bpm_maturity AS bpmMaturity,
+           musical_key AS musicalKey, camelot, key_confidence AS keyConfidence,
+           key_maturity AS keyMaturity, danceability, sources,
            mb_recording_mbid AS mbRecordingMbid, deezer_track_id AS deezerTrackId,
-           status, fetched_at AS fetchedAt
+           status, catalog_status AS catalogStatus, analysis_status AS analysisStatus,
+           fetched_at AS fetchedAt
     FROM audio_features WHERE track_persistent_id = ?
   `);
 
-  // The enrichment backlog: tracks never attempted (no row — attempted tracks
-  // are terminal whatever their status). Most-played first, so the tracks the
-  // model touches most gain features earliest; stable ID tiebreak. Slim
-  // projection: only what matching needs, not TRACK_COLUMNS (whose feature
-  // subqueries are NULL by construction here).
-  const pendingEnrichmentSql = `
-    FROM tracks t
-    WHERE NOT EXISTS (SELECT 1 FROM audio_features af WHERE af.track_persistent_id = t.persistent_id)
-  `;
+  // The backlog for one source: tracks that source has not attempted yet.
+  // Terminal is per source, so a track the catalogs had nothing for is still
+  // pending analysis. Most-played first, so the tracks the model touches most
+  // gain features earliest; stable ID tiebreak. Slim projection: only what
+  // matching needs, not TRACK_COLUMNS (whose feature subqueries are NULL by
+  // construction here).
+  const pendingFor = (statusColumn: string): { page: Statement; count: Statement } => {
+    const scope = `
+      FROM tracks t
+      WHERE NOT EXISTS (
+        SELECT 1 FROM audio_features af
+        WHERE af.track_persistent_id = t.persistent_id AND af.${statusColumn} IS NOT NULL
+      )
+    `;
 
-  const pendingEnrichmentStmt = db.prepare(`
-    SELECT t.persistent_id AS persistentId, t.title, t.artist,
-           t.duration_seconds AS durationSeconds
-    ${pendingEnrichmentSql}
-    ORDER BY t.play_count DESC, t.persistent_id LIMIT ?
-  `);
+    return {
+      page: db.prepare(`
+        SELECT t.persistent_id AS persistentId, t.title, t.artist,
+               t.duration_seconds AS durationSeconds
+        ${scope}
+        ORDER BY t.play_count DESC, t.persistent_id LIMIT ?
+      `),
+      count: db.prepare(`SELECT COUNT(*) AS n ${scope}`),
+    };
+  };
 
-  const countPendingEnrichmentStmt = db.prepare(`SELECT COUNT(*) AS n ${pendingEnrichmentSql}`);
+  const pendingStmts: Record<FeatureSource, ReturnType<typeof pendingFor>> = {
+    catalog: pendingFor('catalog_status'),
+    analysis: pendingFor('analysis_status'),
+  };
 
   const getSourceCooldownStmt = db.prepare(
     'SELECT until_ms FROM enrichment_cooldowns WHERE host = ?',
@@ -105,14 +125,14 @@ export function createMetadataQueries(db: Database) {
       });
     },
 
-    getTracksPendingEnrichment(limit: number): PendingTrack[] {
+    getTracksPendingEnrichment(source: FeatureSource, limit: number): PendingTrack[] {
       // Clamp: a negative LIMIT means "unlimited" to SQLite — a caller bug
       // must not turn a bounded batch into a full-library crawl.
-      return pendingEnrichmentStmt.all(Math.max(0, limit)) as PendingTrack[];
+      return pendingStmts[source].page.all(Math.max(0, limit)) as PendingTrack[];
     },
 
-    countPendingEnrichment(): number {
-      return (countPendingEnrichmentStmt.get() as { n: number }).n;
+    countPendingEnrichment(source: FeatureSource): number {
+      return (pendingStmts[source].count.get() as { n: number }).n;
     },
 
     getAudioFeatures(trackPersistentId: string): AudioFeaturesRow | null {

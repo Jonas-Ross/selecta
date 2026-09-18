@@ -59,7 +59,14 @@
       "mbRecordingMbid": "mbid-dream-a",
       "deezerTrackId": 101,
       "status": "ok",
-      "fetchedAt": "2026-08-02T00:00:00.000Z"
+      "fetchedAt": "2026-08-02T00:00:00.000Z",
+      "bpmConfidence": null,
+      "bpmMaturity": null,
+      "camelot": null,
+      "keyConfidence": null,
+      "keyMaturity": null,
+      "catalogStatus": "ok",
+      "analysisStatus": null
     },
     {
       "trackPersistentId": "T-DREAM-B",
@@ -73,7 +80,14 @@
       "mbRecordingMbid": "mbid-dream-b",
       "deezerTrackId": null,
       "status": "ok",
-      "fetchedAt": "2026-08-02T00:00:00.000Z"
+      "fetchedAt": "2026-08-02T00:00:00.000Z",
+      "bpmConfidence": null,
+      "bpmMaturity": null,
+      "camelot": null,
+      "keyConfidence": null,
+      "keyMaturity": null,
+      "catalogStatus": "ok",
+      "analysisStatus": null
     }
   ],
   "draftTrackIds": ["T-DREAM-A", "T-TURN", "T-DREAM-B", "T-DREAM-A", "T-BARE"]

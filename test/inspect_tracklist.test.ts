@@ -49,12 +49,19 @@ function makeLargeDraft(): { deps: ToolDeps; trackIds: string[] } {
     .map((track, index) => ({
       trackPersistentId: track.persistentId,
       bpm: null,
+      bpmConfidence: null,
+      bpmMaturity: null,
       musicalKey: index % 5 === 0 ? null : ['C major', 'D minor', 'F# minor'][index % 3]!,
+      camelot: null,
+      keyConfidence: null,
+      keyMaturity: null,
       danceability: index % 7 === 0 ? null : 0.35 + (index % 50) / 100,
       sources: { musicalKey: 'acousticbrainz', danceability: 'acousticbrainz' },
       mbRecordingMbid: `mbid-large-${index}`,
       deezerTrackId: null,
       status: 'ok',
+      catalogStatus: 'ok',
+      analysisStatus: null,
       fetchedAt: '2026-08-02T00:00:00.000Z',
     }));
   const cache = SelectaCache.open(':memory:');

@@ -21,6 +21,18 @@ data, and version changes; the opening connection closes and reports
 available for the previous build or an explicit later attempt. A database newer
 than the running build is rejected, never downgraded or reset.
 
+Version 2 adds `playlist_creations.edit_conflict`. Version 3 adds the analysis
+columns to `audio_features` (`camelot`, per-feature confidence and maturity,
+and the per-source `catalog_status`/`analysis_status`) and fills
+`catalog_status` from each row's existing `status`. That `UPDATE` writes only
+the column the same step just added, so it stays inside the additive gate
+below: no pre-existing value is rewritten or removed.
+
+Read-only diagnostics never migrate, so `status` and `doctor` must keep working
+against a database an older build left behind. `readStatus` probes for the
+version-3 columns and reads the pre-3 shape when they are absent; a new
+migration that diagnostics read from needs the same treatment.
+
 ## Adding a migration
 
 1. Append a consecutive version and SQL to `MIGRATIONS`. Never edit a shipped

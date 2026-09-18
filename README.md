@@ -31,11 +31,16 @@ This reads your whole library into a SQLite cache at `~/Library/Application Supp
 Optionally, backfill tempo and key data so your agent can sequence by BPM:
 
 ```bash
-node dist/index.js enrich        # all not-yet-attempted tracks
-node dist/index.js enrich -n 200 # or a batch at a time
+node dist/index.js enrich                    # all not-yet-attempted tracks
+node dist/index.js enrich -n 200             # or a batch at a time
+node dist/index.js enrich --source analysis  # then analyze the previews of what's left
 ```
 
-This looks tracks up on MusicBrainz/AcousticBrainz and Deezer (free, no API keys) at roughly 1–3 seconds per track, so a large library takes a while — it's safe to interrupt and resume. Coverage is partial by nature: many tracks, especially recent releases, simply have no data anywhere, and those are remembered so they aren't looked up twice. Refreshing the library never discards features already fetched.
+The default pass looks tracks up on MusicBrainz/AcousticBrainz and Deezer (free, no API keys) at roughly 1–3 seconds per track, so a large library takes a while — it's safe to interrupt and resume. AcousticBrainz has had no new data since early 2022, so recent releases mostly come back empty.
+
+`--source analysis` fills that gap by measuring the music itself: it runs [metrognome](https://github.com/Jonas-Ross/metrognome) over each track's 30-second store preview for tempo and key. Install that binary first (or point `SELECTA_METROGNOME_PATH` at it); without it the command reports every track skipped and changes nothing. The two passes keep separate records, so a track the lookup found nothing for is still worth analyzing, and neither overwrites what the other already found. An estimate the analyzer isn't sure about is discarded rather than stored — a missing BPM is better than a wrong one.
+
+Whichever pass runs, dead ends are remembered so they aren't attempted twice, and refreshing the library never discards features already fetched.
 
 For a read-only health report, use `status`. It checks the database without creating, migrating, refreshing, enriching, or contacting Music.app. `doctor` adds one read-only Music.app availability and Automation probe. Both write one JSON result to stdout.
 
@@ -135,7 +140,7 @@ After updating Selecta, run `npm ci && npm run build` in the checkout your conne
 |---|---|
 | `refresh_library` | Full reread of Music.app into the cache. Manual by design. Also records play and skip deltas since the previous refresh, and remaps unambiguous recent playlist rekeys and reports ambiguous copies without deleting them. |
 | `set_note` | Save the agent's own note on a track or playlist ("great opener", "user preferred the plain name") so it's there next session. Cache-only, never written to Music.app. Notes come back verbatim on reads; Selecta never filters or ranks on them. |
-| `enrich_features` | Fetch BPM, key and danceability for tracks not yet attempted, from MusicBrainz/AcousticBrainz and Deezer. Works through the most-played backlog, or targets specific track IDs (up to 50). The only tool that uses the network. For a whole-library backfill, prefer the `enrich` CLI command above. |
+| `enrich_features` | Fetch BPM, key and danceability for tracks not yet attempted, from MusicBrainz/AcousticBrainz and Deezer (`source: catalog`) or by analyzing store previews with metrognome (`source: analysis`). Works through the most-played backlog, or targets specific track IDs (up to 50). The only tool that uses the network. For a whole-library backfill, prefer the `enrich` CLI command above. |
 
 Selecta only writes where you point it: it creates playlists, overwrites its own preview slot, edits or deletes the user playlists you ask it to, and sets favorites and ratings on the tracks you name. Smart, subscription and folder playlists are never modified.
 

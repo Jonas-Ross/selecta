@@ -19,6 +19,24 @@ export const MIGRATIONS: readonly Migration[] = [
     version: 2,
     sql: 'ALTER TABLE playlist_creations ADD COLUMN edit_conflict INTEGER NOT NULL DEFAULT 0;',
   },
+  // Audio analysis (metrognome) joins the catalog sources, so "attempted"
+  // becomes per-source: a track the catalogs had nothing for is still worth
+  // analyzing. Estimates gain the confidence and maturity their source
+  // reports, so a hint is never stored as a measurement. The one UPDATE fills
+  // the column it just added and rewrites nothing that existed before.
+  {
+    version: 3,
+    sql: `
+      ALTER TABLE audio_features ADD COLUMN camelot TEXT;
+      ALTER TABLE audio_features ADD COLUMN bpm_confidence REAL;
+      ALTER TABLE audio_features ADD COLUMN bpm_maturity TEXT;
+      ALTER TABLE audio_features ADD COLUMN key_confidence REAL;
+      ALTER TABLE audio_features ADD COLUMN key_maturity TEXT;
+      ALTER TABLE audio_features ADD COLUMN catalog_status TEXT;
+      ALTER TABLE audio_features ADD COLUMN analysis_status TEXT;
+      UPDATE audio_features SET catalog_status = status;
+    `,
+  },
 ];
 
 export function migrateDatabase(

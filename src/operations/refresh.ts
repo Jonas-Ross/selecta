@@ -103,7 +103,7 @@ export async function refreshLibrary(
       track_count: result.trackCount,
       playlist_count: result.playlistCount,
       refreshed_at: result.refreshedAt,
-      audio_features_pending: cache.countPendingEnrichment(),
+      audio_features_pending: cache.countPendingEnrichment('catalog'),
       play_deltas_recorded: result.playDeltasRecorded,
       ...(result.playCountResets > 0 ? { play_count_resets: result.playCountResets } : {}),
       ...(actions.length > 0 ? { sync_reconciliation: reconciliation } : {}),

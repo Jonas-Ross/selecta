@@ -25,6 +25,12 @@ export const enrichFeaturesInputShape = {
     .describe(
       `Backlog tracks to attempt this call (default ${DEFAULT_LIMIT}); omit when using track_ids. Source rate limits (MusicBrainz 1 req/s, AcousticBrainz 10 req/10s) pace the run at ~1-3s per track — size the batch to how long you're willing to wait.`,
     ),
+  source: z
+    .enum(['catalog', 'analysis'])
+    .optional()
+    .describe(
+      "Where features come from: 'catalog' (default) queries MusicBrainz/AcousticBrainz/Deezer; 'analysis' runs the local metrognome binary over each track's 30-second store preview. Backlogs are separate — a track the catalogs exhausted is still pending analysis.",
+    ),
   track_ids: z
     .array(z.string().min(1))
     .min(1)
@@ -62,7 +68,7 @@ type TargetedTrackOutcome =
       existing_result: 'enriched' | 'no_data' | 'no_match';
     };
 
-export const ENRICH_FEATURES_DESCRIPTION = `Fetch audio features (bpm, musical_key, danceability) for owned tracks not yet attempted, from free public sources (MusicBrainz→AcousticBrainz, Deezer; network required, no keys). Two modes: pass unique track_ids (up to ${MAX_BATCH_SIZE}; duplicates fail validation) to attempt only those specific pending tracks, or omit track_ids to process the most-played backlog using limit (default ${DEFAULT_LIMIT}, max ${MAX_BATCH_SIZE}); don't combine track_ids with limit. Targeted calls report one track_outcomes entry per ID: enriched, no_data, no_match, skipped, or already_attempted with its existing result. Unknown IDs fail with track_not_found before any external request. One call runs at ~1-3s per attempted track; source rate limits are honored automatically, and results save in 25-track chunks. Attempted tracks are terminal — no_match / no_data are recorded and never retried, so coverage is partial by nature (bpm lands on roughly half a typical library; recent releases are weakest). Features then appear on search / get_track_context results. Chunks that hit a source outage (AcousticBrainz throws intermittent 5xx) are skipped, reported in skipped/source_errors, and their tracks stay pending — call again later to pick them up; nothing is retried within a run. In backlog mode, call again while pending_remaining > 0. pending_remaining always counts the whole-library backlog, including after a targeted track_ids call; it is not the number of requested targets left. For a first-time backfill of a whole library prefer the CLI: node dist/index.js enrich.`;
+export const ENRICH_FEATURES_DESCRIPTION = `Fetch audio features (bpm, musical_key, danceability) for owned tracks not yet attempted. Two sources, each with its own backlog and its own terminal record: source 'catalog' (default) queries free public services (MusicBrainz→AcousticBrainz, Deezer; network required, no keys) for all three features; source 'analysis' runs the local metrognome binary over each track's 30-second store preview for bpm and musical_key only, covering releases the catalogs have no data for (AcousticBrainz is frozen at early 2022). Run both: a track the catalogs exhausted is still pending analysis, and neither overwrites a feature the other already supplied. 'analysis' needs the metrognome binary installed (SELECTA_METROGNOME_PATH, or on PATH); when it is missing the call returns every track skipped with the reason in source_errors and changes nothing. Estimates flagged uncertain by the analyzer are discarded rather than stored, so absent means "nothing worth trusting", not "not attempted". Two modes: pass unique track_ids (up to ${MAX_BATCH_SIZE}; duplicates fail validation) to attempt only those specific tracks, or omit track_ids to process the most-played backlog using limit (default ${DEFAULT_LIMIT}, max ${MAX_BATCH_SIZE}); don't combine track_ids with limit. Targeted calls report one track_outcomes entry per ID: enriched, no_data, no_match, skipped, or already_attempted with its existing result for that source. Unknown IDs fail with track_not_found before any external request. One call runs at ~1-3s per attempted track; source rate limits are honored automatically, and results save in 25-track chunks. Attempted tracks are terminal per source — no_match / no_data are recorded and never retried by that source, so coverage is partial by nature (catalog bpm lands on roughly half a typical library; recent releases are weakest). Features then appear on search / get_track_context results. A catalog chunk that hits a source outage (AcousticBrainz throws intermittent 5xx) is skipped, reported in skipped/source_errors, and its tracks stay pending — call again later to pick them up; nothing is retried within a run, and an analysis run that dies part-way keeps whatever already streamed back. In backlog mode, call again while pending_remaining > 0. pending_remaining always counts the whole-library backlog for the source you asked for, including after a targeted track_ids call; it is not the number of requested targets left. For a first-time backfill of a whole library prefer the CLI: node dist/index.js enrich --source catalog, then --source analysis.`;
 
 function toTrackOutcome(outcome: TargetedEnrichmentOutcome): TargetedTrackOutcome {
   return outcome.outcome === 'already_attempted'
@@ -89,8 +95,8 @@ export async function handleEnrichFeatures(
   try {
     const options =
       parsed.data.track_ids != null
-        ? { trackIds: parsed.data.track_ids }
-        : { limit: parsed.data.limit ?? DEFAULT_LIMIT };
+        ? { trackIds: parsed.data.track_ids, source: parsed.data.source }
+        : { limit: parsed.data.limit ?? DEFAULT_LIMIT, source: parsed.data.source };
     const summary = await enrichPendingTracks(deps.cache(), options, deps.enrich ?? {});
 
     return {
