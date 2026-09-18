@@ -1124,6 +1124,7 @@ describe('refresh_library sync reconciliation', () => {
       duplicates_removed: [],
       failures: [],
       ambiguous: [{ name: 'Rearview', playlist_ids: ['P-CREATED', 'P-FIRST', 'P-SECOND'] }],
+      note_conflicts: [],
     });
 
     for (const note of notes) {
@@ -1154,12 +1155,40 @@ describe('refresh_library sync reconciliation', () => {
       ambiguous: [],
       duplicates_removed: [],
       failures: [],
+      note_conflicts: [],
     });
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
     // The ID create_playlist returned still resolves for searches.
     const { rows } = deps.cacheInstance.searchTracks({ inPlaylist: 'P-CREATED' });
 
     expect(rows).toHaveLength(2);
+  });
+
+  // A rekey can land on the user's own older same-name copy: same name, same
+  // tracks, and the created one gone. That copy's note is about that playlist,
+  // so it stands, and the refresh says the receipt's note did not travel.
+  it('keeps the destination note on a rekey and reports the conflict', async () => {
+    const deps = depsAfterCreate({
+      readLibrary: vi.fn().mockResolvedValue(echoSnapshot(['P-OLD'])),
+    });
+    const cache = deps.cacheInstance;
+
+    cache.refreshFromSnapshot(echoSnapshot(['P-CREATED', 'P-OLD']), { durationMs: 1 });
+
+    const older = cache.setNote('playlist', 'P-OLD', "the 2019 version — Jonas's, leave alone");
+
+    cache.setNote('playlist', 'P-CREATED', 'selecta draft 3');
+
+    const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+
+    expect(out.sync_reconciliation!.rekeys).toEqual([
+      { name: 'Rearview', from_id: 'P-CREATED', to_id: 'P-OLD' },
+    ]);
+    expect(out.sync_reconciliation!.note_conflicts).toEqual([
+      { name: 'Rearview', playlist_id: 'P-OLD' },
+    ]);
+    expect(cache.getNote('playlist', 'P-OLD')).toEqual(older);
+    expect(cache.getPlaylist('P-OLD')!.noteBody).toBe(older.body);
   });
 
   it('rekeys a reordered preview slot by its reserved name', async () => {

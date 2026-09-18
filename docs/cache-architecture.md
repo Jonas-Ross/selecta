@@ -12,7 +12,11 @@ End the transaction before wire projection or external I/O.
 
 Refresh-wide pruning stays together in `queries/library.ts`, including dependent
 features and notes. This keeps deletion order and the receipt window protecting
-missing playlist notes under one owner.
+missing playlist notes under one owner. A note move is therefore never allowed to
+delete a note: moving onto a playlist that already has one leaves the destination
+untouched, and the note left behind on the stale ID is collected by that same
+prune. Reconciliation reports the collision instead of resolving it, because the
+two notes need not describe the same playlist.
 
 Read-only diagnostics bypass the writable facade and query factories. Their
 separate query-only connection must not initialize or migrate the cache. See

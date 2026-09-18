@@ -24,11 +24,13 @@ export function createMetadataQueries(db: Database) {
     `SELECT ${NOTE_COLUMNS} FROM notes WHERE subject_kind = ? AND subject_id = ?`,
   );
 
-  // OR REPLACE: if the destination somehow already carries a note, the moving
-  // one wins — both describe the same playlist, and the alternative is a PK
-  // failure mid-reconciliation.
+  // OR IGNORE: a destination that already carries a note keeps it. The two
+  // notes do not reliably describe the same playlist — a rekey can land on the
+  // user's own older same-name copy — and the destination's note is the one
+  // written against the playlist that is actually live. OR REPLACE deleted it
+  // to make room for the moving note, which is unrecoverable model memory loss.
   const movePlaylistNoteStmt = db.prepare(
-    `UPDATE OR REPLACE notes SET subject_id = ? WHERE subject_kind = 'playlist' AND subject_id = ?`,
+    `UPDATE OR IGNORE notes SET subject_id = ? WHERE subject_kind = 'playlist' AND subject_id = ?`,
   );
 
   const upsertAudioFeaturesStmt = db.prepare(`
@@ -127,9 +129,15 @@ export function createMetadataQueries(db: Database) {
       return (getNoteStmt.get(subjectKind, subjectId) as NoteRow | undefined) ?? null;
     },
 
-    /** Re-key a playlist note when reconciliation moves the playlist's canonical ID. */
-    movePlaylistNote(fromId: string, toId: string): void {
-      if (fromId !== toId) movePlaylistNoteStmt.run(toId, fromId);
+    /**
+     * Re-key a playlist note when reconciliation moves the playlist's canonical
+     * ID. Returns false when nothing moved — either there was no note on
+     * `fromId`, or `toId` already has one and keeps it.
+     */
+    movePlaylistNote(fromId: string, toId: string): boolean {
+      if (fromId === toId) return false;
+
+      return movePlaylistNoteStmt.run(toId, fromId).changes > 0;
     },
   };
 }
