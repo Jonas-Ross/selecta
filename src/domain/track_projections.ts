@@ -1,16 +1,13 @@
-// Explicit wire projections shared by tool handlers. No runtime storage dependencies.
+// Wire projections for tool handlers.
 import type { NoteRow, TrackRow } from '../types/cache.js';
 
-// The model's own note on a track or playlist (issue #32), verbatim, with
-// when it was first written and last changed. Same shape on every surface.
 export type ApiNote = {
   body: string;
   created_at: string;
   updated_at: string;
 };
 
-// Notes are bounded at the zod boundary so a runaway body can't bloat every
-// later read; the model structures the body however it likes within that.
+// Bounded at zod boundary so runaway bodies can't bloat reads.
 export const NOTE_MAX_LENGTH = 2000;
 
 /** The wire note from any row carrying note columns; undefined when unset. */
@@ -34,10 +31,7 @@ export function apiNoteFromRow(note: NoteRow | null): ApiNote | undefined {
   return { body: note.body, created_at: note.createdAt, updated_at: note.updatedAt };
 }
 
-// The model-facing track shape: identity fields plus the behavioral signal
-// bundle. Ratings are 0–5 stars here (Music.app's 0–100 internally). Absent
-// fields are omitted entirely — undefined keys disappear in JSON, and over a
-// 50-track response the saved tokens add up.
+// Ratings: 0–5 here (Music.app uses 0–100). Absent fields omit the keys.
 export type ApiTrack = {
   persistent_id: string;
   title?: string;
@@ -47,14 +41,10 @@ export type ApiTrack = {
   genre?: string;
   duration_seconds?: number;
   location_kind?: string;
-  // Enriched audio features (#19). Absent = not enriched yet, or no source had
-  // data. bpm prefers the enriched value, falling back to the native tag.
-  bpm?: number;
+  bpm?: number; // enriched or fallback to tag
   musical_key?: string; // e.g. "F# minor"
   danceability?: number; // 0..1
-  // The model's own earlier note on this track, verbatim. Memory, not signal:
-  // Selecta never filters or orders on it.
-  note?: ApiNote;
+  note?: ApiNote; // model's own annotation
   signal: {
     play_count: number;
     skip_count: number;
@@ -66,9 +56,7 @@ export type ApiTrack = {
   };
 };
 
-// One fixed field order removes repeated object keys from broad results while
-// retaining every comparison fact. Keep it explicit so compact output cannot
-// silently grow when ApiTrack gains another field.
+// Fixed order so compact output keys don't repeat; sync this with ApiTrack.
 export const COMPACT_TRACK_FIELDS = [
   'persistent_id',
   'title',
@@ -90,8 +78,7 @@ export const COMPACT_TRACK_FIELDS = [
   'note',
 ] as const;
 
-// Fixed row aligned with COMPACT_TRACK_FIELDS. Null marks an unavailable
-// optional fact; location_kind is the only full-track field not represented.
+// Tuple aligned with COMPACT_TRACK_FIELDS. Null = unavailable.
 export type CompactApiTrack = [
   persistentId: string,
   title: string | null,
