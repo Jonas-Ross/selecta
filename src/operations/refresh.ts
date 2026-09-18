@@ -7,11 +7,9 @@ import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
 
 export type SyncReconciliation = {
   ambiguous: { name: string; playlist_ids: string[] }[];
-  rekeys: { name: string; from_id: string; to_id: string }[];
-  // A rekey whose destination already carried its own note: the destination's
-  // note was kept and the receipt's note did not travel. Reported so the model
-  // never assumes its memory followed the playlist.
-  note_conflicts: { name: string; playlist_id: string }[];
+  // note_conflict marks a rekey whose destination already had its own note:
+  // that note stands and the receipt's note did not travel.
+  rekeys: { name: string; from_id: string; to_id: string; note_conflict?: true }[];
   // Legacy wire fields: refresh reports ambiguous copies and never deletes them.
   // Keep these arrays empty for clients that already consume this shape.
   duplicates_removed: { name: string; deleted_id: string; kept_id: string }[];
@@ -68,7 +66,6 @@ export async function refreshLibrary(
       duplicates_removed: [],
       failures: [],
       ambiguous: [],
-      note_conflicts: [],
     };
 
     for (const action of actions) {
@@ -79,22 +76,20 @@ export async function refreshLibrary(
           name: action.name,
           from_id: action.fromId,
           to_id: action.toId,
+          ...(noteConflict ? { note_conflict: true as const } : {}),
         });
-        log.info(`[sync-reconcile] rekey "${action.name}": ${action.fromId} -> ${action.toId}`);
-
-        if (noteConflict) {
-          reconciliation.note_conflicts.push({ name: action.name, playlist_id: action.toId });
-          log.info(
-            `[sync-reconcile] note conflict "${action.name}": ${action.toId} kept its own note`,
-          );
-        }
-
+        log.info(
+          `[sync-reconcile] rekey "${action.name}": ${action.fromId} -> ${action.toId}` +
+            (noteConflict ? ' (destination kept its own note)' : ''),
+        );
         continue;
       }
 
       reconciliation.ambiguous.push({ name: action.name, playlist_ids: action.playlistIds });
     }
 
+    // The refresh_log summary keeps its frozen three-integer shape; note
+    // conflicts ride the tool response, which is where the model reads them.
     cache.appendRefreshNote(
       result.refreshedAt,
       formatReconciliationSummary({

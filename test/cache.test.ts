@@ -960,6 +960,20 @@ describe('notes', () => {
     expect(cache.getPlaylist('P-OLD')!.noteBody).toBe(older.body);
   });
 
+  // A receipt whose ID never moved, and one with nothing to move, are not
+  // collisions — only a destination defending its own note is.
+  it('reports no note conflict when there was nothing to move', () => {
+    const cache = cacheAfterCreate();
+
+    cache.setNote('playlist', CREATED_ID, 'stays put');
+    expect(cache.applyRekey(CREATED_ID, CREATED_ID, CREATED_ID)).toEqual({ noteConflict: false });
+    expect(cache.getNote('playlist', CREATED_ID)!.body).toBe('stays put');
+
+    cache.clearNote('playlist', CREATED_ID);
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
+    expect(cache.applyRekey(CREATED_ID, CREATED_ID, 'P-REKEYED')).toEqual({ noteConflict: false });
+  });
+
   it('never overwrites a note on the destination of a write-time rekey', () => {
     const cache = cacheAfterCreate();
 

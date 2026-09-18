@@ -1124,7 +1124,6 @@ describe('refresh_library sync reconciliation', () => {
       duplicates_removed: [],
       failures: [],
       ambiguous: [{ name: 'Rearview', playlist_ids: ['P-CREATED', 'P-FIRST', 'P-SECOND'] }],
-      note_conflicts: [],
     });
 
     for (const note of notes) {
@@ -1155,7 +1154,6 @@ describe('refresh_library sync reconciliation', () => {
       ambiguous: [],
       duplicates_removed: [],
       failures: [],
-      note_conflicts: [],
     });
     expect(deps.bridge.deletePlaylistById).not.toHaveBeenCalled();
     // The ID create_playlist returned still resolves for searches.
@@ -1182,10 +1180,7 @@ describe('refresh_library sync reconciliation', () => {
     const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
 
     expect(out.sync_reconciliation!.rekeys).toEqual([
-      { name: 'Rearview', from_id: 'P-CREATED', to_id: 'P-OLD' },
-    ]);
-    expect(out.sync_reconciliation!.note_conflicts).toEqual([
-      { name: 'Rearview', playlist_id: 'P-OLD' },
+      { name: 'Rearview', from_id: 'P-CREATED', to_id: 'P-OLD', note_conflict: true },
     ]);
     expect(cache.getNote('playlist', 'P-OLD')).toEqual(older);
     expect(cache.getPlaylist('P-OLD')!.noteBody).toBe(older.body);
