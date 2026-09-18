@@ -1,7 +1,4 @@
-// Frozen version-1 baseline for fresh and historical unversioned databases.
-// Do not edit: append changes in migrations.ts (docs/cache-migrations.md).
-// No FKs: prune does explicit deletes inside the refresh transaction, which
-// keeps the schema simple and the delete order obvious.
+// Frozen v1 baseline. Changes go in migrations.ts. No FKs; prune uses explicit deletes.
 
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tracks (
@@ -32,10 +29,7 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
   PRIMARY KEY (playlist_persistent_id, position)
 );
 
--- Creation receipts for playlists Selecta itself created. Drives refresh-time
--- ambiguity reporting and safe rekeys (docs/music-app.md, iCloud sync). Keeps
--- creation-time IDs resolvable after iCloud rekeys them: current_persistent_id
--- tracks the canonical ID, created_persistent_id never changes.
+-- Creation receipts for Selecta-created playlists; survives iCloud rekeys.
 CREATE TABLE IF NOT EXISTS playlist_creations (
   created_persistent_id TEXT PRIMARY KEY,
   current_persistent_id TEXT NOT NULL,
@@ -44,18 +38,12 @@ CREATE TABLE IF NOT EXISTS playlist_creations (
   created_at TEXT NOT NULL
 );
 
--- Enriched audio features (issue #19), keyed by track persistent ID and
--- deliberately outside the tracks refresh cycle: refresh upserts/prunes tracks,
--- enrichment writes here — so a library reread never wipes accumulated
--- features (enrichment is expensive). Rows for tracks gone from the library
--- are pruned on refresh. status is terminal: 'ok' (has data), 'no_data'
--- (matched, sources had nothing), 'no_match' (unmatchable) — enrichment never
--- retries a track that has a row.
 CREATE TABLE IF NOT EXISTS enrichment_cooldowns (
   host TEXT PRIMARY KEY,
   until_ms REAL NOT NULL
 );
 
+-- Outside refresh cycle; survives refreshes for tracks in the library. Pruned when track is deleted.
 CREATE TABLE IF NOT EXISTS audio_features (
   track_persistent_id TEXT PRIMARY KEY,
   bpm REAL,
@@ -68,13 +56,7 @@ CREATE TABLE IF NOT EXISTS audio_features (
   fetched_at TEXT NOT NULL
 );
 
--- Per-refresh play/skip deltas (issue #31): a sparse longitudinal record of
--- listening, written inside the refresh transaction by comparing incoming
--- counters against the previous tracks row. Rows exist only where a counter
--- increased; a track's first sighting establishes baseline silently, and a
--- decreased counter (re-import, iCloud weirdness) resets the baseline with no
--- row. Deltas only — the current absolute rides tracks.play_count. Pruned with
--- its track, like audio_features.
+-- Per-refresh deltas only; current absolute is on tracks. Pruned with its track.
 CREATE TABLE IF NOT EXISTS play_history (
   track_persistent_id TEXT,
   refreshed_at TEXT,
@@ -85,14 +67,7 @@ CREATE TABLE IF NOT EXISTS play_history (
 
 CREATE INDEX IF NOT EXISTS idx_play_history_at ON play_history(refreshed_at);
 
--- Model-persisted notes (issue #32): the model's own free-text annotations on
--- a track or playlist, one per subject, handed back verbatim. Outside the
--- refresh cycle like audio_features: refresh never rewrites a note, only
--- prunes notes whose subject left the library. A playlist note is exempt from
--- pruning while a still-reconcilable creation receipt points at its ID, so
--- iCloud rekey reconciliation can move it to the playlist's new ID instead of
--- losing it.
--- Never indexed, filtered, or sorted on — a note is memory, not signal.
+-- Model's own annotations; outside refresh cycle. Never indexed/filtered; moved with playlist on rekey.
 CREATE TABLE IF NOT EXISTS notes (
   subject_kind TEXT NOT NULL CHECK (subject_kind IN ('track', 'playlist')),
   subject_id TEXT NOT NULL,

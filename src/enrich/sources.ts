@@ -2,20 +2,7 @@ import { APP_VERSION } from '../version.js';
 import type { z } from 'zod';
 import * as schemas from './schemas.js';
 import { parsePayload } from '../types/validation.js';
-// External metadata sources, one thin fetch adapter each: build the request,
-// gate the response through match.ts, return plain data. Every failure —
-// non-OK status, in-body error, unreachable host, unparseable JSON — is
-// translated HERE into BridgeError 'enrichment_error' naming the source. No
-// retries, no fallbacks: the caller decides what happens next.
-//
-// Rate limits are honored HERE too, per documented policy, via per-host
-// throttles created with the sources (createSources): a throttle starts as if
-// a request just happened, so even back-to-back engine runs can't burst a
-// host at the boundary.
-//   MusicBrainz    1 req/s avg per IP (503 on breach)  → 1.1s spacing
-//   AcousticBrainz 10 req per 10s per IP (429)         → 1.1s spacing
-//   Deezer         50 req per 5s (in-body quota error) → 250ms spacing
-//                  (caps us at 20 per 5s by construction, not by latency luck)
+// Thin fetch adapters; each handles errors and rate limits, no retries.
 
 import { BridgeError } from '../types/errors.js';
 import { durationCompatible, luceneEscape, primaryArtist, stripFeat } from './match.js';

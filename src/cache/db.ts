@@ -1,5 +1,4 @@
-// SQLite handle. Opens (creating the directory and schema if needed) and maps
-// open failures to the cache_unavailable error code. ':memory:' is the test path.
+// Creates directory and schema as needed; ':memory:' for tests.
 
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';

@@ -1,10 +1,7 @@
-// Shared SQL projections and predicates; notes remain projection-only.
+// Shared SQL projections and predicates; notes stay projection-only.
 import type { NoteSubject, SearchFilters } from '../../types/cache.js';
 
-// Audio-feature lookups as correlated scalar subqueries (PK probes) rather
-// than a LEFT JOIN: TRACK_COLUMNS stays self-contained — no call site has to
-// remember a join — and aggregate queries over the same FROM never pay for
-// features they don't read.
+// Scalar subqueries so TRACK_COLUMNS is self-contained and we don't pay for unused features.
 const featureColumn = (column: string): string =>
   `(SELECT ${column} FROM audio_features af WHERE af.track_persistent_id = t.persistent_id)`;
 
