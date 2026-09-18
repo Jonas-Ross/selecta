@@ -2,8 +2,7 @@ import { capDistribution } from './distributions.js';
 import type { OverviewStats } from '../types/cache.js';
 import { RECENT_WINDOW_DAYS } from './recent_activity.js';
 
-// The long tail of genres beyond this is rolled into genres_other so a
-// fragmented library can't blow the token budget.
+// Long tail rolled into genres_other to control token budget.
 export const GENRE_CAP = 50;
 
 export type LibraryOverviewOutput = {
@@ -40,15 +39,14 @@ export type LibraryOverviewOutput = {
   cache_age_hours: number | null;
 };
 
-// 100 → "5", 90 → "4.5". Music stores half-stars as multiples of 10.
+// Music stores ratings as 0–100; emit as stars (20 per star).
 function formatStars(rating: number): string {
   const stars = rating / 20;
 
   return Number.isInteger(stars) ? String(stars) : stars.toFixed(1);
 }
 
-// Top two units only — "9d 9h", "4h 12m", "37m". Seconds are noise at library
-// scale; 0 reads as "0m".
+// Top two units only: "9d 9h", "4h 12m", "37m".
 function humanizeDuration(totalSeconds: number): string {
   const days = Math.floor(totalSeconds / 86_400);
   const hours = Math.floor((totalSeconds % 86_400) / 3_600);

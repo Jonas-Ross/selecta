@@ -1,4 +1,4 @@
-// Connection-owned query statements. Transactions belong to SelectaCache.
+// Transactions managed by SelectaCache.
 import type { Database, Statement } from 'better-sqlite3';
 import type { RawTrack, TrackLovedState, TrackRatingState } from '../../types/bridge.js';
 import type { PlayHistoryWindow } from '../../types/cache.js';

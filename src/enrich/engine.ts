@@ -1,20 +1,5 @@
 import { withOperation } from '../operations/lock.js';
-// The incremental enrichment pass (issues #19 and #37). One call = one
-// bounded backlog or targeted run, processed in chunks of 25 tracks
-// (AcousticBrainz's bulk-lookup max): per
-// chunk, MusicBrainz matches each track (paced per request by the sources),
-// two bulk AcousticBrainz calls fetch features for every match at once —
-// per-MBID AB lookups take ~60s and are unusable — then Deezer fills bpm
-// gaps, and the chunk's rows are saved in one transaction.
-//
-// A source failure (AB in particular throws intermittent 5xx) SKIPS the
-// chunk and continues: nothing is saved for it — so no terminal row is ever
-// written from a degraded look — its tracks stay pending for a later run,
-// and the skip is reported in the summary (and onChunkError), never
-// swallowed. This is failure isolation, not a retry: no request is ever
-// reissued within a run. Every saved row — 'no_match' and 'no_data'
-// included — is terminal, so the next run starts on fresh tracks and dead
-// ends are never retried.
+// Chunks of 25 tracks; per-chunk failure skips and continues, never retries.
 
 import type { SelectaCache } from '../cache/index.js';
 import type { AudioFeaturesRow, PendingTrack } from '../types/cache.js';
