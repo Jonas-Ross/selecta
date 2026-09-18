@@ -93,7 +93,7 @@ Build autonomously: design, implement, test, branch, and open PRs without per-st
 - Pushing feature branches and opening PRs is normal flow — no per-action confirmation. Never push to `main` or use an unguarded force-push. `--force-with-lease` is allowed when publishing rebased feature branches, including stacked PRs; if the lease fails, inspect the remote changes before proceeding. Never merge without explicit ask. Don't amend committed work.
 - Before opening a PR, run `/simplify` over the diff and address what it surfaces.
 - Use `gh stack` for dependent PRs. After editing a lower layer, rebase the upper layers onto it and publish with lease protection; copying fixes between branches does not maintain stack ancestry.
-- **During PR review cycles:** commit fixes for reviewer feedback (CodeRabbit, Codex, humans) and push only once **every** comment in the review batch is addressed (fixed or skipped with a reply saying why) — one push per batch, so CodeRabbit re-reviews once instead of per fix. Never push with review comments still unaddressed.
+- **During PR review cycles:** commit fixes for reviewer feedback (Codex, humans) and push only once **every** comment in the review batch is addressed (fixed or skipped with a reply saying why) — one push per batch, so a reviewer re-reads once instead of per fix. Never push with review comments still unaddressed. CodeRabbit is not active on this repo: don't wait for its pass or ask it to review.
 
 ## Worktrees
 
