@@ -35,6 +35,18 @@ other, so overwriting on that basis would be a guess dressed as an improvement.
 Per-field confidence and maturity are stored precisely so a future supersede
 rule has something to decide on.
 
+## Camelot is derived, not sourced
+
+Camelot notation is the key written on a clock face — the number is a position
+on the circle of fifths, the letter the mode — so keys that sit next to each
+other mix cleanly. It carries no information the key does not, which is why
+`camelot` is derived from whatever `musical_key` a row ends up with
+(`src/domain/camelot.ts`) rather than stored only when the source that reported
+the key happened to include one. A catalog key earns its position exactly as an
+analyzed one does; a key string with no mode (AcousticBrainz can supply a bare
+tonic) has no position and keeps whatever it had. Migration 4 backfills the
+column for keys already stored.
+
 ## An uncertain estimate is not stored
 
 metrognome flags an estimate `uncertain` when a preview is a beatless intro or

@@ -107,7 +107,7 @@ export function featuresRow(overrides: Partial<AudioFeaturesRow> = {}): AudioFea
     bpmConfidence: null,
     bpmMaturity: null,
     musicalKey: 'A minor',
-    camelot: null,
+    camelot: '8A', // derived from the key on write; kept consistent here
     keyConfidence: null,
     keyMaturity: null,
     danceability: 0.618,
