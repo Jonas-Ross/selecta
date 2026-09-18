@@ -42,19 +42,39 @@ export type TrackRow = {
 // subqueries, which are NULL by construction for pending tracks.
 export type PendingTrack = Pick<TrackRow, 'persistentId' | 'title' | 'artist' | 'durationSeconds'>;
 
+// Terminal outcome of one enrichment attempt. Terminal means never retried:
+// a dead end costs nothing on the next run.
+export type FeatureStatus = 'ok' | 'no_data' | 'no_match';
+
+// How far an estimator has been checked against real recordings, as reported
+// by the estimator itself. Distinct from confidence, which is about one
+// measurement: 'provisional' can be confidently wrong.
+export type FeatureMaturity = 'validated' | 'provisional';
+
+// Which pass produced a row's data. Tracks are terminal per source, not per
+// row, so audio analysis can still reach a track the catalogs had nothing for.
+export type FeatureSource = 'catalog' | 'analysis';
+
 // A full audio_features row — the enrichment engine's read/write shape.
 // Feature columns land on TrackRow via the join; this adds provenance.
-// status is terminal ('ok' | 'no_data' | 'no_match'): a track with a row is
-// never re-enriched, so dead ends aren't retried on every run.
+// catalogStatus/analysisStatus are per-source and terminal; null means that
+// source has not attempted the track yet. status is the best of the two.
 export type AudioFeaturesRow = {
   trackPersistentId: string;
   bpm: number | null;
+  bpmConfidence: number | null;
+  bpmMaturity: FeatureMaturity | null;
   musicalKey: string | null;
+  camelot: string | null;
+  keyConfidence: number | null;
+  keyMaturity: FeatureMaturity | null;
   danceability: number | null;
   sources: Partial<Record<'bpm' | 'musicalKey' | 'danceability', string>> | null;
   mbRecordingMbid: string | null;
   deezerTrackId: number | null;
-  status: 'ok' | 'no_data' | 'no_match';
+  status: FeatureStatus;
+  catalogStatus: FeatureStatus | null;
+  analysisStatus: FeatureStatus | null;
   fetchedAt: string;
 };
 

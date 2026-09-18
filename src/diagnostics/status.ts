@@ -4,6 +4,7 @@
 
 import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
+import type { FeatureSource } from '../types/cache.js';
 
 type LastRefresh = {
   refreshed_at: string;
@@ -37,30 +38,43 @@ export type StatusReport = {
       summary: ReconciliationSummary;
     };
   };
+  // Per-source attempt counts, because a track the catalogs exhausted is still
+  // pending analysis; coverage is library-wide, whichever source supplied it.
   audio_features: null | {
-    attempted: number;
-    successful: number;
-    no_data: number;
-    no_match: number;
-    pending: number;
+    sources: Record<FeatureSource, SourceCounts>;
     coverage: {
-      bpm: { track_count: number; percent: number };
-      musical_key: { track_count: number; percent: number };
-      danceability: { track_count: number; percent: number };
+      bpm: Coverage;
+      musical_key: Coverage;
+      camelot: Coverage;
+      danceability: Coverage;
     };
   };
+};
+
+type Coverage = { track_count: number; percent: number };
+
+type SourceCounts = {
+  attempted: number;
+  successful: number;
+  no_data: number;
+  no_match: number;
+  pending: number;
 };
 
 type CountsRow = {
   trackCount: number;
   playlistCount: number;
+  bpmCount: number;
+  keyCount: number;
+  camelotCount: number;
+  danceabilityCount: number;
+};
+
+type SourceCountsRow = {
   attempted: number;
   successful: number;
   noData: number;
   noMatch: number;
-  bpmCount: number;
-  keyCount: number;
-  danceabilityCount: number;
   pending: number;
 };
 
@@ -104,6 +118,42 @@ function parseReconciliationSummary(notes: string): ReconciliationSummary | null
 
 function percent(count: number, total: number): number {
   return total === 0 ? 0 : Math.round((count / total) * 1_000) / 10;
+}
+
+function hasColumn(db: Database.Database, table: string, column: string): boolean {
+  return (db.pragma(`table_info(${table})`) as { name: string }[]).some(
+    (info) => info.name === column,
+  );
+}
+
+function coverage(count: number, total: number): Coverage {
+  return { track_count: count, percent: percent(count, total) };
+}
+
+// One source's terminal record. Pending is tracks that source has not
+// attempted, which is not the same as tracks without a features row.
+function sourceCounts(db: Database.Database, statusColumn: string): SourceCounts {
+  const row = db
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM audio_features WHERE ${statusColumn} IS NOT NULL) AS attempted,
+         (SELECT COUNT(*) FROM audio_features WHERE ${statusColumn} = 'ok') AS successful,
+         (SELECT COUNT(*) FROM audio_features WHERE ${statusColumn} = 'no_data') AS noData,
+         (SELECT COUNT(*) FROM audio_features WHERE ${statusColumn} = 'no_match') AS noMatch,
+         (SELECT COUNT(*) FROM tracks t WHERE NOT EXISTS
+            (SELECT 1 FROM audio_features af
+              WHERE af.track_persistent_id = t.persistent_id
+                AND af.${statusColumn} IS NOT NULL)) AS pending`,
+    )
+    .get() as SourceCountsRow;
+
+  return {
+    attempted: row.attempted,
+    successful: row.successful,
+    no_data: row.noData,
+    no_match: row.noMatch,
+    pending: row.pending,
+  };
 }
 
 function lastRefresh(db: Database.Database): RefreshRow | null {
@@ -169,22 +219,17 @@ export function readStatus(dbPath: string, now = new Date()): StatusReport {
 
     if (database.integrity === 'failed') return unavailable();
 
+    const perSource = hasColumn(db, 'audio_features', 'catalog_status');
     const counts = db
       .prepare(
         `SELECT
            (SELECT COUNT(*) FROM tracks) AS trackCount,
            (SELECT COUNT(*) FROM playlists) AS playlistCount,
-           (SELECT COUNT(*) FROM audio_features) AS attempted,
-           (SELECT COUNT(*) FROM audio_features WHERE status = 'ok') AS successful,
-           (SELECT COUNT(*) FROM audio_features WHERE status = 'no_data') AS noData,
-           (SELECT COUNT(*) FROM audio_features WHERE status = 'no_match') AS noMatch,
-           (SELECT COUNT(*) FROM tracks t WHERE NOT EXISTS
-              (SELECT 1 FROM audio_features af
-                WHERE af.track_persistent_id = t.persistent_id)) AS pending,
            (SELECT COUNT(*) FROM tracks t LEFT JOIN audio_features af
               ON af.track_persistent_id = t.persistent_id
               WHERE COALESCE(af.bpm, t.bpm) IS NOT NULL) AS bpmCount,
            (SELECT COUNT(*) FROM audio_features WHERE musical_key IS NOT NULL) AS keyCount,
+           ${perSource ? '(SELECT COUNT(*) FROM audio_features WHERE camelot IS NOT NULL)' : '0'} AS camelotCount,
            (SELECT COUNT(*) FROM audio_features WHERE danceability IS NOT NULL) AS danceabilityCount`,
       )
       .get() as CountsRow;
@@ -219,24 +264,20 @@ export function readStatus(dbPath: string, now = new Date()): StatusReport {
           : null,
       },
       audio_features: {
-        attempted: counts.attempted,
-        successful: counts.successful,
-        no_data: counts.noData,
-        no_match: counts.noMatch,
-        pending: counts.pending,
+        sources: {
+          // Before migration 3 every row is a catalog attempt, which is what
+          // that migration backfills; diagnostics never migrate, so read the
+          // old shape rather than failing on a database a build hasn't opened.
+          catalog: sourceCounts(db, perSource ? 'catalog_status' : 'status'),
+          analysis: perSource
+            ? sourceCounts(db, 'analysis_status')
+            : { attempted: 0, successful: 0, no_data: 0, no_match: 0, pending: counts.trackCount },
+        },
         coverage: {
-          bpm: {
-            track_count: counts.bpmCount,
-            percent: percent(counts.bpmCount, counts.trackCount),
-          },
-          musical_key: {
-            track_count: counts.keyCount,
-            percent: percent(counts.keyCount, counts.trackCount),
-          },
-          danceability: {
-            track_count: counts.danceabilityCount,
-            percent: percent(counts.danceabilityCount, counts.trackCount),
-          },
+          bpm: coverage(counts.bpmCount, counts.trackCount),
+          musical_key: coverage(counts.keyCount, counts.trackCount),
+          camelot: coverage(counts.camelotCount, counts.trackCount),
+          danceability: coverage(counts.danceabilityCount, counts.trackCount),
         },
       },
     };

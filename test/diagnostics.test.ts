@@ -53,11 +53,23 @@ describe('readStatus', () => {
         },
       },
       audio_features: {
-        attempted: 1,
-        successful: 1,
-        no_data: 0,
-        no_match: 0,
-        pending: snapshot.tracks.length - 1,
+        sources: {
+          catalog: {
+            attempted: 1,
+            successful: 1,
+            no_data: 0,
+            no_match: 0,
+            pending: snapshot.tracks.length - 1,
+          },
+          // Nothing has been analyzed, so every track is pending that source.
+          analysis: {
+            attempted: 0,
+            successful: 0,
+            no_data: 0,
+            no_match: 0,
+            pending: snapshot.tracks.length,
+          },
+        },
       },
     });
     expect(report.audio_features!.coverage.bpm.percent).toBeGreaterThan(0);
