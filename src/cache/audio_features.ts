@@ -2,6 +2,7 @@
 // facade loads and writes; the policy lives here.
 
 import type { AudioFeaturesRow, FeatureStatus } from '../types/cache.js';
+import { camelotFor } from '../domain/camelot.js';
 
 // no_match (nothing identified) < no_data (identified, nothing measured) < ok.
 const STATUS_RANK: Record<FeatureStatus, number> = { no_match: 0, no_data: 1, ok: 2 };
@@ -50,7 +51,7 @@ export function mergeFeatures(
   existing: AudioFeaturesRow | null,
   candidate: AudioFeaturesRow,
 ): AudioFeaturesRow {
-  if (existing == null) return candidate;
+  if (existing == null) return withCamelot(candidate);
 
   const merged: AudioFeaturesRow = { ...existing, fetchedAt: candidate.fetchedAt };
   const sources = { ...existing.sources };
@@ -65,7 +66,6 @@ export function mergeFeatures(
 
   if (merged.musicalKey == null && candidate.musicalKey != null) {
     merged.musicalKey = candidate.musicalKey;
-    merged.camelot = candidate.camelot;
     merged.keyConfidence = candidate.keyConfidence;
     merged.keyMaturity = candidate.keyMaturity;
 
@@ -87,5 +87,13 @@ export function mergeFeatures(
 
   merged.sources = Object.keys(sources).length > 0 ? sources : null;
 
-  return merged;
+  return withCamelot(merged);
+}
+
+// Camelot is a relabeling of the key, not a second measurement, so it is
+// derived from whatever key the row ended up with rather than carried only by
+// the source that happened to report one. A key we cannot parse keeps whatever
+// its source gave.
+function withCamelot(row: AudioFeaturesRow): AudioFeaturesRow {
+  return { ...row, camelot: camelotFor(row.musicalKey) ?? row.camelot };
 }
