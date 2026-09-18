@@ -8,7 +8,18 @@ export type Migration = {
 
 // Historical schemas only added objects; IF NOT EXISTS brings every released
 // unversioned schema to the same baseline without rewriting existing rows.
-export const MIGRATIONS: readonly Migration[] = [{ version: 1, sql: SCHEMA }];
+export const MIGRATIONS: readonly Migration[] = [
+  { version: 1, sql: SCHEMA },
+  // Marks a receipt whose rekey landed on a pre-existing playlist (the same
+  // collision movePlaylistNote guards for notes) so edit tools can refuse
+  // instead of silently writing to the wrong playlist. No backfill: existing
+  // receipts default to unconflicted, since no prior rekey is known to have
+  // collided.
+  {
+    version: 2,
+    sql: 'ALTER TABLE playlist_creations ADD COLUMN edit_conflict INTEGER NOT NULL DEFAULT 0;',
+  },
+];
 
 export function migrateDatabase(
   db: Database.Database,

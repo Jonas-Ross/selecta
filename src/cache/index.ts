@@ -588,15 +588,24 @@ export class SelectaCache {
    * the playlist's note with it so model memory survives an iCloud rekey.
    * A destination holding its own note keeps it (see movePlaylistNote), and
    * `noteConflict` says so; the refused note waits for the refresh prune.
+   * The same collision marks the receipt itself (edit_conflict) so edit
+   * tools resolving this ID later refuse instead of risking the wrong
+   * playlist — see resolveEditablePlaylist.
    */
   applyRekey(createdId: string, fromId: string, toId: string): { noteConflict: boolean } {
     return this.db.transaction(() => {
       const outcome = this.queries.movePlaylistNote(fromId, toId);
+      const noteConflict = outcome === 'destination_kept';
 
-      this.queries.setCreationCurrentId(createdId, toId);
+      this.queries.setCreationCurrentId(createdId, toId, noteConflict);
 
-      return { noteConflict: outcome === 'destination_kept' };
+      return { noteConflict };
     })();
+  }
+
+  /** Has `createdId`'s canonical resolution collided with a pre-existing playlist? */
+  hasEditConflict(createdId: string): boolean {
+    return this.queries.hasEditConflict(createdId);
   }
 
   close(): void {

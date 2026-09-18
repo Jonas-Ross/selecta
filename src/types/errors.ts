@@ -16,6 +16,7 @@ export type ErrorCode =
   | 'track_not_found' // cache miss on a referenced persistent ID
   | 'playlist_not_found' // same, for playlists
   | 'playlist_not_editable' // edit target is smart/subscription/folder, not a user playlist
+  | 'playlist_rekey_conflict' // creation receipt rekeyed onto a pre-existing playlist; refuse rather than risk the wrong target
   | 'validation_error' // input failed schema check
   | 'cache_unavailable' // DB open failed (perms, disk full)
   // Thrown by enrich/sources.ts on any source failure. The engine converts it
@@ -92,6 +93,8 @@ export const defaultHints: Record<ErrorCode, string> = {
   playlist_not_found: 'Playlist is not in the cache. Cache may be stale — try refresh_library.',
   playlist_not_editable:
     'Only plain user playlists can be edited — smart, subscription, and folder playlists are read-only.',
+  playlist_rekey_conflict:
+    'Creation receipt rekeyed onto a pre-existing playlist — re-resolve via list_playlists/search.',
   validation_error: 'Input failed validation; see message for the offending field.',
   cache_unavailable:
     'Could not open the local cache. Check filesystem permissions on ~/Library/Application Support/Selecta/.',

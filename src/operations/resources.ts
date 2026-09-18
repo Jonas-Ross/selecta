@@ -37,13 +37,35 @@ export function resolvePlaylist(
 }
 
 /**
- * Pre-flight for playlist-edit tools: resolve the cached target, then require
- * a plain user playlist. The bridge repeats the kind check against Music.app.
+ * A creation receipt's rekey can land on the user's own pre-existing
+ * same-name playlist (see SelectaCache.applyRekey); writing through that ID
+ * would silently hit the wrong playlist, so edit tools refuse it instead.
+ */
+export function playlistEditConflictError(
+  cache: SelectaCache,
+  playlistId: string,
+): SelectaError | null {
+  if (!cache.hasEditConflict(playlistId)) return null;
+
+  return {
+    error: 'playlist_rekey_conflict',
+    hint: `Playlist ${playlistId}'s creation receipt rekeyed onto a playlist that already existed under a different ID — it could be the wrong target. Re-resolve via list_playlists/search and use the resolved ID directly.`,
+  };
+}
+
+/**
+ * Pre-flight for playlist-edit tools: refuse a conflicted receipt, resolve
+ * the cached target, then require a plain user playlist. The bridge repeats
+ * the kind check against Music.app.
  */
 export function resolveEditablePlaylist(
   cache: SelectaCache,
   playlistId: string,
 ): { ok: true; playlist: PlaylistRow } | { ok: false; error: SelectaError } {
+  const conflict = playlistEditConflictError(cache, playlistId);
+
+  if (conflict) return { ok: false, error: conflict };
+
   const resolved = resolvePlaylist(cache, playlistId);
 
   if (!resolved.ok) return resolved;

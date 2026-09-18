@@ -119,6 +119,27 @@ describe('set_note', () => {
     expect(deps.cacheInstance.getNote('playlist', 'P-CREATED')).toBeNull();
   });
 
+  it('refuses a playlist ID whose rekey landed on a pre-existing playlist, rather than overwrite its note', async () => {
+    const deps = makeDeps();
+
+    deps.cacheInstance.recordPlaylistCreation('P-CREATED', 'Trip Hop Essentials', ['T-TEARDROP']);
+    deps.cacheInstance.setNote('playlist', 'P-TRIPHOP', "the destination's own note");
+    deps.cacheInstance.setNote('playlist', 'P-CREATED', 'selecta draft, about to lose the race');
+    deps.cacheInstance.applyRekey('P-CREATED', 'P-CREATED', 'P-TRIPHOP');
+
+    const err = asError(
+      await handleSetNote(
+        { subject: 'playlist', id: 'P-CREATED', body: 'overwrite attempt' },
+        deps,
+      ),
+    );
+
+    expect(err.error).toBe('playlist_rekey_conflict');
+    expect(deps.cacheInstance.getNote('playlist', 'P-TRIPHOP')!.body).toBe(
+      "the destination's own note",
+    );
+  });
+
   it('rejects unknown subjects with structured errors, storing nothing', async () => {
     const deps = makeDeps();
 

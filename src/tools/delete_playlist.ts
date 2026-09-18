@@ -26,7 +26,7 @@ export type DeletePlaylistOutput = {
   track_count: number;
 };
 
-export const DELETE_PLAYLIST_DESCRIPTION = `Delete an entire user playlist from Music.app. The tracks stay in the library; the playlist, its ordering, and its description are gone. IRREVERSIBLE — Selecta cannot restore a deleted playlist, so confirm with the user (by playlist NAME, not just ID) before calling. Only plain user playlists can be deleted (playlist_not_editable otherwise — smart/subscription/folder playlists and the Library are off-limits). Fails with playlist_not_found without deleting anything — don't retry with the same input; re-check via list_playlists, or refresh_library if the cache is stale.`;
+export const DELETE_PLAYLIST_DESCRIPTION = `Delete an entire user playlist from Music.app. The tracks stay in the library; the playlist, its ordering, and its description are gone. IRREVERSIBLE — Selecta cannot restore a deleted playlist, so confirm with the user (by playlist NAME, not just ID) before calling. Only plain user playlists can be deleted (playlist_not_editable otherwise — smart/subscription/folder playlists and the Library are off-limits). Fails with playlist_not_found or playlist_rekey_conflict (the ID's creation receipt rekeyed onto a pre-existing playlist) without deleting anything — don't retry with the same input; re-check via list_playlists, or refresh_library if the cache is stale.`;
 
 export async function handleDeletePlaylist(
   raw: unknown,

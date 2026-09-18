@@ -41,8 +41,10 @@ function seed(db: Database.Database): void {
     INSERT INTO tracks_fts(tracks_fts) VALUES ('rebuild');
   `);
   const optional: Record<string, string> = {
+    // Explicit column list, omitting edit_conflict (version 2): works
+    // whether this runs before or after that column exists.
     playlist_creations:
-      "INSERT INTO playlist_creations VALUES ('OLD', 'P1', 'Playlist', '[\"T1\",\"T1\"]', '2026-09-01')",
+      "INSERT INTO playlist_creations (created_persistent_id, current_persistent_id, name, track_ids_json, created_at) VALUES ('OLD', 'P1', 'Playlist', '[\"T1\",\"T1\"]', '2026-09-01')",
     audio_features:
       "INSERT INTO audio_features VALUES ('T1', 123.5, 'Am', 0.8, '{}', 'mbid', 12, 'ok', '2026-09-01')",
     play_history: "INSERT INTO play_history VALUES ('T1', '2026-09-01', 2, 1)",
@@ -75,6 +77,11 @@ afterEach(() => {
   for (const directory of directories.splice(0))
     rmSync(directory, { recursive: true, force: true });
 });
+
+// Version numbers for migrations appended on top of the real MIGRATIONS in
+// these tests — always one and two steps past whatever MIGRATIONS currently
+// installs, so adding a real migration doesn't collide with them.
+const [V2, V3] = [MIGRATIONS.length + 1, MIGRATIONS.length + 2];
 
 describe('cache schema migrations', () => {
   it('creates identical memory and disk schemas and safely reopens', () => {
@@ -109,7 +116,19 @@ describe('cache schema migrations', () => {
       expect(upgraded.pragma('user_version', { simple: true })).toBe(MIGRATIONS.length);
       const after = rows(upgraded);
 
-      for (const [name, data] of Object.entries(before)) expect(after[name], name).toEqual(data);
+      // playlist_creations gained edit_conflict (version 2): an existing row
+      // picks up its default rather than being rewritten.
+      const expected =
+        before.playlist_creations === undefined
+          ? before
+          : {
+              ...before,
+              playlist_creations: (before.playlist_creations as Record<string, unknown>[]).map(
+                (row) => ({ ...row, edit_conflict: 0 }),
+              ),
+            };
+
+      for (const [name, data] of Object.entries(expected)) expect(after[name], name).toEqual(data);
 
       expect(schema(upgraded)).toEqual(schema(track(openDatabase(':memory:'))));
       expect(
@@ -126,11 +145,11 @@ describe('cache schema migrations', () => {
     const migrations = [
       ...MIGRATIONS,
       {
-        version: 2,
+        version: V2,
         sql: "CREATE TABLE sequence (value TEXT); INSERT INTO sequence VALUES ('two');",
       },
       {
-        version: 3,
+        version: V3,
         sql: "ALTER TABLE sequence ADD COLUMN completed INTEGER; UPDATE sequence SET value = value || '-three', completed = 1;",
       },
     ];
@@ -140,53 +159,53 @@ describe('cache schema migrations', () => {
     const reopened = track(new Database(path));
 
     migrateDatabase(reopened, migrations);
-    expect(reopened.pragma('user_version', { simple: true })).toBe(3);
+    expect(reopened.pragma('user_version', { simple: true })).toBe(V3);
     expect(reopened.prepare('SELECT * FROM sequence').all()).toEqual([
       { value: 'two-three', completed: 1 },
     ]);
   });
 
-  it.each([2, 3])(
-    'rechecks a concurrent upgrade to version %i after preflight',
-    (concurrentVersion) => {
-      const path = diskPath();
-      const db = track(openDatabase(path));
-      const other = track(new Database(path));
-      const supported = [
-        ...MIGRATIONS,
-        {
-          version: 2,
-          sql: "CREATE TABLE upgrade_receipt (value); INSERT INTO upgrade_receipt VALUES ('once');",
-        },
-      ];
-      const concurrent =
-        concurrentVersion === 2
-          ? supported
-          : [...supported, { version: 3, sql: 'CREATE TABLE future_schema (id);' }];
-      const pragma = db.pragma.bind(db);
+  it.each([0, 1])('rechecks a concurrent upgrade %i steps ahead after preflight', (extraSteps) => {
+    const path = diskPath();
+    const db = track(openDatabase(path));
+    const other = track(new Database(path));
+    const supported = [
+      ...MIGRATIONS,
+      {
+        version: V2,
+        sql: "CREATE TABLE upgrade_receipt (value); INSERT INTO upgrade_receipt VALUES ('once');",
+      },
+    ];
+    const concurrentVersion = V2 + extraSteps;
+    const concurrent =
+      extraSteps === 0
+        ? supported
+        : [...supported, { version: V3, sql: 'CREATE TABLE future_schema (id);' }];
+    const pragma = db.pragma.bind(db);
 
-      // Deterministically interleave a real commit on a second connection between
-      // the first opener's unlocked read and its acquisition of the writer lock.
-      vi.spyOn(db, 'pragma').mockImplementationOnce((source, options) => {
-        const installed = pragma(source, options);
+    // Deterministically interleave a real commit on a second connection between
+    // the first opener's unlocked read and its acquisition of the writer lock.
+    vi.spyOn(db, 'pragma').mockImplementationOnce((source, options) => {
+      const installed = pragma(source, options);
 
-        expect(db.inTransaction).toBe(false);
-        expect(installed).toBe(1);
-        migrateDatabase(other, concurrent);
+      expect(db.inTransaction).toBe(false);
+      expect(installed).toBe(MIGRATIONS.length);
+      migrateDatabase(other, concurrent);
 
-        return installed;
-      });
+      return installed;
+    });
 
-      if (concurrentVersion === 2) {
-        expect(() => migrateDatabase(db, supported)).not.toThrow();
-      } else {
-        expect(() => migrateDatabase(db, supported)).toThrow('Unsupported cache schema version 3');
-      }
+    if (extraSteps === 0) {
+      expect(() => migrateDatabase(db, supported)).not.toThrow();
+    } else {
+      expect(() => migrateDatabase(db, supported)).toThrow(
+        `Unsupported cache schema version ${V3}`,
+      );
+    }
 
-      expect(db.pragma('user_version', { simple: true })).toBe(concurrentVersion);
-      expect(db.prepare('SELECT * FROM upgrade_receipt').all()).toEqual([{ value: 'once' }]);
-    },
-  );
+    expect(db.pragma('user_version', { simple: true })).toBe(concurrentVersion);
+    expect(db.prepare('SELECT * FROM upgrade_receipt').all()).toEqual([{ value: 'once' }]);
+  });
 
   it('rolls back data, schema and version across all pending steps after a late failure', () => {
     const path = diskPath();
@@ -200,13 +219,13 @@ describe('cache schema migrations', () => {
       migrateDatabase(db, [
         ...MIGRATIONS,
         {
-          version: 2,
+          version: V2,
           sql: "UPDATE tracks SET title = 'changed'; CREATE TABLE temporary_upgrade (id);",
         },
-        { version: 3, sql: 'DROP TABLE notes; INSERT INTO missing_table VALUES (1);' },
+        { version: V3, sql: 'DROP TABLE notes; INSERT INTO missing_table VALUES (1);' },
       ]),
     ).toThrow('no such table');
-    expect(db.pragma('user_version', { simple: true })).toBe(1);
+    expect(db.pragma('user_version', { simple: true })).toBe(MIGRATIONS.length);
     expect(schema(db)).toEqual(beforeSchema);
     expect(rows(db)).toEqual(before);
     db.close();
