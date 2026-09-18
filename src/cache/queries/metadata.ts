@@ -1,6 +1,12 @@
 // Connection-owned query statements. Transactions belong to SelectaCache.
 import type { Database } from 'better-sqlite3';
-import type { AudioFeaturesRow, PendingTrack, NoteRow, NoteSubject } from '../../types/cache.js';
+import type {
+  AudioFeaturesRow,
+  NoteMoveOutcome,
+  NoteRow,
+  NoteSubject,
+  PendingTrack,
+} from '../../types/cache.js';
 
 export function createMetadataQueries(db: Database) {
   // One note per subject: an existing row keeps its created_at and takes the
@@ -24,11 +30,19 @@ export function createMetadataQueries(db: Database) {
     `SELECT ${NOTE_COLUMNS} FROM notes WHERE subject_kind = ? AND subject_id = ?`,
   );
 
-  // OR REPLACE: if the destination somehow already carries a note, the moving
-  // one wins — both describe the same playlist, and the alternative is a PK
-  // failure mid-reconciliation.
-  const movePlaylistNoteStmt = db.prepare(
-    `UPDATE OR REPLACE notes SET subject_id = ? WHERE subject_kind = 'playlist' AND subject_id = ?`,
+  // The destination's note wins: a rekey can land on the user's own older
+  // same-name copy, so the two notes need not describe the same playlist.
+  // NOT EXISTS rather than OR IGNORE, so other violations stay loud.
+  const movePlaylistNoteStmt = db.prepare(`
+    UPDATE notes SET subject_id = @toId
+    WHERE subject_kind = 'playlist' AND subject_id = @fromId
+      AND NOT EXISTS (
+        SELECT 1 FROM notes WHERE subject_kind = 'playlist' AND subject_id = @toId
+      )
+  `);
+
+  const hasPlaylistNoteStmt = db.prepare(
+    `SELECT 1 FROM notes WHERE subject_kind = 'playlist' AND subject_id = ? LIMIT 1`,
   );
 
   const upsertAudioFeaturesStmt = db.prepare(`
@@ -128,8 +142,14 @@ export function createMetadataQueries(db: Database) {
     },
 
     /** Re-key a playlist note when reconciliation moves the playlist's canonical ID. */
-    movePlaylistNote(fromId: string, toId: string): void {
-      if (fromId !== toId) movePlaylistNoteStmt.run(toId, fromId);
+    movePlaylistNote(fromId: string, toId: string): NoteMoveOutcome {
+      if (fromId !== toId && movePlaylistNoteStmt.run({ fromId, toId }).changes > 0) return 'moved';
+
+      // Only the refused path pays for a second read.
+      if (fromId === toId || hasPlaylistNoteStmt.get(fromId) === undefined)
+        return 'nothing_to_move';
+
+      return 'destination_kept';
     },
   };
 }
