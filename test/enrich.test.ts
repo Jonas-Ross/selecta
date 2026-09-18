@@ -219,7 +219,7 @@ describe('enrichPendingTracks', () => {
   it('treats a negative limit as zero, never as SQLite-unlimited', async () => {
     // Regression (PR #29 review): LIMIT -1 means "no limit" to SQLite — a
     // caller bug must not become a full-library crawl of external services.
-    expect(cache.getTracksPendingEnrichment(-1)).toEqual([]);
+    expect(cache.getTracksPendingEnrichment('catalog', -1)).toEqual([]);
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
     const summary = await enrichPendingTracks(cache, { limit: -1 }, testDeps(fetchLike));
 
@@ -570,6 +570,7 @@ describe('enrich_features tool', () => {
         mbRecordingMbid: null,
         deezerTrackId: null,
         status: 'no_match',
+        catalogStatus: 'no_match',
       }),
     ]);
 

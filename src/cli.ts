@@ -3,14 +3,15 @@
 // result from an explicit CLI verb.
 
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
-import { Command, InvalidArgumentError } from 'commander';
+import { Command, InvalidArgumentError, Option } from 'commander';
 import { refreshLibrary } from './operations/refresh.js';
 import { bridge as defaultBridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
 import { runDoctor } from './diagnostics/doctor.js';
 import { readStatus } from './diagnostics/status.js';
 import { DraftStore, draftDbPath } from './drafts/store.js';
-import { enrichPendingTracks } from './enrich/index.js';
+import { METROGNOME_PATH_ENV, enrichPendingTracks } from './enrich/index.js';
+import type { FeatureSource } from './types/cache.js';
 import { log as defaultLogger, type Logger } from './log.js';
 import { createServer } from './server.js';
 import type { Bridge } from './types/bridge.js';
@@ -139,7 +140,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
   program
     .command('enrich')
     .description(
-      'Fetch audio features (bpm/key/danceability) from MusicBrainz/AcousticBrainz/Deezer for tracks not yet attempted',
+      'Fetch audio features for tracks not yet attempted: from MusicBrainz/AcousticBrainz/Deezer (--source catalog), or by analyzing store previews with metrognome (--source analysis)',
     )
     .option(
       '-n, --limit <count>',
@@ -154,60 +155,81 @@ export function createCliProgram(options: CliOptions = {}): Command {
         return count;
       },
     )
-    .action(async ({ limit }: { limit?: number }) => {
-      try {
-        const cache = SelectaCache.open(dbPath);
-
+    .addOption(
+      new Option('-s, --source <source>', 'where features come from')
+        .choices(['catalog', 'analysis'])
+        .default('catalog'),
+    )
+    .option(
+      '--metrognome-path <path>',
+      `path to the metrognome binary (--source analysis; default: $${METROGNOME_PATH_ENV} or metrognome on PATH)`,
+    )
+    .action(
+      async ({
+        limit,
+        source,
+        metrognomePath: binaryPath,
+      }: {
+        limit?: number;
+        source: FeatureSource;
+        metrognomePath?: string;
+      }) => {
         try {
-          const pending = cache.countPendingEnrichment();
-          const budget = Math.min(limit ?? pending, pending);
+          const cache = SelectaCache.open(dbPath);
 
-          logger.info(
-            `${pending} tracks pending enrichment; attempting ${budget} at ~1-2s each (source rate limits)`,
-          );
-          const startedAt = Date.now();
-          const summary = await enrichPendingTracks(
-            cache,
-            { limit: budget },
-            {
-              onProgress: (progress) => {
-                const covered = progress.processed + progress.skipped;
-                const pct = Math.floor((covered / budget) * 100);
-                const remaining = budget - covered;
-                const eta =
-                  remaining === 0
-                    ? 'done'
-                    : `~${formatEta(remaining * ((Date.now() - startedAt) / covered))} remaining`;
-                const skipped = progress.skipped > 0 ? `, ${progress.skipped} skipped` : '';
+          try {
+            const pending = cache.countPendingEnrichment(source);
+            const budget = Math.min(limit ?? pending, pending);
 
-                logger.info(
-                  `enriched ${progress.enriched}/${progress.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
-                );
+            logger.info(
+              `${pending} tracks pending ${source} enrichment; attempting ${budget} at ~1-3s each`,
+            );
+            const startedAt = Date.now();
+            const summary = await enrichPendingTracks(
+              cache,
+              { limit: budget, source },
+              {
+                metrognome: { binaryPath, trace: (line) => logger.info(line) },
+                onProgress: (progress) => {
+                  const covered = progress.processed + progress.skipped;
+                  const pct = Math.floor((covered / budget) * 100);
+                  const remaining = budget - covered;
+                  const eta =
+                    remaining === 0
+                      ? 'done'
+                      : `~${formatEta(remaining * ((Date.now() - startedAt) / covered))} remaining`;
+                  const skipped = progress.skipped > 0 ? `, ${progress.skipped} skipped` : '';
+
+                  logger.info(
+                    `enriched ${progress.enriched}/${progress.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
+                  );
+                },
+                onChunkError: (message, trackCount) =>
+                  logger.error(`chunk skipped (${trackCount} tracks stay pending): ${message}`),
+                trace: (line) => logger.info(line),
               },
-              onChunkError: (message, trackCount) =>
-                logger.error(`chunk skipped (${trackCount} tracks stay pending): ${message}`),
-              trace: (line) => logger.info(line),
-            },
-          );
+            );
 
-          writeJson({
-            processed: summary.processed,
-            enriched: summary.enriched,
-            no_data: summary.noData,
-            no_match: summary.noMatch,
-            skipped: summary.skipped,
-            source_errors: summary.errors,
-            pending_remaining: summary.pendingRemaining,
-            db_path: dbPath,
-          });
-        } finally {
-          cache.close();
+            writeJson({
+              source,
+              processed: summary.processed,
+              enriched: summary.enriched,
+              no_data: summary.noData,
+              no_match: summary.noMatch,
+              skipped: summary.skipped,
+              source_errors: summary.errors,
+              pending_remaining: summary.pendingRemaining,
+              db_path: dbPath,
+            });
+          } finally {
+            cache.close();
+          }
+        } catch (err) {
+          reportError(err);
+          setExitCode(1);
         }
-      } catch (err) {
-        reportError(err);
-        setExitCode(1);
-      }
-    });
+      },
+    );
 
   return program;
 }
