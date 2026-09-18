@@ -934,22 +934,18 @@ describe('notes', () => {
     expect(cache.getNote('playlist', CREATED_ID)).toBeNull();
   });
 
-  // Reconciliation rekeys a receipt onto a same-name playlist with the same
-  // tracks. That playlist can be the user's own older copy, and it can already
-  // carry its own note — moving the receipt's note over it destroys memory
-  // about a playlist that still exists, unrecoverably.
+  // The rekey target can be the user's own older copy, so overwriting its note
+  // destroys memory about a playlist that still exists.
   it('never overwrites a note already on the playlist a rekey lands on', () => {
     const cache = cacheAfterCreate();
 
-    // The user's older, intentional "Rearview" shows up alongside the copy
-    // Selecta created, and the model records what it is.
     cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-OLD' }), { durationMs: 1 });
 
     const older = cache.setNote('playlist', 'P-OLD', "the 2019 version — Jonas's, leave alone");
 
     cache.setNote('playlist', CREATED_ID, 'selecta draft 3');
-    // iCloud drops the copy Selecta created; only the older playlist is left,
-    // and it has the receipt's exact track sequence, so it looks like a rekey.
+    // iCloud drops Selecta's copy; the older one matches the receipt exactly,
+    // so it looks like a rekey.
     cache.refreshFromSnapshot(snapshotWith({ id: 'P-OLD' }), { durationMs: 1 });
     expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
       { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: CREATED_ID, toId: 'P-OLD' },
@@ -960,8 +956,7 @@ describe('notes', () => {
     expect(cache.getPlaylist('P-OLD')!.noteBody).toBe(older.body);
   });
 
-  // A receipt whose ID never moved, and one with nothing to move, are not
-  // collisions — only a destination defending its own note is.
+  // Only a destination defending its own note is a collision.
   it('reports no note conflict when there was nothing to move', () => {
     const cache = cacheAfterCreate();
 

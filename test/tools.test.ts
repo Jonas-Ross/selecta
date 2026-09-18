@@ -1162,9 +1162,8 @@ describe('refresh_library sync reconciliation', () => {
     expect(rows).toHaveLength(2);
   });
 
-  // A rekey can land on the user's own older same-name copy: same name, same
-  // tracks, and the created one gone. That copy's note is about that playlist,
-  // so it stands, and the refresh says the receipt's note did not travel.
+  // The older copy's note is about that playlist, so it stands and the refresh
+  // says the receipt's note did not travel.
   it('keeps the destination note on a rekey and reports the conflict', async () => {
     const deps = depsAfterCreate({
       readLibrary: vi.fn().mockResolvedValue(echoSnapshot(['P-OLD'])),

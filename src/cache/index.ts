@@ -530,7 +530,7 @@ export class SelectaCache {
    * rekey observed at write time, not refresh time). Repoint every receipt
    * at the live ID, move the note, mirror the live row and order, drop the
    * stale row. No receipt is retired or created. A note already on the live ID
-   * wins (see movePlaylistNote); the refused note goes with the stale row.
+   * wins (see movePlaylistNote); the refused one goes with the stale row.
    */
   applyLiveRekey(
     staleId: string,
@@ -586,9 +586,8 @@ export class SelectaCache {
   /**
    * Point a creation receipt at the playlist's current canonical ID, moving
    * the playlist's note with it so model memory survives an iCloud rekey.
-   * A destination holding its own note keeps it (see movePlaylistNote);
-   * `noteConflict` reports that so the caller can tell the model its note did
-   * not travel, and the refused note waits for the ordinary refresh prune.
+   * A destination holding its own note keeps it (see movePlaylistNote), and
+   * `noteConflict` says so; the refused note waits for the refresh prune.
    */
   applyRekey(createdId: string, fromId: string, toId: string): { noteConflict: boolean } {
     return this.db.transaction(() => {

@@ -7,8 +7,8 @@ import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
 
 export type SyncReconciliation = {
   ambiguous: { name: string; playlist_ids: string[] }[];
-  // note_conflict marks a rekey whose destination already had its own note:
-  // that note stands and the receipt's note did not travel.
+  // note_conflict: the destination kept its own note, so this receipt's
+  // note did not travel.
   rekeys: { name: string; from_id: string; to_id: string; note_conflict?: true }[];
   // Legacy wire fields: refresh reports ambiguous copies and never deletes them.
   // Keep these arrays empty for clients that already consume this shape.
@@ -88,8 +88,7 @@ export async function refreshLibrary(
       reconciliation.ambiguous.push({ name: action.name, playlist_ids: action.playlistIds });
     }
 
-    // The refresh_log summary keeps its frozen three-integer shape; note
-    // conflicts ride the tool response, which is where the model reads them.
+    // Frozen three-integer shape; note conflicts ride the tool response.
     cache.appendRefreshNote(
       result.refreshedAt,
       formatReconciliationSummary({

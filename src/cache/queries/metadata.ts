@@ -30,12 +30,9 @@ export function createMetadataQueries(db: Database) {
     `SELECT ${NOTE_COLUMNS} FROM notes WHERE subject_kind = ? AND subject_id = ?`,
   );
 
-  // Moving a note must never delete one. The two notes need not describe the
-  // same playlist — a rekey lands on the sole surviving same-name playlist,
-  // which can be the user's own older copy — and the destination's note is the
-  // one written against the playlist that is actually live, so it wins. The
-  // NOT EXISTS guard says that outright and leaves every other constraint
-  // violation loud, which `OR REPLACE`/`OR IGNORE` would not.
+  // The destination's note wins: a rekey can land on the user's own older
+  // same-name copy, so the two notes need not describe the same playlist.
+  // NOT EXISTS rather than OR IGNORE, so other violations stay loud.
   const movePlaylistNoteStmt = db.prepare(`
     UPDATE notes SET subject_id = @toId
     WHERE subject_kind = 'playlist' AND subject_id = @fromId
@@ -148,8 +145,7 @@ export function createMetadataQueries(db: Database) {
     movePlaylistNote(fromId: string, toId: string): NoteMoveOutcome {
       if (fromId !== toId && movePlaylistNoteStmt.run({ fromId, toId }).changes > 0) return 'moved';
 
-      // Only the refused path pays for a second read: either there was nothing
-      // to move, or the destination's own note blocked the guard above.
+      // Only the refused path pays for a second read.
       if (fromId === toId || hasPlaylistNoteStmt.get(fromId) === undefined)
         return 'nothing_to_move';
 

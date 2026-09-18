@@ -102,9 +102,8 @@ export type NoteRow = {
   updatedAt: string;
 };
 
-// What became of a playlist note reconciliation tried to move. A rekey can
-// land on the user's own older same-name copy, so a destination that already
-// has a note keeps it and the move is refused rather than resolved.
+// A rekey can land on the user's own older same-name copy, so a destination
+// that already has a note keeps it and the move is refused.
 export type NoteMoveOutcome = 'moved' | 'nothing_to_move' | 'destination_kept';
 
 export type PlaylistRef = { id: string; name: string };
