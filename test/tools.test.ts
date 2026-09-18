@@ -1162,6 +1162,29 @@ describe('refresh_library sync reconciliation', () => {
     expect(rows).toHaveLength(2);
   });
 
+  // The older copy's note is about that playlist, so it stands and the refresh
+  // says the receipt's note did not travel.
+  it('keeps the destination note on a rekey and reports the conflict', async () => {
+    const deps = depsAfterCreate({
+      readLibrary: vi.fn().mockResolvedValue(echoSnapshot(['P-OLD'])),
+    });
+    const cache = deps.cacheInstance;
+
+    cache.refreshFromSnapshot(echoSnapshot(['P-CREATED', 'P-OLD']), { durationMs: 1 });
+
+    const older = cache.setNote('playlist', 'P-OLD', "the 2019 version — Jonas's, leave alone");
+
+    cache.setNote('playlist', 'P-CREATED', 'selecta draft 3');
+
+    const out = (await handleRefreshLibrary({}, deps)) as RefreshLibraryOutput;
+
+    expect(out.sync_reconciliation!.rekeys).toEqual([
+      { name: 'Rearview', from_id: 'P-CREATED', to_id: 'P-OLD', note_conflict: true },
+    ]);
+    expect(cache.getNote('playlist', 'P-OLD')).toEqual(older);
+    expect(cache.getPlaylist('P-OLD')!.noteBody).toBe(older.body);
+  });
+
   it('rekeys a reordered preview slot by its reserved name', async () => {
     // The user reordered the slot while auditioning, so the exact-sequence
     // match fails — only the reserved name carries the identity.

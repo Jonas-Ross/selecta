@@ -7,7 +7,9 @@ import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
 
 export type SyncReconciliation = {
   ambiguous: { name: string; playlist_ids: string[] }[];
-  rekeys: { name: string; from_id: string; to_id: string }[];
+  // note_conflict: the destination kept its own note, so this receipt's
+  // note did not travel.
+  rekeys: { name: string; from_id: string; to_id: string; note_conflict?: true }[];
   // Legacy wire fields: refresh reports ambiguous copies and never deletes them.
   // Keep these arrays empty for clients that already consume this shape.
   duplicates_removed: { name: string; deleted_id: string; kept_id: string }[];
@@ -68,19 +70,25 @@ export async function refreshLibrary(
 
     for (const action of actions) {
       if (action.kind === 'rekey') {
-        cache.applyRekey(action.createdId, action.fromId, action.toId);
+        const { noteConflict } = cache.applyRekey(action.createdId, action.fromId, action.toId);
+
         reconciliation.rekeys.push({
           name: action.name,
           from_id: action.fromId,
           to_id: action.toId,
+          ...(noteConflict ? { note_conflict: true as const } : {}),
         });
-        log.info(`[sync-reconcile] rekey "${action.name}": ${action.fromId} -> ${action.toId}`);
+        log.info(
+          `[sync-reconcile] rekey "${action.name}": ${action.fromId} -> ${action.toId}` +
+            (noteConflict ? ' (destination kept its own note)' : ''),
+        );
         continue;
       }
 
       reconciliation.ambiguous.push({ name: action.name, playlist_ids: action.playlistIds });
     }
 
+    // Frozen three-integer shape; note conflicts ride the tool response.
     cache.appendRefreshNote(
       result.refreshedAt,
       formatReconciliationSummary({

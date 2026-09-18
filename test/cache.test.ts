@@ -934,6 +934,58 @@ describe('notes', () => {
     expect(cache.getNote('playlist', CREATED_ID)).toBeNull();
   });
 
+  // The rekey target can be the user's own older copy, so overwriting its note
+  // destroys memory about a playlist that still exists.
+  it('never overwrites a note already on the playlist a rekey lands on', () => {
+    const cache = cacheAfterCreate();
+
+    cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-OLD' }), { durationMs: 1 });
+
+    const older = cache.setNote('playlist', 'P-OLD', "the 2019 version — Jonas's, leave alone");
+
+    cache.setNote('playlist', CREATED_ID, 'selecta draft 3');
+    // iCloud drops Selecta's copy; the older one matches the receipt exactly,
+    // so it looks like a rekey.
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-OLD' }), { durationMs: 1 });
+    expect(cache.planSyncReconciliation({ windowMinutes: 60 })).toEqual([
+      { kind: 'rekey', createdId: CREATED_ID, name: NAME, fromId: CREATED_ID, toId: 'P-OLD' },
+    ]);
+    cache.applyRekey(CREATED_ID, CREATED_ID, 'P-OLD');
+
+    expect(cache.getNote('playlist', 'P-OLD')).toEqual(older);
+    expect(cache.getPlaylist('P-OLD')!.noteBody).toBe(older.body);
+  });
+
+  // Only a destination defending its own note is a collision.
+  it('reports no note conflict when there was nothing to move', () => {
+    const cache = cacheAfterCreate();
+
+    cache.setNote('playlist', CREATED_ID, 'stays put');
+    expect(cache.applyRekey(CREATED_ID, CREATED_ID, CREATED_ID)).toEqual({ noteConflict: false });
+    expect(cache.getNote('playlist', CREATED_ID)!.body).toBe('stays put');
+
+    cache.clearNote('playlist', CREATED_ID);
+    cache.refreshFromSnapshot(snapshotWith({ id: 'P-REKEYED' }), { durationMs: 1 });
+    expect(cache.applyRekey(CREATED_ID, CREATED_ID, 'P-REKEYED')).toEqual({ noteConflict: false });
+  });
+
+  it('never overwrites a note on the destination of a write-time rekey', () => {
+    const cache = cacheAfterCreate();
+
+    cache.refreshFromSnapshot(snapshotWith({ id: CREATED_ID }, { id: 'P-LIVE' }), {
+      durationMs: 1,
+    });
+
+    const live = cache.setNote('playlist', 'P-LIVE', 'what the live slot actually holds');
+
+    cache.setNote('playlist', CREATED_ID, 'draft 3: softer close');
+    cache.applyLiveRekey(CREATED_ID, { persistentId: 'P-LIVE', name: NAME, trackIds: TRACKS });
+
+    expect(cache.getNote('playlist', CREATED_ID)).toBeNull();
+    expect(cache.getNote('playlist', 'P-LIVE')).toEqual(live);
+    expect(cache.getPlaylist('P-LIVE')!.noteBody).toBe(live.body);
+  });
+
   it('follows a write-time (live) rekey of the preview slot', () => {
     const cache = cacheAfterCreate();
 
