@@ -1,5 +1,5 @@
 import { withOperation } from '../operations/lock.js';
-// Chunks of 25 tracks; per-chunk failure skips and continues, never retries.
+// Chunks of 25 tracks; per-chunk failure skips and continues, never retries within a run.
 
 import type { SelectaCache } from '../cache/index.js';
 import type { AudioFeaturesRow, PendingTrack } from '../types/cache.js';

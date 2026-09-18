@@ -38,12 +38,12 @@ CREATE TABLE IF NOT EXISTS playlist_creations (
   created_at TEXT NOT NULL
 );
 
--- Outside refresh cycle; once written, never wiped. Status is terminal: refresh never retries a track with a row.
 CREATE TABLE IF NOT EXISTS enrichment_cooldowns (
   host TEXT PRIMARY KEY,
   until_ms REAL NOT NULL
 );
 
+-- Outside refresh cycle; survives refreshes for tracks in the library. Pruned when track is deleted.
 CREATE TABLE IF NOT EXISTS audio_features (
   track_persistent_id TEXT PRIMARY KEY,
   bpm REAL,
