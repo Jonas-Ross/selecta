@@ -1,5 +1,6 @@
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -72,6 +73,50 @@ describe('operation lifecycle', () => {
       }
     } finally {
       cache.close();
+      rmSync(directory, { recursive: true });
+    }
+  });
+
+  it('releases an interrupted enrich lock but leaves an interrupted music lock', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'selecta-lock-'));
+    const dbPath = join(directory, 'library.db');
+
+    SelectaCache.open(dbPath).close();
+
+    try {
+      for (const [kind, survives] of [
+        ['enrich', false],
+        ['music', true],
+      ] as const) {
+        const script = `import { SelectaCache } from './dist/cache/index.js';
+          import { withOperation } from './dist/operations/lock.js';
+          const c = SelectaCache.open(${JSON.stringify(dbPath)});
+          await withOperation(c, ${JSON.stringify(kind)}, async () => {
+            console.log('held');
+            // A signal listener does not hold the event loop open; a real run's
+            // pending I/O does, so stand in for it with a timer.
+            await new Promise((r) => setTimeout(r, 60_000));
+          });`;
+        const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
+          stdio: ['ignore', 'pipe', 'inherit'],
+        });
+
+        // Watched before the wait, so a child that dies early cannot hang this.
+        const closed = once(child, 'close') as Promise<[number | null, string | null]>;
+
+        for await (const chunk of child.stdout) {
+          if (String(chunk).includes('held')) break;
+        }
+
+        child.kill('SIGINT');
+
+        const [, signal] = await closed;
+
+        // The signal must still end the process the way it would have.
+        expect(signal).toBe('SIGINT');
+        expect(existsSync(`${realpathSync(dbPath)}.${kind}.lock`)).toBe(survives);
+      }
+    } finally {
       rmSync(directory, { recursive: true });
     }
   });

@@ -4,6 +4,8 @@ import { BridgeError } from '../types/errors.js';
 
 const memoryLocks = new WeakMap<object, Set<string>>();
 
+const SIGNALS = ['SIGINT', 'SIGTERM'] as const;
+
 /** A settled action can survive this failure; the named lock still needs recovery. */
 export class OperationCleanupError extends Error {
   constructor(
@@ -78,9 +80,43 @@ export async function withOperation<T>(
     }
   }
 
+  // An hours-long enrich is normally ended by Ctrl-C, and it writes nowhere but
+  // this cache. A music lock survives a signal on purpose: a half-finished
+  // Music.app write is the thing it warns about.
+  const armed = kind === 'enrich' && !cache.db.memory ? releaseOnSignal(release) : null;
+
   try {
     return await action();
   } finally {
+    armed?.();
     release();
   }
+}
+
+/** Drop the lock if a signal ends the process, then let the signal land. */
+function releaseOnSignal(release: () => void): () => void {
+  const handlers = SIGNALS.map((signal) => {
+    const handler = (): void => {
+      disarm();
+
+      try {
+        release();
+      } catch {
+        // Nothing can be reported from here and the process is already going;
+        // a lock that outlives it is still recoverable by hand.
+      }
+
+      process.kill(process.pid, signal);
+    };
+
+    process.once(signal, handler);
+
+    return () => process.off(signal, handler);
+  });
+
+  function disarm(): void {
+    for (const off of handlers) off();
+  }
+
+  return disarm;
 }
