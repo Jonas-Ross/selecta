@@ -336,19 +336,23 @@ describe('enrichPendingTracks', () => {
     expect(text).toContain('chunk saved — 2 ok, 1 no_data, 3 no_match');
   });
 
-  it('reports progress after each saved chunk', async () => {
+  it('names each track as it reaches it, and settles counters a chunk at a time', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
-    const ticks: number[] = [];
+    const ticks: [number, string | null][] = [];
 
     await enrichPendingTracks(
       cache,
       { limit: 3 },
       {
         ...testDeps(fetchLike),
-        onProgress: (p) => ticks.push(p.processed),
+        onProgress: (p, current) => ticks.push([p.processed, current]),
       },
     );
-    expect(ticks).toEqual([3]); // 3 tracks = one chunk
+
+    // 3 tracks = one chunk, so the count lands once, at the end.
+    expect(ticks.filter(([processed]) => processed > 0)).toEqual([[3, expect.any(String)]]);
+    // Progress a terminal can show while that chunk is still running.
+    expect(ticks.map(([, current]) => current)).toContain('Midnight City — M83');
   });
 
   it('paces every request on every host, including the first of a run', async () => {
