@@ -73,10 +73,14 @@ function formatRate(done: number, elapsedMs: number): string | null {
 }
 
 // East Asian wide/fullwidth forms and emoji render two columns, so counting
-// code units would let a CJK title wrap onto a second row. Combining marks are
-// counted as one rather than zero, which only ever truncates a little early.
+// code units would let a CJK title wrap onto a second row. The symbol and
+// emoji blocks are taken wholesale instead of code point by code point, since
+// over-counting a narrow one only truncates a character early where
+// under-counting a wide one wraps the line and leaves a stray row behind.
+// Braille (U+2800-U+28FF, the spinner) is carved back out as genuinely narrow,
+// and combining marks count as one rather than zero, erring the same safe way.
 const WIDE =
-  /[\u1100-\u115f\u2e80-\u303e\u3041-\u33ff\u3400-\u4dbf\u4e00-\u9fff\ua000-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]|[\u{1f300}-\u{1faff}]|[\u{20000}-\u{3fffd}]/u;
+  /[\u1100-\u115f\u2190-\u27ff\u2900-\u2bff\u2e80-\u303e\u3041-\u33ff\u3400-\u4dbf\u4e00-\u9fff\ua000-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]|[\u{16fe0}-\u{1b152}\u{1f000}-\u{1faff}\u{20000}-\u{3fffd}]/u;
 
 const charWidth = (char: string): number => (WIDE.test(char) ? 2 : 1);
 

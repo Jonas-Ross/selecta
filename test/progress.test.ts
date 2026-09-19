@@ -131,6 +131,22 @@ describe('progress on a terminal', () => {
     expect(h.stderr.at(-1)!.endsWith('…')).toBe(true);
   });
 
+  it('counts wide symbols outside the CJK blocks as two columns', () => {
+    const kept = (char: string): number => {
+      const h = harness(true, { columns: 40 });
+
+      h.reporter.update(snapshot(1, char.repeat(40)));
+
+      return [...h.stderr.at(-1)!].filter((c) => c === char).length;
+    };
+
+    // ⌚ 〈 🚀 sit outside the CJK blocks and are still two columns wide, so
+    // half as many of them survive the same budget as a narrow character.
+    for (const char of ['\u231a', '\u2329', '\u{1f680}']) {
+      expect(kept(char)).toBe(Math.floor(kept('x') / 2));
+    }
+  });
+
   it('measures double-width characters so a CJK title cannot wrap the line', () => {
     const h = harness(true, { columns: 24 });
 
