@@ -14,6 +14,7 @@ const tracks = [
     duration_seconds: 90.5,
     bpm: 80,
     musical_key: 'C minor',
+    camelot: '5A',
   },
   { title: 'Middle', artist: 'Artist B', duration_seconds: 181, bpm: null, musical_key: null },
   {
@@ -22,6 +23,7 @@ const tracks = [
     duration_seconds: 90.5,
     bpm: 80,
     musical_key: 'C minor',
+    camelot: '5A',
   },
 ];
 
@@ -93,8 +95,11 @@ it('selects only the requested repeated occurrence and preserves facts in access
   expect(first.attributes['aria-pressed']).toBe('false');
   expect(last.attributes['aria-pressed']).toBe('true');
   expect(last.attributes['aria-label']).toContain('Entry 3: Repeated, Artist A.');
-  expect(last.attributes['aria-label']).toContain('Tempo 80 BPM. Key C minor.');
+  expect(last.attributes['aria-label']).toContain('Tempo 80 BPM. Key 5A C minor.');
   expect(middle.attributes['aria-label']).toContain('Tempo unknown. Key unknown.');
+  // The lane leads with the wheel position; a keyless entry still reads as one.
+  expect(last.children[4].textContent).toBe('5A C minor');
+  expect(middle.children[4].textContent).toBe('? key');
   expect(parseFloat(middle.style.flex) / parseFloat(first.style.flex)).toBe(2);
   expect(first.children[2].style.borderTopColor).toBe(last.children[2].style.borderTopColor);
   expect(first.children[2].style.borderTopColor).not.toBe(middle.children[2].style.borderTopColor);

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { occurrencePositions } from './occurrence_positions.js';
 import { songIdentityKey } from '../cache/song_identity.js';
 import type { TrackRow } from '../types/cache.js';
-import { toApiTrack, toInspectedTrack, type InspectedTrack } from './track_projections.js';
+import { toInspectedTrack, type InspectedTrack } from './track_projections.js';
 
 type FeatureCoverage = {
   present_count: number;
@@ -165,7 +165,7 @@ export function buildTracklistInspection(rows: TrackRow[]): TracklistInspection 
   return {
     fingerprint: orderedTrackIdsFingerprint(trackIds),
     track_count: rows.length,
-    tracks: rows.map((row) => toInspectedTrack(toApiTrack(row))),
+    tracks: rows.map(toInspectedTrack),
     runtime: {
       known_seconds: rows.reduce((sum, row) => sum + (row.durationSeconds ?? 0), 0),
       missing_count: runtimeMissing.length,

@@ -31,7 +31,12 @@ const bare: TrackRow = {
   comments: null,
   locationKind: null,
   musicalKey: null,
+  camelot: null,
   danceability: null,
+  bpmConfidence: null,
+  bpmMaturity: null,
+  keyConfidence: null,
+  keyMaturity: null,
   noteBody: null,
   noteCreatedAt: null,
   noteUpdatedAt: null,
@@ -47,7 +52,12 @@ const populated: TrackRow = {
   durationSeconds: 210.25,
   bpm: 118.456,
   musicalKey: 'F# minor',
+  camelot: '11A',
   danceability: 0.736,
+  bpmConfidence: 0.918_4,
+  bpmMaturity: 'validated',
+  keyConfidence: 0.42,
+  keyMaturity: 'provisional',
   locationKind: 'cloud',
   playCount: 12,
   skipCount: 1,
@@ -63,23 +73,24 @@ const populated: TrackRow = {
 const noteJson =
   '{"body":"Keep this version.","created_at":"2026-09-01T01:00:00.000Z","updated_at":"2026-09-02T01:00:00.000Z"}';
 const fullJson =
-  '{"persistent_id":"T-FULL","title":"Title","artist":"Artist","album":"Album","year":2026,"genre":"RAW Genre","duration_seconds":210.25,"location_kind":"cloud","bpm":118.5,"musical_key":"F# minor","danceability":0.74,"note":' +
+  '{"persistent_id":"T-FULL","title":"Title","artist":"Artist","album":"Album","year":2026,"genre":"RAW Genre","duration_seconds":210.25,"location_kind":"cloud","bpm":118.5,"musical_key":"F# minor","camelot":"11A","danceability":0.74,"note":' +
   noteJson +
   ',"signal":{"play_count":12,"skip_count":1,"rating":4.5,"loved":true,"disliked":true,"last_played":"2026-09-01T00:00:00.000Z","date_added":"2026-01-01T00:00:00.000Z"}}';
 const inspectedJson =
-  '{"persistent_id":"T-FULL","title":"Title","artist":"Artist","album":"Album","duration_seconds":210.25,"bpm":118.5,"musical_key":"F# minor","danceability":0.74,"note":' +
+  '{"persistent_id":"T-FULL","title":"Title","artist":"Artist","album":"Album","duration_seconds":210.25,"bpm":118.5,"musical_key":"F# minor","camelot":"11A","danceability":0.74,"bpm_confidence":0.92,"bpm_maturity":"validated","key_confidence":0.42,"key_maturity":"provisional","note":' +
   noteJson +
   ',"signal":{"play_count":12,"skip_count":1,"rating":4.5,"loved":true}}';
 
 describe('serialized track contracts', () => {
-  it('excludes future full-track and signal fields from reduced contracts', () => {
+  it('excludes future row and signal fields from reduced contracts', () => {
+    const extendedRow = { ...populated, futureRowFact: 'not an inspection field' };
+    const inspected = toInspectedTrack(extendedRow);
     const full = toApiTrack(populated);
     const extended = {
       ...full,
-      future_track_fact: 'not an inspection field',
+      future_track_fact: 'not a compact slot',
       signal: { ...full.signal, future_signal_fact: 42 },
     };
-    const inspected = toInspectedTrack(extended);
 
     expect(JSON.stringify(inspected)).toBe(inspectedJson);
     expect(Object.keys(inspected.signal)).toEqual(['play_count', 'skip_count', 'rating', 'loved']);
@@ -102,7 +113,12 @@ describe('serialized track contracts', () => {
       'duration_seconds',
       'bpm',
       'musical_key',
+      'camelot',
       'danceability',
+      'bpm_confidence',
+      'bpm_maturity',
+      'key_confidence',
+      'key_maturity',
       'note',
       'signal',
     ]);
@@ -114,7 +130,7 @@ describe('serialized track contracts', () => {
     expect(JSON.stringify(toApiTrack(bare))).toBe(json);
     expect(JSON.stringify(buildTracklistInspection([bare]).tracks[0])).toBe(json);
     expect(JSON.stringify(projectApiTrack(bare, true))).toBe(
-      '["T-BARE",null,null,null,null,null,null,null,null,null,0,0,null,null,null,null,null,null]',
+      '["T-BARE",null,null,null,null,null,null,null,null,null,null,0,0,null,null,null,null,null,null]',
     );
   });
 
@@ -129,6 +145,7 @@ describe('serialized track contracts', () => {
       'duration_seconds',
       'bpm',
       'musical_key',
+      'camelot',
       'danceability',
       'signal.play_count',
       'signal.skip_count',
@@ -140,7 +157,7 @@ describe('serialized track contracts', () => {
       'note',
     ]);
     expect(JSON.stringify(toCompactApiTrack(toApiTrack(populated)))).toBe(
-      '["T-FULL","Title","Artist","Album",2026,"RAW Genre",210.25,118.5,"F# minor",0.74,12,1,4.5,true,true,"2026-09-01T00:00:00.000Z","2026-01-01T00:00:00.000Z",' +
+      '["T-FULL","Title","Artist","Album",2026,"RAW Genre",210.25,118.5,"F# minor","11A",0.74,12,1,4.5,true,true,"2026-09-01T00:00:00.000Z","2026-01-01T00:00:00.000Z",' +
         noteJson +
         ']',
     );

@@ -32,7 +32,7 @@ For conflict/error/uncertainty, inspect Music.app and reconcile the desired draf
 
 ## Layout and appearance
 
-Setlist uses a compact title/count header, an options menu for Appearance, Reload latest and Track details, a collapsible sequence timeline, dense rows, and a feedback drawer. Musical key is omitted from the rows; the timeline's optional key lane shows the cached fact.
+Setlist uses a compact title/count header, an options menu for Appearance, Reload latest and Track details, a collapsible sequence timeline, dense rows, and a feedback drawer. Musical key is omitted from the rows; the timeline's optional key lane shows the cached fact, led by its Camelot wheel position where one is known (`11A F# minor`).
 
 Timeline blocks share one proportional scale. An unknown duration is a fixed-width hatched marker, and the elapsed clock stays unknown from the first gap onwards rather than skipping over it; nothing is interpolated. There is no zero-duration case: the bridge treats a zero duration as unset, so the cache only ever holds positive or missing durations. Blocks and row checkboxes toggle the same occurrence selection through the revision-checked edit flow; lane toggles are view state only. Durations at or over an hour use explicit units (`1h 02m 03s`, `1d 19h 51m 52s`) everywhere the card shows time.
 

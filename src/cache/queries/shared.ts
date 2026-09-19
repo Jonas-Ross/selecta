@@ -23,6 +23,8 @@ const noteColumns = (kind: NoteSubject, subjectIdExpr: string): string => `
 `;
 
 // SELECT fragment aliasing snake_case columns to TrackRow's camelCase fields.
+// The confidence/maturity columns reach only inspect_tracklist's projection but
+// ride here anyway, so one fragment stays the whole of a track read.
 export const TRACK_COLUMNS = `
   t.persistent_id AS persistentId, t.title, t.artist,
   t.album_artist AS albumArtist, t.album, t.genre, t.year,
@@ -32,7 +34,12 @@ export const TRACK_COLUMNS = `
   t.play_count AS playCount, t.skip_count AS skipCount, t.rating,
   t.loved, t.disliked, t.comments, t.location_kind AS locationKind,
   ${featureColumn('musical_key')} AS musicalKey,
+  ${featureColumn('camelot')} AS camelot,
   ${featureColumn('danceability')} AS danceability,
+  ${featureColumn('bpm_confidence')} AS bpmConfidence,
+  ${featureColumn('bpm_maturity')} AS bpmMaturity,
+  ${featureColumn('key_confidence')} AS keyConfidence,
+  ${featureColumn('key_maturity')} AS keyMaturity,
   ${noteColumns('track', 't.persistent_id')}
 `;
 

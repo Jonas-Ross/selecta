@@ -12,6 +12,7 @@ import {
 } from '../src/tools/get_track_context.js';
 import { handleSearch, type CompactSearchOutput, type SearchOutput } from '../src/tools/search.js';
 import type { ToolDeps } from '../src/tools/deps.js';
+import type { AudioFeaturesRow } from '../src/types/cache.js';
 import type { LibrarySnapshot, RawTrack } from '../src/types/bridge.js';
 import { makeBridge } from './helpers.js';
 
@@ -88,10 +89,46 @@ function discoverySnapshot(): LibrarySnapshot {
   };
 }
 
+const KEYS = ['A minor', 'F# minor', 'C major', 'G minor'];
+
+// Partial coverage, roughly what the real library measures (bpm on about half
+// the tracks, key on fewer). Features are a third of a compact row, so a
+// fixture with none of them would not measure the format anyone ships.
+function discoveryFeatures(snapshot: LibrarySnapshot): AudioFeaturesRow[] {
+  return snapshot.tracks.flatMap((track, index) => {
+    if (index % 3 === 2) return [];
+
+    const musicalKey = index % 5 < 2 ? KEYS[index % KEYS.length]! : null;
+
+    return [
+      {
+        trackPersistentId: track.persistentId,
+        bpm: 112 + (index % 24),
+        bpmConfidence: 0.91,
+        bpmMaturity: 'validated',
+        musicalKey,
+        camelot: null, // derived on save from musicalKey
+        keyConfidence: musicalKey === null ? null : 0.58,
+        keyMaturity: musicalKey === null ? null : 'provisional',
+        danceability: 0.4 + (index % 50) / 100,
+        sources: { bpm: 'deezer' },
+        mbRecordingMbid: null,
+        deezerTrackId: null,
+        status: 'ok',
+        catalogStatus: 'ok',
+        analysisStatus: null,
+        fetchedAt: '2026-09-01T00:00:00.000Z',
+      },
+    ];
+  });
+}
+
 function deps(): ToolDeps {
   const cache = SelectaCache.open(':memory:');
+  const snapshot = discoverySnapshot();
 
-  cache.refreshFromSnapshot(discoverySnapshot(), { durationMs: 1 });
+  cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+  cache.saveAudioFeatures(discoveryFeatures(snapshot));
 
   return { cache: () => cache, bridge: makeBridge() };
 }
