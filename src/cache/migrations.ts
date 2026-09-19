@@ -37,6 +37,61 @@ export const MIGRATIONS: readonly Migration[] = [
       UPDATE audio_features SET catalog_status = status;
     `,
   },
+  // Camelot is a relabeling of the key, so every stored key earns one, not
+  // just the analyzed keys that arrived with one. Frozen literal rather than
+  // generated SQL: a migration's text must never change under a shipped
+  // database, and a test pins these values against domain/camelot.ts.
+  {
+    version: 4,
+    sql: `
+      UPDATE audio_features SET camelot = CASE lower(trim(musical_key))
+      WHEN 'c major' THEN '8B'
+      WHEN 'c# major' THEN '3B'
+      WHEN 'cb major' THEN '1B'
+      WHEN 'd major' THEN '10B'
+      WHEN 'd# major' THEN '5B'
+      WHEN 'db major' THEN '3B'
+      WHEN 'e major' THEN '12B'
+      WHEN 'e# major' THEN '7B'
+      WHEN 'eb major' THEN '5B'
+      WHEN 'f major' THEN '7B'
+      WHEN 'f# major' THEN '2B'
+      WHEN 'fb major' THEN '12B'
+      WHEN 'g major' THEN '9B'
+      WHEN 'g# major' THEN '4B'
+      WHEN 'gb major' THEN '2B'
+      WHEN 'a major' THEN '11B'
+      WHEN 'a# major' THEN '6B'
+      WHEN 'ab major' THEN '4B'
+      WHEN 'b major' THEN '1B'
+      WHEN 'b# major' THEN '8B'
+      WHEN 'bb major' THEN '6B'
+      WHEN 'c minor' THEN '5A'
+      WHEN 'c# minor' THEN '12A'
+      WHEN 'cb minor' THEN '10A'
+      WHEN 'd minor' THEN '7A'
+      WHEN 'd# minor' THEN '2A'
+      WHEN 'db minor' THEN '12A'
+      WHEN 'e minor' THEN '9A'
+      WHEN 'e# minor' THEN '4A'
+      WHEN 'eb minor' THEN '2A'
+      WHEN 'f minor' THEN '4A'
+      WHEN 'f# minor' THEN '11A'
+      WHEN 'fb minor' THEN '9A'
+      WHEN 'g minor' THEN '6A'
+      WHEN 'g# minor' THEN '1A'
+      WHEN 'gb minor' THEN '11A'
+      WHEN 'a minor' THEN '8A'
+      WHEN 'a# minor' THEN '3A'
+      WHEN 'ab minor' THEN '1A'
+      WHEN 'b minor' THEN '10A'
+      WHEN 'b# minor' THEN '5A'
+      WHEN 'bb minor' THEN '3A'
+      ELSE camelot
+      END
+      WHERE musical_key IS NOT NULL;
+    `,
+  },
 ];
 
 export function migrateDatabase(

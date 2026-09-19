@@ -28,6 +28,14 @@ and the per-source `catalog_status`/`analysis_status`) and fills
 the column the same step just added, so it stays inside the additive gate
 below: no pre-existing value is rewritten or removed.
 
+Version 4 backfills `audio_features.camelot` from `musical_key` for keys
+already stored. It writes only that column, and only where the key maps to a
+position — an unparseable key keeps whatever it had — so it stays inside the
+additive gate below. Its `CASE` is a frozen literal rather than SQL generated
+from `src/domain/camelot.ts`, because a shipped migration's text must not
+change when that module does; `test/camelot.test.ts` pins the two together, so
+a later change to the mapping fails there and has to ship as its own migration.
+
 Read-only diagnostics never migrate, so `status` and `doctor` must keep working
 against a database an older build left behind. `readStatus` probes for the
 version-3 columns and reads the pre-3 shape when they are absent; a new
