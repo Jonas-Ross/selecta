@@ -306,6 +306,41 @@ describe('cache schema migrations', () => {
     }
   });
 
+  it('reports the migrations a database is behind, and the counts that predate them', () => {
+    const path = diskPath();
+    const db = track(new Database(path));
+
+    // A database the previous build left behind: version 3 stores camelot, but
+    // only for the rows whose own source supplied one.
+    for (const step of MIGRATIONS.slice(0, 3)) {
+      db.exec(step.sql);
+      db.pragma(`user_version = ${step.version}`);
+    }
+
+    db.exec(`
+      INSERT INTO tracks (persistent_id, title, artist) VALUES ('T1', 'Song', 'Artist'), ('T2', 'Other', 'Artist');
+      INSERT INTO audio_features (track_persistent_id, musical_key, camelot, status, catalog_status, fetched_at)
+        VALUES ('T1', 'F minor', NULL, 'ok', 'ok', '2026-09-01');
+      INSERT INTO audio_features (track_persistent_id, musical_key, camelot, status, analysis_status, fetched_at)
+        VALUES ('T2', 'A minor', '8A', 'ok', 'ok', '2026-09-01');
+    `);
+    db.close();
+    const stale = readStatus(path);
+
+    expect(stale.database.schema).toEqual({ version: 3, expected: MIGRATIONS.length, pending: 1 });
+    expect(stale.audio_features!.coverage.camelot.track_count).toBe(1);
+
+    openDatabase(path).close();
+    const migrated = readStatus(path);
+
+    expect(migrated.database.schema).toEqual({
+      version: MIGRATIONS.length,
+      expected: MIGRATIONS.length,
+      pending: 0,
+    });
+    expect(migrated.audio_features!.coverage.camelot.track_count).toBe(2);
+  });
+
   it('read-only diagnostics do not baseline an unversioned database', () => {
     const path = diskPath();
     const db = track(new Database(path));

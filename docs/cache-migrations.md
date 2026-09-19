@@ -41,6 +41,13 @@ against a database an older build left behind. `readStatus` probes for the
 version-3 columns and reads the pre-3 shape when they are absent; a new
 migration that diagnostics read from needs the same treatment.
 
+Because they never migrate, their counts describe the database as the last
+writer left it. `database.schema` reports the installed version, the version
+this build writes, and how many migrations are pending; the CLI repeats a
+nonzero gap on stderr with the reminder that any writable open (`refresh`, the
+MCP server, `enrich`) applies them. Without it a backfilled column reads as
+genuinely empty coverage rather than as a migration that has not run.
+
 ## Adding a migration
 
 1. Append a consecutive version and SQL to `MIGRATIONS`. Never edit a shipped

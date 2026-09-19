@@ -35,7 +35,7 @@ Shared storage and bridge types live in `src/types/`; the cross-cutting error en
 | `npm run smoke` | End-to-end smoke against the real library (builds first) |
 | `npm run preview` | Consolidated draft and explorer fixture gallery at `http://127.0.0.1:8767` |
 | `npm run dev` | Run the MCP server over stdio |
-| `node dist/index.js status` | Read-only cache integrity, freshness, counts, and enrichment diagnostics |
+| `node dist/index.js status` | Read-only cache integrity, schema version and pending migrations, freshness, counts, and enrichment diagnostics |
 | `node dist/index.js doctor` | `status` plus a read-only Music.app availability and Automation probe |
 | `node dist/index.js refresh` | Refresh the library cache from the CLI, no MCP client needed |
 | `node dist/index.js enrich [-n N] [--source catalog\|analysis]` | Backfill audio features from the CLI (default all pending on `catalog`, ~1-3s/track) |
