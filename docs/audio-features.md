@@ -35,6 +35,15 @@ other, so overwriting on that basis would be a guess dressed as an improvement.
 Per-field confidence and maturity are stored precisely so a future supersede
 rule has something to decide on.
 
+## What the summary counts mean
+
+Each run reports `returned` (tracks the source stood behind an estimate for)
+and `enriched` (tracks where a value actually landed in storage this run).
+They diverge exactly where gap-fill applies: a source can return `ok` for a
+track that already has that feature from the other source, and `mergeFeatures`
+discards the estimate rather than overwriting it. `returned` is the source's
+own hit rate; `enriched` is what the run actually changed.
+
 ## Camelot is derived, not sourced
 
 Camelot notation is the key written on a clock face — the number is a position

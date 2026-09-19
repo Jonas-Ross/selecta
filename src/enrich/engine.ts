@@ -17,7 +17,8 @@ const CHUNK_SIZE = 25;
 
 export type EnrichmentProgress = {
   processed: number;
-  enriched: number; // status 'ok'
+  enriched: number; // landed a new value in storage (post gap-fill merge)
+  returned: number; // status 'ok' from the source, whether or not it landed
   noData: number;
   noMatch: number;
   skipped: number; // tracks in chunks that hit a source failure; still pending
@@ -110,6 +111,7 @@ function createTally(alreadyAttempted: PriorAttempt[], deps: EnrichDeps) {
   const progress: EnrichmentProgress = {
     processed: 0,
     enriched: 0,
+    returned: 0,
     noData: 0,
     noMatch: 0,
     skipped: 0,
@@ -127,12 +129,15 @@ function createTally(alreadyAttempted: PriorAttempt[], deps: EnrichDeps) {
     errors,
     outcomes,
 
-    /** Record one track's terminal outcome. */
-    settle(trackPersistentId: string, status: FeatureStatus): void {
+    /** Record one track's terminal outcome; landed only applies to 'ok'. */
+    settle(trackPersistentId: string, status: FeatureStatus, landed: boolean): void {
       progress.processed += 1;
 
-      if (status === 'ok') progress.enriched += 1;
-      else if (status === 'no_data') progress.noData += 1;
+      if (status === 'ok') {
+        progress.returned += 1;
+
+        if (landed) progress.enriched += 1;
+      } else if (status === 'no_data') progress.noData += 1;
       else progress.noMatch += 1;
 
       outcomes.set(trackPersistentId, {
@@ -201,12 +206,12 @@ async function runCatalogPass(
       continue;
     }
 
-    cache.saveAudioFeatures(rows);
+    const landed = cache.saveAudioFeatures(rows);
     const counts = { ok: 0, no_data: 0, no_match: 0 };
 
     for (const row of rows) {
       counts[row.status] += 1;
-      tally.settle(row.trackPersistentId, row.status);
+      tally.settle(row.trackPersistentId, row.status, landed.get(row.trackPersistentId) ?? false);
     }
 
     trace(`chunk saved — ${counts.ok} ok, ${counts.no_data} no_data, ${counts.no_match} no_match`);
@@ -236,11 +241,11 @@ async function runAnalysisPass(
   const flush = (): void => {
     if (buffered.length === 0) return;
 
-    cache.saveAudioFeatures(buffered);
+    const landed = cache.saveAudioFeatures(buffered);
 
     for (const row of buffered) {
       unsettled.delete(row.trackPersistentId);
-      tally.settle(row.trackPersistentId, row.status);
+      tally.settle(row.trackPersistentId, row.status, landed.get(row.trackPersistentId) ?? false);
     }
 
     buffered.length = 0;
