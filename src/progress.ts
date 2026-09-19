@@ -19,7 +19,7 @@ export type ProgressReporter = {
   /** Counters moved, or the run started working on another track. */
   update: (snapshot: ProgressSnapshot) => void;
   /** A line worth keeping, printed above the live one. */
-  note: (line: string, level: 'info' | 'error') => void;
+  note: (line: string, level: 'info' | 'debug' | 'error') => void;
   /** Take the live line down; the caller owns whatever is printed next. */
   stop: () => void;
 };
@@ -60,8 +60,34 @@ function formatRate(done: number, elapsedMs: number): string | null {
   return perSecond >= 1 ? `${perSecond.toFixed(1)}/s` : `${(1 / perSecond).toFixed(1)}s each`;
 }
 
+// East Asian wide/fullwidth forms and emoji render two columns, so counting
+// code units would let a CJK title wrap onto a second row. Combining marks are
+// counted as one rather than zero, which only ever truncates a little early.
+const WIDE =
+  /[\u1100-\u115f\u2e80-\u303e\u3041-\u33ff\u3400-\u4dbf\u4e00-\u9fff\ua000-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]|[\u{1f300}-\u{1faff}]|[\u{20000}-\u{3fffd}]/u;
+
+const charWidth = (char: string): number => (WIDE.test(char) ? 2 : 1);
+
+/** Fit to a column budget, counting display width and never splitting a character. */
 function truncate(line: string, columns: number): string {
-  return line.length <= columns ? line : line.slice(0, Math.max(1, columns - 1)) + '…';
+  let width = 0;
+
+  for (const char of line) width += charWidth(char);
+
+  if (width <= columns) return line;
+
+  let kept = '';
+
+  width = 0;
+
+  for (const char of line) {
+    if (width + charWidth(char) > columns - 1) break;
+
+    kept += char;
+    width += charWidth(char);
+  }
+
+  return kept + '…';
 }
 
 /** Everything but the spinner, so the live line and a logged line say the same thing. */
@@ -82,7 +108,7 @@ function describe(snapshot: ProgressSnapshot, elapsedMs: number): string {
 
   if (rate != null) parts.push(rate);
 
-  if (done > 0 && done < total) {
+  if (done > 0 && done < total && elapsedMs > 0) {
     parts.push(`${formatDuration((total - done) * (elapsedMs / done))} left`);
   }
 

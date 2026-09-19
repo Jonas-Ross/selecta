@@ -12,7 +12,7 @@ function harness(isTty: boolean, options: { columns?: number } = {}) {
   const logged: string[] = [];
   const logger: Logger = {
     info: (...args) => logged.push(args.join(' ')),
-    debug: () => undefined,
+    debug: (...args) => logged.push(`DEBUG ${args.join(' ')}`),
     error: (...args) => logged.push(`ERROR ${args.join(' ')}`),
   };
   let clock = 0;
@@ -109,6 +109,19 @@ describe('progress on a terminal', () => {
     expect(h.live()).toContain('10/100');
   });
 
+  it('brackets a debug trace with a clear and a repaint', () => {
+    const h = harness(true);
+
+    h.reporter.update(snapshot(10, 'Angel — Massive Attack'));
+    h.reporter.note('MusicBrainz "Angel" — Massive Attack …', 'debug');
+
+    // The live line ends without a newline, so a trace written straight to
+    // stderr would land on it and leave the joined row behind.
+    expect(h.logged).toEqual(['DEBUG MusicBrainz "Angel" — Massive Attack …']);
+    expect(h.stderr.at(-2)).toBe(CLEAR);
+    expect(h.live()).toContain('Angel — Massive Attack');
+  });
+
   it('truncates to the terminal width rather than wrapping', () => {
     const h = harness(true, { columns: 30 });
 
@@ -116,6 +129,22 @@ describe('progress on a terminal', () => {
 
     expect(h.stderr.at(-1)!.replace(CLEAR, '')).toHaveLength(30);
     expect(h.stderr.at(-1)!.endsWith('…')).toBe(true);
+  });
+
+  it('measures double-width characters so a CJK title cannot wrap the line', () => {
+    const h = harness(true, { columns: 24 });
+
+    // Ten columns of spinner and counts, then a title whose every character
+    // takes two: seven fit before the ellipsis, not thirteen.
+    h.reporter.update({ done: 0, total: 9, enriched: 0, skipped: 0, current: '未来'.repeat(10) });
+    const rendered = h.stderr.at(-1)!.replace(CLEAR, '');
+
+    expect(
+      [...rendered].reduce((w, c) => w + (/[\u4e00-\u9fff]/.test(c) ? 2 : 1), 0),
+    ).toBeLessThanOrEqual(24);
+    expect(rendered.endsWith('…')).toBe(true);
+    // Whole characters only — a lone surrogate would render as a replacement box.
+    expect(rendered).not.toContain('\ufffd');
   });
 
   it('takes the line down on stop, leaving the terminal clean for the JSON', () => {

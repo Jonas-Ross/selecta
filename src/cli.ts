@@ -199,7 +199,9 @@ export function createCliProgram(options: CliOptions = {}): Command {
             const progress = createProgressReporter({ logger, writeStderr, isTty });
             // Per-request narration is debug-level: on a terminal it would
             // scroll the live line away, and it is what the file log is for.
-            const trace = (line: string): void => logger.debug(line);
+            // Through the reporter even so, or SELECTA_DEBUG=1 would write it
+            // onto the live line rather than above it.
+            const trace = (line: string): void => progress.note(line, 'debug');
             const summary = await enrichPendingTracks(
               cache,
               { limit: budget, source },
