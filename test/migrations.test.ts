@@ -45,8 +45,10 @@ function seed(db: Database.Database): void {
     // whether this runs before or after that column exists.
     playlist_creations:
       "INSERT INTO playlist_creations (created_persistent_id, current_persistent_id, name, track_ids_json, created_at) VALUES ('OLD', 'P1', 'Playlist', '[\"T1\",\"T1\"]', '2026-09-01')",
+    // Explicit column list for the same reason as playlist_creations: version 3
+    // adds columns, and this seed runs both before and after that.
     audio_features:
-      "INSERT INTO audio_features VALUES ('T1', 123.5, 'Am', 0.8, '{}', 'mbid', 12, 'ok', '2026-09-01')",
+      "INSERT INTO audio_features (track_persistent_id, bpm, musical_key, danceability, sources, mb_recording_mbid, deezer_track_id, status, fetched_at) VALUES ('T1', 123.5, 'Am', 0.8, '{}', 'mbid', 12, 'ok', '2026-09-01')",
     play_history: "INSERT INTO play_history VALUES ('T1', '2026-09-01', 2, 1)",
     notes:
       "INSERT INTO notes VALUES ('track', 'T1', 'verbatim note', '2026-09-01', '2026-09-01'), ('playlist', 'P1', 'playlist note', '2026-09-01', '2026-09-01')",
@@ -116,17 +118,34 @@ describe('cache schema migrations', () => {
       expect(upgraded.pragma('user_version', { simple: true })).toBe(MIGRATIONS.length);
       const after = rows(upgraded);
 
-      // playlist_creations gained edit_conflict (version 2): an existing row
-      // picks up its default rather than being rewritten.
-      const expected =
-        before.playlist_creations === undefined
-          ? before
+      // Added columns only: playlist_creations gained edit_conflict (version 2)
+      // and takes its default; audio_features gained the analysis columns
+      // (version 3), where catalog_status is filled from the status the row
+      // already had. Nothing that existed before is rewritten.
+      const expected = {
+        ...before,
+        ...(before.playlist_creations === undefined
+          ? {}
           : {
-              ...before,
               playlist_creations: (before.playlist_creations as Record<string, unknown>[]).map(
                 (row) => ({ ...row, edit_conflict: 0 }),
               ),
-            };
+            }),
+        ...(before.audio_features === undefined
+          ? {}
+          : {
+              audio_features: (before.audio_features as Record<string, unknown>[]).map((row) => ({
+                ...row,
+                camelot: null,
+                bpm_confidence: null,
+                bpm_maturity: null,
+                key_confidence: null,
+                key_maturity: null,
+                catalog_status: row.status,
+                analysis_status: null,
+              })),
+            }),
+      };
 
       for (const [name, data] of Object.entries(expected)) expect(after[name], name).toEqual(data);
 

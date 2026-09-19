@@ -2,9 +2,16 @@ import { withOperation } from '../operations/lock.js';
 // Chunks of 25 tracks; per-chunk failure skips and continues, never retries within a run.
 
 import type { SelectaCache } from '../cache/index.js';
-import type { AudioFeaturesRow, PendingTrack } from '../types/cache.js';
+import type {
+  AudioFeaturesRow,
+  FeatureSource,
+  FeatureStatus,
+  PendingTrack,
+} from '../types/cache.js';
 import { BridgeError, trackNotFoundError } from '../types/errors.js';
 import { createSources, withUserAgent, type FetchLike, type Sources } from './sources.js';
+import { analyzeTracks, toFeaturesRow, type MetrognomeDeps } from './metrognome.js';
+import { blankFeatures } from '../cache/audio_features.js';
 
 const CHUNK_SIZE = 25;
 
@@ -38,9 +45,16 @@ export type TargetedEnrichmentOutcome =
       existingResult: EnrichmentResult;
     };
 
-export type EnrichOptions =
+// source picks the pass: 'catalog' queries the metadata services, 'analysis'
+// runs metrognome over the tracks' store previews. Each keeps its own terminal
+// record, so analysis still reaches tracks the catalogs had nothing for.
+export type EnrichOptions = (
   | { limit: number; trackIds?: undefined }
-  | { trackIds: string[]; limit?: undefined };
+  | {
+      trackIds: string[];
+      limit?: undefined;
+    }
+) & { source?: FeatureSource };
 
 // Injection points for tests plus the progress/failure hooks the CLI uses;
 // production defaults to the real fetch/clock/timer.
@@ -52,6 +66,8 @@ export type EnrichDeps = {
   onChunkError?: (message: string, trackCount: number) => void;
   // Moment-to-moment narration of every request and chunk (see SourceDeps.trace).
   trace?: (line: string) => void;
+  // Binary path and spawn override for the analysis pass.
+  metrognome?: MetrognomeDeps;
 };
 
 const defaultSleep = (ms: number): Promise<void> =>
@@ -63,108 +79,220 @@ export async function enrichPendingTracks(
   deps: EnrichDeps = {},
 ): Promise<EnrichmentSummary> {
   return withOperation(cache, 'enrich', async () => {
-    const selection = selectTargets(cache, opts);
+    const source = opts.source ?? 'catalog';
+    const selection = selectTargets(cache, opts, source);
     const now = deps.now ?? (() => new Date());
-    const trace = deps.trace ?? (() => {});
-    const sources = createSources({
-      fetchLike: deps.fetchLike ?? withUserAgent(fetch),
-      sleep: deps.sleep ?? defaultSleep,
-      nowMs: () => now().getTime(),
-      trace: deps.trace,
-      cooldown: {
-        get: (host) => cache.getSourceCooldown(host),
-        set: (host, until) => cache.setSourceCooldown(host, until),
-      },
-    });
+    const tally = createTally(selection.alreadyAttempted, deps);
 
-    const pending = selection.pending;
-    const totalChunks = Math.ceil(pending.length / CHUNK_SIZE);
-    const progress: EnrichmentProgress = {
-      processed: 0,
-      enriched: 0,
-      noData: 0,
-      noMatch: 0,
-      skipped: 0,
-    };
-    const errors: string[] = [];
-    const outcomes = new Map<string, TargetedEnrichmentOutcome>(
-      selection.alreadyAttempted.map(({ trackPersistentId, existingResult }) => [
-        trackPersistentId,
-        { trackPersistentId, outcome: 'already_attempted', existingResult },
-      ]),
-    );
-
-    for (let i = 0; i < pending.length; i += CHUNK_SIZE) {
-      const chunk = pending.slice(i, i + CHUNK_SIZE);
-
-      trace(`— chunk ${i / CHUNK_SIZE + 1}/${totalChunks}: ${chunk.length} tracks —`);
-      let rows: AudioFeaturesRow[];
-
-      try {
-        rows = await resolveChunk(sources, chunk, now().toISOString());
-      } catch (err) {
-        // Only source failures are skippable; anything else is a bug and rethrows.
-        if (!(err instanceof BridgeError) || err.errorCode !== 'enrichment_error') throw err;
-
-        progress.skipped += chunk.length;
-
-        for (const track of chunk) {
-          outcomes.set(track.persistentId, {
-            trackPersistentId: track.persistentId,
-            outcome: 'skipped',
-          });
-        }
-
-        if (!errors.includes(err.message)) errors.push(err.message);
-
-        deps.onChunkError?.(err.message, chunk.length);
-        deps.onProgress?.({ ...progress });
-        continue;
-      }
-
-      cache.saveAudioFeatures(rows);
-      const counts = { ok: 0, no_data: 0, no_match: 0 };
-
-      for (const row of rows) {
-        progress.processed += 1;
-        counts[row.status] += 1;
-        outcomes.set(row.trackPersistentId, {
-          trackPersistentId: row.trackPersistentId,
-          outcome: resultForStatus(row.status),
-        });
-
-        if (row.status === 'ok') progress.enriched += 1;
-        else if (row.status === 'no_data') progress.noData += 1;
-        else progress.noMatch += 1;
-      }
-
-      trace(
-        `chunk saved — ${counts.ok} ok, ${counts.no_data} no_data, ${counts.no_match} no_match`,
-      );
-      deps.onProgress?.({ ...progress });
-    }
+    if (source === 'catalog') await runCatalogPass(cache, selection.pending, tally, deps, now);
+    else await runAnalysisPass(cache, selection.pending, tally, deps, now);
 
     return {
-      ...progress,
-      pendingRemaining: cache.countPendingEnrichment(),
-      errors,
+      ...tally.progress,
+      pendingRemaining: cache.countPendingEnrichment(source),
+      errors: tally.errors,
       ...(selection.requestedIds != null
         ? {
             alreadyAttempted: selection.alreadyAttempted.length,
-            outcomes: selection.requestedIds.map((id) => outcomes.get(id)!),
+            outcomes: selection.requestedIds.map((id) => tally.outcomes.get(id)!),
           }
         : {}),
     };
   });
 }
 
-function resultForStatus(status: AudioFeaturesRow['status']): EnrichmentResult {
+type Tally = ReturnType<typeof createTally>;
+
+type PriorAttempt = { trackPersistentId: string; existingResult: EnrichmentResult };
+
+/** Run-wide counters, per-track outcomes and the caller's progress hooks. */
+function createTally(alreadyAttempted: PriorAttempt[], deps: EnrichDeps) {
+  const progress: EnrichmentProgress = {
+    processed: 0,
+    enriched: 0,
+    noData: 0,
+    noMatch: 0,
+    skipped: 0,
+  };
+  const errors: string[] = [];
+  const outcomes = new Map<string, TargetedEnrichmentOutcome>(
+    alreadyAttempted.map(({ trackPersistentId, existingResult }) => [
+      trackPersistentId,
+      { trackPersistentId, outcome: 'already_attempted', existingResult },
+    ]),
+  );
+
+  return {
+    progress,
+    errors,
+    outcomes,
+
+    /** Record one track's terminal outcome. */
+    settle(trackPersistentId: string, status: FeatureStatus): void {
+      progress.processed += 1;
+
+      if (status === 'ok') progress.enriched += 1;
+      else if (status === 'no_data') progress.noData += 1;
+      else progress.noMatch += 1;
+
+      outcomes.set(trackPersistentId, {
+        trackPersistentId,
+        outcome: resultForStatus(status),
+      });
+    },
+
+    /** Leave tracks pending for a later run and report why, once per message. */
+    skip(trackPersistentIds: readonly string[], message: string): void {
+      progress.skipped += trackPersistentIds.length;
+
+      for (const id of trackPersistentIds) {
+        outcomes.set(id, { trackPersistentId: id, outcome: 'skipped' });
+      }
+
+      if (!errors.includes(message)) errors.push(message);
+
+      deps.onChunkError?.(message, trackPersistentIds.length);
+      deps.onProgress?.({ ...progress });
+    },
+
+    report(): void {
+      deps.onProgress?.({ ...progress });
+    },
+  };
+}
+
+/** MusicBrainz → AcousticBrainz → Deezer, 25 tracks at a time. */
+async function runCatalogPass(
+  cache: SelectaCache,
+  pending: PendingTrack[],
+  tally: Tally,
+  deps: EnrichDeps,
+  now: () => Date,
+): Promise<void> {
+  const trace = deps.trace ?? (() => {});
+  const sources = createSources({
+    fetchLike: deps.fetchLike ?? withUserAgent(fetch),
+    sleep: deps.sleep ?? defaultSleep,
+    nowMs: () => now().getTime(),
+    trace: deps.trace,
+    cooldown: {
+      get: (host) => cache.getSourceCooldown(host),
+      set: (host, until) => cache.setSourceCooldown(host, until),
+    },
+  });
+  const totalChunks = Math.ceil(pending.length / CHUNK_SIZE);
+
+  for (let i = 0; i < pending.length; i += CHUNK_SIZE) {
+    const chunk = pending.slice(i, i + CHUNK_SIZE);
+
+    trace(`— chunk ${i / CHUNK_SIZE + 1}/${totalChunks}: ${chunk.length} tracks —`);
+    let rows: AudioFeaturesRow[];
+
+    try {
+      rows = await resolveChunk(sources, chunk, now().toISOString());
+    } catch (err) {
+      // Only source failures are skippable; anything else is a bug and rethrows.
+      if (!(err instanceof BridgeError) || err.errorCode !== 'enrichment_error') throw err;
+
+      tally.skip(
+        chunk.map((track) => track.persistentId),
+        err.message,
+      );
+      continue;
+    }
+
+    cache.saveAudioFeatures(rows);
+    const counts = { ok: 0, no_data: 0, no_match: 0 };
+
+    for (const row of rows) {
+      counts[row.status] += 1;
+      tally.settle(row.trackPersistentId, row.status);
+    }
+
+    trace(`chunk saved — ${counts.ok} ok, ${counts.no_data} no_data, ${counts.no_match} no_match`);
+    tally.report();
+  }
+}
+
+/**
+ * metrognome over the whole backlog: one process, queries down its stdin,
+ * results saved in chunks as they stream back. A failure ends the run rather
+ * than skipping a chunk — there is one pipe, not one request per track — so
+ * everything unsettled stays pending for a later run.
+ */
+async function runAnalysisPass(
+  cache: SelectaCache,
+  pending: PendingTrack[],
+  tally: Tally,
+  deps: EnrichDeps,
+  now: () => Date,
+): Promise<void> {
+  if (pending.length === 0) return;
+
+  const trace = deps.trace ?? (() => {});
+  const unsettled = new Set(pending.map((track) => track.persistentId));
+  const buffered: AudioFeaturesRow[] = [];
+
+  const flush = (): void => {
+    if (buffered.length === 0) return;
+
+    cache.saveAudioFeatures(buffered);
+
+    for (const row of buffered) {
+      unsettled.delete(row.trackPersistentId);
+      tally.settle(row.trackPersistentId, row.status);
+    }
+
+    buffered.length = 0;
+    trace(`saved ${tally.progress.processed}/${pending.length} analyzed`);
+    tally.report();
+  };
+
+  trace(`analyzing ${pending.length} tracks via metrognome`);
+
+  try {
+    await analyzeTracks(
+      pending.map((track) => ({
+        clientRef: track.persistentId,
+        artist: track.artist ?? '',
+        title: track.title ?? '',
+      })),
+      (analysis) => {
+        const row = toFeaturesRow(analysis, now().toISOString());
+
+        // A non-terminal failure (transport, cache, a bug) says nothing about
+        // the track, so it is left pending rather than recorded.
+        if (row != null && unsettled.has(row.trackPersistentId)) buffered.push(row);
+
+        if (buffered.length >= CHUNK_SIZE) flush();
+      },
+      deps.metrognome,
+    );
+  } catch (err) {
+    if (!(err instanceof BridgeError) || err.errorCode !== 'enrichment_error') throw err;
+
+    flush();
+    tally.skip([...unsettled], err.message);
+
+    return;
+  }
+
+  flush();
+
+  // Results that arrived without a usable terminal verdict.
+  if (unsettled.size > 0) {
+    tally.skip([...unsettled], 'metrognome returned no terminal result for these tracks');
+  }
+}
+
+function resultForStatus(status: FeatureStatus): EnrichmentResult {
   return status === 'ok' ? 'enriched' : status;
 }
 
 function selectTargets(
   cache: SelectaCache,
   opts: EnrichOptions,
+  source: FeatureSource,
 ): {
   pending: PendingTrack[];
   requestedIds?: string[];
@@ -172,7 +300,7 @@ function selectTargets(
 } {
   if (opts.trackIds == null) {
     return {
-      pending: cache.getTracksPendingEnrichment(opts.limit),
+      pending: cache.getTracksPendingEnrichment(source, opts.limit),
       alreadyAttempted: [],
     };
   }
@@ -209,13 +337,15 @@ function selectTargets(
 
   for (const [i, track] of tracks.entries()) {
     const id = requestedIds[i]!;
-    const existing = cache.getAudioFeatures(id);
+    // Terminal is per source: a track the catalogs exhausted is still a
+    // candidate for analysis, and vice versa.
+    const attempted =
+      source === 'catalog'
+        ? cache.getAudioFeatures(id)?.catalogStatus
+        : cache.getAudioFeatures(id)?.analysisStatus;
 
-    if (existing != null) {
-      alreadyAttempted.push({
-        trackPersistentId: id,
-        existingResult: resultForStatus(existing.status),
-      });
+    if (attempted != null) {
+      alreadyAttempted.push({ trackPersistentId: id, existingResult: resultForStatus(attempted) });
       continue;
     }
 
@@ -252,17 +382,10 @@ async function resolveChunk(
   chunk: PendingTrack[],
   fetchedAt: string,
 ): Promise<AudioFeaturesRow[]> {
-  const rows: AudioFeaturesRow[] = chunk.map((track) => ({
-    trackPersistentId: track.persistentId,
-    bpm: null,
-    musicalKey: null,
-    danceability: null,
-    sources: null,
-    mbRecordingMbid: null,
-    deezerTrackId: null,
-    status: 'no_match', // tracks with no artist/title stay here without any network
-    fetchedAt,
-  }));
+  // Tracks with no artist/title stay at the blank row's no_match without any network.
+  const rows: AudioFeaturesRow[] = chunk.map((track) =>
+    blankFeatures(track.persistentId, fetchedAt),
+  );
   const provenance: Provenance[] = rows.map(() => ({}));
 
   await matchViaMusicBrainz(sources, chunk, rows);
@@ -355,6 +478,7 @@ function finalizeRows(rows: AudioFeaturesRow[], provenance: Provenance[]): void 
       : row.mbRecordingMbid != null || row.deezerTrackId != null
         ? 'no_data'
         : 'no_match';
+    row.catalogStatus = row.status;
     row.sources = hasData ? provenance[i]! : null;
   }
 }

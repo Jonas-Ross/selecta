@@ -12,6 +12,7 @@ import type {
   AudioFeaturesRow,
   CoOccurrenceFilters,
   CoOccurrenceResult,
+  FeatureSource,
   NoteRow,
   NoteSubject,
   PendingTrack,
@@ -29,6 +30,7 @@ import type {
   TrackRow,
 } from '../types/cache.js';
 import { openDatabase } from './db.js';
+import { mergeFeatures } from './audio_features.js';
 import { planSyncReconciliation } from './reconciliation.js';
 import { createQueries, type Queries } from './queries.js';
 import { recentSinceIso } from '../domain/recent_activity.js';
@@ -372,7 +374,13 @@ export class SelectaCache {
     const run = this.db.transaction(() => {
       for (const row of rows) {
         // A concurrent refresh may have removed a track while its lookup was in flight.
-        if (this.getTrack(row.trackPersistentId)) this.queries.upsertAudioFeatures(row);
+        if (!this.getTrack(row.trackPersistentId)) continue;
+
+        // Read and merge share the write's transaction, so the other pass
+        // cannot land a value between the two and lose it.
+        const existing = this.queries.getAudioFeatures(row.trackPersistentId);
+
+        this.queries.upsertAudioFeatures(mergeFeatures(existing, row));
       }
     });
 
@@ -384,13 +392,13 @@ export class SelectaCache {
     return this.queries.getAudioFeatures(trackPersistentId);
   }
 
-  /** The enrichment backlog, most-played first: tracks never attempted. */
-  getTracksPendingEnrichment(limit: number): PendingTrack[] {
-    return this.queries.getTracksPendingEnrichment(limit);
+  /** One source's backlog, most-played first: tracks that source has not attempted. */
+  getTracksPendingEnrichment(source: FeatureSource, limit: number): PendingTrack[] {
+    return this.queries.getTracksPendingEnrichment(source, limit);
   }
 
-  countPendingEnrichment(): number {
-    return this.queries.countPendingEnrichment();
+  countPendingEnrichment(source: FeatureSource): number {
+    return this.queries.countPendingEnrichment(source);
   }
 
   /**

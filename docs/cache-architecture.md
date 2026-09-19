@@ -28,6 +28,12 @@ conflicted receipt's ID rather than risk writing to that playlist. A later
 write-time rekey (`applyLiveRekey`, resolved authoritatively from Music.app,
 not by name/tracklist matching) supersedes the conflict and clears it.
 
+`saveAudioFeatures` owns the audio-feature merge: it reads the stored row,
+folds the incoming one in through the pure `mergeFeatures`, and writes, all
+inside one transaction, so a concurrent pass over the same track cannot land a
+value between the read and the write and lose it. The merge rule itself is in
+[audio features](audio-features.md).
+
 Read-only diagnostics bypass the writable facade and query factories. Their
 separate query-only connection must not initialize or migrate the cache. See
 [cache migrations](cache-migrations.md) for persisted-state and backup requirements.
