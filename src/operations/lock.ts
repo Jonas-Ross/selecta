@@ -4,18 +4,24 @@ import { BridgeError } from '../types/errors.js';
 
 const memoryLocks = new WeakMap<object, Set<string>>();
 
-const SIGNALS = ['SIGINT', 'SIGTERM'] as const;
+// Enrich locks this process holds right now. Nothing here listens for a
+// signal: a library that takes SIGINT breaks whatever embeds it, so dropping
+// these is the process owner's call (see operations/shutdown.ts).
+const heldReleases = new Set<() => void>();
 
-type Signal = (typeof SIGNALS)[number];
+/** Release every enrich lock held in this process. */
+export function releaseHeldEnrichLocks(): void {
+  for (const release of heldReleases) {
+    try {
+      release();
+    } catch {
+      // Nothing can be reported from a process on its way out, and a lock that
+      // outlives it is still recoverable by hand.
+    }
+  }
 
-const signalHandlers: Record<Signal, () => void> = {
-  SIGINT: () => onSignal('SIGINT'),
-  SIGTERM: () => onSignal('SIGTERM'),
-};
-
-// Enrich locks held right now, dropped together when the process ends.
-const pendingReleases = new Set<() => void>();
-let attached = false;
+  heldReleases.clear();
+}
 
 /** A settled action can survive this failure; the named lock still needs recovery. */
 export class OperationCleanupError extends Error {
@@ -92,77 +98,16 @@ export async function withOperation<T>(
   }
 
   // An hours-long enrich is normally ended by Ctrl-C, and it writes nowhere but
-  // this cache. A music lock survives a signal on purpose: a half-finished
-  // Music.app write is the thing it warns about.
-  const disarm = kind === 'enrich' && !cache.db.memory ? releaseOnShutdown(release) : null;
+  // this cache, so a process owner may drop it. A music lock never joins: a
+  // half-finished Music.app write is the thing it warns about.
+  const held = kind === 'enrich' && !cache.db.memory;
+
+  if (held) heldReleases.add(release);
 
   try {
     return await action();
   } finally {
-    disarm?.();
+    heldReleases.delete(release);
     release();
   }
-}
-
-/**
- * Register a lock to drop when the process is ending.
- *
- * One set of process listeners serves every run, so concurrent runs cannot
- * mistake each other's handlers for an embedding host's.
- */
-function releaseOnShutdown(release: () => void): () => void {
-  pendingReleases.add(release);
-  attach();
-
-  return () => {
-    pendingReleases.delete(release);
-
-    if (pendingReleases.size === 0) detach();
-  };
-}
-
-function releasePending(): void {
-  for (const release of pendingReleases) {
-    try {
-      release();
-    } catch {
-      // Nothing can be reported from a process on its way out, and a lock that
-      // outlives it is still recoverable by hand.
-    }
-  }
-
-  pendingReleases.clear();
-}
-
-function onSignal(signal: Signal): void {
-  // A host's own listener took this same delivery, so what happens next is its
-  // decision: the run may continue and keep needing its lock, and if the host
-  // ends the process instead, `exit` still drops it.
-  if (process.listeners(signal).some((listener) => listener !== signalHandlers[signal])) return;
-
-  detach();
-  releasePending();
-  // Nothing else was listening, so the default terminate this listener
-  // suppressed is what should have happened.
-  process.kill(process.pid, signal);
-}
-
-function attach(): void {
-  if (attached) return;
-
-  attached = true;
-
-  for (const signal of SIGNALS) process.on(signal, signalHandlers[signal]);
-
-  process.on('exit', releasePending);
-}
-
-function detach(): void {
-  if (!attached) return;
-
-  attached = false;
-
-  for (const signal of SIGNALS) process.off(signal, signalHandlers[signal]);
-
-  process.off('exit', releasePending);
 }
