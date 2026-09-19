@@ -47,6 +47,25 @@ analyzed one does; a key string with no mode (AcousticBrainz can supply a bare
 tonic) has no position and keeps whatever it had. Migration 4 backfills the
 column for keys already stored.
 
+## What the model actually reads
+
+`camelot` rides every projection `musical_key` rides: `search`,
+`get_track_context`, `inspect_tracklist`, the explorer page and the draft card,
+full and compact alike. In compact output it is a slot of its own, directly
+after `musical_key` in `track_fields` — positional readers index off that array,
+never off a remembered offset. The draft timeline's key lane leads with the
+position and keeps the key beside it ("11A F# minor"), because the position is
+what a DJ reads and the key is what everything else calls it.
+
+Confidence and maturity do not ride along. They are per feature, so honest bulk
+surfacing means four more values on every row of a hundred-track discovery
+result, qualifying a fact that does not change which tracks are candidates.
+`inspect_tracklist` carries them instead (`bpm_confidence`, `bpm_maturity`,
+`key_confidence`, `key_maturity`, omitted where nothing was recorded): that call
+is the deliberate look at a tracklist someone has already settled on, which is
+exactly where "this key is provisional" should change what gets built on it.
+Scanning is cheap there and expensive everywhere else.
+
 ## An uncertain estimate is not stored
 
 metrognome flags an estimate `uncertain` when a preview is a beatless intro or

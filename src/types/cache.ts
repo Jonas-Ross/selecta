@@ -29,7 +29,13 @@ export type TrackRow = {
   // Enriched audio features, carried on every track projection. Null until
   // enrichment (issue #19) has covered the track.
   musicalKey: string | null; // e.g. "F# minor"
+  camelot: string | null; // the same key on the DJ wheel, e.g. "11A"
   danceability: number | null; // 0..1
+  // How far to trust the two estimated features; projected by inspect_tracklist only.
+  bpmConfidence: number | null; // 0..1
+  bpmMaturity: FeatureMaturity | null;
+  keyConfidence: number | null; // 0..1
+  keyMaturity: FeatureMaturity | null;
   // The model's own note on this track (issue #32), verbatim. Null until the
   // model writes one via set_note. Projection-only — never a filter or sort.
   noteBody: string | null;

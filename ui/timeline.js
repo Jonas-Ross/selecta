@@ -22,6 +22,7 @@ export function timelineEntries(entries, tracks = []) {
       end: elapsed,
       bpm: track?.bpm ?? null,
       key: track?.musical_key ?? null,
+      camelot: track?.camelot ?? null,
     };
   });
 }
@@ -78,6 +79,14 @@ const LANES = [
   'timeline-duration',
 ];
 
+// Camelot leads: it is the position on the mixing wheel, the one a DJ reads.
+// The key stays beside it because that is what everything else calls it.
+function keyLabel(entry, unknown) {
+  if (entry.key === null) return unknown;
+
+  return entry.camelot === null ? entry.key : `${entry.camelot} ${entry.key}`;
+}
+
 export function renderTimeline(container, entries, { selected, disabled, onSelect }) {
   const document = container.ownerDocument;
   const glyph = (value) => (value === null ? '?' : clockLabel(value));
@@ -98,7 +107,7 @@ export function renderTimeline(container, entries, { selected, disabled, onSelec
     },
     update: (button, entry) => {
       const unknown = entry.seconds === null;
-      const label = `Entry ${entry.position}: ${entry.title}, ${entry.artist}. Duration ${unknown ? 'unknown' : clockLabel(entry.seconds)}. Starts ${clockLabel(entry.start)}; ends ${clockLabel(entry.end)}. Tempo ${entry.bpm === null ? 'unknown' : `${entry.bpm} BPM`}. Key ${entry.key ?? 'unknown'}.`;
+      const label = `Entry ${entry.position}: ${entry.title}, ${entry.artist}. Duration ${unknown ? 'unknown' : clockLabel(entry.seconds)}. Starts ${clockLabel(entry.start)}; ends ${clockLabel(entry.end)}. Tempo ${entry.bpm === null ? 'unknown' : `${entry.bpm} BPM`}. Key ${keyLabel(entry, 'unknown')}.`;
       const [start, block, artist, tempo, key, duration] = button.children;
 
       button.classList.toggle('duration-unknown', unknown);
@@ -114,7 +123,7 @@ export function renderTimeline(container, entries, { selected, disabled, onSelec
       artist.textContent = entry.artist;
       artist.style.borderTopColor = artistColor(entry.artist);
       tempo.textContent = entry.bpm === null ? '? BPM' : `${entry.bpm} BPM`;
-      key.textContent = entry.key ?? '? key';
+      key.textContent = keyLabel(entry, '? key');
       duration.textContent = glyph(entry.seconds);
     },
   });

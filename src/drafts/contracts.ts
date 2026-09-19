@@ -41,6 +41,7 @@ export const DraftInspection = z.looseObject({
         duration_seconds: z.number().nonnegative().optional(),
         bpm: z.number().optional(),
         musical_key: z.string().optional(),
+        camelot: z.string().optional(),
       }),
     )
     .max(500),

@@ -98,9 +98,16 @@ describe('inspect_tracklist', () => {
       duration_seconds: 210,
       bpm: 118.4,
       musical_key: 'F# minor',
+      camelot: '11A',
       danceability: 0.73,
+      bpm_confidence: 0.93,
+      bpm_maturity: 'validated',
+      key_confidence: 0.61,
+      key_maturity: 'provisional',
       signal: { play_count: 12, skip_count: 1, rating: 4, loved: true },
     });
+    // Only this view carries trust, and only where a source recorded it.
+    expect(JSON.parse(JSON.stringify(out.tracks[1]))).not.toHaveProperty('key_confidence');
     expect(JSON.parse(JSON.stringify(out.tracks[2]!.signal))).toEqual({
       play_count: 4,
       skip_count: 3,

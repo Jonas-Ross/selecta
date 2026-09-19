@@ -7,7 +7,13 @@ import { describe, expect, it } from 'vitest';
 import { camelotFor } from '../src/domain/camelot.js';
 import { MIGRATIONS } from '../src/cache/migrations.js';
 import { SelectaCache } from '../src/cache/index.js';
-import { featuresRow } from './helpers.js';
+import { featuresRow, makeBridge } from './helpers.js';
+import { handleSearch, type CompactSearchOutput, type SearchOutput } from '../src/tools/search.js';
+import { handleGetTrackContext, type TrackContextOutput } from '../src/tools/get_track_context.js';
+import {
+  handleInspectTracklist,
+  type InspectTracklistOutput,
+} from '../src/tools/inspect_tracklist.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 import libraryFixture from './fixtures/library.json' with { type: 'json' };
 import { readFileSync } from 'node:fs';
@@ -120,6 +126,42 @@ describe('the migration 4 backfill', () => {
       { id: 'T-SCALELESS', camelot: 'kept' },
     ]);
     db.close();
+  });
+});
+
+describe('Camelot on the wire', () => {
+  it('rides every projection the key rides, full and compact', async () => {
+    const cache = SelectaCache.open(':memory:');
+
+    cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+    cache.saveAudioFeatures([
+      featuresRow({ trackPersistentId: 'T-TEARDROP', musicalKey: 'F# minor', camelot: null }),
+    ]);
+
+    const deps = { cache: () => cache, bridge: makeBridge() };
+    const full = (await handleSearch({ query: 'Teardrop' }, deps)) as SearchOutput;
+    const compact = (await handleSearch(
+      { query: 'Teardrop', compact: true },
+      deps,
+    )) as CompactSearchOutput;
+    const context = (await handleGetTrackContext(
+      { track_id: 'T-TEARDROP' },
+      deps,
+    )) as TrackContextOutput;
+    const inspected = (await handleInspectTracklist(
+      { track_ids: ['T-TEARDROP'] },
+      deps,
+    )) as InspectTracklistOutput;
+
+    expect(full.tracks[0]).toMatchObject({ musical_key: 'F# minor', camelot: '11A' });
+    expect(context.seed).toMatchObject({ musical_key: 'F# minor', camelot: '11A' });
+    expect(inspected.tracks[0]).toMatchObject({ musical_key: 'F# minor', camelot: '11A' });
+    // Compact rows are positional: the slot has to be the one track_fields names.
+    const slot = compact.track_fields.indexOf('camelot');
+
+    expect(compact.track_fields[slot - 1]).toBe('musical_key');
+    expect(compact.tracks[0]!.track[slot]).toBe('11A');
+    cache.close();
   });
 });
 
