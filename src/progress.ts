@@ -1,0 +1,173 @@
+// Terminal progress for long CLI runs. An enrichment backlog is minutes to
+// hours of work, so silence reads as a hang. stdout stays the JSON channel:
+// this owns stderr, and only redraws in place when stderr is a terminal, so a
+// redirected run still produces a plain, greppable log.
+
+import type { Logger } from './log.js';
+
+export type ProgressSnapshot = {
+  done: number;
+  total: number;
+  enriched: number; // values that landed in storage
+  returned: number; // verdicts the source stood behind, landed or gap-filled away
+  skipped: number;
+  // The track the run most recently touched, or null before the first one.
+  current: string | null;
+};
+
+export type ProgressReporter = {
+  /** Counters moved, or the run started working on another track. */
+  update: (snapshot: ProgressSnapshot) => void;
+  /** A line worth keeping, printed above the live one. */
+  note: (line: string, level: 'info' | 'error') => void;
+  /** Take the live line down; the caller owns whatever is printed next. */
+  stop: () => void;
+};
+
+export type ProgressOptions = {
+  logger: Logger;
+  writeStderr: (text: string) => void;
+  isTty: boolean;
+  columns?: () => number;
+  now?: () => number;
+  // A terminal repaints on a timer so elapsed time keeps moving through a slow
+  // track; a redirected run logs at most one line per logEveryMs.
+  repaintMs?: number;
+  logEveryMs?: number;
+};
+
+const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const CLEAR_LINE = '\r\u001b[2K';
+
+export function formatDuration(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+
+  if (seconds < 60) return `${seconds}s`;
+
+  const minutes = Math.round(seconds / 60);
+
+  if (minutes < 60) return `${minutes}m`;
+
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+/** Tracks per second, or seconds per track once a track takes longer than one. */
+function formatRate(done: number, elapsedMs: number): string | null {
+  if (done === 0 || elapsedMs <= 0) return null;
+
+  const perSecond = done / (elapsedMs / 1000);
+
+  return perSecond >= 1 ? `${perSecond.toFixed(1)}/s` : `${(1 / perSecond).toFixed(1)}s each`;
+}
+
+function truncate(line: string, columns: number): string {
+  return line.length <= columns ? line : line.slice(0, Math.max(1, columns - 1)) + '…';
+}
+
+/** Everything but the spinner, so the live line and a logged line say the same thing. */
+function describe(snapshot: ProgressSnapshot, elapsedMs: number): string {
+  const { done, total, enriched, returned, skipped, current } = snapshot;
+  const parts = [`${done}/${total}`];
+
+  if (total > 0) parts.push(`${Math.floor((done / total) * 100)}%`);
+
+  parts.push(`${enriched} landed`);
+
+  // Only when gap-fill has actually discarded something, so the usual line stays short.
+  if (returned !== enriched) parts.push(`${returned} returned`);
+
+  if (skipped > 0) parts.push(`${skipped} skipped`);
+
+  const rate = formatRate(done, elapsedMs);
+
+  if (rate != null) parts.push(rate);
+
+  if (done > 0 && done < total) {
+    parts.push(`${formatDuration((total - done) * (elapsedMs / done))} left`);
+  }
+
+  if (current != null) parts.push(current);
+
+  return parts.join(' · ');
+}
+
+export function createProgressReporter(options: ProgressOptions): ProgressReporter {
+  const { logger, writeStderr, isTty } = options;
+  const columns = options.columns ?? (() => process.stderr.columns || 80);
+  const now = options.now ?? (() => Date.now());
+  const repaintMs = options.repaintMs ?? 1000;
+  const logEveryMs = options.logEveryMs ?? 15_000;
+  const startedAt = now();
+
+  let snapshot: ProgressSnapshot | null = null;
+  let frame = 0;
+  let painted = false;
+  let loggedAt: number | null = null;
+  let loggedDone = -1;
+  let timer: ReturnType<typeof setInterval> | null = null;
+
+  function paint(): void {
+    if (snapshot == null) return;
+
+    const spinner = SPINNER[frame % SPINNER.length];
+
+    writeStderr(
+      CLEAR_LINE + truncate(`${spinner} ${describe(snapshot, now() - startedAt)}`, columns()),
+    );
+    painted = true;
+  }
+
+  function clear(): void {
+    if (!painted) return;
+
+    writeStderr(CLEAR_LINE);
+    painted = false;
+  }
+
+  /** One durable line per `logEveryMs`, so a redirected run logs without flooding. */
+  function logThrottled(): void {
+    if (snapshot == null) return;
+
+    const at = now();
+    const finished = snapshot.total > 0 && snapshot.done >= snapshot.total;
+    const due =
+      loggedAt == null || at - loggedAt >= logEveryMs || (finished && snapshot.done !== loggedDone);
+
+    if (!due) return;
+
+    loggedAt = at;
+    loggedDone = snapshot.done;
+    logger.info(describe(snapshot, at - startedAt));
+  }
+
+  if (isTty) {
+    timer = setInterval(() => {
+      frame += 1;
+      paint();
+    }, repaintMs);
+    timer.unref?.();
+  }
+
+  return {
+    update(next) {
+      snapshot = next;
+
+      if (isTty) paint();
+      else logThrottled();
+    },
+
+    note(text, level) {
+      clear();
+      logger[level](text);
+
+      if (isTty) paint();
+    },
+
+    stop() {
+      if (timer != null) clearInterval(timer);
+
+      timer = null;
+      clear();
+    },
+  };
+}
