@@ -318,6 +318,81 @@ describe('inspect_tracklist', () => {
     expect(out.harmonic.provisional_key_positions).toEqual([3]);
   });
 
+  it('treats a stored camelot it cannot parse as no position at all', async () => {
+    // A key metrognome could not parse keeps whatever camelot its source gave
+    // (`withCamelot`), and migration 4 preserves it — so a non-null value that
+    // is not a wheel position reaches this code.
+    const tracks: RawTrack[] = ['T-JUNK', 'T-REAL'].map((persistentId) => ({
+      persistentId,
+      title: persistentId,
+      artist: 'Wheel',
+      durationSeconds: 200,
+      playCount: 0,
+      skipCount: 0,
+    }));
+    const cache = SelectaCache.open(':memory:');
+
+    cache.refreshFromSnapshot(
+      { capturedAt: '2026-09-01T12:00:00.000Z', tracks, playlists: [] },
+      { durationMs: 1 },
+    );
+    cache.saveAudioFeatures([
+      {
+        trackPersistentId: 'T-JUNK',
+        bpm: null,
+        bpmConfidence: null,
+        bpmMaturity: null,
+        musicalKey: null,
+        camelot: 'kept',
+        keyConfidence: null,
+        keyMaturity: 'provisional',
+        danceability: null,
+        sources: null,
+        mbRecordingMbid: null,
+        deezerTrackId: null,
+        status: 'ok',
+        catalogStatus: 'ok',
+        analysisStatus: null,
+        fetchedAt: '2026-09-01T00:00:00.000Z',
+      },
+      {
+        trackPersistentId: 'T-REAL',
+        bpm: null,
+        bpmConfidence: null,
+        bpmMaturity: null,
+        musicalKey: 'A minor',
+        camelot: null,
+        keyConfidence: 0.9,
+        keyMaturity: 'validated',
+        danceability: null,
+        sources: null,
+        mbRecordingMbid: null,
+        deezerTrackId: null,
+        status: 'ok',
+        catalogStatus: 'ok',
+        analysisStatus: null,
+        fetchedAt: '2026-09-01T00:00:00.000Z',
+      },
+    ]);
+
+    const out = (await handleInspectTracklist(
+      { track_ids: ['T-JUNK', 'T-REAL'] },
+      {
+        cache: () => cache,
+        bridge: makeBridge(),
+      },
+    )) as InspectTracklistOutput;
+
+    expect(out.tracks[0]!.camelot).toBe('kept');
+    expect(out.harmonic.transitions).toEqual([
+      { from_position: 0, relation: 'unknown', provisional: true },
+    ]);
+    // Unparseable is off the wheel, so it counts as unknown and never as a
+    // provisional position the relation calculation would refuse to read.
+    expect(out.harmonic.unknown_key_positions).toEqual([0]);
+    expect(out.harmonic.provisional_key_positions).toEqual([]);
+  });
+
   it('reports no transitions for a single track', async () => {
     const { deps } = makeHarmonicDraft();
     const out = (await handleInspectTracklist(

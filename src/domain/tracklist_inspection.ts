@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { occurrencePositions } from './occurrence_positions.js';
 import { songIdentityKey } from '../cache/song_identity.js';
-import { harmonicRelation, type HarmonicRelation } from './harmonic.js';
+import { harmonicRelation, parseCamelot, type HarmonicRelation } from './harmonic.js';
 import type { TrackRow } from '../types/cache.js';
 import { toInspectedTrack, type InspectedTrack } from './track_projections.js';
 
@@ -192,17 +192,20 @@ function harmonicFacts(rows: TrackRow[]): HarmonicFacts {
     transitions.push({ from_position: index, relation, ...(provisional && { provisional: true }) });
   }
 
+  // Both lists turn on the same parse the relation does, so a stored value
+  // that is not a wheel position can't count as one here and unknown there.
   const positionsWhere = (predicate: (row: TrackRow) => boolean): number[] =>
     rows.flatMap((row, index) => (predicate(row) ? [index] : []));
+  const onWheel = (row: TrackRow): boolean => parseCamelot(row.camelot) != null;
 
   return {
     transitions,
     by_relation: byRelation,
-    // A key with no mode has no wheel position, so this is not the same list
-    // as the musical_key gap.
-    unknown_key_positions: positionsWhere((row) => row.camelot == null),
+    // Not the same list as the musical_key gap: a key with no mode has no
+    // wheel position.
+    unknown_key_positions: positionsWhere((row) => !onWheel(row)),
     provisional_key_positions: positionsWhere(
-      (row) => row.camelot != null && row.keyMaturity === 'provisional',
+      (row) => onWheel(row) && row.keyMaturity === 'provisional',
     ),
   };
 }
