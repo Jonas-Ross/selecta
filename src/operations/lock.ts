@@ -99,11 +99,16 @@ function releaseOnSignal(release: () => void): () => void {
     const handler = (): void => {
       disarm();
 
-      try {
-        release();
-      } catch {
-        // Nothing can be reported from here and the process is already going;
-        // a lock that outlives it is still recoverable by hand.
+      // A listener left by an embedding host takes the re-raised signal instead
+      // of the default terminate, so the run may outlive it and still needs its
+      // lock. Only an otherwise unhandled signal is guaranteed to end here.
+      if (process.listenerCount(signal) === 0) {
+        try {
+          release();
+        } catch {
+          // Nothing can be reported from here and the process is already going;
+          // a lock that outlives it is still recoverable by hand.
+        }
       }
 
       process.kill(process.pid, signal);

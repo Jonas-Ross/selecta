@@ -121,6 +121,47 @@ describe('operation lifecycle', () => {
     }
   });
 
+  it('keeps the enrich lock when a host listener swallows the signal', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'selecta-lock-'));
+    const dbPath = join(directory, 'library.db');
+
+    SelectaCache.open(dbPath).close();
+
+    const script = `import { SelectaCache } from './dist/cache/index.js';
+      import { withOperation } from './dist/operations/lock.js';
+      const c = SelectaCache.open(${JSON.stringify(dbPath)});
+      // An embedding host that handles the signal itself: the process survives,
+      // so the run it interrupts keeps needing its lock. Reporting a tick later
+      // puts the report after every listener of this signal has run.
+      process.on('SIGINT', () => setImmediate(() => console.log('host')));
+      await withOperation(c, 'enrich', async () => {
+        console.log('held');
+        await new Promise((r) => setTimeout(r, 60_000));
+      });`;
+    const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+
+    try {
+      let seen = '';
+
+      // One pass over stdout: breaking out of it destroys the stream, so the
+      // signal goes out mid-loop rather than between two of them.
+      for await (const chunk of child.stdout) {
+        seen += String(chunk);
+
+        if (seen.includes('held') && !seen.includes('host')) child.kill('SIGINT');
+
+        if (seen.includes('host')) break;
+      }
+
+      expect(existsSync(`${realpathSync(dbPath)}.enrich.lock`)).toBe(true);
+    } finally {
+      child.kill('SIGKILL');
+      rmSync(directory, { recursive: true });
+    }
+  });
+
   it('does not resurrect enrichment rows for tracks removed during lookup', () => {
     const cache = SelectaCache.open(':memory:');
 
