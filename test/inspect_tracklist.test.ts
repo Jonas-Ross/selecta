@@ -78,6 +78,60 @@ function makeLargeDraft(): { deps: ToolDeps; trackIds: string[] } {
   };
 }
 
+// A deliberate walk round the wheel, so every relation the tool can report
+// appears once in a known order.
+function makeHarmonicDraft(): { deps: ToolDeps; trackIds: string[] } {
+  const keys: (string | null)[] = [
+    'A minor', // 8A
+    'E minor', // 9A  — one step up
+    'G major', // 9B  — relative major
+    'A major', // 11B — two steps up
+    'F', // no mode, so no wheel position
+    'F minor', // 4A
+    'F minor', // 4A  — same key
+    'C major', // 8B  — four steps away, other mode
+  ];
+  const tracks: RawTrack[] = keys.map((_, index) => ({
+    persistentId: `T-HARM-${index + 1}`,
+    title: `Harmonic ${index + 1}`,
+    artist: 'Wheel',
+    durationSeconds: 200,
+    playCount: 0,
+    skipCount: 0,
+  }));
+  const features: AudioFeaturesRow[] = keys.map((musicalKey, index) => ({
+    trackPersistentId: `T-HARM-${index + 1}`,
+    bpm: null,
+    bpmConfidence: null,
+    bpmMaturity: null,
+    musicalKey,
+    camelot: null,
+    keyConfidence: musicalKey == null ? null : 0.7,
+    // Only the fourth track's key is a provisional estimate.
+    keyMaturity: musicalKey == null ? null : index === 3 ? 'provisional' : 'validated',
+    danceability: null,
+    sources: { musicalKey: 'acousticbrainz' },
+    mbRecordingMbid: null,
+    deezerTrackId: null,
+    status: 'ok',
+    catalogStatus: 'ok',
+    analysisStatus: null,
+    fetchedAt: '2026-09-01T00:00:00.000Z',
+  }));
+  const cache = SelectaCache.open(':memory:');
+
+  cache.refreshFromSnapshot(
+    { capturedAt: '2026-09-01T12:00:00.000Z', tracks, playlists: [] },
+    { durationMs: 1 },
+  );
+  cache.saveAudioFeatures(features);
+
+  return {
+    deps: { cache: () => cache, bridge: makeBridge() },
+    trackIds: tracks.map((track) => track.persistentId),
+  };
+}
+
 async function inspect(deps = makeDeps()): Promise<InspectTracklistOutput> {
   return (await handleInspectTracklist(
     { track_ids: inspectFixture.draftTrackIds },
@@ -211,6 +265,68 @@ describe('inspect_tracklist', () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+
+  it('names every relation between adjacent wheel positions, in draft order', async () => {
+    const { deps, trackIds } = makeHarmonicDraft();
+    const out = (await handleInspectTracklist(
+      { track_ids: trackIds },
+      deps,
+    )) as InspectTracklistOutput;
+
+    expect(out.tracks.map((track) => track.camelot ?? null)).toEqual([
+      '8A',
+      '9A',
+      '9B',
+      '11B',
+      null,
+      '4A',
+      '4A',
+      '8B',
+    ]);
+    expect(out.harmonic.transitions).toEqual([
+      { from_position: 0, relation: 'adjacent' },
+      { from_position: 1, relation: 'relative' },
+      { from_position: 2, relation: 'energy_boost', provisional: true },
+      { from_position: 3, relation: 'unknown', provisional: true },
+      { from_position: 4, relation: 'unknown' },
+      { from_position: 5, relation: 'same' },
+      { from_position: 6, relation: 'distant' },
+    ]);
+    expect(out.harmonic.by_relation).toEqual({
+      same: 1,
+      adjacent: 1,
+      relative: 1,
+      energy_boost: 1,
+      distant: 1,
+      unknown: 2,
+    });
+  });
+
+  it('separates a key with no wheel position from a missing key, and never guesses either', async () => {
+    const { deps, trackIds } = makeHarmonicDraft();
+    const out = (await handleInspectTracklist(
+      { track_ids: trackIds },
+      deps,
+    )) as InspectTracklistOutput;
+
+    // The fifth track has a key ("F") but no mode, so it counts as covered
+    // while still having no position on the wheel.
+    expect(out.feature_coverage.musical_key).toEqual({ present_count: 8, missing_count: 0 });
+    expect(out.feature_gaps.some((gap) => gap.missing.includes('musical_key'))).toBe(false);
+    expect(out.harmonic.unknown_key_positions).toEqual([4]);
+    expect(out.harmonic.provisional_key_positions).toEqual([3]);
+  });
+
+  it('reports no transitions for a single track', async () => {
+    const { deps } = makeHarmonicDraft();
+    const out = (await handleInspectTracklist(
+      { track_ids: ['T-HARM-1'] },
+      deps,
+    )) as InspectTracklistOutput;
+
+    expect(out.harmonic.transitions).toEqual([]);
+    expect(out.harmonic.by_relation.unknown).toBe(0);
   });
 
   it('stays below 150 KB for 500 distinct, realistically populated tracks', async () => {

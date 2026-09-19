@@ -47,6 +47,38 @@ analyzed one does; a key string with no mode (AcousticBrainz can supply a bare
 tonic) has no position and keeps whatever it had. Migration 4 backfills the
 column for keys already stored.
 
+## Harmonic relations are geometry, not a score
+
+`inspect_tracklist` reports a `harmonic` block: one entry per adjacent pair in
+the draft, naming how the two wheel positions relate (`src/domain/harmonic.ts`).
+
+- `same` — identical position.
+- `adjacent` — one step either way, which is a fifth apart.
+- `relative` — the A/B pair on one number, relative minor and major.
+- `energy_boost` — two steps up. Directional: two steps *down* is `distant`.
+- `distant` — anything else.
+- `unknown` — at least one side has no position.
+
+The Camelot convention treats the first four as clean mixes and `distant` as a
+clash. Selecta does not say so in the payload, and emits no score, ranking or
+verdict over the draft: reading a relation as good or bad is sequencing, which
+is the model's job under the no-taste rule. What Selecta owes is the geometry
+and the caveats on it — hence `provisional: true` on a transition resting on a
+provisional key estimate, and `provisional_key_positions` beside it.
+
+Transitions are keyed by `from_position`, the 0-based index into `tracks`, the
+same identity `duplicate_ids.positions` uses: a repeated track is a different
+transition each time it appears, and IDs could not say which. They carry no
+Camelot strings and no prose label, because both are already derivable from
+`tracks` and repeating them costs a third of the payload on a 500-track draft.
+The plain-language reading of each relation lives in the tool description,
+which is the model's interface to this.
+
+`unknown_key_positions` is not the same set as the `musical_key` feature gap.
+AcousticBrainz can supply a bare tonic ("F"), which is a key Selecta has but
+not a position on the wheel — covered by one measure, absent from the other. A
+key Selecta does not have is never inferred from its neighbours.
+
 ## What the model actually reads
 
 `camelot` rides every projection `musical_key` rides: `search`,
