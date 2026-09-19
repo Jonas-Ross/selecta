@@ -6,6 +6,17 @@ const memoryLocks = new WeakMap<object, Set<string>>();
 
 const SIGNALS = ['SIGINT', 'SIGTERM'] as const;
 
+type Signal = (typeof SIGNALS)[number];
+
+const signalHandlers: Record<Signal, () => void> = {
+  SIGINT: () => onSignal('SIGINT'),
+  SIGTERM: () => onSignal('SIGTERM'),
+};
+
+// Enrich locks held right now, dropped together when the process ends.
+const pendingReleases = new Set<() => void>();
+let attached = false;
+
 /** A settled action can survive this failure; the named lock still needs recovery. */
 export class OperationCleanupError extends Error {
   constructor(
@@ -83,45 +94,75 @@ export async function withOperation<T>(
   // An hours-long enrich is normally ended by Ctrl-C, and it writes nowhere but
   // this cache. A music lock survives a signal on purpose: a half-finished
   // Music.app write is the thing it warns about.
-  const armed = kind === 'enrich' && !cache.db.memory ? releaseOnSignal(release) : null;
+  const disarm = kind === 'enrich' && !cache.db.memory ? releaseOnShutdown(release) : null;
 
   try {
     return await action();
   } finally {
-    armed?.();
+    disarm?.();
     release();
   }
 }
 
-/** Drop the lock if a signal ends the process, then let the signal land. */
-function releaseOnSignal(release: () => void): () => void {
-  const handlers = SIGNALS.map((signal) => {
-    const handler = (): void => {
-      disarm();
+/**
+ * Register a lock to drop when the process is ending.
+ *
+ * One set of process listeners serves every run, so concurrent runs cannot
+ * mistake each other's handlers for an embedding host's.
+ */
+function releaseOnShutdown(release: () => void): () => void {
+  pendingReleases.add(release);
+  attach();
 
-      // A listener left by an embedding host takes the re-raised signal instead
-      // of the default terminate, so the run may outlive it and still needs its
-      // lock. Only an otherwise unhandled signal is guaranteed to end here.
-      if (process.listenerCount(signal) === 0) {
-        try {
-          release();
-        } catch {
-          // Nothing can be reported from here and the process is already going;
-          // a lock that outlives it is still recoverable by hand.
-        }
-      }
+  return () => {
+    pendingReleases.delete(release);
 
-      process.kill(process.pid, signal);
-    };
+    if (pendingReleases.size === 0) detach();
+  };
+}
 
-    process.once(signal, handler);
-
-    return () => process.off(signal, handler);
-  });
-
-  function disarm(): void {
-    for (const off of handlers) off();
+function releasePending(): void {
+  for (const release of pendingReleases) {
+    try {
+      release();
+    } catch {
+      // Nothing can be reported from a process on its way out, and a lock that
+      // outlives it is still recoverable by hand.
+    }
   }
 
-  return disarm;
+  pendingReleases.clear();
+}
+
+function onSignal(signal: Signal): void {
+  // A host's own listener took this same delivery, so what happens next is its
+  // decision: the run may continue and keep needing its lock, and if the host
+  // ends the process instead, `exit` still drops it.
+  if (process.listeners(signal).some((listener) => listener !== signalHandlers[signal])) return;
+
+  detach();
+  releasePending();
+  // Nothing else was listening, so the default terminate this listener
+  // suppressed is what should have happened.
+  process.kill(process.pid, signal);
+}
+
+function attach(): void {
+  if (attached) return;
+
+  attached = true;
+
+  for (const signal of SIGNALS) process.on(signal, signalHandlers[signal]);
+
+  process.on('exit', releasePending);
+}
+
+function detach(): void {
+  if (!attached) return;
+
+  attached = false;
+
+  for (const signal of SIGNALS) process.off(signal, signalHandlers[signal]);
+
+  process.off('exit', releasePending);
 }

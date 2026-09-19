@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
 import { withOperation } from '../src/operations/lock.js';
 import { refreshLibrary } from '../src/operations/refresh.js';
@@ -77,89 +77,131 @@ describe('operation lifecycle', () => {
     }
   });
 
-  it('releases an interrupted enrich lock but leaves an interrupted music lock', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'selecta-lock-'));
-    const dbPath = join(directory, 'library.db');
+  describe('interrupted operations', () => {
+    const hold = (
+      body: string,
+      setup = '',
+    ) => `import { SelectaCache } from './dist/cache/index.js';
+      import { withOperation } from './dist/operations/lock.js';
+      ${setup}
+      ${body}`;
 
-    SelectaCache.open(dbPath).close();
+    /** Spawn a lock holder and expose its stdout as markers to wait for. */
+    function holder(script: string) {
+      const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
+        stdio: ['ignore', 'pipe', 'inherit'],
+      });
+      const waiting: (() => void)[] = [];
+      let seen = '';
 
-    try {
-      for (const [kind, survives] of [
-        ['enrich', false],
-        ['music', true],
-      ] as const) {
-        const script = `import { SelectaCache } from './dist/cache/index.js';
-          import { withOperation } from './dist/operations/lock.js';
-          const c = SelectaCache.open(${JSON.stringify(dbPath)});
-          await withOperation(c, ${JSON.stringify(kind)}, async () => {
-            console.log('held');
-            // A signal listener does not hold the event loop open; a real run's
-            // pending I/O does, so stand in for it with a timer.
-            await new Promise((r) => setTimeout(r, 60_000));
-          });`;
-        const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
-          stdio: ['ignore', 'pipe', 'inherit'],
+      child.stdout.on('data', (chunk) => {
+        seen += String(chunk);
+
+        for (const notify of waiting.splice(0)) notify();
+      });
+
+      const printed = (marker: string): Promise<void> =>
+        new Promise((resolve) => {
+          const check = (): void => {
+            if (seen.includes(marker)) resolve();
+            else waiting.push(check);
+          };
+
+          check();
         });
 
-        // Watched before the wait, so a child that dies early cannot hang this.
-        const closed = once(child, 'close') as Promise<[number | null, string | null]>;
+      return {
+        child,
+        printed,
+        closed: once(child, 'close') as Promise<[number | null, string | null]>,
+      };
+    }
 
-        for await (const chunk of child.stdout) {
-          if (String(chunk).includes('held')) break;
-        }
+    let directory: string;
+    let dbPath: string;
 
+    beforeEach(() => {
+      directory = mkdtempSync(join(tmpdir(), 'selecta-lock-'));
+      dbPath = join(directory, 'library.db');
+      SelectaCache.open(dbPath).close();
+    });
+
+    afterEach(() => rmSync(directory, { recursive: true }));
+
+    const lockPath = (path: string, kind: string): string => `${realpathSync(path)}.${kind}.lock`;
+
+    const runForever = (
+      path: string,
+      kind: string,
+      inner = "console.log('held'); await forever;",
+    ) =>
+      `const forever = new Promise((r) => setTimeout(r, 60_000));
+       await withOperation(SelectaCache.open(${JSON.stringify(path)}), ${JSON.stringify(kind)}, async () => { ${inner} });`;
+
+    it.each([
+      ['enrich', false],
+      ['music', true],
+    ] as const)(
+      'interrupting a %s operation leaves its lock in place: %s',
+      async (kind, survives) => {
+        const { child, printed, closed } = holder(hold(runForever(dbPath, kind)));
+
+        await printed('held');
         child.kill('SIGINT');
 
         const [, signal] = await closed;
 
         // The signal must still end the process the way it would have.
         expect(signal).toBe('SIGINT');
-        expect(existsSync(`${realpathSync(dbPath)}.${kind}.lock`)).toBe(survives);
-      }
-    } finally {
-      rmSync(directory, { recursive: true });
-    }
-  });
+        expect(existsSync(lockPath(dbPath, kind))).toBe(survives);
+      },
+    );
 
-  it('keeps the enrich lock when a host listener swallows the signal', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'selecta-lock-'));
-    const dbPath = join(directory, 'library.db');
+    it('keeps the lock when a host listener leaves the process running', async () => {
+      // Reporting a tick later puts the report after every listener has run.
+      const setup = "process.on('SIGINT', () => setImmediate(() => console.log('host')));";
+      const { child, printed } = holder(hold(runForever(dbPath, 'enrich'), setup));
 
-    SelectaCache.open(dbPath).close();
+      await printed('held');
+      child.kill('SIGINT');
+      await printed('host');
 
-    const script = `import { SelectaCache } from './dist/cache/index.js';
-      import { withOperation } from './dist/operations/lock.js';
-      const c = SelectaCache.open(${JSON.stringify(dbPath)});
-      // An embedding host that handles the signal itself: the process survives,
-      // so the run it interrupts keeps needing its lock. Reporting a tick later
-      // puts the report after every listener of this signal has run.
-      process.on('SIGINT', () => setImmediate(() => console.log('host')));
-      await withOperation(c, 'enrich', async () => {
-        console.log('held');
-        await new Promise((r) => setTimeout(r, 60_000));
-      });`;
-    const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
-      stdio: ['ignore', 'pipe', 'inherit'],
+      expect(existsSync(lockPath(dbPath, 'enrich'))).toBe(true);
+
+      child.kill('SIGKILL');
     });
 
-    try {
-      let seen = '';
+    it('releases the lock when a host listener exits before this one runs', async () => {
+      const setup = "process.on('SIGINT', () => process.exit(0));";
+      const { child, printed, closed } = holder(hold(runForever(dbPath, 'enrich'), setup));
 
-      // One pass over stdout: breaking out of it destroys the stream, so the
-      // signal goes out mid-loop rather than between two of them.
-      for await (const chunk of child.stdout) {
-        seen += String(chunk);
+      await printed('held');
+      child.kill('SIGINT');
 
-        if (seen.includes('held') && !seen.includes('host')) child.kill('SIGINT');
+      const [code] = await closed;
 
-        if (seen.includes('host')) break;
-      }
+      expect(code).toBe(0);
+      expect(existsSync(lockPath(dbPath, 'enrich'))).toBe(false);
+    });
 
-      expect(existsSync(`${realpathSync(dbPath)}.enrich.lock`)).toBe(true);
-    } finally {
-      child.kill('SIGKILL');
-      rmSync(directory, { recursive: true });
-    }
+    it('releases every enrich lock a process holds, not just the last', async () => {
+      const second = join(directory, 'other.db');
+
+      SelectaCache.open(second).close();
+
+      const inner = `await withOperation(SelectaCache.open(${JSON.stringify(second)}), 'enrich', async () => {
+        console.log('held');
+        await forever;
+      });`;
+      const { child, printed, closed } = holder(hold(runForever(dbPath, 'enrich', inner)));
+
+      await printed('held');
+      child.kill('SIGINT');
+      await closed;
+
+      expect(existsSync(lockPath(dbPath, 'enrich'))).toBe(false);
+      expect(existsSync(lockPath(second, 'enrich'))).toBe(false);
+    });
   });
 
   it('does not resurrect enrichment rows for tracks removed during lookup', () => {
