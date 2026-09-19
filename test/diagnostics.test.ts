@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createCliProgram } from '../src/cli.js';
 import { SelectaCache } from '../src/cache/index.js';
+import { LATEST_SCHEMA_VERSION } from '../src/cache/migrations.js';
 import { runDoctor } from '../src/diagnostics/doctor.js';
 import {
   formatReconciliationSummary,
@@ -41,7 +42,17 @@ describe('readStatus', () => {
 
     expect(report).toMatchObject({
       ok: true,
-      database: { path: dbPath, exists: true, integrity: 'ok', errors: [] },
+      database: {
+        path: dbPath,
+        exists: true,
+        integrity: 'ok',
+        schema: {
+          version: LATEST_SCHEMA_VERSION,
+          expected: LATEST_SCHEMA_VERSION,
+          pending: 0,
+        },
+        errors: [],
+      },
       cache: {
         age_hours: 1,
         track_count: snapshot.tracks.length,
@@ -151,6 +162,35 @@ describe('diagnostic CLI commands', () => {
     expect(musicCheck).not.toHaveBeenCalled();
     expect(logger.info).not.toHaveBeenCalled();
     expect(logger.error).not.toHaveBeenCalled();
+    expect(exitCode).toBeUndefined();
+  });
+
+  it('names the pending migrations behind a stale count, without failing the run', async () => {
+    const { dbPath } = seededDatabase();
+    const cache = SelectaCache.open(dbPath);
+
+    // What a build one version back leaves on disk; diagnostics never migrate.
+    cache.db.pragma(`user_version = ${LATEST_SCHEMA_VERSION - 1}`);
+    cache.close();
+    const writes: string[] = [];
+    const logger = { info: vi.fn(), debug: vi.fn(), error: vi.fn() };
+    let exitCode: number | undefined;
+
+    await createCliProgram({
+      dbPath,
+      logger,
+      musicCheck: vi.fn(),
+      setExitCode: (code) => (exitCode = code),
+      writeStdout: (text) => writes.push(text),
+    }).parseAsync(['node', 'selecta', 'status']);
+
+    expect(JSON.parse(writes[0]!).database.schema).toEqual({
+      version: LATEST_SCHEMA_VERSION - 1,
+      expected: LATEST_SCHEMA_VERSION,
+      pending: 1,
+    });
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('1 pending migration'));
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('refresh'));
     expect(exitCode).toBeUndefined();
   });
 

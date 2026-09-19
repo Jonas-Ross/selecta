@@ -4,6 +4,7 @@
 
 import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
+import { LATEST_SCHEMA_VERSION } from '../cache/migrations.js';
 import type { FeatureSource } from '../types/cache.js';
 
 type LastRefresh = {
@@ -26,6 +27,9 @@ export type StatusReport = {
     path: string;
     exists: boolean;
     integrity: 'ok' | 'failed' | 'unavailable';
+    // Null until the database opens. A nonzero `pending` means everything
+    // below was measured against a shape this build has not upgraded yet.
+    schema: SchemaVersions | null;
     errors: string[];
   };
   cache: null | {
@@ -52,6 +56,8 @@ export type StatusReport = {
 };
 
 type Coverage = { track_count: number; percent: number };
+
+export type SchemaVersions = { version: number; expected: number; pending: number };
 
 type SourceCounts = {
   attempted: number;
@@ -192,6 +198,7 @@ export function readStatus(dbPath: string, now = new Date()): StatusReport {
     path: dbPath,
     exists: existsSync(dbPath),
     integrity: 'unavailable' as StatusReport['database']['integrity'],
+    schema: null as SchemaVersions | null,
     errors: [] as string[],
   };
   const unavailable = (): StatusReport => ({
@@ -218,6 +225,14 @@ export function readStatus(dbPath: string, now = new Date()): StatusReport {
     database.integrity = database.errors.length === 0 ? 'ok' : 'failed';
 
     if (database.integrity === 'failed') return unavailable();
+
+    const installed = db.pragma('user_version', { simple: true }) as number;
+
+    database.schema = {
+      version: installed,
+      expected: LATEST_SCHEMA_VERSION,
+      pending: Math.max(LATEST_SCHEMA_VERSION - installed, 0),
+    };
 
     const perSource = hasColumn(db, 'audio_features', 'catalog_status');
     const counts = db
