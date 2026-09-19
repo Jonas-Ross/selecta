@@ -94,6 +94,10 @@ export const MIGRATIONS: readonly Migration[] = [
   },
 ];
 
+// What a current database reads as; diagnostics report the gap rather than
+// closing it, since they never migrate.
+export const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
+
 export function migrateDatabase(
   db: Database.Database,
   migrations: readonly Migration[] = MIGRATIONS,

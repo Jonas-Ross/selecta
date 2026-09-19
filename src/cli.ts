@@ -8,7 +8,7 @@ import { refreshLibrary } from './operations/refresh.js';
 import { bridge as defaultBridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
 import { runDoctor } from './diagnostics/doctor.js';
-import { readStatus } from './diagnostics/status.js';
+import { readStatus, type SchemaVersions } from './diagnostics/status.js';
 import { DraftStore, draftDbPath } from './drafts/store.js';
 import { METROGNOME_PATH_ENV, enrichPendingTracks } from './enrich/index.js';
 import type { FeatureSource } from './types/cache.js';
@@ -61,6 +61,20 @@ export function createCliProgram(options: CliOptions = {}): Command {
     }
   }
 
+  // Diagnostics never migrate, so a stale count would otherwise read as the
+  // current one.
+  function reportPendingMigrations(schema: SchemaVersions | null): void {
+    if (schema == null || schema.pending === 0) return;
+
+    logger.error(
+      `cache schema is version ${schema.version}, this build writes ${schema.expected}: ` +
+        `${schema.pending} pending migration(s), so the counts above predate them.`,
+    );
+    logger.error(
+      'hint: run `node dist/index.js refresh` to open the cache for write and apply them',
+    );
+  }
+
   const program = new Command();
 
   program
@@ -89,6 +103,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
       const result = readStatus(dbPath);
 
       writeJson(result);
+      reportPendingMigrations(result.database.schema);
 
       if (!result.ok) {
         logger.error(`[cache_unavailable] ${result.database.errors.join('; ')}`);
@@ -103,6 +118,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
       const result = await runDoctor(dbPath, options.musicCheck);
 
       writeJson(result);
+      reportPendingMigrations(result.database.schema);
 
       if (!result.ok) {
         if (result.database.errors.length) {
