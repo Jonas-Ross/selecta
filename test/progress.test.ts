@@ -147,6 +147,20 @@ describe('progress on a terminal', () => {
     expect(rendered).not.toContain('\ufffd');
   });
 
+  it('neutralizes control characters in a title so it cannot break the line', () => {
+    const h = harness(true);
+
+    h.reporter.update(snapshot(10, 'Bad\nTitle\u001b[2J — \tArtist'));
+
+    // One row, and no escape the terminal would act on.
+    const rendered = h.stderr.at(-1)!.slice(CLEAR.length);
+
+    expect(rendered).not.toContain('\n');
+    expect(rendered).not.toContain('\u001b');
+    expect(rendered).not.toContain('\t');
+    expect(h.live()).toContain('Bad Title [2J —  Artist');
+  });
+
   it('takes the line down on stop, leaving the terminal clean for the JSON', () => {
     const h = harness(true);
 

@@ -39,6 +39,18 @@ export type ProgressOptions = {
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const CLEAR_LINE = '\r\u001b[2K';
 
+const isControl = (code: number): boolean => code < 0x20 || (code >= 0x7f && code <= 0x9f);
+
+// Track titles are Music.app's text, not ours: a stray newline would add rows
+// and an escape sequence could move the cursor or clear the line.
+function safe(text: string): string {
+  let out = '';
+
+  for (const char of text) out += isControl(char.codePointAt(0)!) ? ' ' : char;
+
+  return out;
+}
+
 export function formatDuration(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
 
@@ -112,7 +124,7 @@ function describe(snapshot: ProgressSnapshot, elapsedMs: number): string {
     parts.push(`${formatDuration((total - done) * (elapsedMs / done))} left`);
   }
 
-  if (current != null) parts.push(current);
+  if (current != null) parts.push(safe(current));
 
   return parts.join(' · ');
 }
@@ -184,7 +196,7 @@ export function createProgressReporter(options: ProgressOptions): ProgressReport
 
     note(text, level) {
       clear();
-      logger[level](text);
+      logger[level](safe(text));
 
       if (isTty) paint();
     },

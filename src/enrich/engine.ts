@@ -87,6 +87,10 @@ export async function enrichPendingTracks(
     const now = deps.now ?? (() => new Date());
     const tally = createTally(selection.alreadyAttempted, deps);
 
+    // Before the first request, so a caller showing progress has a line up
+    // during the startup stall rather than after it.
+    tally.report();
+
     if (source === 'catalog') await runCatalogPass(cache, selection.pending, tally, deps, now);
     else await runAnalysisPass(cache, selection.pending, tally, deps, now);
 

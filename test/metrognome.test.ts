@@ -500,6 +500,9 @@ describe('the analysis enrichment pass', () => {
     // Results stream one at a time but save 25 at a time, so the name is the
     // only thing that moves until the flush.
     expect(ticks).toEqual([
+      // Seeded before the binary is even spawned, so a slow first preview
+      // still shows a line rather than nothing.
+      [0, null],
       [0, 'Midnight City — M83'],
       [0, 'Teardrop — Massive Attack'],
       [2, 'Teardrop — Massive Attack'],
