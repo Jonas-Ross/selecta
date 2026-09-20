@@ -377,6 +377,40 @@ describe('destructive CLI commands', () => {
     }
   });
 
+  it('journals what the write touched when driven through the CLI', async () => {
+    const { dbPath } = seeded();
+    const applySupersede = SelectaCache.prototype.applySupersedeFeatures;
+    // The CLI plans and applies inside one call, so the prune has to be
+    // interleaved from within it; this is the only seam between the two.
+    const spy = vi
+      .spyOn(SelectaCache.prototype, 'applySupersedeFeatures')
+      .mockImplementation(function (this: SelectaCache, plan) {
+        const snapshot = fixture as LibrarySnapshot;
+
+        this.refreshFromSnapshot(
+          { ...snapshot, tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-ANGEL') },
+          { durationMs: 1 },
+        );
+
+        return applySupersede.call(this, plan);
+      });
+
+    try {
+      const { json } = await run(dbPath, ['supersede', '-p', ANALYSIS_KEY, '--apply']);
+
+      expect(json.summary).toMatchObject({ tracks: 1 });
+
+      // Covers the wiring, not just the runner: handing runDestructive the plan
+      // rather than what landed passes every other test in this file.
+      const journal = readUndoJournal(json.undo_journal, dbPath);
+      const journalled = journal.rows.audio_features as { trackPersistentId: string }[];
+
+      expect(journalled.map((row) => row.trackPersistentId)).toEqual(['T-TEARDROP']);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('leaves no journal when the write turns out to touch nothing', () => {
     const { dbPath } = seeded();
     const cache = SelectaCache.open(dbPath);
