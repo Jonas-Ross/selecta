@@ -46,11 +46,19 @@ as `undo_journal`. `node dist/index.js restore <journal>` puts those rows back
 verbatim, bypassing the merge rule — a journalled value is the value that
 belongs there, not a candidate to gap-fill with.
 
+The journal is written before the transaction and narrowed to what the
+transaction wrote once it commits. The two can differ: a refresh holds a
+different lock, so it can prune a track between the plan and the write, and the
+write skips that row rather than resurrect an orphan. Erring wide first means a
+crash part-way through still leaves everything recoverable; narrowing after
+means a restore never rewrites a row the run never touched — which, once that
+track is re-added and re-enriched, would overwrite fresh values with stale ones.
+
 A journal names the database it came from and is refused against any other, and
 restore runs under the same `--apply` convention as the command it undoes, since
-it too writes over live rows. A run that changes nothing writes no journal, so
-the directory holds only runs worth undoing. Journals are never pruned
-automatically; they are small, and deleting the user's only copy of a value to
+it too writes over live rows. A run that changes nothing writes no journal, and
+neither does one whose write turns out to touch nothing, so the directory holds
+only runs worth undoing. Journals are never pruned automatically; they are small, and deleting the user's only copy of a value to
 save bytes would be the same class of mistake.
 
 Restore skips a journalled row whose track has since left the library, and says

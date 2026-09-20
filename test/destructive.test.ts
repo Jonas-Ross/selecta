@@ -3,9 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createCliProgram } from '../src/cli.js';
-import { readUndoJournal, runDestructive } from '../src/operations/destructive.js';
+import {
+  readUndoJournal,
+  runDestructive,
+  type DestructiveOutcome,
+} from '../src/operations/destructive.js';
 import { planRestore } from '../src/operations/restore.js';
 import { SelectaCache } from '../src/cache/index.js';
+import type { SupersedeSummary } from '../src/cache/audio_features.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 import { featuresRow } from './helpers.js';
@@ -317,6 +322,76 @@ describe('destructive CLI commands', () => {
     expect(journals(dbPath)).toHaveLength(0);
   });
 
+  /** The plan, then a prune, then the write — the journal must follow the write. */
+  function supersedeRacingAPrune(
+    cache: SelectaCache,
+    dbPath: string,
+    survivors: string[],
+  ): DestructiveOutcome<SupersedeSummary> {
+    const decided = cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]);
+
+    expect(decided.changes).toHaveLength(2);
+
+    const snapshot = fixture as LibrarySnapshot;
+
+    cache.refreshFromSnapshot(
+      { ...snapshot, tracks: snapshot.tracks.filter((t) => survivors.includes(t.persistentId)) },
+      { durationMs: 1 },
+    );
+
+    return runDestructive(
+      {
+        command: 'supersede',
+        arguments: { source: 'analysis' },
+        summary: decided.summary,
+        empty: decided.changes.length === 0,
+        before: { audio_features: decided.changes.map((change) => change.before) },
+        apply: () => {
+          const { summary, applied } = cache.applySupersedeFeatures(decided);
+
+          return { summary, applied: { audio_features: applied } };
+        },
+      },
+      { apply: true, dbPath },
+    );
+  }
+
+  it('journals what the write touched, not what the plan named', () => {
+    const { dbPath } = seeded();
+    const cache = SelectaCache.open(dbPath);
+
+    try {
+      const outcome = supersedeRacingAPrune(cache, dbPath, ['T-TEARDROP']);
+
+      expect(outcome.summary).toMatchObject({ tracks: 1 });
+
+      // A journal wider than the write is not a harmless superset: restoring it
+      // would rewrite a row this run never touched, and if the pruned track is
+      // later re-added and re-enriched, overwrite its fresh values verbatim.
+      const journal = readUndoJournal(outcome.undo_journal!, dbPath);
+      const journalled = journal.rows.audio_features as { trackPersistentId: string }[];
+
+      expect(journalled.map((row) => row.trackPersistentId)).toEqual(['T-TEARDROP']);
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('leaves no journal when the write turns out to touch nothing', () => {
+    const { dbPath } = seeded();
+    const cache = SelectaCache.open(dbPath);
+
+    try {
+      const outcome = supersedeRacingAPrune(cache, dbPath, []);
+
+      expect(outcome).toMatchObject({ dry_run: false, undo_journal: null });
+      expect(outcome.summary).toMatchObject({ tracks: 0 });
+      expect(journals(dbPath)).toHaveLength(0);
+    } finally {
+      cache.close();
+    }
+  });
+
   it('reports what a restore actually put back, not what it planned to', async () => {
     const { dbPath } = seeded();
     const superseded = await run(dbPath, ['supersede', '-p', ANALYSIS_KEY, '--apply']);
@@ -336,7 +411,7 @@ describe('destructive CLI commands', () => {
         { durationMs: 1 },
       );
 
-      expect(plan.apply()).toMatchObject({ rows: 1, replacing: 1, adding: 0, skipped: 1 });
+      expect(plan.apply().summary).toMatchObject({ rows: 1, replacing: 1, adding: 0, skipped: 1 });
     } finally {
       cache.close();
     }

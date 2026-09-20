@@ -480,7 +480,10 @@ export class SelectaCache {
    * Applying the plan rather than recomputing it is what keeps a dry run and
    * the run it previews from describing different things.
    */
-  applySupersedeFeatures(plan: SupersedePlan): SupersedeSummary {
+  applySupersedeFeatures(plan: SupersedePlan): {
+    summary: SupersedeSummary;
+    applied: AudioFeaturesRow[];
+  } {
     const applied: SupersedeChange[] = [];
     const run = this.db.transaction(() => {
       for (const change of plan.changes) {
@@ -502,8 +505,9 @@ export class SelectaCache {
     run();
 
     // Summarized from what was written rather than what was planned: the
-    // report has to account for the rows that actually moved.
-    return summarizeSupersede(applied);
+    // report has to account for the rows that actually moved, and so does the
+    // undo journal, which is narrowed to these rows.
+    return { summary: summarizeSupersede(applied), applied: applied.map((c) => c.before) };
   }
 
   /**

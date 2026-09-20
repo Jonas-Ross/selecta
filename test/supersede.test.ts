@@ -84,9 +84,9 @@ describe('superseding a stale algorithm', () => {
     try {
       const before = cache.countPendingEnrichment('analysis');
       const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]);
-      const result = cache.applySupersedeFeatures(plan);
+      const { summary } = cache.applySupersedeFeatures(plan);
 
-      expect(result).toMatchObject({
+      expect(summary).toMatchObject({
         tracks: 1,
         cleared_fields: { musicalKey: 1 },
         rows_removed: 0,
@@ -124,7 +124,7 @@ describe('superseding a stale algorithm', () => {
     try {
       const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]);
 
-      expect(cache.applySupersedeFeatures(plan)).toMatchObject({ tracks: 1 });
+      expect(cache.applySupersedeFeatures(plan).summary).toMatchObject({ tracks: 1 });
       expect(cache.getAudioFeatures('T-ANGEL')).toMatchObject({ analysisStatus: 'no_data' });
     } finally {
       cache.close();
@@ -246,7 +246,10 @@ describe('superseding a stale algorithm', () => {
         { durationMs: 1 },
       );
 
-      expect(cache.applySupersedeFeatures(plan)).toMatchObject({ tracks: 0 });
+      expect(cache.applySupersedeFeatures(plan)).toMatchObject({
+        summary: { tracks: 0 },
+        applied: [],
+      });
       expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
     } finally {
       cache.close();

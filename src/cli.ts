@@ -325,7 +325,11 @@ export function createCliProgram(options: CliOptions = {}): Command {
                     summary: decided.summary,
                     empty: decided.changes.length === 0,
                     before: { audio_features: decided.changes.map((change) => change.before) },
-                    apply: () => cache.applySupersedeFeatures(decided),
+                    apply: () => {
+                      const { summary, applied } = cache.applySupersedeFeatures(decided);
+
+                      return { summary, applied: { audio_features: applied } };
+                    },
                   },
                   { apply, dbPath },
                 ),

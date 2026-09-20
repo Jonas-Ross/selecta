@@ -78,16 +78,20 @@ export function planRestore(
     before: { audio_features: before },
     apply: () => {
       // A track pruned between deciding and writing is skipped by the cache, so
-      // the report is built from what landed rather than from what was planned.
+      // both the report and the journal are built from what landed rather than
+      // from what was planned.
       const restored = new Set(cache.restoreAudioFeatures(rows));
-      const replaced = before.filter((row) => restored.has(row.trackPersistentId)).length;
+      const replaced = before.filter((row) => restored.has(row.trackPersistentId));
 
       return {
-        tables,
-        rows: restored.size,
-        replacing: replaced,
-        adding: restored.size - replaced,
-        skipped: journalled.length - restored.size,
+        summary: {
+          tables,
+          rows: restored.size,
+          replacing: replaced.length,
+          adding: restored.size - replaced.length,
+          skipped: journalled.length - restored.size,
+        },
+        applied: { audio_features: replaced },
       };
     },
   };
