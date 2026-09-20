@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto';
 import { occurrencePositions } from './occurrence_positions.js';
 import { songIdentityKey } from '../cache/song_identity.js';
+import { harmonicRelation, parseCamelot, type HarmonicRelation } from './harmonic.js';
 import type { TrackRow } from '../types/cache.js';
 import { toInspectedTrack, type InspectedTrack } from './track_projections.js';
 
@@ -11,6 +12,21 @@ type FeatureCoverage = {
 };
 
 type FeatureName = 'bpm' | 'musical_key' | 'danceability';
+
+export type HarmonicTransition = {
+  // 0-based index of the earlier track. Positions, not IDs: a repeated track
+  // is a different transition each time it appears.
+  from_position: number;
+  relation: HarmonicRelation;
+  provisional?: true; // either side's key is a provisional estimate
+};
+
+export type HarmonicFacts = {
+  transitions: HarmonicTransition[];
+  by_relation: Record<HarmonicRelation, number>;
+  unknown_key_positions: number[];
+  provisional_key_positions: number[];
+};
 
 export type TracklistInspection = {
   fingerprint: string;
@@ -45,6 +61,7 @@ export type TracklistInspection = {
     danceability: FeatureCoverage;
   };
   feature_gaps: { missing: FeatureName[]; track_ids: string[] }[];
+  harmonic: HarmonicFacts;
 };
 
 export function orderedTrackIdsFingerprint(trackIds: string[]): string {
@@ -154,6 +171,45 @@ function featureFacts(rows: TrackRow[]): {
   };
 }
 
+function harmonicFacts(rows: TrackRow[]): HarmonicFacts {
+  const byRelation: Record<HarmonicRelation, number> = {
+    same: 0,
+    adjacent: 0,
+    relative: 0,
+    energy_boost: 0,
+    distant: 0,
+    unknown: 0,
+  };
+  const transitions: HarmonicTransition[] = [];
+
+  for (let index = 0; index + 1 < rows.length; index += 1) {
+    const from = rows[index]!;
+    const to = rows[index + 1]!;
+    const relation = harmonicRelation(from.camelot, to.camelot);
+    const provisional = from.keyMaturity === 'provisional' || to.keyMaturity === 'provisional';
+
+    byRelation[relation] += 1;
+    transitions.push({ from_position: index, relation, ...(provisional && { provisional: true }) });
+  }
+
+  // Both lists turn on the same parse the relation does, so a stored value
+  // that is not a wheel position can't count as one here and unknown there.
+  const positionsWhere = (predicate: (row: TrackRow) => boolean): number[] =>
+    rows.flatMap((row, index) => (predicate(row) ? [index] : []));
+  const onWheel = (row: TrackRow): boolean => parseCamelot(row.camelot) != null;
+
+  return {
+    transitions,
+    by_relation: byRelation,
+    // Not the same list as the musical_key gap: a key with no mode has no
+    // wheel position.
+    unknown_key_positions: positionsWhere((row) => !onWheel(row)),
+    provisional_key_positions: positionsWhere(
+      (row) => onWheel(row) && row.keyMaturity === 'provisional',
+    ),
+  };
+}
+
 /** Pure aggregation once the cache boundary has resolved every input ID. */
 export function buildTracklistInspection(rows: TrackRow[]): TracklistInspection {
   const trackIds = rows.map((row) => row.persistentId);
@@ -183,5 +239,6 @@ export function buildTracklistInspection(rows: TrackRow[]): TracklistInspection 
     unknown_artist_count: unknownArtistCount,
     feature_coverage: coverage,
     feature_gaps: gaps,
+    harmonic: harmonicFacts(rows),
   };
 }
