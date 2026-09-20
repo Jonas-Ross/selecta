@@ -216,6 +216,43 @@ describe('reopening a discarded estimate', () => {
     }
   });
 
+  it('refuses a field the named source cannot measure', async () => {
+    const { dbPath } = seeded();
+    const before = inspect(dbPath, (cache) => snapshotCache(cache.db));
+    const writes: string[] = [];
+    const logged: string[] = [];
+    let exitCode: number | undefined;
+
+    await createCliProgram({
+      dbPath,
+      logger: {
+        info: vi.fn(),
+        debug: vi.fn(),
+        error: vi.fn((...parts: unknown[]) => logged.push(parts.join(' '))),
+      },
+      writeStdout: (text) => writes.push(text),
+      setExitCode: (code) => (exitCode = code),
+    }).parseAsync(['node', 'selecta', 'reopen', '-s', 'analysis', '-m', 'danceability']);
+
+    // metrognome measures tempo and key only, so this would reopen the whole
+    // analysed library, fill nothing, and mark it terminal again.
+    expect(exitCode).toBe(1);
+    expect(writes).toHaveLength(0);
+    expect(logged.join('\n')).toContain('analysis does not measure danceability');
+    expectOnlyChanged(
+      before,
+      inspect(dbPath, (cache) => snapshotCache(cache.db)),
+      [],
+    );
+  });
+
+  it('allows a field the source does measure', async () => {
+    const { dbPath } = seeded();
+    const json = await run(dbPath, ['reopen', '-s', 'catalog', '-m', 'danceability']);
+
+    expect(json).toMatchObject({ command: 'reopen', dry_run: true });
+  });
+
   it('puts the attempt back from its journal', async () => {
     const { dbPath } = seeded();
     const before = inspect(dbPath, (cache) => snapshotCache(cache.db));

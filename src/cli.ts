@@ -19,7 +19,7 @@ import { SelectaCache, defaultDbPath } from './cache/index.js';
 import { runDoctor } from './diagnostics/doctor.js';
 import { readStatus, type SchemaVersions } from './diagnostics/status.js';
 import { DraftStore, draftDbPath } from './drafts/store.js';
-import { METROGNOME_PATH_ENV, enrichPendingTracks } from './enrich/index.js';
+import { FIELDS_BY_SOURCE, METROGNOME_PATH_ENV, enrichPendingTracks } from './enrich/index.js';
 import type { FeatureSource } from './types/cache.js';
 import type { SourceField } from './cache/audio_features.js';
 import { log as defaultLogger, type Logger } from './log.js';
@@ -382,6 +382,16 @@ export function createCliProgram(options: CliOptions = {}): Command {
         apply?: boolean;
       }) => {
         try {
+          // Reopening a field this source cannot measure would re-run the
+          // entire backlog, fill nothing, and mark it all terminal again.
+          if (!FIELDS_BY_SOURCE[source].includes(missing)) {
+            throw new BridgeError(
+              'validation_error',
+              `${source} does not measure ${missing}`,
+              `It can supply ${FIELDS_BY_SOURCE[source].join(' or ')}. Reopening ${missing} for it would re-analyze every track and fill none of them.`,
+            );
+          }
+
           const cache = SelectaCache.open(dbPath);
 
           try {

@@ -193,6 +193,12 @@ way twice, while an `ok` one is where a better estimator pays. It clears no
 values at all: a field that already holds one is left alone whichever source
 supplied it, since gap-fill would discard a fresh estimate anyway.
 
+A field the named source cannot measure is refused: metrognome reports tempo
+and key and nothing else, so `--source analysis --missing danceability` would
+reopen every analysed track, fill none of them and mark them all terminal
+again. `FIELDS_BY_SOURCE` in `src/enrich/` records what each pass can supply,
+pinned by a test against what the adapters actually write.
+
 Like `supersede` it is dry-run by default, journals what it overwrites and runs
 under the enrichment lock.
 
