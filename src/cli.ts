@@ -7,6 +7,13 @@ import { Command, InvalidArgumentError, Option } from 'commander';
 import { refreshLibrary } from './operations/refresh.js';
 import { releaseLocksOnShutdown } from './operations/shutdown.js';
 import { withOperation } from './operations/lock.js';
+import {
+  APPLY_FLAG_DESCRIPTION,
+  readUndoJournal,
+  runDestructive,
+  type DestructiveOutcome,
+} from './operations/destructive.js';
+import { planRestore } from './operations/restore.js';
 import { bridge as defaultBridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
 import { runDoctor } from './diagnostics/doctor.js';
@@ -70,6 +77,14 @@ export function createCliProgram(options: CliOptions = {}): Command {
     logger.error(
       'hint: run `node dist/index.js refresh` to open the cache for write and apply them',
     );
+  }
+
+  // stdout carries the result; the nudge that nothing was written belongs on
+  // stderr with the rest of the narration.
+  function reportDryRun(outcome: DestructiveOutcome<unknown>): void {
+    if (!outcome.dry_run) return;
+
+    logger.info('dry run: nothing was written. Re-run with --apply to carry this out.');
   }
 
   const program = new Command();
@@ -263,7 +278,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
   program
     .command('supersede')
     .description(
-      'List what produced each stored audio feature; with --provenance, clear those values and reopen the source so a later enrich re-measures them',
+      'List what produced each stored audio feature; with --provenance, report what clearing those values would change, and with --apply carry it out so a later enrich re-measures them',
     )
     .addOption(
       new Option('-s, --source <source>', 'whose terminal attempt to reopen')
@@ -274,33 +289,75 @@ export function createCliProgram(options: CliOptions = {}): Command {
       '-p, --provenance <value...>',
       'algorithm strings to treat as superseded, exactly as listed (e.g. metrognome/chroma-correlation-edm@1)',
     )
-    .action(async ({ source, provenance }: { source: FeatureSource; provenance?: string[] }) => {
+    .option('--apply', APPLY_FLAG_DESCRIPTION)
+    .action(
+      async ({
+        source,
+        provenance,
+        apply = false,
+      }: {
+        source: FeatureSource;
+        provenance?: string[];
+        apply?: boolean;
+      }) => {
+        try {
+          const cache = SelectaCache.open(dbPath);
+
+          try {
+            // No provenance named is the survey: it reports what is stored and
+            // changes nothing, which is also how a caller learns the exact
+            // strings this command takes.
+            if (provenance == null || provenance.length === 0) {
+              writeJson({ provenance: cache.featureProvenance(), db_path: dbPath });
+
+              return;
+            }
+
+            const outcome = await withOperation(cache, 'enrich', async () => {
+              const plan = cache.planSupersedeFeatures(source, provenance);
+
+              return runDestructive(
+                {
+                  command: 'supersede',
+                  arguments: { source, provenance },
+                  summary: plan.summary,
+                  empty: plan.changes.length === 0,
+                  before: { audio_features: plan.changes.map((change) => change.before) },
+                  apply: () => cache.applySupersedeFeatures(plan),
+                },
+                { apply, dbPath },
+              );
+            });
+
+            writeJson({ ...outcome, pending_remaining: cache.countPendingEnrichment(source) });
+            reportDryRun(outcome);
+          } finally {
+            cache.close();
+          }
+        } catch (err) {
+          reportError(err);
+          setExitCode(1);
+        }
+      },
+    );
+
+  program
+    .command('restore')
+    .argument('<journal>', 'path printed as undo_journal by the command to undo')
+    .description('Put back the cache rows a destructive command journalled before it ran')
+    .option('--apply', APPLY_FLAG_DESCRIPTION)
+    .action(async (journalPath: string, { apply = false }: { apply?: boolean }) => {
       try {
         const cache = SelectaCache.open(dbPath);
 
         try {
-          // No provenance named is the survey: it reports what is stored and
-          // changes nothing, which is also how a caller learns the exact
-          // strings this command takes.
-          if (provenance == null || provenance.length === 0) {
-            writeJson({ provenance: cache.featureProvenance(), db_path: dbPath });
-
-            return;
-          }
-
-          const result = await withOperation(cache, 'enrich', async () =>
-            cache.supersedeFeatures(source, provenance),
+          const journal = readUndoJournal(journalPath, dbPath);
+          const outcome = await withOperation(cache, 'enrich', async () =>
+            runDestructive(planRestore(cache, journal), { apply, dbPath }),
           );
 
-          writeJson({
-            source,
-            superseded: provenance,
-            tracks: result.tracks,
-            cleared_fields: result.clearedFields,
-            rows_removed: result.rowsRemoved,
-            pending_remaining: cache.countPendingEnrichment(source),
-            db_path: dbPath,
-          });
+          writeJson(outcome);
+          reportDryRun(outcome);
         } finally {
           cache.close();
         }

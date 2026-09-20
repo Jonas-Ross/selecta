@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
 import { supersedeFeatures } from '../src/cache/audio_features.js';
 import { featuresRow } from './helpers.js';
+import { expectOnlyChanged, snapshotCache } from './table_diff.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 
@@ -82,9 +83,14 @@ describe('superseding a stale algorithm', () => {
 
     try {
       const before = cache.countPendingEnrichment('analysis');
-      const result = cache.supersedeFeatures('analysis', [ANALYSIS_KEY]);
+      const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]);
+      const result = cache.applySupersedeFeatures(plan);
 
-      expect(result).toMatchObject({ tracks: 1, clearedFields: { musicalKey: 1 }, rowsRemoved: 0 });
+      expect(result).toMatchObject({
+        tracks: 1,
+        cleared_fields: { musicalKey: 1 },
+        rows_removed: 0,
+      });
       expect(cache.countPendingEnrichment('analysis')).toBe(before + 1);
       expect(cache.getAudioFeatures('T-TEARDROP')).toMatchObject({
         musicalKey: null,
@@ -116,7 +122,9 @@ describe('superseding a stale algorithm', () => {
     ]);
 
     try {
-      expect(cache.supersedeFeatures('analysis', [ANALYSIS_KEY])).toMatchObject({ tracks: 1 });
+      const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]);
+
+      expect(cache.applySupersedeFeatures(plan)).toMatchObject({ tracks: 1 });
       expect(cache.getAudioFeatures('T-ANGEL')).toMatchObject({ analysisStatus: 'no_data' });
     } finally {
       cache.close();
@@ -151,7 +159,7 @@ describe('superseding a stale algorithm', () => {
     const cache = loaded();
 
     try {
-      expect(() => cache.supersedeFeatures('analysis', ['acousticbrainz'])).toThrow(
+      expect(() => cache.planSupersedeFeatures('analysis', ['acousticbrainz'])).toThrow(
         /not produced by analysis/,
       );
       // Refused before anything was written.
@@ -159,6 +167,65 @@ describe('superseding a stale algorithm', () => {
         musicalKey: 'A minor',
         catalogStatus: 'ok',
       });
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('names whose values each cleared field came from', () => {
+    const cache = loaded([
+      featuresRow({ sources: { bpm: ANALYSIS_BPM, musicalKey: ANALYSIS_KEY } }),
+      featuresRow({ trackPersistentId: 'T-ANGEL', sources: { bpm: ANALYSIS_BPM } }),
+    ]);
+
+    try {
+      // A count alone cannot answer "whose data am I about to lose"; the dry
+      // run has to say which algorithm each number belongs to.
+      expect(
+        cache.planSupersedeFeatures('analysis', [ANALYSIS_BPM, ANALYSIS_KEY]).summary.by_provenance,
+      ).toEqual({
+        [ANALYSIS_BPM]: { bpm: 2 },
+        [ANALYSIS_KEY]: { musicalKey: 1 },
+      });
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('plans without writing anything at all', () => {
+    const cache = loaded([featuresRow({ sources: { musicalKey: ANALYSIS_KEY } })]);
+
+    try {
+      const before = snapshotCache(cache.db);
+
+      expect(cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]).summary.tracks).toBe(1);
+      expectOnlyChanged(before, snapshotCache(cache.db), []);
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('changes exactly the rows and columns its summary accounts for', () => {
+    const cache = loaded([
+      featuresRow({ sources: { bpm: 'deezer', musicalKey: ANALYSIS_KEY }, analysisStatus: 'ok' }),
+      featuresRow({ trackPersistentId: 'T-ANGEL', sources: { musicalKey: 'acousticbrainz' } }),
+    ]);
+
+    try {
+      const before = snapshotCache(cache.db);
+
+      cache.applySupersedeFeatures(cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]));
+
+      // The whole database, not just the row under test: a clear that reaches
+      // past what it reported is the bug this pattern exists to catch.
+      expectOnlyChanged(before, snapshotCache(cache.db), [
+        {
+          table: 'audio_features',
+          key: 'T-TEARDROP',
+          change: 'changed',
+          fields: ['analysis_status', 'camelot', 'musical_key', 'sources'],
+        },
+      ]);
     } finally {
       cache.close();
     }

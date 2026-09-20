@@ -131,16 +131,63 @@ export function sourceForProvenance(provenance: string): FeatureSource {
   return CATALOG_PROVENANCES.has(provenance) ? 'catalog' : 'analysis';
 }
 
+// Reported straight to the caller as JSON, so the keys are the CLI's.
 export type SupersedeSummary = {
   tracks: number;
-  clearedFields: Partial<Record<SourceField, number>>;
-  rowsRemoved: number;
+  cleared_fields: Partial<Record<SourceField, number>>;
+  rows_removed: number;
+  // Per named algorithm, which fields it produced and how many tracks carry
+  // them. A count alone does not tell a caller whose values are at stake.
+  by_provenance: Record<string, Partial<Record<SourceField, number>>>;
 };
 
 export type SupersedeResult =
   | { action: 'unchanged' }
   | { action: 'update'; row: AudioFeaturesRow; clearedFields: SourceField[] }
   | { action: 'delete'; clearedFields: SourceField[] };
+
+/** One row's decision, paired with the row as it stands before it. */
+export type SupersedeChange = {
+  before: AudioFeaturesRow;
+  result: Extract<SupersedeResult, { action: 'update' | 'delete' }>;
+};
+
+export type SupersedePlan = {
+  source: FeatureSource;
+  provenances: string[];
+  changes: SupersedeChange[];
+  summary: SupersedeSummary;
+};
+
+/** What a set of decisions adds up to, reported identically dry or applied. */
+export function summarizeSupersede(changes: readonly SupersedeChange[]): SupersedeSummary {
+  const cleared: SupersedeSummary['cleared_fields'] = {};
+  const byProvenance: SupersedeSummary['by_provenance'] = {};
+  let rowsRemoved = 0;
+
+  for (const { before, result } of changes) {
+    if (result.action === 'delete') rowsRemoved += 1;
+
+    for (const field of result.clearedFields) {
+      cleared[field] = (cleared[field] ?? 0) + 1;
+
+      const provenance = before.sources?.[field];
+
+      if (provenance == null) continue;
+
+      const counts = (byProvenance[provenance] ??= {});
+
+      counts[field] = (counts[field] ?? 0) + 1;
+    }
+  }
+
+  return {
+    tracks: changes.length,
+    cleared_fields: cleared,
+    rows_removed: rowsRemoved,
+    by_provenance: byProvenance,
+  };
+}
 
 /**
  * Drop the values a named algorithm produced and reopen that source's attempt.
