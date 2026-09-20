@@ -34,6 +34,7 @@ import {
   mergeFeatures,
   sourceForProvenance,
   supersedeFeatures,
+  statusFieldFor,
   summarizeSupersede,
   type SupersedeChange,
   type SupersedePlan,
@@ -459,7 +460,18 @@ export class SelectaCache {
       changes.push({ before: existing, result });
     }
 
-    return { source, provenances: [...provenances], changes, summary: summarizeSupersede(changes) };
+    // Only a change whose attempt was still terminal puts its track back in the
+    // backlog; one an earlier supersede already reopened is counted there.
+    const statusField = statusFieldFor(source);
+    const reopened = changes.filter((change) => change.before[statusField] != null).length;
+
+    return {
+      source,
+      provenances: [...provenances],
+      changes,
+      reopened,
+      summary: summarizeSupersede(changes),
+    };
   }
 
   /**
@@ -501,9 +513,8 @@ export class SelectaCache {
    * this cache wrote, so gap-fill would be the wrong policy — a value the
    * journal carries is the value that belongs there.
    */
-  restoreAudioFeatures(rows: readonly AudioFeaturesRow[]): number {
-    let restored = 0;
-
+  restoreAudioFeatures(rows: readonly AudioFeaturesRow[]): string[] {
+    const restored: string[] = [];
     const run = this.db.transaction(() => {
       for (const row of rows) {
         // A track that left the library between the journal and now takes its
@@ -511,7 +522,7 @@ export class SelectaCache {
         if (!this.getTrack(row.trackPersistentId)) continue;
 
         this.queries.upsertAudioFeatures(row);
-        restored += 1;
+        restored.push(row.trackPersistentId);
       }
     });
 

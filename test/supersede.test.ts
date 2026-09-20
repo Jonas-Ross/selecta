@@ -265,6 +265,46 @@ describe('superseding a stale algorithm', () => {
     }
   });
 
+  it('keeps a row honest about having been measured', () => {
+    // Clearing one algorithm can leave both attempts blank while another
+    // algorithm's value survives. Recomputing from two blanks would label a row
+    // that still stores a bpm as "nothing identified".
+    const row = featuresRow({
+      musicalKey: null,
+      camelot: null,
+      danceability: null,
+      sources: { bpm: ANALYSIS_BPM, musicalKey: ANALYSIS_KEY },
+      catalogStatus: null,
+      analysisStatus: 'ok',
+      status: 'ok',
+    });
+    const result = supersedeFeatures(row, 'analysis', new Set([ANALYSIS_KEY]));
+
+    if (result.action !== 'update') throw new Error('expected an update');
+
+    expect(result.row).toMatchObject({ bpm: row.bpm, analysisStatus: null, status: 'ok' });
+  });
+
+  it('counts only the changes that put a track back in the backlog', () => {
+    const cache = loaded([
+      featuresRow({ sources: { bpm: ANALYSIS_BPM }, analysisStatus: null, catalogStatus: 'ok' }),
+      featuresRow({
+        trackPersistentId: 'T-ANGEL',
+        sources: { bpm: ANALYSIS_BPM },
+        analysisStatus: 'ok',
+      }),
+    ]);
+
+    try {
+      const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_BPM]);
+
+      expect(plan.summary.tracks).toBe(2);
+      expect(plan.reopened).toBe(1);
+    } finally {
+      cache.close();
+    }
+  });
+
   it('reports what produced each stored value', () => {
     const cache = loaded();
 

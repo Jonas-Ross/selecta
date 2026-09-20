@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createCliProgram } from '../src/cli.js';
-import { runDestructive } from '../src/operations/destructive.js';
+import { readUndoJournal, runDestructive } from '../src/operations/destructive.js';
+import { planRestore } from '../src/operations/restore.js';
 import { SelectaCache } from '../src/cache/index.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
@@ -11,6 +12,7 @@ import { featuresRow } from './helpers.js';
 import { expectOnlyChanged, snapshotCache } from './table_diff.js';
 
 const ANALYSIS_KEY = 'metrognome/chroma-correlation-edm@1';
+const ANALYSIS_BPM = 'metrognome/onset-autocorrelation-comb@1';
 
 function seeded(): { dbPath: string } {
   const dbPath = join(mkdtempSync(join(tmpdir(), 'selecta-destructive-')), 'library.db');
@@ -267,6 +269,34 @@ describe('destructive CLI commands', () => {
     expect(applied.json.pending_remaining).toBe(backlog);
   });
 
+  it('does not count a track the backlog already holds', async () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), 'selecta-destructive-')), 'library.db');
+    const cache = SelectaCache.open(dbPath);
+
+    cache.refreshFromSnapshot(fixture as LibrarySnapshot, { durationMs: 1 });
+    cache.saveAudioFeatures([
+      featuresRow({
+        sources: { bpm: ANALYSIS_BPM, musicalKey: ANALYSIS_KEY },
+        catalogStatus: null,
+        analysisStatus: 'ok',
+      }),
+    ]);
+    cache.close();
+
+    // Clearing one of the two algorithms already reopened this track, so the
+    // second supersede changes a row that is pending again — adding it to the
+    // backlog a second time would predict a number the apply never reaches.
+    await run(dbPath, ['supersede', '-p', ANALYSIS_KEY, '--apply']);
+
+    const dry = await run(dbPath, ['supersede', '-p', ANALYSIS_BPM]);
+
+    await run(dbPath, ['supersede', '-p', ANALYSIS_BPM, '--apply']);
+
+    expect(dry.json.pending_remaining).toBe(
+      inspect(dbPath, (open) => open.countPendingEnrichment('analysis')),
+    );
+  });
+
   it('writes no journal for a change that moves nothing', () => {
     const { dbPath } = seeded();
     const outcome = runDestructive(
@@ -285,6 +315,31 @@ describe('destructive CLI commands', () => {
 
     expect(outcome).toMatchObject({ dry_run: false, undo_journal: null });
     expect(journals(dbPath)).toHaveLength(0);
+  });
+
+  it('reports what a restore actually put back, not what it planned to', async () => {
+    const { dbPath } = seeded();
+    const superseded = await run(dbPath, ['supersede', '-p', ANALYSIS_KEY, '--apply']);
+    const cache = SelectaCache.open(dbPath);
+
+    try {
+      const plan = planRestore(cache, readUndoJournal(superseded.json.undo_journal, dbPath));
+
+      expect(plan.summary).toMatchObject({ rows: 2, skipped: 0 });
+
+      // The same plan-then-write interleaving applySupersedeFeatures guards
+      // against: a refresh prunes one of the tracks before the write lands.
+      const snapshot = fixture as LibrarySnapshot;
+
+      cache.refreshFromSnapshot(
+        { ...snapshot, tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-ANGEL') },
+        { durationMs: 1 },
+      );
+
+      expect(plan.apply()).toMatchObject({ rows: 1, replacing: 1, adding: 0, skipped: 1 });
+    } finally {
+      cache.close();
+    }
   });
 
   it('refuses a journal whose rows are not a list', async () => {

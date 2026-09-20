@@ -156,8 +156,17 @@ export type SupersedePlan = {
   source: FeatureSource;
   provenances: string[];
   changes: SupersedeChange[];
+  // Changes that put a track back in the backlog. Not every change does: a row
+  // whose attempt an earlier supersede already cleared is pending already, so
+  // counting it again would overstate the work the next enrich faces.
+  reopened: number;
   summary: SupersedeSummary;
 };
+
+/** The column a source's terminal attempt is recorded in. */
+export function statusFieldFor(source: FeatureSource): 'catalogStatus' | 'analysisStatus' {
+  return source === 'analysis' ? 'analysisStatus' : 'catalogStatus';
+}
 
 /** What a set of decisions adds up to, reported identically dry or applied. */
 export function summarizeSupersede(changes: readonly SupersedeChange[]): SupersedeSummary {
@@ -226,7 +235,7 @@ export function supersedeFeatures(
   if (clearedFields.length === 0) return { action: 'unchanged' };
 
   next.sources = Object.keys(sources).length > 0 ? sources : null;
-  next[source === 'analysis' ? 'analysisStatus' : 'catalogStatus'] = null;
+  next[statusFieldFor(source)] = null;
 
   // An emptied row would still carry a row-level status, which reads as
   // "looked and found nothing" where the truth is now "never looked".
@@ -234,7 +243,15 @@ export function supersedeFeatures(
     return { action: 'delete', clearedFields };
   }
 
-  next.status = bestStatus(next.catalogStatus, next.analysisStatus);
+  // Both attempts can end up cleared while values an unnamed algorithm wrote
+  // survive; bestStatus would then label a row that still stores a bpm as
+  // "nothing identified". What is stored was measured, whoever measured it.
+  const keepsValue = next.bpm != null || next.musicalKey != null || next.danceability != null;
+
+  next.status =
+    keepsValue && next.catalogStatus == null && next.analysisStatus == null
+      ? row.status
+      : bestStatus(next.catalogStatus, next.analysisStatus);
 
   return { action: 'update', row: next, clearedFields };
 }
