@@ -21,6 +21,7 @@ import { readStatus, type SchemaVersions } from './diagnostics/status.js';
 import { DraftStore, draftDbPath } from './drafts/store.js';
 import { METROGNOME_PATH_ENV, enrichPendingTracks } from './enrich/index.js';
 import type { FeatureSource } from './types/cache.js';
+import type { SourceField } from './cache/audio_features.js';
 import { log as defaultLogger, type Logger } from './log.js';
 import { createProgressReporter, formatDuration } from './progress.js';
 import { createServer } from './server.js';
@@ -343,6 +344,64 @@ export function createCliProgram(options: CliOptions = {}): Command {
               cache.countPendingEnrichment(source) + (outcome.dry_run ? plan.reopened : 0);
 
             writeJson({ ...outcome, pending_remaining: pendingRemaining });
+            reportDryRun(outcome);
+          } finally {
+            cache.close();
+          }
+        } catch (err) {
+          reportError(err);
+          setExitCode(1);
+        }
+      },
+    );
+
+  program
+    .command('reopen')
+    .description(
+      "Clear one source's terminal attempt for tracks that hold no value in a field, so a later enrich tries them again; reports what it would do unless --apply is given",
+    )
+    .addOption(
+      new Option('-s, --source <source>', 'whose attempt to reopen')
+        .choices(['catalog', 'analysis'])
+        .default('analysis'),
+    )
+    .addOption(
+      new Option('-m, --missing <field>', 'the field those tracks hold no value for')
+        .choices(['bpm', 'musicalKey', 'danceability'])
+        .makeOptionMandatory(),
+    )
+    .option('--apply', APPLY_FLAG_DESCRIPTION)
+    .action(
+      async ({
+        source,
+        missing,
+        apply = false,
+      }: {
+        source: FeatureSource;
+        missing: SourceField;
+        apply?: boolean;
+      }) => {
+        try {
+          const cache = SelectaCache.open(dbPath);
+
+          try {
+            const outcome = await withOperation(cache, 'enrich', async () => {
+              const plan = cache.planReopenFeatures(source, missing);
+
+              return runDestructive(
+                {
+                  command: 'reopen',
+                  arguments: { source, missing },
+                  summary: plan.summary,
+                  empty: plan.changes.length === 0,
+                  before: { audio_features: plan.changes.map((change) => change.before) },
+                  apply: () => cache.applyReopenFeatures(plan),
+                },
+                { apply, dbPath },
+              );
+            });
+
+            writeJson({ ...outcome, pending_remaining: cache.countPendingEnrichment(source) });
             reportDryRun(outcome);
           } finally {
             cache.close();

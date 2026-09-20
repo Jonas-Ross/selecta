@@ -8,6 +8,7 @@ import type {
   NoteSubject,
   PendingTrack,
 } from '../../types/cache.js';
+import type { SourceField } from '../audio_features.js';
 
 export type FeatureProvenanceRow = {
   field: string;
@@ -106,6 +107,30 @@ export function createMetadataQueries(db: Database) {
     analysis: pendingFor('analysis_status'),
   };
 
+  // Tracks one source has finished with that still hold no value in a field.
+  // The pending query cannot see them — the attempt is what marks them done —
+  // and neither can supersede, because a discarded estimate stored no
+  // provenance to name. Column names are literals, never caller input.
+  const reopenableFor = (statusColumn: string): Record<SourceField, Statement> => {
+    const forField = (valueColumn: string): Statement =>
+      db.prepare(`
+        SELECT track_persistent_id AS trackPersistentId FROM audio_features
+        WHERE ${statusColumn} IS NOT NULL AND ${valueColumn} IS NULL
+        ORDER BY track_persistent_id
+      `);
+
+    return {
+      bpm: forField('bpm'),
+      musicalKey: forField('musical_key'),
+      danceability: forField('danceability'),
+    };
+  };
+
+  const reopenableStmts: Record<FeatureSource, Record<SourceField, Statement>> = {
+    catalog: reopenableFor('catalog_status'),
+    analysis: reopenableFor('analysis_status'),
+  };
+
   // What produced each stored value, counted per field. Provenance lives in
   // the sources JSON rather than a column, so this is the only way to see which
   // algorithm versions a library is actually carrying. json_extract raises on
@@ -194,6 +219,12 @@ export function createMetadataQueries(db: Database) {
       // Clamp: a negative LIMIT means "unlimited" to SQLite — a caller bug
       // must not turn a bounded batch into a full-library crawl.
       return pendingStmts[source].page.all(Math.max(0, limit)) as PendingTrack[];
+    },
+
+    trackIdsReopenable(source: FeatureSource, field: SourceField): string[] {
+      return (reopenableStmts[source][field].all() as { trackPersistentId: string }[]).map(
+        (row) => row.trackPersistentId,
+      );
     },
 
     countPendingEnrichment(source: FeatureSource): number {

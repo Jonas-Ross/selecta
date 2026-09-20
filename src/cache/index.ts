@@ -32,10 +32,15 @@ import type {
 import { openDatabase } from './db.js';
 import {
   mergeFeatures,
+  reopenFeatures,
   sourceForProvenance,
   supersedeFeatures,
   statusFieldFor,
+  summarizeReopen,
   summarizeSupersede,
+  type ReopenPlan,
+  type ReopenSummary,
+  type SourceField,
   type SupersedeChange,
   type SupersedePlan,
   type SupersedeSummary,
@@ -480,6 +485,48 @@ export class SelectaCache {
    * Applying the plan rather than recomputing it is what keeps a dry run and
    * the run it previews from describing different things.
    */
+  /**
+   * Decide which tracks one source could usefully try again for a field.
+   *
+   * The counterpart to superseding: that re-measures a value that exists and
+   * can be named by its provenance, while this reaches the track whose
+   * estimate was discarded, which stored nothing and so left nothing to name.
+   */
+  planReopenFeatures(source: FeatureSource, field: SourceField): ReopenPlan {
+    const changes: ReopenPlan['changes'] = [];
+
+    for (const id of this.queries.trackIdsReopenable(source, field)) {
+      const existing = this.queries.getAudioFeatures(id);
+
+      if (existing == null) continue;
+
+      const result = reopenFeatures(existing, source, field);
+
+      if (result.action === 'unchanged') continue;
+
+      changes.push({ before: existing, result });
+    }
+
+    return { source, field, changes, summary: summarizeReopen(source, changes) };
+  }
+
+  /** Carry out the decisions a reopen plan described, atomically. */
+  applyReopenFeatures(plan: ReopenPlan): ReopenSummary {
+    const run = this.db.transaction(() => {
+      for (const { before, result } of plan.changes) {
+        if (result.action === 'delete') {
+          this.queries.deleteAudioFeatures(before.trackPersistentId);
+        } else {
+          this.queries.upsertAudioFeatures(result.row);
+        }
+      }
+    });
+
+    run();
+
+    return plan.summary;
+  }
+
   applySupersedeFeatures(plan: SupersedePlan): {
     summary: SupersedeSummary;
     applied: AudioFeaturesRow[];

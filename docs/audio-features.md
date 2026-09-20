@@ -176,6 +176,26 @@ The catalog pass writes a closed set of provenance strings (`acousticbrainz`,
 `deezer`), so anything else is analysis; that is how a value is attributed
 without Selecta knowing metrognome's versions.
 
+## Reaching a track whose estimate was discarded
+
+Superseding names a provenance, so it reaches only tracks that hold a value.
+A track whose estimate came back `uncertain` stored nothing and therefore
+recorded no provenance — and its attempt is still terminal, so the pending
+backlog cannot see it either. On a real library that is the larger population:
+a live count here found metrognome owning provenance on roughly 1,350 tracks
+against some 2,100 whose attempt is terminal with nothing of its stored.
+
+`node dist/index.js reopen --source <s> --missing <field>` covers exactly that
+gap. It clears that source's terminal attempt for tracks holding no value in
+the named field, so the next `enrich` reaches them again, and reports the
+terminal status each one carried — a `no_match` track will likely fail the same
+way twice, while an `ok` one is where a better estimator pays. It clears no
+values at all: a field that already holds one is left alone whichever source
+supplied it, since gap-fill would discard a fresh estimate anyway.
+
+Like `supersede` it is dry-run by default, journals what it overwrites and runs
+under the enrichment lock.
+
 Superseding is a judgement that the newer algorithm is better, which is not the
 same as newer. metrognome's own `validate` against real recordings is what
 settles that; a version bump alone is not evidence.
