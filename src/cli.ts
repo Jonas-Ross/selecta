@@ -14,6 +14,7 @@ import { DraftStore, draftDbPath } from './drafts/store.js';
 import { METROGNOME_PATH_ENV, enrichPendingTracks } from './enrich/index.js';
 import type { FeatureSource } from './types/cache.js';
 import { log as defaultLogger, type Logger } from './log.js';
+import { createProgressReporter, formatDuration } from './progress.js';
 import { createServer } from './server.js';
 import type { Bridge } from './types/bridge.js';
 import { BridgeError, defaultHints } from './types/errors.js';
@@ -23,6 +24,9 @@ export type CliOptions = {
   dbPath?: string;
   logger?: Logger;
   musicCheck?: () => Promise<void>;
+  // Whether stderr can carry a redrawn progress line; a redirected run gets
+  // plain lines instead.
+  isTty?: boolean;
   setExitCode?: (code: number) => void;
   writeStderr?: (text: string) => void;
   writeStdout?: (text: string) => void;
@@ -34,20 +38,11 @@ function lazyCache(dbPath: string): () => SelectaCache {
   return () => (cache ??= SelectaCache.open(dbPath));
 }
 
-function formatEta(ms: number): string {
-  const minutes = Math.round(ms / 60_000);
-
-  if (minutes < 1) return '<1m';
-
-  if (minutes < 60) return `${minutes}m`;
-
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
-
 export function createCliProgram(options: CliOptions = {}): Command {
   const bridge = options.bridge ?? defaultBridge;
   const dbPath = options.dbPath ?? defaultDbPath();
   const logger = options.logger ?? defaultLogger;
+  const isTty = options.isTty ?? process.stderr.isTTY === true;
   const setExitCode = options.setExitCode ?? ((code) => (process.exitCode = code));
   const writeStderr = options.writeStderr ?? ((text) => process.stderr.write(text));
   const writeStdout = options.writeStdout ?? ((text) => process.stdout.write(text));
@@ -207,35 +202,44 @@ export function createCliProgram(options: CliOptions = {}): Command {
               `${pending} tracks pending ${source} enrichment; attempting ${budget} at ~1-3s each`,
             );
             const startedAt = Date.now();
+            const progress = createProgressReporter({ logger, writeStderr, isTty });
+            // Per-request narration is debug-level: on a terminal it would
+            // scroll the live line away, and it is what the file log is for.
+            // Through the reporter even so, or SELECTA_DEBUG=1 would write it
+            // onto the live line rather than above it.
+            const trace = (line: string): void => progress.note(line, 'debug');
             const summary = await enrichPendingTracks(
               cache,
               { limit: budget, source },
               {
-                metrognome: { binaryPath, trace: (line) => logger.info(line) },
-                onProgress: (progress) => {
-                  const covered = progress.processed + progress.skipped;
-                  const pct = Math.floor((covered / budget) * 100);
-                  const remaining = budget - covered;
-                  const eta =
-                    remaining === 0
-                      ? 'done'
-                      : `~${formatEta(remaining * ((Date.now() - startedAt) / covered))} remaining`;
-                  const skipped = progress.skipped > 0 ? `, ${progress.skipped} skipped` : '';
-
-                  logger.info(
-                    `enriched ${progress.enriched}/${progress.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
-                  );
-                },
+                metrognome: { binaryPath, trace },
+                onProgress: ({ processed, enriched, returned, skipped }, current) =>
+                  progress.update({
+                    done: processed + skipped,
+                    total: budget,
+                    enriched,
+                    returned,
+                    skipped,
+                    current,
+                  }),
                 onChunkError: (message, trackCount) =>
-                  logger.error(`chunk skipped (${trackCount} tracks stay pending): ${message}`),
-                trace: (line) => logger.info(line),
+                  progress.note(
+                    `chunk skipped (${trackCount} tracks stay pending): ${message}`,
+                    'error',
+                  ),
+                trace,
               },
+            ).finally(() => progress.stop());
+
+            logger.info(
+              `${summary.enriched} landed of ${summary.returned} returned, ${summary.processed} attempted in ${formatDuration(Date.now() - startedAt)}; ${summary.pendingRemaining} still pending ${source}`,
             );
 
             writeJson({
               source,
               processed: summary.processed,
               enriched: summary.enriched,
+              returned: summary.returned,
               no_data: summary.noData,
               no_match: summary.noMatch,
               skipped: summary.skipped,

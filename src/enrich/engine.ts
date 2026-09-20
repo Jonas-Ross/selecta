@@ -17,7 +17,8 @@ const CHUNK_SIZE = 25;
 
 export type EnrichmentProgress = {
   processed: number;
-  enriched: number; // status 'ok'
+  enriched: number; // landed a new value in storage (post gap-fill merge)
+  returned: number; // status 'ok' from the source, whether or not it landed
   noData: number;
   noMatch: number;
   skipped: number; // tracks in chunks that hit a source failure; still pending
@@ -62,7 +63,9 @@ export type EnrichDeps = {
   fetchLike?: FetchLike;
   sleep?: (ms: number) => Promise<void>;
   now?: () => Date;
-  onProgress?: (progress: EnrichmentProgress) => void;
+  // `current` names the track being worked on: counters settle a chunk at a
+  // time, so it is what moves between them on a live display.
+  onProgress?: (progress: EnrichmentProgress, current: string | null) => void;
   onChunkError?: (message: string, trackCount: number) => void;
   // Moment-to-moment narration of every request and chunk (see SourceDeps.trace).
   trace?: (line: string) => void;
@@ -83,6 +86,10 @@ export async function enrichPendingTracks(
     const selection = selectTargets(cache, opts, source);
     const now = deps.now ?? (() => new Date());
     const tally = createTally(selection.alreadyAttempted, deps);
+
+    // Before the first request, so a caller showing progress has a line up
+    // during the startup stall rather than after it.
+    tally.report();
 
     if (source === 'catalog') await runCatalogPass(cache, selection.pending, tally, deps, now);
     else await runAnalysisPass(cache, selection.pending, tally, deps, now);
@@ -110,11 +117,13 @@ function createTally(alreadyAttempted: PriorAttempt[], deps: EnrichDeps) {
   const progress: EnrichmentProgress = {
     processed: 0,
     enriched: 0,
+    returned: 0,
     noData: 0,
     noMatch: 0,
     skipped: 0,
   };
   const errors: string[] = [];
+  let current: string | null = null;
   const outcomes = new Map<string, TargetedEnrichmentOutcome>(
     alreadyAttempted.map(({ trackPersistentId, existingResult }) => [
       trackPersistentId,
@@ -127,12 +136,21 @@ function createTally(alreadyAttempted: PriorAttempt[], deps: EnrichDeps) {
     errors,
     outcomes,
 
-    /** Record one track's terminal outcome. */
-    settle(trackPersistentId: string, status: FeatureStatus): void {
+    /** Name the track now being worked on, without settling anything. */
+    touch(label: string): void {
+      current = label;
+      deps.onProgress?.({ ...progress }, current);
+    },
+
+    /** Record one track's terminal outcome; landed only applies to 'ok'. */
+    settle(trackPersistentId: string, status: FeatureStatus, landed: boolean): void {
       progress.processed += 1;
 
-      if (status === 'ok') progress.enriched += 1;
-      else if (status === 'no_data') progress.noData += 1;
+      if (status === 'ok') {
+        progress.returned += 1;
+
+        if (landed) progress.enriched += 1;
+      } else if (status === 'no_data') progress.noData += 1;
       else progress.noMatch += 1;
 
       outcomes.set(trackPersistentId, {
@@ -152,11 +170,11 @@ function createTally(alreadyAttempted: PriorAttempt[], deps: EnrichDeps) {
       if (!errors.includes(message)) errors.push(message);
 
       deps.onChunkError?.(message, trackPersistentIds.length);
-      deps.onProgress?.({ ...progress });
+      deps.onProgress?.({ ...progress }, current);
     },
 
     report(): void {
-      deps.onProgress?.({ ...progress });
+      deps.onProgress?.({ ...progress }, current);
     },
   };
 }
@@ -189,7 +207,7 @@ async function runCatalogPass(
     let rows: AudioFeaturesRow[];
 
     try {
-      rows = await resolveChunk(sources, chunk, now().toISOString());
+      rows = await resolveChunk(sources, chunk, now().toISOString(), tally.touch);
     } catch (err) {
       // Only source failures are skippable; anything else is a bug and rethrows.
       if (!(err instanceof BridgeError) || err.errorCode !== 'enrichment_error') throw err;
@@ -201,12 +219,12 @@ async function runCatalogPass(
       continue;
     }
 
-    cache.saveAudioFeatures(rows);
+    const landed = cache.saveAudioFeatures(rows);
     const counts = { ok: 0, no_data: 0, no_match: 0 };
 
     for (const row of rows) {
       counts[row.status] += 1;
-      tally.settle(row.trackPersistentId, row.status);
+      tally.settle(row.trackPersistentId, row.status, landed.get(row.trackPersistentId) ?? false);
     }
 
     trace(`chunk saved — ${counts.ok} ok, ${counts.no_data} no_data, ${counts.no_match} no_match`);
@@ -231,16 +249,17 @@ async function runAnalysisPass(
 
   const trace = deps.trace ?? (() => {});
   const unsettled = new Set(pending.map((track) => track.persistentId));
+  const labels = new Map(pending.map((track) => [track.persistentId, trackLabel(track)]));
   const buffered: AudioFeaturesRow[] = [];
 
   const flush = (): void => {
     if (buffered.length === 0) return;
 
-    cache.saveAudioFeatures(buffered);
+    const landed = cache.saveAudioFeatures(buffered);
 
     for (const row of buffered) {
       unsettled.delete(row.trackPersistentId);
-      tally.settle(row.trackPersistentId, row.status);
+      tally.settle(row.trackPersistentId, row.status, landed.get(row.trackPersistentId) ?? false);
     }
 
     buffered.length = 0;
@@ -259,6 +278,10 @@ async function runAnalysisPass(
       })),
       (analysis) => {
         const row = toFeaturesRow(analysis, now().toISOString());
+        const label = labels.get(analysis.query.client_ref ?? '');
+
+        // Results stream one at a time but save 25 at a time.
+        if (label != null) tally.touch(label);
 
         // A non-terminal failure (transport, cache, a bug) says nothing about
         // the track, so it is left pending rather than recorded.
@@ -283,6 +306,11 @@ async function runAnalysisPass(
   if (unsettled.size > 0) {
     tally.skip([...unsettled], 'metrognome returned no terminal result for these tracks');
   }
+}
+
+/** What a progress display calls a track. */
+function trackLabel(track: PendingTrack): string {
+  return [track.title, track.artist].filter(Boolean).join(' — ') || track.persistentId;
 }
 
 function resultForStatus(status: FeatureStatus): EnrichmentResult {
@@ -381,6 +409,7 @@ async function resolveChunk(
   sources: Sources,
   chunk: PendingTrack[],
   fetchedAt: string,
+  onTrack: (label: string) => void,
 ): Promise<AudioFeaturesRow[]> {
   // Tracks with no artist/title stay at the blank row's no_match without any network.
   const rows: AudioFeaturesRow[] = chunk.map((track) =>
@@ -388,9 +417,9 @@ async function resolveChunk(
   );
   const provenance: Provenance[] = rows.map(() => ({}));
 
-  await matchViaMusicBrainz(sources, chunk, rows);
+  await matchViaMusicBrainz(sources, chunk, rows, onTrack);
   await applyAcousticBrainzFeatures(sources, rows, provenance);
-  await fillDeezerBpm(sources, chunk, rows, provenance);
+  await fillDeezerBpm(sources, chunk, rows, provenance, onTrack);
   finalizeRows(rows, provenance);
 
   return rows;
@@ -400,9 +429,12 @@ async function matchViaMusicBrainz(
   sources: Sources,
   chunk: PendingTrack[],
   rows: AudioFeaturesRow[],
+  onTrack: (label: string) => void,
 ): Promise<void> {
   for (const [i, track] of chunk.entries()) {
     const target = matchTarget(track);
+
+    onTrack(trackLabel(track));
 
     if (target) rows[i]!.mbRecordingMbid = await sources.mbFindRecording(target);
   }
@@ -448,12 +480,15 @@ async function fillDeezerBpm(
   chunk: PendingTrack[],
   rows: AudioFeaturesRow[],
   provenance: Provenance[],
+  onTrack: (label: string) => void,
 ): Promise<void> {
   for (const [i, track] of chunk.entries()) {
     const row = rows[i]!;
     const target = matchTarget(track);
 
     if (row.bpm != null || !target) continue;
+
+    onTrack(trackLabel(track));
 
     const dz = await sources.dzFindTrack(target);
 

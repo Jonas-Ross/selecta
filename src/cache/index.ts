@@ -368,9 +368,11 @@ export class SelectaCache {
   /**
    * Persist one enrichment batch atomically. Rows live outside the tracks
    * refresh cycle (see schema.ts) — a refresh never rewrites them, only prunes
-   * rows whose track left the library.
+   * rows whose track left the library. Returns which of the candidates
+   * actually landed a new value, since gap-fill can discard one silently.
    */
-  saveAudioFeatures(rows: AudioFeaturesRow[]): void {
+  saveAudioFeatures(rows: AudioFeaturesRow[]): Map<string, boolean> {
+    const landed = new Map<string, boolean>();
     const run = this.db.transaction(() => {
       for (const row of rows) {
         // A concurrent refresh may have removed a track while its lookup was in flight.
@@ -379,12 +381,16 @@ export class SelectaCache {
         // Read and merge share the write's transaction, so the other pass
         // cannot land a value between the two and lose it.
         const existing = this.queries.getAudioFeatures(row.trackPersistentId);
+        const result = mergeFeatures(existing, row);
 
-        this.queries.upsertAudioFeatures(mergeFeatures(existing, row));
+        this.queries.upsertAudioFeatures(result.row);
+        landed.set(row.trackPersistentId, result.landed);
       }
     });
 
     run();
+
+    return landed;
   }
 
   /** Full features row with provenance; feature values also ride every TrackRow. */
