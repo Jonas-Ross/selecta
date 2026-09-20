@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createCliProgram } from '../src/cli.js';
+import { runDestructive } from '../src/operations/destructive.js';
 import { SelectaCache } from '../src/cache/index.js';
 import { reopenFeatures } from '../src/cache/audio_features.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
@@ -228,7 +229,10 @@ describe('reopening a discarded estimate', () => {
         { durationMs: 1 },
       );
 
-      expect(cache.applyReopenFeatures(plan)).toMatchObject({ tracks: 0 });
+      // `applied` drives the undo journal, so an empty one has to mean an
+      // empty journal — not a row the run never touched.
+      expect(cache.applyReopenFeatures(plan)).toEqual({ summary: expect.anything(), applied: [] });
+      expect(cache.applyReopenFeatures(plan).summary).toMatchObject({ tracks: 0 });
       expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
     } finally {
       cache.close();
@@ -270,6 +274,48 @@ describe('reopening a discarded estimate', () => {
     const json = await run(dbPath, ['reopen', '-s', 'catalog', '-m', 'danceability']);
 
     expect(json).toMatchObject({ command: 'reopen', dry_run: true });
+  });
+
+  it('leaves no journal when a prune takes the only planned row', () => {
+    const { dbPath } = seeded();
+    const cache = SelectaCache.open(dbPath);
+
+    try {
+      const plan = cache.planReopenFeatures('analysis', 'musicalKey');
+
+      expect(plan.changes).toHaveLength(1);
+
+      const snapshot = fixture as LibrarySnapshot;
+
+      cache.refreshFromSnapshot(
+        { ...snapshot, tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-ANGEL') },
+        { durationMs: 1 },
+      );
+
+      // Through the shared runner, so this covers reopen handing it what the
+      // write actually touched rather than what the plan named. A journal left
+      // behind here would restore a row this run never changed.
+      const outcome = runDestructive(
+        {
+          command: 'reopen',
+          arguments: { source: 'analysis', missing: 'musicalKey' },
+          summary: plan.summary,
+          empty: plan.changes.length === 0,
+          before: { audio_features: plan.changes.map((change) => change.before) },
+          apply: () => {
+            const { summary, applied } = cache.applyReopenFeatures(plan);
+
+            return { summary, applied: { audio_features: applied } };
+          },
+        },
+        { apply: true, dbPath },
+      );
+
+      expect(outcome).toMatchObject({ summary: { tracks: 0 }, undo_journal: null });
+      expect(journals(dbPath)).toHaveLength(0);
+    } finally {
+      cache.close();
+    }
   });
 
   it('puts the attempt back from its journal', async () => {

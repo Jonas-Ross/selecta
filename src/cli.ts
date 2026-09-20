@@ -405,7 +405,11 @@ export function createCliProgram(options: CliOptions = {}): Command {
                   summary: plan.summary,
                   empty: plan.changes.length === 0,
                   before: { audio_features: plan.changes.map((change) => change.before) },
-                  apply: () => cache.applyReopenFeatures(plan),
+                  apply: () => {
+                    const { summary, applied } = cache.applyReopenFeatures(plan);
+
+                    return { summary, applied: { audio_features: applied } };
+                  },
                 },
                 { apply, dbPath },
               );

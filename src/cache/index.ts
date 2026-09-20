@@ -512,7 +512,7 @@ export class SelectaCache {
   }
 
   /** Carry out the decisions a reopen plan described, atomically. */
-  applyReopenFeatures(plan: ReopenPlan): ReopenSummary {
+  applyReopenFeatures(plan: ReopenPlan): { summary: ReopenSummary; applied: AudioFeaturesRow[] } {
     const applied: ReopenChange[] = [];
     const run = this.db.transaction(() => {
       for (const change of plan.changes) {
@@ -534,8 +534,12 @@ export class SelectaCache {
     run();
 
     // Summarized from what was written rather than what was planned: the
-    // report has to account for the rows that actually moved.
-    return summarizeReopen(plan.source, applied);
+    // report has to account for the rows that actually moved, and so does the
+    // undo journal, which is narrowed to these rows.
+    return {
+      summary: summarizeReopen(plan.source, applied),
+      applied: applied.map((change) => change.before),
+    };
   }
 
   applySupersedeFeatures(plan: SupersedePlan): {
