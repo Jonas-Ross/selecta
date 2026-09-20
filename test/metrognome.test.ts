@@ -481,6 +481,35 @@ describe('the analysis enrichment pass', () => {
     cache.close();
   });
 
+  it('names each track as its result streams back, between chunk saves', async () => {
+    const cache = seeded();
+    const ticks: [number, string | null][] = [];
+
+    await enrichPendingTracks(
+      cache,
+      { trackIds: ['T-MIDNIGHT', 'T-TEARDROP'], source: 'analysis' },
+      {
+        ...answeringStub({
+          'T-MIDNIGHT': line('T-MIDNIGHT'),
+          'T-TEARDROP': line('T-TEARDROP'),
+        }),
+        onProgress: (p, current) => ticks.push([p.processed, current]),
+      },
+    );
+
+    // Results stream one at a time but save 25 at a time, so the name is the
+    // only thing that moves until the flush.
+    expect(ticks).toEqual([
+      // Seeded before the binary is even spawned, so a slow first preview
+      // still shows a line rather than nothing.
+      [0, null],
+      [0, 'Midnight City — M83'],
+      [0, 'Teardrop — Massive Attack'],
+      [2, 'Teardrop — Massive Attack'],
+    ]);
+    cache.close();
+  });
+
   it('works the backlog in most-played order and leaves the catalog backlog alone', async () => {
     const cache = seeded();
     const stub = answeringStub({ 'T-MIDNIGHT': line('T-MIDNIGHT') });

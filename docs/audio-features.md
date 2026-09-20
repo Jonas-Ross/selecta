@@ -85,6 +85,30 @@ records the attempt. It also carries each estimate's own confidence (0-1) and
 is `validated` against published references, its key `provisional`, so a key
 from analysis is a hint however confident the number looks.
 
+## Watching a long run
+
+A whole-library `analysis` backlog is thousands of tracks at ~1-3s each, which
+is hours. `stdout` stays the JSON channel — one summary object when the run
+ends — so everything a human reads is on `stderr`, and what `stderr` gets
+depends on whether it is a terminal:
+
+- **A terminal** gets one live line, redrawn in place: tracks done out of the
+  budget, percentage, enriched so far, any skipped, throughput, ETA, and the
+  track being worked on. It repaints on a timer as well as on progress, so the
+  elapsed picture keeps moving through a slow track rather than looking hung.
+  Counters settle a chunk at a time and the track name moves between chunks.
+- **Anything else** (`2> run.log`, a pipe, CI) gets the same content as plain
+  lines with no control characters, at most one per 15 seconds plus the last
+  one, so the file stays readable and greppable.
+
+The fork was between one live line and a scrolling narration. Per-request
+narration (every MusicBrainz query, every metrognome log line) would scroll the
+live line away within a second, so it moved to debug level: run with
+`SELECTA_DEBUG=1` to put it back on `stderr` and into
+`~/Library/Logs/Selecta/selecta.log`. Redirecting `stderr` to keep a log is
+therefore no longer the only way to see a run — and it is the one way to see
+nothing while it runs.
+
 ## Configuration
 
 The binary is found at `SELECTA_METROGNOME_PATH`, the CLI's
