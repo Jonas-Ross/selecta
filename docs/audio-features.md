@@ -154,11 +154,15 @@ have to be undone together.
   per field, with a track count. Nothing changes. This is also how a caller
   learns the exact strings the flag takes — Selecta does not know metrognome's
   versioning and must not hardcode it.
-- With `--provenance <value...>`, it clears exactly the values recorded under
-  those strings, along with the confidence, maturity and Camelot that described
-  them, and clears `--source`'s terminal status so the backlog includes those
-  tracks again. A row left with no values and no attempt on either source is
-  removed rather than kept claiming a row-level status nothing supports.
+- With `--provenance <value...>`, it reports what clearing those values would
+  do — tracks, fields, and which algorithm string each cleared field belongs to
+  — and writes nothing. With `--apply` as well, it clears exactly the values
+  recorded under those strings, along with the confidence, maturity and Camelot
+  that described them, and clears `--source`'s terminal status so the backlog
+  includes those tracks again. A row left with no values and no attempt on
+  either source is removed rather than kept claiming a row-level status nothing
+  supports. The apply journals every row it touches first and prints the path;
+  `docs/destructive-commands.md` covers that convention and `restore`.
 
 Anything the other source supplied is untouched, as is anything a newer version
 of the same algorithm wrote. It runs under the enrichment lock, so it cannot

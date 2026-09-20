@@ -6,6 +6,7 @@ A local MCP server that exposes the user's Apple Music library to AI agents thro
 `docs/cache-migrations.md` covers schema upgrades and the backup policy for future destructive migrations.
 `docs/cache-architecture.md` records transaction boundaries and refresh-pruning ownership.
 `docs/audio-features.md` covers the two enrichment sources, per-source terminal status, the merge rule and which of it reaches the model.
+`docs/destructive-commands.md` covers the dry-run/`--apply` convention, the undo journal and the test pattern every destructive command owes.
 
 ## Architecture
 
@@ -39,7 +40,8 @@ Shared storage and bridge types live in `src/types/`; the cross-cutting error en
 | `node dist/index.js doctor` | `status` plus a read-only Music.app availability and Automation probe |
 | `node dist/index.js refresh` | Refresh the library cache from the CLI, no MCP client needed |
 | `node dist/index.js enrich [-n N] [--source catalog\|analysis]` | Backfill audio features from the CLI (default all pending on `catalog`, ~1-3s/track; live progress line on a terminal, plain throttled lines when redirected) |
-| `node dist/index.js supersede [--source S] [-p <algo>...]` | List what produced each stored feature; with `-p`, clear those values so a later `enrich` re-measures them |
+| `node dist/index.js supersede [--source S] [-p <algo>...] [--apply]` | List what produced each stored feature; with `-p`, report what clearing those values would change, and with `--apply` carry it out so a later `enrich` re-measures them |
+| `node dist/index.js restore <journal> [--apply]` | Put back the cache rows a destructive command journalled before it ran |
 
 ## Testing
 
@@ -60,6 +62,7 @@ Two tiers, cheapest first:
 - **No taste in the MCP.** No similarity scoring, candidate ranking, or recommendation inside Selecta — sequencing and taste are the model's job. Surfacing and enriching objective facts (BPM/key/energy, including from external sources like MusicBrainz/AcousticBrainz) is in scope. A feature drifting toward ranking is the wrong feature — stop and flag it.
 - **All Music.app coupling stays in `src/bridge/`.** No `osascript`/JXA in `tools/` or `cache/`.
 - **`stdout` is the MCP protocol channel.** All logging to `stderr`; optional file log at `~/Library/Logs/Selecta/selecta.log` only when `SELECTA_DEBUG=1`.
+- **Destructive CLI commands are dry-run by default.** A command that deletes or overwrites cache rows reports what it would change — with counts per source, not just totals — and writes only with `--apply`, dumping every row it overwrites or removes to an undo journal beside the database first. Its tests snapshot the whole cache and assert the delta is exactly what the summary reported, and empty for a dry run. `docs/destructive-commands.md` has the convention and what is deliberately outside it.
 - **No hidden retries, no fallbacks, no auto-refresh.** Bridge fails → structured error; the model decides what to do. Write paths patch the cache surgically but never trigger a full reread.
 - **CLI no-arg must start the MCP server over stdio** — clients spawn it that way; never print help on no-arg. Commander output routes to stderr (`configureOutput`).
 - **macOS only.** Out of scope: Spotify integration, Last.fm scrobbling, multi-user, cloud, auth, standalone UI.
