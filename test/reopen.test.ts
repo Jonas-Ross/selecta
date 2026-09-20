@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createCliProgram } from '../src/cli.js';
 import { runDestructive } from '../src/operations/destructive.js';
 import { SelectaCache } from '../src/cache/index.js';
-import { reopenFeatures } from '../src/cache/audio_features.js';
+import { reopenFeatures, type ReopenPlan } from '../src/cache/audio_features.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 import { featuresRow } from './helpers.js';
@@ -315,6 +315,36 @@ describe('reopening a discarded estimate', () => {
       expect(journals(dbPath)).toHaveLength(0);
     } finally {
       cache.close();
+    }
+  });
+
+  it('journals nothing when the prune lands inside the CLI run', async () => {
+    const { dbPath } = seeded();
+    const original = SelectaCache.prototype.applyReopenFeatures;
+    const snapshot = fixture as LibrarySnapshot;
+
+    // The CLI plans and applies inside one call, so the only way to interleave
+    // a refresh is from inside the apply. This covers the three lines joining
+    // the cache method to the runner, which the tests either side of them
+    // cannot see: both build their own DestructiveChange.
+    const spy = vi
+      .spyOn(SelectaCache.prototype, 'applyReopenFeatures')
+      .mockImplementation(function (this: SelectaCache, plan: ReopenPlan) {
+        this.refreshFromSnapshot(
+          { ...snapshot, tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-ANGEL') },
+          { durationMs: 1 },
+        );
+
+        return original.call(this, plan);
+      });
+
+    try {
+      const json = await run(dbPath, ['reopen', '-m', 'musicalKey', '--apply']);
+
+      expect(json).toMatchObject({ summary: { tracks: 0 }, undo_journal: null });
+      expect(journals(dbPath)).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
     }
   });
 
