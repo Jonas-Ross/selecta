@@ -141,6 +141,41 @@ live line away within a second, so it moved to debug level: run with
 therefore no longer the only way to see a run — and it is the one way to see
 nothing while it runs.
 
+## Superseding what an older algorithm measured
+
+An estimator that improves leaves worse values behind it, and nothing in the
+normal path reaches them: gap-fill keeps whatever is already on the field, and
+the source's attempt is terminal, so a later run never revisits the track. Both
+have to be undone together.
+
+`node dist/index.js supersede` does that, in two steps so neither is a guess:
+
+- With no `--provenance`, it lists every algorithm string currently stored,
+  per field, with a track count. Nothing changes. This is also how a caller
+  learns the exact strings the flag takes — Selecta does not know metrognome's
+  versioning and must not hardcode it.
+- With `--provenance <value...>`, it clears exactly the values recorded under
+  those strings, along with the confidence, maturity and Camelot that described
+  them, and clears `--source`'s terminal status so the backlog includes those
+  tracks again. A row left with no values and no attempt on either source is
+  removed rather than kept claiming a row-level status nothing supports.
+
+Anything the other source supplied is untouched, as is anything a newer version
+of the same algorithm wrote. It runs under the enrichment lock, so it cannot
+interleave with a run in progress.
+
+Naming a provenance the given `--source` did not produce is refused rather than
+applied: only that source's attempt reopens, so clearing the other's values
+would strand them — its status stays terminal, nothing refetches, and with the
+provenance gone a second `supersede` could no longer find the row to repair it.
+The catalog pass writes a closed set of provenance strings (`acousticbrainz`,
+`deezer`), so anything else is analysis; that is how a value is attributed
+without Selecta knowing metrognome's versions.
+
+Superseding is a judgement that the newer algorithm is better, which is not the
+same as newer. metrognome's own `validate` against real recordings is what
+settles that; a version bump alone is not evidence.
+
 ## Configuration
 
 The binary is found at `SELECTA_METROGNOME_PATH`, the CLI's

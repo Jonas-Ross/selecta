@@ -6,6 +6,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { Command, InvalidArgumentError, Option } from 'commander';
 import { refreshLibrary } from './operations/refresh.js';
 import { releaseLocksOnShutdown } from './operations/shutdown.js';
+import { withOperation } from './operations/lock.js';
 import { bridge as defaultBridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
 import { runDoctor } from './diagnostics/doctor.js';
@@ -258,6 +259,56 @@ export function createCliProgram(options: CliOptions = {}): Command {
         }
       },
     );
+
+  program
+    .command('supersede')
+    .description(
+      'List what produced each stored audio feature; with --provenance, clear those values and reopen the source so a later enrich re-measures them',
+    )
+    .addOption(
+      new Option('-s, --source <source>', 'whose terminal attempt to reopen')
+        .choices(['catalog', 'analysis'])
+        .default('analysis'),
+    )
+    .option(
+      '-p, --provenance <value...>',
+      'algorithm strings to treat as superseded, exactly as listed (e.g. metrognome/chroma-correlation-edm@1)',
+    )
+    .action(async ({ source, provenance }: { source: FeatureSource; provenance?: string[] }) => {
+      try {
+        const cache = SelectaCache.open(dbPath);
+
+        try {
+          // No provenance named is the survey: it reports what is stored and
+          // changes nothing, which is also how a caller learns the exact
+          // strings this command takes.
+          if (provenance == null || provenance.length === 0) {
+            writeJson({ provenance: cache.featureProvenance(), db_path: dbPath });
+
+            return;
+          }
+
+          const result = await withOperation(cache, 'enrich', async () =>
+            cache.supersedeFeatures(source, provenance),
+          );
+
+          writeJson({
+            source,
+            superseded: provenance,
+            tracks: result.tracks,
+            cleared_fields: result.clearedFields,
+            rows_removed: result.rowsRemoved,
+            pending_remaining: cache.countPendingEnrichment(source),
+            db_path: dbPath,
+          });
+        } finally {
+          cache.close();
+        }
+      } catch (err) {
+        reportError(err);
+        setExitCode(1);
+      }
+    });
 
   return program;
 }

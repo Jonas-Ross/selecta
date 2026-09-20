@@ -9,6 +9,12 @@ import type {
   PendingTrack,
 } from '../../types/cache.js';
 
+export type FeatureProvenanceRow = {
+  field: string;
+  provenance: string;
+  trackCount: number;
+};
+
 export function createMetadataQueries(db: Database) {
   // One note per subject: an existing row keeps its created_at and takes the
   // new body and updated_at.
@@ -100,6 +106,43 @@ export function createMetadataQueries(db: Database) {
     analysis: pendingFor('analysis_status'),
   };
 
+  // What produced each stored value, counted per field. Provenance lives in
+  // the sources JSON rather than a column, so this is the only way to see which
+  // algorithm versions a library is actually carrying.
+  const provenanceStmt = db.prepare(`
+    SELECT field, provenance, COUNT(*) AS trackCount FROM (
+      SELECT 'bpm' AS field, json_extract(sources, '$.bpm') AS provenance
+        FROM audio_features WHERE bpm IS NOT NULL
+      UNION ALL
+      SELECT 'musicalKey', json_extract(sources, '$.musicalKey')
+        FROM audio_features WHERE musical_key IS NOT NULL
+      UNION ALL
+      SELECT 'danceability', json_extract(sources, '$.danceability')
+        FROM audio_features WHERE danceability IS NOT NULL
+    )
+    WHERE provenance IS NOT NULL
+    GROUP BY field, provenance
+    ORDER BY trackCount DESC, provenance
+  `);
+
+  // Rows carrying any of the named provenance values. The caller decides what
+  // that means for each row (see supersedeFeatures).
+  const rowsByProvenanceStmt = (provenances: readonly string[]): Statement =>
+    db.prepare(`
+      SELECT track_persistent_id AS trackPersistentId FROM audio_features
+      -- json_each raises on malformed JSON, and most rows are an attempt with
+      -- no sources at all, so the guard keeps one odd row from failing the run.
+      WHERE json_valid(sources) AND EXISTS (
+        SELECT 1 FROM json_each(audio_features.sources)
+        WHERE json_each.value IN (${provenances.map(() => '?').join(', ')})
+      )
+      ORDER BY track_persistent_id
+    `);
+
+  const deleteAudioFeaturesStmt = db.prepare(
+    'DELETE FROM audio_features WHERE track_persistent_id = ?',
+  );
+
   const getSourceCooldownStmt = db.prepare(
     'SELECT until_ms FROM enrichment_cooldowns WHERE host = ?',
   );
@@ -123,6 +166,26 @@ export function createMetadataQueries(db: Database) {
         ...row,
         sources: row.sources != null ? JSON.stringify(row.sources) : null,
       });
+    },
+
+    /** Distinct provenance values across stored features, with track counts. */
+    featureProvenance(): FeatureProvenanceRow[] {
+      return provenanceStmt.all() as FeatureProvenanceRow[];
+    },
+
+    /** IDs of rows whose sources name any of these provenance values. */
+    trackIdsWithProvenance(provenances: readonly string[]): string[] {
+      if (provenances.length === 0) return [];
+
+      return (
+        rowsByProvenanceStmt(provenances).all(...provenances) as {
+          trackPersistentId: string;
+        }[]
+      ).map((row) => row.trackPersistentId);
+    },
+
+    deleteAudioFeatures(trackPersistentId: string): void {
+      deleteAudioFeaturesStmt.run(trackPersistentId);
     },
 
     getTracksPendingEnrichment(source: FeatureSource, limit: number): PendingTrack[] {
