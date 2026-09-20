@@ -183,9 +183,11 @@ describe('reopening a discarded estimate', () => {
     const applied = await run(dbPath, ['reopen', '-m', 'musicalKey', '--apply']);
 
     // Pinned against a number computed here, not just against each other: two
-    // runs agreeing proves nothing when both can be wrong the same way.
-    expect(dry.pending_after).toBe(pendingBefore + dry.summary.tracks);
-    expect(applied.pending_after).toBe(dry.pending_after);
+    // runs agreeing proves nothing when both can be wrong the same way, and an
+    // undefined key compares equal to itself.
+    expect(typeof dry.pending_remaining).toBe('number');
+    expect(dry.pending_remaining).toBe(pendingBefore + dry.summary.tracks);
+    expect(applied.pending_remaining).toBe(dry.pending_remaining);
   });
 
   it('skips a track pruned between deciding and writing', () => {

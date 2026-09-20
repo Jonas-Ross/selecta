@@ -414,10 +414,10 @@ export function createCliProgram(options: CliOptions = {}): Command {
             // Every row a reopen clears joins the backlog, so a dry run
             // reports the number the caller will act on rather than the one it
             // is replacing. Both paths report the same thing (see the tests).
-            const pendingAfter =
+            const pendingRemaining =
               cache.countPendingEnrichment(source) + (outcome.dry_run ? outcome.summary.tracks : 0);
 
-            writeJson({ ...outcome, pending_after: pendingAfter });
+            writeJson({ ...outcome, pending_remaining: pendingRemaining });
             reportDryRun(outcome);
           } finally {
             cache.close();
