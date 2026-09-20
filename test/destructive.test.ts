@@ -252,14 +252,19 @@ describe('destructive CLI commands', () => {
     expect(journals(dbPath)).toHaveLength(0);
   });
 
-  it('leaves the same backlog whether it was previewed or applied', async () => {
+  it('predicts the backlog the apply actually leaves', async () => {
     const { dbPath } = seeded();
     const dry = await run(dbPath, ['supersede', '-p', ANALYSIS_KEY]);
     const applied = await run(dbPath, ['supersede', '-p', ANALYSIS_KEY, '--apply']);
+    // Ground truth from the cache, not from either run's own arithmetic.
+    const backlog = inspect(dbPath, (cache) => cache.countPendingEnrichment('analysis'));
 
-    // The dry run projects the backlog rather than reporting the one it is
-    // about to replace; this is what keeps that projection honest.
-    expect(dry.json.pending_remaining).toBe(applied.json.pending_remaining);
+    // Named because a key the CLI does not emit reads as undefined on both
+    // sides and compares equal, which is how this assertion once passed while
+    // the projection was wrong.
+    expect(typeof dry.json.pending_remaining).toBe('number');
+    expect(dry.json.pending_remaining).toBe(backlog);
+    expect(applied.json.pending_remaining).toBe(backlog);
   });
 
   it('writes no journal for a change that moves nothing', () => {
