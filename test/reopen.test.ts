@@ -107,9 +107,33 @@ describe('reopening a discarded estimate', () => {
   });
 
   it('leaves a track alone when that source never finished', () => {
+    // Also what keeps the backlog projection exact: a track whose attempt is
+    // already clear is in the backlog, so counting this as a change would
+    // predict one more pending track than the run actually leaves.
     const row = featuresRow({ musicalKey: null, camelot: null, analysisStatus: null });
 
     expect(reopenFeatures(row, 'analysis', 'musicalKey')).toEqual({ action: 'unchanged' });
+  });
+
+  it('keeps the row-level status while the row still stores a value', () => {
+    // Clearing the last attempt leaves the bpm it produced behind. Deriving the
+    // status from two blank attempts would call that row "nothing identified".
+    const row = featuresRow({
+      bpm: 132,
+      musicalKey: null,
+      camelot: null,
+      danceability: null,
+      sources: { bpm: ANALYSIS_BPM },
+      status: 'ok',
+      catalogStatus: null,
+      analysisStatus: 'ok',
+    });
+    const result = reopenFeatures(row, 'analysis', 'musicalKey');
+
+    expect(result).toMatchObject({
+      action: 'update',
+      row: { status: 'ok', analysisStatus: null, catalogStatus: null, bpm: 132 },
+    });
   });
 
   it('removes a row once it records no attempt and no value', () => {
@@ -156,20 +180,13 @@ describe('reopening a discarded estimate', () => {
     expect(json).toMatchObject({ dry_run: false, summary: { tracks: 1 } });
     expect(json.undo_journal).toMatch(/reopen-.*\.json$/);
 
-    // The keyed track is untouched; only the one whose key was discarded moves.
-    // Its row-level status follows the attempt it derives from, as it does
-    // after a supersede — nothing queries that column, and the next run sets it.
+    // The keyed track is untouched; only the one whose key was discarded moves,
+    // and only its attempt does. The row-level status stays put because the
+    // row still stores the bpm that attempt produced.
     expectOnlyChanged(
       before,
       inspect(dbPath, (cache) => snapshotCache(cache.db)),
-      [
-        {
-          table: 'audio_features',
-          key: 'T-ANGEL',
-          change: 'changed',
-          fields: ['analysis_status', 'status'],
-        },
-      ],
+      [{ table: 'audio_features', key: 'T-ANGEL', change: 'changed', fields: ['analysis_status'] }],
     );
     expect(inspect(dbPath, (cache) => cache.countPendingEnrichment('analysis'))).toBe(
       pendingBefore + 1,

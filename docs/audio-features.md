@@ -18,7 +18,10 @@ pick between them with `source`:
 Every attempt records a terminal `ok` / `no_data` / `no_match`, so a dead end
 costs nothing on the next run. That record is **per source**:
 `catalog_status` and `analysis_status`, either of which may be `NULL` for
-"not attempted yet". Row-level `status` is the better of the two.
+"not attempted yet". Row-level `status` is the better of the two, except where
+`supersede` or `reopen` has cleared the last attempt on a row that still stores
+a value: deriving it from two blank attempts would call that row "nothing
+identified", so it keeps what it said.
 
 A track the catalogs exhausted is therefore still pending analysis — which is
 the whole point, since that is exactly the 2022-and-later gap. The two
