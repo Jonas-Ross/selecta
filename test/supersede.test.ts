@@ -231,6 +231,40 @@ describe('superseding a stale algorithm', () => {
     }
   });
 
+  it('skips a track pruned between deciding and writing', () => {
+    const cache = loaded([featuresRow({ sources: { musicalKey: ANALYSIS_KEY } })]);
+
+    try {
+      const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]);
+      const snapshot = fixture as LibrarySnapshot;
+
+      // supersede holds the enrich lock, refresh holds the music one, so this
+      // interleaving is reachable. The row is already gone; rewriting it would
+      // resurrect an orphan, and reporting it would overstate what moved.
+      cache.refreshFromSnapshot(
+        { ...snapshot, tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-TEARDROP') },
+        { durationMs: 1 },
+      );
+
+      expect(cache.applySupersedeFeatures(plan)).toMatchObject({ tracks: 0 });
+      expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('refuses a provenance no stored feature came from', () => {
+    const cache = loaded();
+
+    try {
+      expect(() => cache.planSupersedeFeatures('analysis', ['metrognome/chroma@9'])).toThrow(
+        /no stored feature came from/,
+      );
+    } finally {
+      cache.close();
+    }
+  });
+
   it('reports what produced each stored value', () => {
     const cache = loaded();
 

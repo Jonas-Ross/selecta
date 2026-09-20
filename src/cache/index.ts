@@ -35,6 +35,7 @@ import {
   sourceForProvenance,
   supersedeFeatures,
   summarizeSupersede,
+  type SupersedeChange,
   type SupersedePlan,
   type SupersedeSummary,
 } from './audio_features.js';
@@ -428,6 +429,21 @@ export class SelectaCache {
       );
     }
 
+    // A typo passes the check above, since anything outside the catalog's own
+    // literals reads as analysis. Silently clearing nothing is the failure this
+    // command exists to prevent, so a string the library does not carry is
+    // refused rather than reported as a no-op.
+    const stored = new Set(this.queries.featureProvenance().map((row) => row.provenance));
+    const unknown = provenances.filter((value) => !stored.has(value));
+
+    if (unknown.length > 0) {
+      throw new BridgeError(
+        'validation_error',
+        `no stored feature came from: ${summarizeIds([...unknown])}`,
+        'Run `supersede` with no --provenance to list the algorithm strings this library carries, and pass one exactly as listed.',
+      );
+    }
+
     const wanted = new Set(provenances);
     const changes: SupersedePlan['changes'] = [];
 
@@ -453,19 +469,29 @@ export class SelectaCache {
    * the run it previews from describing different things.
    */
   applySupersedeFeatures(plan: SupersedePlan): SupersedeSummary {
+    const applied: SupersedeChange[] = [];
     const run = this.db.transaction(() => {
-      for (const { before, result } of plan.changes) {
-        if (result.action === 'delete') {
-          this.queries.deleteAudioFeatures(before.trackPersistentId);
+      for (const change of plan.changes) {
+        // supersede holds the enrich lock and refresh holds the music one, so a
+        // prune can land between deciding and writing. Its row is already gone;
+        // rewriting it here would resurrect an orphan.
+        if (!this.getTrack(change.before.trackPersistentId)) continue;
+
+        if (change.result.action === 'delete') {
+          this.queries.deleteAudioFeatures(change.before.trackPersistentId);
         } else {
-          this.queries.upsertAudioFeatures(result.row);
+          this.queries.upsertAudioFeatures(change.result.row);
         }
+
+        applied.push(change);
       }
     });
 
     run();
 
-    return plan.summary;
+    // Summarized from what was written rather than what was planned: the
+    // report has to account for the rows that actually moved.
+    return summarizeSupersede(applied);
   }
 
   /**

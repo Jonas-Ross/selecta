@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createCliProgram } from '../src/cli.js';
+import { runDestructive } from '../src/operations/destructive.js';
 import { SelectaCache } from '../src/cache/index.js';
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
@@ -233,11 +234,82 @@ describe('destructive CLI commands', () => {
     });
   });
 
-  it('leaves no journal behind when there was nothing to clear', async () => {
+  it('refuses a provenance no stored feature came from', async () => {
     const { dbPath } = seeded();
-    const { json } = await run(dbPath, ['supersede', '-p', 'metrognome/never-ran@9', '--apply']);
+    const before = inspect(dbPath, (cache) => snapshotCache(cache.db));
 
-    expect(json).toMatchObject({ dry_run: false, undo_journal: null, summary: { tracks: 0 } });
+    // One character off the real string. Reporting "0 tracks" and exiting 0
+    // would be indistinguishable from an algorithm already superseded.
+    const logged = await refused(dbPath, ['supersede', '-p', 'metrognome/chroma@9', '--apply']);
+
+    expect(logged).toContain('no stored feature came from');
+    expect(logged).toContain('--provenance');
+    expectOnlyChanged(
+      before,
+      inspect(dbPath, (cache) => snapshotCache(cache.db)),
+      [],
+    );
     expect(journals(dbPath)).toHaveLength(0);
+  });
+
+  it('leaves the same backlog whether it was previewed or applied', async () => {
+    const { dbPath } = seeded();
+    const dry = await run(dbPath, ['supersede', '-p', ANALYSIS_KEY]);
+    const applied = await run(dbPath, ['supersede', '-p', ANALYSIS_KEY, '--apply']);
+
+    // The dry run projects the backlog rather than reporting the one it is
+    // about to replace; this is what keeps that projection honest.
+    expect(dry.json.pending_remaining).toBe(applied.json.pending_remaining);
+  });
+
+  it('writes no journal for a change that moves nothing', () => {
+    const { dbPath } = seeded();
+    const outcome = runDestructive(
+      {
+        command: 'supersede',
+        arguments: {},
+        summary: { tracks: 0 },
+        empty: true,
+        before: { audio_features: [] },
+        apply: () => {
+          throw new Error('an empty change must not be applied');
+        },
+      },
+      { apply: true, dbPath },
+    );
+
+    expect(outcome).toMatchObject({ dry_run: false, undo_journal: null });
+    expect(journals(dbPath)).toHaveLength(0);
+  });
+
+  it('refuses a journal whose rows are not a list', async () => {
+    const { dbPath } = seeded();
+    const superseded = await run(dbPath, ['supersede', '-p', ANALYSIS_KEY, '--apply']);
+    const journal = JSON.parse(readFileSync(superseded.json.undo_journal, 'utf8'));
+
+    journal.rows.audio_features = { trackPersistentId: 'T-TEARDROP' };
+    writeFileSync(superseded.json.undo_journal, JSON.stringify(journal), 'utf8');
+
+    expect(await refused(dbPath, ['restore', superseded.json.undo_journal, '--apply'])).toContain(
+      'other than a list of rows',
+    );
+  });
+
+  it('survives a feature row whose provenance is not valid JSON', async () => {
+    const { dbPath } = seeded();
+    const cache = SelectaCache.open(dbPath);
+
+    cache.db
+      .prepare("UPDATE audio_features SET sources = '{not json' WHERE track_persistent_id = ?")
+      .run('T-ANGEL');
+    cache.close();
+
+    // The survey is the read-only half of a destructive command; one hand-edited
+    // row must not be able to take it down.
+    const { json } = await run(dbPath, ['supersede']);
+
+    expect(json.provenance).toEqual(
+      expect.arrayContaining([{ field: 'musicalKey', provenance: ANALYSIS_KEY, trackCount: 1 }]),
+    );
   });
 });

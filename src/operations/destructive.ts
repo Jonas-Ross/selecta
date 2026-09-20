@@ -117,6 +117,15 @@ export function readUndoJournal(path: string, dbPath: string): UndoJournal {
     throw new BridgeError('validation_error', `Undo journal ${path} carries no rows`);
   }
 
+  for (const [table, rows] of Object.entries(journal.rows)) {
+    if (!Array.isArray(rows)) {
+      throw new BridgeError(
+        'validation_error',
+        `Undo journal ${path} holds something other than a list of rows for ${table}`,
+      );
+    }
+  }
+
   if (journal.db_path !== resolve(dbPath)) {
     throw new BridgeError(
       'validation_error',

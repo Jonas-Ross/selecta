@@ -108,17 +108,19 @@ export function createMetadataQueries(db: Database) {
 
   // What produced each stored value, counted per field. Provenance lives in
   // the sources JSON rather than a column, so this is the only way to see which
-  // algorithm versions a library is actually carrying.
+  // algorithm versions a library is actually carrying. json_extract raises on
+  // malformed JSON, and this is the read-only survey, so one odd row must not
+  // take it down.
   const provenanceStmt = db.prepare(`
     SELECT field, provenance, COUNT(*) AS trackCount FROM (
       SELECT 'bpm' AS field, json_extract(sources, '$.bpm') AS provenance
-        FROM audio_features WHERE bpm IS NOT NULL
+        FROM audio_features WHERE bpm IS NOT NULL AND json_valid(sources)
       UNION ALL
       SELECT 'musicalKey', json_extract(sources, '$.musicalKey')
-        FROM audio_features WHERE musical_key IS NOT NULL
+        FROM audio_features WHERE musical_key IS NOT NULL AND json_valid(sources)
       UNION ALL
       SELECT 'danceability', json_extract(sources, '$.danceability')
-        FROM audio_features WHERE danceability IS NOT NULL
+        FROM audio_features WHERE danceability IS NOT NULL AND json_valid(sources)
     )
     WHERE provenance IS NOT NULL
     GROUP BY field, provenance
