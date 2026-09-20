@@ -1,8 +1,9 @@
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
 import { withOperation } from '../src/operations/lock.js';
 import { refreshLibrary } from '../src/operations/refresh.js';
@@ -74,6 +75,111 @@ describe('operation lifecycle', () => {
       cache.close();
       rmSync(directory, { recursive: true });
     }
+  });
+
+  describe('interrupted operations', () => {
+    /** Spawn a lock holder and expose its stdout as markers to wait for. */
+    function holder(script: string) {
+      const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
+        stdio: ['ignore', 'pipe', 'inherit'],
+      });
+      const waiting: (() => void)[] = [];
+      let seen = '';
+
+      child.stdout.on('data', (chunk) => {
+        seen += String(chunk);
+
+        for (const notify of waiting.splice(0)) notify();
+      });
+
+      const printed = (marker: string): Promise<void> =>
+        new Promise((resolve) => {
+          const check = (): void => {
+            if (seen.includes(marker)) resolve();
+            else waiting.push(check);
+          };
+
+          check();
+        });
+
+      return {
+        child,
+        printed,
+        closed: once(child, 'close') as Promise<[number | null, string | null]>,
+      };
+    }
+
+    let directory: string;
+    let dbPath: string;
+
+    beforeEach(() => {
+      directory = mkdtempSync(join(tmpdir(), 'selecta-lock-'));
+      dbPath = join(directory, 'library.db');
+      SelectaCache.open(dbPath).close();
+    });
+
+    afterEach(() => rmSync(directory, { recursive: true }));
+
+    const lockPath = (path: string, kind: string): string => `${realpathSync(path)}.${kind}.lock`;
+
+    /** What the CLI does: own the signals, then hold a lock until interrupted. */
+    const holding = (kind: string, { owned = true, path = dbPath, inner = '' } = {}) =>
+      `import { SelectaCache } from './dist/cache/index.js';
+       import { withOperation } from './dist/operations/lock.js';
+       import { releaseLocksOnShutdown } from './dist/operations/shutdown.js';
+       const forever = new Promise((r) => setTimeout(r, 60_000));
+       ${owned ? 'releaseLocksOnShutdown();' : ''}
+       await withOperation(SelectaCache.open(${JSON.stringify(path)}), ${JSON.stringify(kind)}, async () => {
+         ${inner || "console.log('held'); await forever;"}
+       });`;
+
+    it.each([
+      ['enrich', false],
+      ['music', true],
+    ] as const)(
+      'interrupting a %s operation leaves its lock in place: %s',
+      async (kind, survives) => {
+        const { child, printed, closed } = holder(holding(kind));
+
+        await printed('held');
+        child.kill('SIGINT');
+
+        const [, signal] = await closed;
+
+        // The signal must still end the process the way it would have.
+        expect(signal).toBe('SIGINT');
+        expect(existsSync(lockPath(dbPath, kind))).toBe(survives);
+      },
+    );
+
+    it('leaves the lock alone when nothing claimed the process signals', async () => {
+      const { child, printed, closed } = holder(holding('enrich', { owned: false }));
+
+      await printed('held');
+      child.kill('SIGINT');
+      await closed;
+
+      expect(existsSync(lockPath(dbPath, 'enrich'))).toBe(true);
+    });
+
+    it('releases every enrich lock the process holds, not just the last', async () => {
+      const second = join(directory, 'other.db');
+
+      SelectaCache.open(second).close();
+
+      const inner = `await withOperation(SelectaCache.open(${JSON.stringify(second)}), 'enrich', async () => {
+        console.log('held');
+        await forever;
+      });`;
+      const { child, printed, closed } = holder(holding('enrich', { inner }));
+
+      await printed('held');
+      child.kill('SIGINT');
+      await closed;
+
+      expect(existsSync(lockPath(dbPath, 'enrich'))).toBe(false);
+      expect(existsSync(lockPath(second, 'enrich'))).toBe(false);
+    });
   });
 
   it('does not resurrect enrichment rows for tracks removed during lookup', () => {
