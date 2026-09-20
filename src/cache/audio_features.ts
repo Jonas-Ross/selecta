@@ -38,6 +38,15 @@ export function blankFeatures(trackPersistentId: string, fetchedAt: string): Aud
   };
 }
 
+export type MergeResult = {
+  row: AudioFeaturesRow;
+  // Whether this candidate actually put a new value in storage — as opposed
+  // to being gap-filled away because the other pass already had it. That
+  // distinction is what makes an enrichment summary honest: a source can
+  // report 'ok' for a track without landing anything here.
+  landed: boolean;
+};
+
 /**
  * Fold one pass's findings into whatever the other pass already stored.
  *
@@ -50,16 +59,22 @@ export function blankFeatures(trackPersistentId: string, fetchedAt: string): Aud
 export function mergeFeatures(
   existing: AudioFeaturesRow | null,
   candidate: AudioFeaturesRow,
-): AudioFeaturesRow {
-  if (existing == null) return withCamelot(candidate);
+): MergeResult {
+  if (existing == null) {
+    const row = withCamelot(candidate);
+
+    return { row, landed: row.status === 'ok' };
+  }
 
   const merged: AudioFeaturesRow = { ...existing, fetchedAt: candidate.fetchedAt };
   const sources = { ...existing.sources };
+  let landed = false;
 
   if (merged.bpm == null && candidate.bpm != null) {
     merged.bpm = candidate.bpm;
     merged.bpmConfidence = candidate.bpmConfidence;
     merged.bpmMaturity = candidate.bpmMaturity;
+    landed = true;
 
     if (candidate.sources?.bpm != null) sources.bpm = candidate.sources.bpm;
   }
@@ -68,12 +83,14 @@ export function mergeFeatures(
     merged.musicalKey = candidate.musicalKey;
     merged.keyConfidence = candidate.keyConfidence;
     merged.keyMaturity = candidate.keyMaturity;
+    landed = true;
 
     if (candidate.sources?.musicalKey != null) sources.musicalKey = candidate.sources.musicalKey;
   }
 
   if (merged.danceability == null && candidate.danceability != null) {
     merged.danceability = candidate.danceability;
+    landed = true;
 
     if (candidate.sources?.danceability != null)
       sources.danceability = candidate.sources.danceability;
@@ -87,7 +104,7 @@ export function mergeFeatures(
 
   merged.sources = Object.keys(sources).length > 0 ? sources : null;
 
-  return withCamelot(merged);
+  return { row: withCamelot(merged), landed };
 }
 
 // Camelot is a relabeling of the key, not a second measurement, so it is

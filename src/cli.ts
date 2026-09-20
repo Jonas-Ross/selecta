@@ -217,7 +217,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
                   const skipped = progress.skipped > 0 ? `, ${progress.skipped} skipped` : '';
 
                   logger.info(
-                    `enriched ${progress.enriched}/${progress.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
+                    `${progress.enriched} landed, ${progress.returned} returned, ${progress.processed} attempted — ${pct}% of ${budget}${skipped}, ${eta}`,
                   );
                 },
                 onChunkError: (message, trackCount) =>
@@ -230,6 +230,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
               source,
               processed: summary.processed,
               enriched: summary.enriched,
+              returned: summary.returned,
               no_data: summary.noData,
               no_match: summary.noMatch,
               skipped: summary.skipped,

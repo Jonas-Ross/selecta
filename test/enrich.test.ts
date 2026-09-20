@@ -164,6 +164,7 @@ describe('enrichPendingTracks', () => {
     expect(summary).toEqual({
       processed: 6,
       enriched: 2,
+      returned: 2,
       noData: 1,
       noMatch: 3,
       skipped: 0,
@@ -550,6 +551,7 @@ describe('enrich_features tool', () => {
     expect(out).toEqual({
       processed: 6,
       enriched: 2,
+      returned: 2,
       no_data: 1,
       no_match: 3,
       pending_remaining: 0,
@@ -582,6 +584,7 @@ describe('enrich_features tool', () => {
     expect(out).toEqual({
       processed: 1,
       enriched: 1,
+      returned: 1,
       no_data: 0,
       no_match: 0,
       pending_remaining: 4,
