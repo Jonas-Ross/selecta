@@ -5,6 +5,7 @@
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { Command, InvalidArgumentError, Option } from 'commander';
 import { refreshLibrary } from './operations/refresh.js';
+import { releaseLocksOnShutdown } from './operations/shutdown.js';
 import { bridge as defaultBridge } from './bridge/index.js';
 import { SelectaCache, defaultDbPath } from './cache/index.js';
 import { runDoctor } from './diagnostics/doctor.js';
@@ -185,6 +186,11 @@ export function createCliProgram(options: CliOptions = {}): Command {
         source: FeatureSource;
         metrognomePath?: string;
       }) => {
+        // A full-library pass runs for hours, so Ctrl-C is a normal way to end
+        // one; this process owns its signals, so it can drop the lock on the
+        // way out and leave the backlog resumable.
+        const stopShutdownHandler = releaseLocksOnShutdown();
+
         try {
           const cache = SelectaCache.open(dbPath);
 
@@ -247,6 +253,8 @@ export function createCliProgram(options: CliOptions = {}): Command {
         } catch (err) {
           reportError(err);
           setExitCode(1);
+        } finally {
+          stopShutdownHandler();
         }
       },
     );

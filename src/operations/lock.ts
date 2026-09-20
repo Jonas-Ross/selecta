@@ -4,6 +4,25 @@ import { BridgeError } from '../types/errors.js';
 
 const memoryLocks = new WeakMap<object, Set<string>>();
 
+// Enrich locks this process holds right now. Nothing here listens for a
+// signal: a library that takes SIGINT breaks whatever embeds it, so dropping
+// these is the process owner's call (see operations/shutdown.ts).
+const heldReleases = new Set<() => void>();
+
+/** Release every enrich lock held in this process. */
+export function releaseHeldEnrichLocks(): void {
+  for (const release of heldReleases) {
+    try {
+      release();
+    } catch {
+      // Nothing can be reported from a process on its way out, and a lock that
+      // outlives it is still recoverable by hand.
+    }
+  }
+
+  heldReleases.clear();
+}
+
 /** A settled action can survive this failure; the named lock still needs recovery. */
 export class OperationCleanupError extends Error {
   constructor(
@@ -78,9 +97,17 @@ export async function withOperation<T>(
     }
   }
 
+  // An hours-long enrich is normally ended by Ctrl-C, and it writes nowhere but
+  // this cache, so a process owner may drop it. A music lock never joins: a
+  // half-finished Music.app write is the thing it warns about.
+  const held = kind === 'enrich' && !cache.db.memory;
+
+  if (held) heldReleases.add(release);
+
   try {
     return await action();
   } finally {
+    heldReleases.delete(release);
     release();
   }
 }
