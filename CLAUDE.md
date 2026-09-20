@@ -38,7 +38,7 @@ Shared storage and bridge types live in `src/types/`; the cross-cutting error en
 | `node dist/index.js status` | Read-only cache integrity, schema version and pending migrations, freshness, counts, and enrichment diagnostics |
 | `node dist/index.js doctor` | `status` plus a read-only Music.app availability and Automation probe |
 | `node dist/index.js refresh` | Refresh the library cache from the CLI, no MCP client needed |
-| `node dist/index.js enrich [-n N] [--source catalog\|analysis]` | Backfill audio features from the CLI (default all pending on `catalog`, ~1-3s/track) |
+| `node dist/index.js enrich [-n N] [--source catalog\|analysis]` | Backfill audio features from the CLI (default all pending on `catalog`, ~1-3s/track; live progress line on a terminal, plain throttled lines when redirected) |
 
 ## Testing
 

@@ -35,6 +35,15 @@ other, so overwriting on that basis would be a guess dressed as an improvement.
 Per-field confidence and maturity are stored precisely so a future supersede
 rule has something to decide on.
 
+## What the summary counts mean
+
+Each run reports `returned` (tracks the source stood behind an estimate for)
+and `enriched` (tracks where a value actually landed in storage this run).
+They diverge exactly where gap-fill applies: a source can return `ok` for a
+track that already has that feature from the other source, and `mergeFeatures`
+discards the estimate rather than overwriting it. `returned` is the source's
+own hit rate; `enriched` is what the run actually changed.
+
 ## Camelot is derived, not sourced
 
 Camelot notation is the key written on a clock face — the number is a position
@@ -107,6 +116,30 @@ records the attempt. It also carries each estimate's own confidence (0-1) and
 `maturity`, which is the estimator's own account of itself — metrognome's tempo
 is `validated` against published references, its key `provisional`, so a key
 from analysis is a hint however confident the number looks.
+
+## Watching a long run
+
+A whole-library `analysis` backlog is thousands of tracks at ~1-3s each, which
+is hours. `stdout` stays the JSON channel — one summary object when the run
+ends — so everything a human reads is on `stderr`, and what `stderr` gets
+depends on whether it is a terminal:
+
+- **A terminal** gets one live line, redrawn in place: tracks done out of the
+  budget, percentage, enriched so far, any skipped, throughput, ETA, and the
+  track being worked on. It repaints on a timer as well as on progress, so the
+  elapsed picture keeps moving through a slow track rather than looking hung.
+  Counters settle a chunk at a time and the track name moves between chunks.
+- **Anything else** (`2> run.log`, a pipe, CI) gets the same content as plain
+  lines with no control characters, at most one per 15 seconds plus the last
+  one, so the file stays readable and greppable.
+
+The fork was between one live line and a scrolling narration. Per-request
+narration (every MusicBrainz query, every metrognome log line) would scroll the
+live line away within a second, so it moved to debug level: run with
+`SELECTA_DEBUG=1` to put it back on `stderr` and into
+`~/Library/Logs/Selecta/selecta.log`. Redirecting `stderr` to keep a log is
+therefore no longer the only way to see a run — and it is the one way to see
+nothing while it runs.
 
 ## Configuration
 

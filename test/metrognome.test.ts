@@ -348,7 +348,9 @@ describe('merging one pass into the other', () => {
       analysisStatus: 'ok',
     };
 
-    expect(mergeFeatures(stored, analyzed)).toMatchObject({
+    const merged = mergeFeatures(stored, analyzed);
+
+    expect(merged.row).toMatchObject({
       bpm: 78.42, // Deezer's stands; metrognome's 156 is not an improvement it can prove.
       bpmConfidence: null,
       musicalKey: 'A minor',
@@ -365,6 +367,8 @@ describe('merging one pass into the other', () => {
       analysisStatus: 'ok',
       status: 'ok',
     });
+    // The key gap-filled even though bpm didn't — landed tracks the row, not the source.
+    expect(merged.landed).toBe(true);
   });
 
   it('keeps each pass’s own terminal record and reports the better one', () => {
@@ -382,11 +386,14 @@ describe('merging one pass into the other', () => {
       analysisStatus: 'no_data' as const,
     };
 
-    expect(mergeFeatures(exhausted, analyzed)).toMatchObject({
+    const merged = mergeFeatures(exhausted, analyzed);
+
+    expect(merged.row).toMatchObject({
       catalogStatus: 'no_match',
       analysisStatus: 'no_data',
       status: 'no_data',
     });
+    expect(merged.landed).toBe(false);
   });
 });
 
@@ -436,7 +443,7 @@ describe('the analysis enrichment pass', () => {
       answeringStub({ 'T-MIDNIGHT': line('T-MIDNIGHT') }),
     );
 
-    expect(summary).toMatchObject({ processed: 1, enriched: 1, skipped: 0 });
+    expect(summary).toMatchObject({ processed: 1, enriched: 1, returned: 1, skipped: 0 });
     expect(cache.getAudioFeatures('T-MIDNIGHT')).toMatchObject({
       bpm: parsed('T-MIDNIGHT').features.tempo.bpm,
       bpmMaturity: 'validated',
@@ -447,6 +454,59 @@ describe('the analysis enrichment pass', () => {
       status: 'ok',
     });
     expect(cache.getTrack('T-MIDNIGHT')!.bpm).toBe(parsed('T-MIDNIGHT').features.tempo.bpm);
+    cache.close();
+  });
+
+  it('returns without enriching when gap-fill discards the estimate', async () => {
+    // Regression: the summary used to count this as enriched because
+    // metrognome stood behind an estimate, even though nothing changed —
+    // T-MIDNIGHT already has a catalog bpm and key.
+    const cache = seeded();
+
+    cache.saveAudioFeatures([featuresRow({ trackPersistentId: 'T-MIDNIGHT' })]);
+
+    const summary = await enrichPendingTracks(
+      cache,
+      { trackIds: ['T-MIDNIGHT'], source: 'analysis' },
+      answeringStub({ 'T-MIDNIGHT': line('T-MIDNIGHT') }),
+    );
+
+    expect(summary).toMatchObject({ processed: 1, returned: 1, enriched: 0 });
+    expect(cache.getAudioFeatures('T-MIDNIGHT')).toMatchObject({
+      bpm: 78.42, // the catalog's value, not metrognome's 124.01
+      musicalKey: 'A minor', // the catalog's, unchanged
+      analysisStatus: 'ok',
+      catalogStatus: 'ok',
+    });
+    cache.close();
+  });
+
+  it('names each track as its result streams back, between chunk saves', async () => {
+    const cache = seeded();
+    const ticks: [number, string | null][] = [];
+
+    await enrichPendingTracks(
+      cache,
+      { trackIds: ['T-MIDNIGHT', 'T-TEARDROP'], source: 'analysis' },
+      {
+        ...answeringStub({
+          'T-MIDNIGHT': line('T-MIDNIGHT'),
+          'T-TEARDROP': line('T-TEARDROP'),
+        }),
+        onProgress: (p, current) => ticks.push([p.processed, current]),
+      },
+    );
+
+    // Results stream one at a time but save 25 at a time, so the name is the
+    // only thing that moves until the flush.
+    expect(ticks).toEqual([
+      // Seeded before the binary is even spawned, so a slow first preview
+      // still shows a line rather than nothing.
+      [0, null],
+      [0, 'Midnight City — M83'],
+      [0, 'Teardrop — Massive Attack'],
+      [2, 'Teardrop — Massive Attack'],
+    ]);
     cache.close();
   });
 
