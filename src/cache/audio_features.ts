@@ -1,7 +1,7 @@
 // Pure reconciliation of a stored audio_features row with a fresh one. The
 // facade loads and writes; the policy lives here.
 
-import type { AudioFeaturesRow, FeatureStatus } from '../types/cache.js';
+import type { AudioFeaturesRow, FeatureSource, FeatureStatus } from '../types/cache.js';
 import { camelotFor } from '../domain/camelot.js';
 
 // no_match (nothing identified) < no_data (identified, nothing measured) < ok.
@@ -105,6 +105,75 @@ export function mergeFeatures(
   merged.sources = Object.keys(sources).length > 0 ? sources : null;
 
   return { row: withCamelot(merged), landed };
+}
+
+/** What a source can contribute, keyed as its provenance is recorded. */
+const SOURCE_FIELDS = ['bpm', 'musicalKey', 'danceability'] as const;
+
+export type SourceField = (typeof SOURCE_FIELDS)[number];
+
+// Confidence, maturity and Camelot describe the value they came with, so they
+// go when it does.
+const CLEARED_WITH: Record<SourceField, readonly (keyof AudioFeaturesRow)[]> = {
+  bpm: ['bpm', 'bpmConfidence', 'bpmMaturity'],
+  musicalKey: ['musicalKey', 'camelot', 'keyConfidence', 'keyMaturity'],
+  danceability: ['danceability'],
+};
+
+export type SupersedeSummary = {
+  tracks: number;
+  clearedFields: Partial<Record<SourceField, number>>;
+  rowsRemoved: number;
+};
+
+export type SupersedeResult =
+  | { action: 'unchanged' }
+  | { action: 'update'; row: AudioFeaturesRow; clearedFields: SourceField[] }
+  | { action: 'delete'; clearedFields: SourceField[] };
+
+/**
+ * Drop the values a named algorithm produced and reopen that source's attempt.
+ *
+ * An estimator that improves leaves worse values behind it, and gap-fill means
+ * a better one can never replace them: the field is occupied and the source's
+ * attempt is terminal. Clearing both is the only way a later run reaches them.
+ * Only fields whose recorded provenance was named are touched, so the other
+ * source's contributions and anything a newer algorithm wrote stay put.
+ */
+export function supersedeFeatures(
+  row: AudioFeaturesRow,
+  source: FeatureSource,
+  provenances: ReadonlySet<string>,
+): SupersedeResult {
+  const sources = { ...row.sources };
+  const clearedFields: SourceField[] = [];
+  const next: AudioFeaturesRow = { ...row };
+
+  for (const field of SOURCE_FIELDS) {
+    const provenance = sources[field];
+
+    if (provenance == null || !provenances.has(provenance)) continue;
+
+    for (const dependent of CLEARED_WITH[field]) Object.assign(next, { [dependent]: null });
+
+    delete sources[field];
+    clearedFields.push(field);
+  }
+
+  if (clearedFields.length === 0) return { action: 'unchanged' };
+
+  next.sources = Object.keys(sources).length > 0 ? sources : null;
+  next[source === 'analysis' ? 'analysisStatus' : 'catalogStatus'] = null;
+
+  // An emptied row would still carry a row-level status, which reads as
+  // "looked and found nothing" where the truth is now "never looked".
+  if (next.catalogStatus == null && next.analysisStatus == null && next.sources == null) {
+    return { action: 'delete', clearedFields };
+  }
+
+  next.status = bestStatus(next.catalogStatus, next.analysisStatus);
+
+  return { action: 'update', row: next, clearedFields };
 }
 
 // Camelot is a relabeling of the key, not a second measurement, so it is

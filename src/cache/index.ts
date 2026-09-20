@@ -30,9 +30,10 @@ import type {
   TrackRow,
 } from '../types/cache.js';
 import { openDatabase } from './db.js';
-import { mergeFeatures } from './audio_features.js';
+import { mergeFeatures, supersedeFeatures, type SupersedeSummary } from './audio_features.js';
 import { planSyncReconciliation } from './reconciliation.js';
 import { createQueries, type Queries } from './queries.js';
+import type { FeatureProvenanceRow } from './queries/metadata.js';
 import { recentSinceIso } from '../domain/recent_activity.js';
 import { occurrencePositions } from '../domain/occurrence_positions.js';
 
@@ -391,6 +392,54 @@ export class SelectaCache {
     run();
 
     return landed;
+  }
+
+  /** What produced each stored feature value, counted per field. */
+  featureProvenance(): FeatureProvenanceRow[] {
+    return this.queries.featureProvenance();
+  }
+
+  /**
+   * Clear the features a superseded algorithm produced and reopen that
+   * source's attempt, so the next enrich run reaches those tracks again.
+   *
+   * Atomic, and scoped to exactly the named provenance values: anything the
+   * other source supplied, or a newer version of this one, is left alone.
+   */
+  supersedeFeatures(source: FeatureSource, provenances: readonly string[]): SupersedeSummary {
+    const wanted = new Set(provenances);
+    const clearedFields: SupersedeSummary['clearedFields'] = {};
+    let tracks = 0;
+    let rowsRemoved = 0;
+
+    const run = this.db.transaction(() => {
+      for (const id of this.queries.trackIdsWithProvenance(provenances)) {
+        const existing = this.queries.getAudioFeatures(id);
+
+        if (existing == null) continue;
+
+        const result = supersedeFeatures(existing, source, wanted);
+
+        if (result.action === 'unchanged') continue;
+
+        if (result.action === 'delete') {
+          this.queries.deleteAudioFeatures(id);
+          rowsRemoved += 1;
+        } else {
+          this.queries.upsertAudioFeatures(result.row);
+        }
+
+        tracks += 1;
+
+        for (const field of result.clearedFields) {
+          clearedFields[field] = (clearedFields[field] ?? 0) + 1;
+        }
+      }
+    });
+
+    run();
+
+    return { tracks, clearedFields, rowsRemoved };
   }
 
   /** Full features row with provenance; feature values also ride every TrackRow. */
