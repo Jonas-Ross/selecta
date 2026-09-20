@@ -176,6 +176,46 @@ describe('reopening a discarded estimate', () => {
     );
   });
 
+  it('projects the backlog it will leave, not the one it is replacing', async () => {
+    const { dbPath } = seeded();
+    const pendingBefore = inspect(dbPath, (cache) => cache.countPendingEnrichment('analysis'));
+    const dry = await run(dbPath, ['reopen', '-m', 'musicalKey']);
+    const applied = await run(dbPath, ['reopen', '-m', 'musicalKey', '--apply']);
+
+    // Pinned against a number computed here, not just against each other: two
+    // runs agreeing proves nothing when both can be wrong the same way.
+    expect(dry.pending_after).toBe(pendingBefore + dry.summary.tracks);
+    expect(applied.pending_after).toBe(dry.pending_after);
+  });
+
+  it('skips a track pruned between deciding and writing', () => {
+    const cache = SelectaCache.open(':memory:');
+
+    try {
+      const snapshot = fixture as LibrarySnapshot;
+
+      cache.refreshFromSnapshot(snapshot, { durationMs: 1 });
+      cache.saveAudioFeatures([
+        featuresRow({ musicalKey: null, camelot: null, analysisStatus: 'ok' }),
+      ]);
+
+      const plan = cache.planReopenFeatures('analysis', 'musicalKey');
+
+      // reopen holds the enrich lock, refresh holds the music one, so this
+      // interleaving is reachable. The row is already gone; rewriting it would
+      // resurrect an orphan, and reporting it would overstate what moved.
+      cache.refreshFromSnapshot(
+        { ...snapshot, tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-TEARDROP') },
+        { durationMs: 1 },
+      );
+
+      expect(cache.applyReopenFeatures(plan)).toMatchObject({ tracks: 0 });
+      expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
+    } finally {
+      cache.close();
+    }
+  });
+
   it('puts the attempt back from its journal', async () => {
     const { dbPath } = seeded();
     const before = inspect(dbPath, (cache) => snapshotCache(cache.db));

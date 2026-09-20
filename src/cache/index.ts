@@ -38,6 +38,7 @@ import {
   statusFieldFor,
   summarizeReopen,
   summarizeSupersede,
+  type ReopenChange,
   type ReopenPlan,
   type ReopenSummary,
   type SourceField,
@@ -512,19 +513,29 @@ export class SelectaCache {
 
   /** Carry out the decisions a reopen plan described, atomically. */
   applyReopenFeatures(plan: ReopenPlan): ReopenSummary {
+    const applied: ReopenChange[] = [];
     const run = this.db.transaction(() => {
-      for (const { before, result } of plan.changes) {
-        if (result.action === 'delete') {
-          this.queries.deleteAudioFeatures(before.trackPersistentId);
+      for (const change of plan.changes) {
+        // reopen holds the enrich lock and refresh holds the music one, so a
+        // prune can land between deciding and writing. Its row is already gone;
+        // rewriting it here would resurrect an orphan.
+        if (!this.getTrack(change.before.trackPersistentId)) continue;
+
+        if (change.result.action === 'delete') {
+          this.queries.deleteAudioFeatures(change.before.trackPersistentId);
         } else {
-          this.queries.upsertAudioFeatures(result.row);
+          this.queries.upsertAudioFeatures(change.result.row);
         }
+
+        applied.push(change);
       }
     });
 
     run();
 
-    return plan.summary;
+    // Summarized from what was written rather than what was planned: the
+    // report has to account for the rows that actually moved.
+    return summarizeReopen(plan.source, applied);
   }
 
   applySupersedeFeatures(plan: SupersedePlan): {
