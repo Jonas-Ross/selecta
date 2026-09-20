@@ -140,9 +140,10 @@ describe('progress on a terminal', () => {
       return [...h.stderr.at(-1)!].filter((c) => c === char).length;
     };
 
-    // ⌚ 〈 🚀 sit outside the CJK blocks and are still two columns wide, so
-    // half as many of them survive the same budget as a narrow character.
-    for (const char of ['\u231a', '\u2329', '\u{1f680}']) {
+    // ⌚ 〈 🚀 sit outside the CJK blocks, and Hangul jamo outside the syllable
+    // block; all are two columns, so half as many survive the same budget as a
+    // narrow character does.
+    for (const char of ['\u231a', '\u2329', '\u{1f680}', '\ua960', '\ud7b0', '\uac00']) {
       expect(kept(char)).toBe(Math.floor(kept('x') / 2));
     }
   });
