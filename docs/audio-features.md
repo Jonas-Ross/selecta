@@ -164,6 +164,14 @@ Anything the other source supplied is untouched, as is anything a newer version
 of the same algorithm wrote. It runs under the enrichment lock, so it cannot
 interleave with a run in progress.
 
+Naming a provenance the given `--source` did not produce is refused rather than
+applied: only that source's attempt reopens, so clearing the other's values
+would strand them — its status stays terminal, nothing refetches, and with the
+provenance gone a second `supersede` could no longer find the row to repair it.
+The catalog pass writes a closed set of provenance strings (`acousticbrainz`,
+`deezer`), so anything else is analysis; that is how a value is attributed
+without Selecta knowing metrognome's versions.
+
 Superseding is a judgement that the newer algorithm is better, which is not the
 same as newer. metrognome's own `validate` against real recordings is what
 settles that; a version bump alone is not evidence.

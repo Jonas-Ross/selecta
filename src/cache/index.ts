@@ -30,7 +30,13 @@ import type {
   TrackRow,
 } from '../types/cache.js';
 import { openDatabase } from './db.js';
-import { mergeFeatures, supersedeFeatures, type SupersedeSummary } from './audio_features.js';
+import {
+  mergeFeatures,
+  sourceForProvenance,
+  supersedeFeatures,
+  type SupersedeSummary,
+} from './audio_features.js';
+import { BridgeError, summarizeIds } from '../types/errors.js';
 import { planSyncReconciliation } from './reconciliation.js';
 import { createQueries, type Queries } from './queries.js';
 import type { FeatureProvenanceRow } from './queries/metadata.js';
@@ -405,8 +411,22 @@ export class SelectaCache {
    *
    * Atomic, and scoped to exactly the named provenance values: anything the
    * other source supplied, or a newer version of this one, is left alone.
+   * Naming a provenance the given source did not produce is refused outright.
    */
   supersedeFeatures(source: FeatureSource, provenances: readonly string[]): SupersedeSummary {
+    // Naming another source's provenance is a mistake worth refusing, not
+    // silently skipping: only this source's attempt reopens, so its values
+    // would be cleared with nothing left able to measure them again.
+    const foreign = provenances.filter((value) => sourceForProvenance(value) !== source);
+
+    if (foreign.length > 0) {
+      throw new BridgeError(
+        'validation_error',
+        `not produced by ${source}: ${summarizeIds([...foreign])}`,
+        `Supersede reopens one source's attempt and clears only what that source measured. Re-run these with --source ${sourceForProvenance(foreign[0]!)}.`,
+      );
+    }
+
     const wanted = new Set(provenances);
     const clearedFields: SupersedeSummary['clearedFields'] = {};
     let tracks = 0;

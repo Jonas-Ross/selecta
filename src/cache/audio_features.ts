@@ -120,6 +120,17 @@ const CLEARED_WITH: Record<SourceField, readonly (keyof AudioFeaturesRow)[]> = {
   danceability: ['danceability'],
 };
 
+// Everything the catalog pass can write as provenance (enrich/engine.ts).
+// metrognome names its own algorithms, so that side cannot be enumerated —
+// but only these two passes write provenance at all, so "not one of ours"
+// identifies analysis without selecta holding a table of metrognome versions.
+const CATALOG_PROVENANCES: ReadonlySet<string> = new Set(['acousticbrainz', 'deezer']);
+
+/** Which pass wrote a stored provenance value. */
+export function sourceForProvenance(provenance: string): FeatureSource {
+  return CATALOG_PROVENANCES.has(provenance) ? 'catalog' : 'analysis';
+}
+
 export type SupersedeSummary = {
   tracks: number;
   clearedFields: Partial<Record<SourceField, number>>;
@@ -153,6 +164,11 @@ export function supersedeFeatures(
     const provenance = sources[field];
 
     if (provenance == null || !provenances.has(provenance)) continue;
+
+    // Only the reopened source's own values. Clearing the other source's would
+    // strand them: its attempt stays terminal, so no later run refetches, and
+    // the provenance is gone so a second supersede cannot find the row either.
+    if (sourceForProvenance(provenance) !== source) continue;
 
     for (const dependent of CLEARED_WITH[field]) Object.assign(next, { [dependent]: null });
 

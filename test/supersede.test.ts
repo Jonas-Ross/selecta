@@ -123,6 +123,47 @@ describe('superseding a stale algorithm', () => {
     }
   });
 
+  it('leaves a value the reopened source did not measure', () => {
+    // Clearing the catalog's key while reopening analysis would strand it:
+    // catalog_status stays terminal, so no later run refetches it, and the
+    // provenance is gone so a second supersede cannot find the row either.
+    const row = featuresRow({
+      sources: { bpm: ANALYSIS_BPM, musicalKey: 'acousticbrainz' },
+      catalogStatus: 'ok',
+      analysisStatus: 'ok',
+    });
+    const result = supersedeFeatures(row, 'analysis', new Set([ANALYSIS_BPM, 'acousticbrainz']));
+
+    expect(result).toMatchObject({ action: 'update', clearedFields: ['bpm'] });
+
+    if (result.action !== 'update') throw new Error('expected an update');
+
+    expect(result.row).toMatchObject({
+      bpm: null,
+      musicalKey: row.musicalKey,
+      sources: { musicalKey: 'acousticbrainz' },
+      catalogStatus: 'ok',
+      analysisStatus: null,
+    });
+  });
+
+  it('refuses a provenance the named source never produced', () => {
+    const cache = loaded();
+
+    try {
+      expect(() => cache.supersedeFeatures('analysis', ['acousticbrainz'])).toThrow(
+        /not produced by analysis/,
+      );
+      // Refused before anything was written.
+      expect(cache.getAudioFeatures('T-TEARDROP')).toMatchObject({
+        musicalKey: 'A minor',
+        catalogStatus: 'ok',
+      });
+    } finally {
+      cache.close();
+    }
+  });
+
   it('reports what produced each stored value', () => {
     const cache = loaded();
 
