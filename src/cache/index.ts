@@ -34,6 +34,8 @@ import {
   mergeFeatures,
   sourceForProvenance,
   supersedeFeatures,
+  summarizeSupersede,
+  type SupersedePlan,
   type SupersedeSummary,
 } from './audio_features.js';
 import { BridgeError, summarizeIds } from '../types/errors.js';
@@ -406,14 +408,13 @@ export class SelectaCache {
   }
 
   /**
-   * Clear the features a superseded algorithm produced and reopen that
-   * source's attempt, so the next enrich run reaches those tracks again.
+   * Decide what superseding a named algorithm would clear, writing nothing.
    *
-   * Atomic, and scoped to exactly the named provenance values: anything the
-   * other source supplied, or a newer version of this one, is left alone.
-   * Naming a provenance the given source did not produce is refused outright.
+   * Scoped to exactly the named provenance values: anything the other source
+   * supplied, or a newer version of this one, is left alone. Naming a
+   * provenance the given source did not produce is refused outright.
    */
-  supersedeFeatures(source: FeatureSource, provenances: readonly string[]): SupersedeSummary {
+  planSupersedeFeatures(source: FeatureSource, provenances: readonly string[]): SupersedePlan {
     // Naming another source's provenance is a mistake worth refusing, not
     // silently skipping: only this source's attempt reopens, so its values
     // would be cleared with nothing left able to measure them again.
@@ -428,38 +429,69 @@ export class SelectaCache {
     }
 
     const wanted = new Set(provenances);
-    const clearedFields: SupersedeSummary['clearedFields'] = {};
-    let tracks = 0;
-    let rowsRemoved = 0;
+    const changes: SupersedePlan['changes'] = [];
 
+    for (const id of this.queries.trackIdsWithProvenance(provenances)) {
+      const existing = this.queries.getAudioFeatures(id);
+
+      if (existing == null) continue;
+
+      const result = supersedeFeatures(existing, source, wanted);
+
+      if (result.action === 'unchanged') continue;
+
+      changes.push({ before: existing, result });
+    }
+
+    return { source, provenances: [...provenances], changes, summary: summarizeSupersede(changes) };
+  }
+
+  /**
+   * Carry out a plan, atomically, so the next enrich run reaches those tracks.
+   *
+   * Applying the plan rather than recomputing it is what keeps a dry run and
+   * the run it previews from describing different things.
+   */
+  applySupersedeFeatures(plan: SupersedePlan): SupersedeSummary {
     const run = this.db.transaction(() => {
-      for (const id of this.queries.trackIdsWithProvenance(provenances)) {
-        const existing = this.queries.getAudioFeatures(id);
-
-        if (existing == null) continue;
-
-        const result = supersedeFeatures(existing, source, wanted);
-
-        if (result.action === 'unchanged') continue;
-
+      for (const { before, result } of plan.changes) {
         if (result.action === 'delete') {
-          this.queries.deleteAudioFeatures(id);
-          rowsRemoved += 1;
+          this.queries.deleteAudioFeatures(before.trackPersistentId);
         } else {
           this.queries.upsertAudioFeatures(result.row);
-        }
-
-        tracks += 1;
-
-        for (const field of result.clearedFields) {
-          clearedFields[field] = (clearedFields[field] ?? 0) + 1;
         }
       }
     });
 
     run();
 
-    return { tracks, clearedFields, rowsRemoved };
+    return plan.summary;
+  }
+
+  /**
+   * Put feature rows back exactly as they were, bypassing the merge rule.
+   *
+   * This is the undo path, not an enrichment one: the rows come from a journal
+   * this cache wrote, so gap-fill would be the wrong policy — a value the
+   * journal carries is the value that belongs there.
+   */
+  restoreAudioFeatures(rows: readonly AudioFeaturesRow[]): number {
+    let restored = 0;
+
+    const run = this.db.transaction(() => {
+      for (const row of rows) {
+        // A track that left the library between the journal and now takes its
+        // features with it; re-adding the row would orphan it until a refresh.
+        if (!this.getTrack(row.trackPersistentId)) continue;
+
+        this.queries.upsertAudioFeatures(row);
+        restored += 1;
+      }
+    });
+
+    run();
+
+    return restored;
   }
 
   /** Full features row with provenance; feature values also ride every TrackRow. */
