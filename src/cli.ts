@@ -19,8 +19,9 @@ import { SelectaCache, defaultDbPath } from './cache/index.js';
 import { runDoctor } from './diagnostics/doctor.js';
 import { readStatus, type SchemaVersions } from './diagnostics/status.js';
 import { DraftStore, draftDbPath } from './drafts/store.js';
-import { METROGNOME_PATH_ENV, enrichPendingTracks } from './enrich/index.js';
+import { FIELDS_BY_SOURCE, METROGNOME_PATH_ENV, enrichPendingTracks } from './enrich/index.js';
 import type { FeatureSource } from './types/cache.js';
+import type { SourceField } from './cache/audio_features.js';
 import { log as defaultLogger, type Logger } from './log.js';
 import { createProgressReporter, formatDuration } from './progress.js';
 import { createServer } from './server.js';
@@ -341,6 +342,84 @@ export function createCliProgram(options: CliOptions = {}): Command {
             // it changes — one an earlier supersede reopened is pending already.
             const pendingRemaining =
               cache.countPendingEnrichment(source) + (outcome.dry_run ? plan.reopened : 0);
+
+            writeJson({ ...outcome, pending_remaining: pendingRemaining });
+            reportDryRun(outcome);
+          } finally {
+            cache.close();
+          }
+        } catch (err) {
+          reportError(err);
+          setExitCode(1);
+        }
+      },
+    );
+
+  program
+    .command('reopen')
+    .description(
+      "Clear one source's terminal attempt for tracks that hold no value in a field, so a later enrich tries them again; reports what it would do unless --apply is given",
+    )
+    .addOption(
+      new Option('-s, --source <source>', 'whose attempt to reopen')
+        .choices(['catalog', 'analysis'])
+        .default('analysis'),
+    )
+    .addOption(
+      new Option('-m, --missing <field>', 'the field those tracks hold no value for')
+        .choices(['bpm', 'musicalKey', 'danceability'])
+        .makeOptionMandatory(),
+    )
+    .option('--apply', APPLY_FLAG_DESCRIPTION)
+    .action(
+      async ({
+        source,
+        missing,
+        apply = false,
+      }: {
+        source: FeatureSource;
+        missing: SourceField;
+        apply?: boolean;
+      }) => {
+        try {
+          // Reopening a field this source cannot measure would re-run the
+          // entire backlog, fill nothing, and mark it all terminal again.
+          if (!FIELDS_BY_SOURCE[source].includes(missing)) {
+            throw new BridgeError(
+              'validation_error',
+              `${source} does not measure ${missing}`,
+              `It can supply ${FIELDS_BY_SOURCE[source].join(' or ')}. Reopening ${missing} for it would re-analyze every track and fill none of them.`,
+            );
+          }
+
+          const cache = SelectaCache.open(dbPath);
+
+          try {
+            const outcome = await withOperation(cache, 'enrich', async () => {
+              const plan = cache.planReopenFeatures(source, missing);
+
+              return runDestructive(
+                {
+                  command: 'reopen',
+                  arguments: { source, missing },
+                  summary: plan.summary,
+                  empty: plan.changes.length === 0,
+                  before: { audio_features: plan.changes.map((change) => change.before) },
+                  apply: () => {
+                    const { summary, applied } = cache.applyReopenFeatures(plan);
+
+                    return { summary, applied: { audio_features: applied } };
+                  },
+                },
+                { apply, dbPath },
+              );
+            });
+
+            // Every row a reopen clears joins the backlog, so a dry run
+            // reports the number the caller will act on rather than the one it
+            // is replacing. Both paths report the same thing (see the tests).
+            const pendingRemaining =
+              cache.countPendingEnrichment(source) + (outcome.dry_run ? outcome.summary.tracks : 0);
 
             writeJson({ ...outcome, pending_remaining: pendingRemaining });
             reportDryRun(outcome);

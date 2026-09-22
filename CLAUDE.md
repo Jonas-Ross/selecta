@@ -41,6 +41,7 @@ Shared storage and bridge types live in `src/types/`; the cross-cutting error en
 | `node dist/index.js refresh` | Refresh the library cache from the CLI, no MCP client needed |
 | `node dist/index.js enrich [-n N] [--source catalog\|analysis]` | Backfill audio features from the CLI (default all pending on `catalog`, ~1-3s/track; live progress line on a terminal, plain throttled lines when redirected) |
 | `node dist/index.js supersede [--source S] [-p <algo>...] [--apply]` | List what produced each stored feature; with `-p`, report what clearing those values would change, and with `--apply` carry it out so a later `enrich` re-measures them |
+| `node dist/index.js reopen -s S -m <field> [--apply]` | Clear a source's terminal attempt for tracks holding no value in that field, so a later `enrich` tries them again |
 | `node dist/index.js restore <journal> [--apply]` | Put back the cache rows a destructive command journalled before it ran |
 
 ## Testing

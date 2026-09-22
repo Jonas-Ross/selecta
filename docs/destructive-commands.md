@@ -69,6 +69,18 @@ undoing a *restore* only covers rows it overwrote. A row restore re-added where
 nothing existed is not removable by the counter-journal; supersede it again or
 remove it by hand.
 
+## What follows the convention today
+
+- **`supersede`** clears values a named algorithm produced and reopens that
+  source's attempt, so a better version of it can measure them again.
+- **`reopen`** clears a source's terminal attempt for tracks that hold no value
+  in a field. It writes no values at all, but it overwrites a status column, so
+  it owes the same three rules. `docs/audio-features.md` explains why the two
+  are separate commands: one names a provenance, and the tracks the other
+  reaches have none.
+- **`restore`** replays either one's journal, itself dry-run by default because
+  it writes over live rows.
+
 ## What is deliberately outside this
 
 - **`refresh` pruning.** Refresh deletes rows for tracks and playlists that

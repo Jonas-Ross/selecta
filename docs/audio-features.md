@@ -18,7 +18,10 @@ pick between them with `source`:
 Every attempt records a terminal `ok` / `no_data` / `no_match`, so a dead end
 costs nothing on the next run. That record is **per source**:
 `catalog_status` and `analysis_status`, either of which may be `NULL` for
-"not attempted yet". Row-level `status` is the better of the two.
+"not attempted yet". Row-level `status` is the better of the two, except where
+`supersede` or `reopen` has cleared the last attempt on a row that still stores
+a value: deriving it from two blank attempts would call that row "nothing
+identified", so it keeps what it said.
 
 A track the catalogs exhausted is therefore still pending analysis — which is
 the whole point, since that is exactly the 2022-and-later gap. The two
@@ -175,6 +178,32 @@ provenance gone a second `supersede` could no longer find the row to repair it.
 The catalog pass writes a closed set of provenance strings (`acousticbrainz`,
 `deezer`), so anything else is analysis; that is how a value is attributed
 without Selecta knowing metrognome's versions.
+
+## Reaching a track whose estimate was discarded
+
+Superseding names a provenance, so it reaches only tracks that hold a value.
+A track whose estimate came back `uncertain` stored nothing and therefore
+recorded no provenance — and its attempt is still terminal, so the pending
+backlog cannot see it either. On a real library that is the larger population:
+a live count here found metrognome owning provenance on roughly 1,350 tracks
+against some 2,100 whose attempt is terminal with nothing of its stored.
+
+`node dist/index.js reopen --source <s> --missing <field>` covers exactly that
+gap. It clears that source's terminal attempt for tracks holding no value in
+the named field, so the next `enrich` reaches them again, and reports the
+terminal status each one carried — a `no_match` track will likely fail the same
+way twice, while an `ok` one is where a better estimator pays. It clears no
+values at all: a field that already holds one is left alone whichever source
+supplied it, since gap-fill would discard a fresh estimate anyway.
+
+A field the named source cannot measure is refused: metrognome reports tempo
+and key and nothing else, so `--source analysis --missing danceability` would
+reopen every analysed track, fill none of them and mark them all terminal
+again. `FIELDS_BY_SOURCE` in `src/enrich/` records what each pass can supply,
+pinned by a test against what the adapters actually write.
+
+Like `supersede` it is dry-run by default, journals what it overwrites and runs
+under the enrichment lock.
 
 Superseding is a judgement that the newer algorithm is better, which is not the
 same as newer. metrognome's own `validate` against real recordings is what

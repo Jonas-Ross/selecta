@@ -3,7 +3,12 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
-import { enrichPendingTracks, type FetchLike } from '../src/enrich/index.js';
+import {
+  FIELDS_BY_SOURCE,
+  enrichPendingTracks,
+  toFeaturesRow,
+  type FetchLike,
+} from '../src/enrich/index.js';
 import { durationCompatible, luceneEscape, primaryArtist, stripFeat } from '../src/enrich/match.js';
 import { USER_AGENT, withUserAgent } from '../src/enrich/sources.js';
 import { handleEnrichFeatures, type EnrichFeaturesOutput } from '../src/tools/enrich_features.js';
@@ -666,5 +671,35 @@ describe('enrich_features tool', () => {
     expect(out.skipped).toBe(6);
     expect(out.pending_remaining).toBe(6);
     expect(out.source_errors).toEqual([expect.stringContaining('MusicBrainz unreachable')]);
+  });
+});
+
+describe('what each source can supply', () => {
+  it('matches what the metrognome adapter actually writes', () => {
+    const row = toFeaturesRow(
+      {
+        query: { client_ref: 'T-1' },
+        status: 'ok',
+        features: {
+          tempo: { bpm: 128, confidence: 0.9, maturity: 'validated', source: 'mg/tempo@1' },
+          key: {
+            key: 'A minor',
+            camelot: '8A',
+            confidence: 0.8,
+            maturity: 'provisional',
+            source: 'mg/key@3',
+          },
+        },
+      } as never,
+      '2026-09-20T00:00:00.000Z',
+    );
+
+    // Pins FIELDS_BY_SOURCE to reality: if metrognome ever starts reporting
+    // danceability, this fails and the capability list gets updated with it.
+    const written = (['bpm', 'musicalKey', 'danceability'] as const).filter(
+      (field) => row?.sources?.[field] != null,
+    );
+
+    expect([...FIELDS_BY_SOURCE.analysis].sort()).toEqual([...written].sort());
   });
 });

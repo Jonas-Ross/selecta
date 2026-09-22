@@ -32,10 +32,16 @@ import type {
 import { openDatabase } from './db.js';
 import {
   mergeFeatures,
+  reopenFeatures,
   sourceForProvenance,
   supersedeFeatures,
   statusFieldFor,
+  summarizeReopen,
   summarizeSupersede,
+  type ReopenChange,
+  type ReopenPlan,
+  type ReopenSummary,
+  type SourceField,
   type SupersedeChange,
   type SupersedePlan,
   type SupersedeSummary,
@@ -480,6 +486,62 @@ export class SelectaCache {
    * Applying the plan rather than recomputing it is what keeps a dry run and
    * the run it previews from describing different things.
    */
+  /**
+   * Decide which tracks one source could usefully try again for a field.
+   *
+   * The counterpart to superseding: that re-measures a value that exists and
+   * can be named by its provenance, while this reaches the track whose
+   * estimate was discarded, which stored nothing and so left nothing to name.
+   */
+  planReopenFeatures(source: FeatureSource, field: SourceField): ReopenPlan {
+    const changes: ReopenPlan['changes'] = [];
+
+    for (const id of this.queries.trackIdsReopenable(source, field)) {
+      const existing = this.queries.getAudioFeatures(id);
+
+      if (existing == null) continue;
+
+      const result = reopenFeatures(existing, source, field);
+
+      if (result.action === 'unchanged') continue;
+
+      changes.push({ before: existing, result });
+    }
+
+    return { source, field, changes, summary: summarizeReopen(source, changes) };
+  }
+
+  /** Carry out the decisions a reopen plan described, atomically. */
+  applyReopenFeatures(plan: ReopenPlan): { summary: ReopenSummary; applied: AudioFeaturesRow[] } {
+    const applied: ReopenChange[] = [];
+    const run = this.db.transaction(() => {
+      for (const change of plan.changes) {
+        // reopen holds the enrich lock and refresh holds the music one, so a
+        // prune can land between deciding and writing. Its row is already gone;
+        // rewriting it here would resurrect an orphan.
+        if (!this.getTrack(change.before.trackPersistentId)) continue;
+
+        if (change.result.action === 'delete') {
+          this.queries.deleteAudioFeatures(change.before.trackPersistentId);
+        } else {
+          this.queries.upsertAudioFeatures(change.result.row);
+        }
+
+        applied.push(change);
+      }
+    });
+
+    run();
+
+    // Summarized from what was written rather than what was planned: the
+    // report has to account for the rows that actually moved, and so does the
+    // undo journal, which is narrowed to these rows.
+    return {
+      summary: summarizeReopen(plan.source, applied),
+      applied: applied.map((change) => change.before),
+    };
+  }
+
   applySupersedeFeatures(plan: SupersedePlan): {
     summary: SupersedeSummary;
     applied: AudioFeaturesRow[];

@@ -120,6 +120,21 @@ const CLEARED_WITH: Record<SourceField, readonly (keyof AudioFeaturesRow)[]> = {
   danceability: ['danceability'],
 };
 
+/**
+ * The row-level status after one source's attempt is cleared.
+ *
+ * Clearing the last attempt can leave stored values behind, and bestStatus
+ * would then label a row that still holds a bpm "nothing identified". What is
+ * stored was measured, whoever measured it, so the row keeps what it said.
+ */
+function settledStatus(next: AudioFeaturesRow, previous: FeatureStatus): FeatureStatus {
+  const keepsValue = SOURCE_FIELDS.some((field) => next[field] != null);
+
+  return next.catalogStatus == null && next.analysisStatus == null && keepsValue
+    ? previous
+    : bestStatus(next.catalogStatus, next.analysisStatus);
+}
+
 // Everything the catalog pass can write as provenance (enrich/engine.ts).
 // metrognome names its own algorithms, so that side cannot be enumerated —
 // but only these two passes write provenance at all, so "not one of ours"
@@ -243,15 +258,7 @@ export function supersedeFeatures(
     return { action: 'delete', clearedFields };
   }
 
-  // Both attempts can end up cleared while values an unnamed algorithm wrote
-  // survive; bestStatus would then label a row that still stores a bpm as
-  // "nothing identified". What is stored was measured, whoever measured it.
-  const keepsValue = next.bpm != null || next.musicalKey != null || next.danceability != null;
-
-  next.status =
-    keepsValue && next.catalogStatus == null && next.analysisStatus == null
-      ? row.status
-      : bestStatus(next.catalogStatus, next.analysisStatus);
+  next.status = settledStatus(next, row.status);
 
   return { action: 'update', row: next, clearedFields };
 }
@@ -262,4 +269,97 @@ export function supersedeFeatures(
 // its source gave.
 function withCamelot(row: AudioFeaturesRow): AudioFeaturesRow {
   return { ...row, camelot: camelotFor(row.musicalKey) ?? row.camelot };
+}
+
+/** A row left recording no attempt, no value and no provenance. */
+function recordsNothing(row: AudioFeaturesRow): boolean {
+  return (
+    row.catalogStatus == null &&
+    row.analysisStatus == null &&
+    row.sources == null &&
+    SOURCE_FIELDS.every((field) => row[field] == null)
+  );
+}
+
+// Reported straight to the caller as JSON, so the keys are the CLI's.
+export type ReopenSummary = {
+  tracks: number;
+  rows_removed: number;
+  // The terminal status each reopened track carried. A no_match track will
+  // likely fail the same way again; an ok one is where a better estimator pays.
+  by_status: Partial<Record<FeatureStatus, number>>;
+};
+
+export type ReopenResult =
+  | { action: 'unchanged' }
+  | { action: 'update'; row: AudioFeaturesRow }
+  | { action: 'delete' };
+
+/** One row's decision, paired with the row as it stands before it. */
+export type ReopenChange = {
+  before: AudioFeaturesRow;
+  result: Extract<ReopenResult, { action: 'update' | 'delete' }>;
+};
+
+export type ReopenPlan = {
+  source: FeatureSource;
+  field: SourceField;
+  changes: ReopenChange[];
+  summary: ReopenSummary;
+};
+
+/** What a set of decisions adds up to, reported identically dry or applied. */
+export function summarizeReopen(
+  source: FeatureSource,
+  changes: readonly ReopenChange[],
+): ReopenSummary {
+  const byStatus: ReopenSummary['by_status'] = {};
+  let rowsRemoved = 0;
+
+  for (const { before, result } of changes) {
+    if (result.action === 'delete') rowsRemoved += 1;
+
+    const status = before[statusFieldFor(source)];
+
+    if (status != null) byStatus[status] = (byStatus[status] ?? 0) + 1;
+  }
+
+  return { tracks: changes.length, rows_removed: rowsRemoved, by_status: byStatus };
+}
+
+/**
+ * Clear one source's terminal attempt for a track holding no value in a field,
+ * so a later run reaches it again.
+ *
+ * The counterpart to superseding. That re-measures a value that exists and is
+ * named by its provenance; this reaches the track whose estimate was discarded
+ * as uncertain, which stored no value and so left no provenance to name. The
+ * attempt is the only thing marking such a track done, so clearing it is the
+ * only way back to it.
+ */
+export function reopenFeatures(
+  row: AudioFeaturesRow,
+  source: FeatureSource,
+  field: SourceField,
+): ReopenResult {
+  const statusField = statusFieldFor(source);
+
+  // Nothing to reopen where this source never finished, and nothing to gain
+  // where the field is already filled — by either source, since gap-fill means
+  // a fresh estimate would be discarded anyway. Skipping an already-cleared
+  // attempt is also what keeps the backlog projection exact: every change this
+  // returns moves its track into the backlog, none of them were there already.
+  if (row[statusField] == null || row[field] != null) return { action: 'unchanged' };
+
+  const next: AudioFeaturesRow = { ...row };
+
+  next[statusField] = null;
+
+  // An emptied row would still carry a row-level status, which reads as
+  // "looked and found nothing" where the truth is now "never looked".
+  if (recordsNothing(next)) return { action: 'delete' };
+
+  next.status = settledStatus(next, row.status);
+
+  return { action: 'update', row: next };
 }
