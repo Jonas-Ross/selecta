@@ -313,23 +313,36 @@ export function createCliProgram(options: CliOptions = {}): Command {
               return;
             }
 
-            const outcome = await withOperation(cache, 'enrich', async () => {
-              const plan = cache.planSupersedeFeatures(source, provenance);
+            const { plan, outcome } = await withOperation(cache, 'enrich', async () => {
+              const decided = cache.planSupersedeFeatures(source, provenance);
 
-              return runDestructive(
-                {
-                  command: 'supersede',
-                  arguments: { source, provenance },
-                  summary: plan.summary,
-                  empty: plan.changes.length === 0,
-                  before: { audio_features: plan.changes.map((change) => change.before) },
-                  apply: () => cache.applySupersedeFeatures(plan),
-                },
-                { apply, dbPath },
-              );
+              return {
+                plan: decided,
+                outcome: runDestructive(
+                  {
+                    command: 'supersede',
+                    arguments: { source, provenance },
+                    summary: decided.summary,
+                    empty: decided.changes.length === 0,
+                    before: { audio_features: decided.changes.map((change) => change.before) },
+                    apply: () => {
+                      const { summary, applied } = cache.applySupersedeFeatures(decided);
+
+                      return { summary, applied: { audio_features: applied } };
+                    },
+                  },
+                  { apply, dbPath },
+                ),
+              };
             });
 
-            writeJson({ ...outcome, pending_remaining: cache.countPendingEnrichment(source) });
+            // Same key and meaning as enrich's: the backlog this leaves behind.
+            // A dry run adds the tracks it would reopen, which is not every row
+            // it changes — one an earlier supersede reopened is pending already.
+            const pendingRemaining =
+              cache.countPendingEnrichment(source) + (outcome.dry_run ? plan.reopened : 0);
+
+            writeJson({ ...outcome, pending_remaining: pendingRemaining });
             reportDryRun(outcome);
           } finally {
             cache.close();

@@ -34,7 +34,9 @@ import {
   mergeFeatures,
   sourceForProvenance,
   supersedeFeatures,
+  statusFieldFor,
   summarizeSupersede,
+  type SupersedeChange,
   type SupersedePlan,
   type SupersedeSummary,
 } from './audio_features.js';
@@ -428,6 +430,21 @@ export class SelectaCache {
       );
     }
 
+    // A typo passes the check above, since anything outside the catalog's own
+    // literals reads as analysis. Silently clearing nothing is the failure this
+    // command exists to prevent, so a string the library does not carry is
+    // refused rather than reported as a no-op.
+    const stored = new Set(this.queries.featureProvenance().map((row) => row.provenance));
+    const unknown = provenances.filter((value) => !stored.has(value));
+
+    if (unknown.length > 0) {
+      throw new BridgeError(
+        'validation_error',
+        `no stored feature came from: ${summarizeIds([...unknown])}`,
+        'Run `supersede` with no --provenance to list the algorithm strings this library carries, and pass one exactly as listed.',
+      );
+    }
+
     const wanted = new Set(provenances);
     const changes: SupersedePlan['changes'] = [];
 
@@ -443,7 +460,18 @@ export class SelectaCache {
       changes.push({ before: existing, result });
     }
 
-    return { source, provenances: [...provenances], changes, summary: summarizeSupersede(changes) };
+    // Only a change whose attempt was still terminal puts its track back in the
+    // backlog; one an earlier supersede already reopened is counted there.
+    const statusField = statusFieldFor(source);
+    const reopened = changes.filter((change) => change.before[statusField] != null).length;
+
+    return {
+      source,
+      provenances: [...provenances],
+      changes,
+      reopened,
+      summary: summarizeSupersede(changes),
+    };
   }
 
   /**
@@ -452,20 +480,34 @@ export class SelectaCache {
    * Applying the plan rather than recomputing it is what keeps a dry run and
    * the run it previews from describing different things.
    */
-  applySupersedeFeatures(plan: SupersedePlan): SupersedeSummary {
+  applySupersedeFeatures(plan: SupersedePlan): {
+    summary: SupersedeSummary;
+    applied: AudioFeaturesRow[];
+  } {
+    const applied: SupersedeChange[] = [];
     const run = this.db.transaction(() => {
-      for (const { before, result } of plan.changes) {
-        if (result.action === 'delete') {
-          this.queries.deleteAudioFeatures(before.trackPersistentId);
+      for (const change of plan.changes) {
+        // supersede holds the enrich lock and refresh holds the music one, so a
+        // prune can land between deciding and writing. Its row is already gone;
+        // rewriting it here would resurrect an orphan.
+        if (!this.getTrack(change.before.trackPersistentId)) continue;
+
+        if (change.result.action === 'delete') {
+          this.queries.deleteAudioFeatures(change.before.trackPersistentId);
         } else {
-          this.queries.upsertAudioFeatures(result.row);
+          this.queries.upsertAudioFeatures(change.result.row);
         }
+
+        applied.push(change);
       }
     });
 
     run();
 
-    return plan.summary;
+    // Summarized from what was written rather than what was planned: the
+    // report has to account for the rows that actually moved, and so does the
+    // undo journal, which is narrowed to these rows.
+    return { summary: summarizeSupersede(applied), applied: applied.map((c) => c.before) };
   }
 
   /**
@@ -475,9 +517,8 @@ export class SelectaCache {
    * this cache wrote, so gap-fill would be the wrong policy — a value the
    * journal carries is the value that belongs there.
    */
-  restoreAudioFeatures(rows: readonly AudioFeaturesRow[]): number {
-    let restored = 0;
-
+  restoreAudioFeatures(rows: readonly AudioFeaturesRow[]): string[] {
+    const restored: string[] = [];
     const run = this.db.transaction(() => {
       for (const row of rows) {
         // A track that left the library between the journal and now takes its
@@ -485,7 +526,7 @@ export class SelectaCache {
         if (!this.getTrack(row.trackPersistentId)) continue;
 
         this.queries.upsertAudioFeatures(row);
-        restored += 1;
+        restored.push(row.trackPersistentId);
       }
     });
 

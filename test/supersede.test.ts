@@ -84,9 +84,9 @@ describe('superseding a stale algorithm', () => {
     try {
       const before = cache.countPendingEnrichment('analysis');
       const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]);
-      const result = cache.applySupersedeFeatures(plan);
+      const { summary } = cache.applySupersedeFeatures(plan);
 
-      expect(result).toMatchObject({
+      expect(summary).toMatchObject({
         tracks: 1,
         cleared_fields: { musicalKey: 1 },
         rows_removed: 0,
@@ -124,7 +124,7 @@ describe('superseding a stale algorithm', () => {
     try {
       const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]);
 
-      expect(cache.applySupersedeFeatures(plan)).toMatchObject({ tracks: 1 });
+      expect(cache.applySupersedeFeatures(plan).summary).toMatchObject({ tracks: 1 });
       expect(cache.getAudioFeatures('T-ANGEL')).toMatchObject({ analysisStatus: 'no_data' });
     } finally {
       cache.close();
@@ -226,6 +226,83 @@ describe('superseding a stale algorithm', () => {
           fields: ['analysis_status', 'camelot', 'musical_key', 'sources'],
         },
       ]);
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('skips a track pruned between deciding and writing', () => {
+    const cache = loaded([featuresRow({ sources: { musicalKey: ANALYSIS_KEY } })]);
+
+    try {
+      const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_KEY]);
+      const snapshot = fixture as LibrarySnapshot;
+
+      // supersede holds the enrich lock, refresh holds the music one, so this
+      // interleaving is reachable. The row is already gone; rewriting it would
+      // resurrect an orphan, and reporting it would overstate what moved.
+      cache.refreshFromSnapshot(
+        { ...snapshot, tracks: snapshot.tracks.filter((t) => t.persistentId !== 'T-TEARDROP') },
+        { durationMs: 1 },
+      );
+
+      expect(cache.applySupersedeFeatures(plan)).toMatchObject({
+        summary: { tracks: 0 },
+        applied: [],
+      });
+      expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('refuses a provenance no stored feature came from', () => {
+    const cache = loaded();
+
+    try {
+      expect(() => cache.planSupersedeFeatures('analysis', ['metrognome/chroma@9'])).toThrow(
+        /no stored feature came from/,
+      );
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('keeps a row honest about having been measured', () => {
+    // Clearing one algorithm can leave both attempts blank while another
+    // algorithm's value survives. Recomputing from two blanks would label a row
+    // that still stores a bpm as "nothing identified".
+    const row = featuresRow({
+      musicalKey: null,
+      camelot: null,
+      danceability: null,
+      sources: { bpm: ANALYSIS_BPM, musicalKey: ANALYSIS_KEY },
+      catalogStatus: null,
+      analysisStatus: 'ok',
+      status: 'ok',
+    });
+    const result = supersedeFeatures(row, 'analysis', new Set([ANALYSIS_KEY]));
+
+    if (result.action !== 'update') throw new Error('expected an update');
+
+    expect(result.row).toMatchObject({ bpm: row.bpm, analysisStatus: null, status: 'ok' });
+  });
+
+  it('counts only the changes that put a track back in the backlog', () => {
+    const cache = loaded([
+      featuresRow({ sources: { bpm: ANALYSIS_BPM }, analysisStatus: null, catalogStatus: 'ok' }),
+      featuresRow({
+        trackPersistentId: 'T-ANGEL',
+        sources: { bpm: ANALYSIS_BPM },
+        analysisStatus: 'ok',
+      }),
+    ]);
+
+    try {
+      const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_BPM]);
+
+      expect(plan.summary.tracks).toBe(2);
+      expect(plan.reopened).toBe(1);
     } finally {
       cache.close();
     }

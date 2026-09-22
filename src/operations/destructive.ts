@@ -3,7 +3,7 @@
 // what is written is recoverable from a journal. docs/destructive-commands.md
 // records why, and what is deliberately outside this convention.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { BridgeError } from '../types/errors.js';
 
@@ -39,7 +39,11 @@ export type DestructiveChange<S> = {
   // journal, so the undo directory holds only runs worth undoing.
   empty: boolean;
   before: JournalRows;
-  apply: () => S;
+  // Returns the rows it actually wrote over, which can be a subset of `before`
+  // when a concurrent prune takes a row away between deciding and writing. The
+  // journal is narrowed to these, so a restore never resurrects a row this run
+  // never touched.
+  apply: () => { summary: S; applied: JournalRows };
 };
 
 export type DestructiveOutcome<S> = {
@@ -62,27 +66,44 @@ function journalPathFor(dbPath: string, command: string, now: Date): string {
   return join(journalDir(dbPath), `${command}-${stamp}.json`);
 }
 
-export function writeUndoJournal(
+type JournalHandle = { path: string; journal: UndoJournal };
+
+function writeJournalFile(path: string, journal: UndoJournal): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(journal, null, 2) + '\n', 'utf8');
+}
+
+function openUndoJournal(
   dbPath: string,
   command: string,
   args: Record<string, unknown>,
   rows: JournalRows,
-): string {
+): JournalHandle {
   const now = new Date();
-  const path = journalPathFor(dbPath, command, now);
-  const journal: UndoJournal = {
-    journal_version: JOURNAL_VERSION,
-    command,
-    arguments: args,
-    written_at: now.toISOString(),
-    db_path: resolve(dbPath),
-    rows,
+  const handle: JournalHandle = {
+    path: journalPathFor(dbPath, command, now),
+    journal: {
+      journal_version: JOURNAL_VERSION,
+      command,
+      arguments: args,
+      written_at: now.toISOString(),
+      db_path: resolve(dbPath),
+      rows,
+    },
   };
 
-  mkdirSync(journalDir(dbPath), { recursive: true });
-  writeFileSync(path, JSON.stringify(journal, null, 2) + '\n', 'utf8');
+  writeJournalFile(handle.path, handle.journal);
 
-  return path;
+  return handle;
+}
+
+/** Narrow a journal to what the transaction wrote, keeping its original path. */
+function rewriteUndoJournal(handle: JournalHandle, rows: JournalRows): void {
+  writeJournalFile(handle.path, { ...handle.journal, rows });
+}
+
+function journalIsEmpty(rows: JournalRows): boolean {
+  return Object.values(rows).every((table) => table.length === 0);
 }
 
 /**
@@ -117,6 +138,15 @@ export function readUndoJournal(path: string, dbPath: string): UndoJournal {
     throw new BridgeError('validation_error', `Undo journal ${path} carries no rows`);
   }
 
+  for (const [table, rows] of Object.entries(journal.rows)) {
+    if (!Array.isArray(rows)) {
+      throw new BridgeError(
+        'validation_error',
+        `Undo journal ${path} holds something other than a list of rows for ${table}`,
+      );
+    }
+  }
+
   if (journal.db_path !== resolve(dbPath)) {
     throw new BridgeError(
       'validation_error',
@@ -148,7 +178,19 @@ export function runDestructive<S>(
     return { ...base, dry_run: !context.apply, summary: change.summary, undo_journal: null };
   }
 
-  const journal = writeUndoJournal(context.dbPath, change.command, change.arguments, change.before);
+  // Journalled before the write, so a crash part-way through still leaves every
+  // row the run could have touched recoverable — a superset errs the safe way.
+  // Once the transaction commits, the journal is narrowed to what it wrote.
+  const handle = openUndoJournal(context.dbPath, change.command, change.arguments, change.before);
+  const { summary, applied } = change.apply();
 
-  return { ...base, dry_run: false, summary: change.apply(), undo_journal: journal };
+  if (journalIsEmpty(applied)) {
+    rmSync(handle.path, { force: true });
+
+    return { ...base, dry_run: false, summary, undo_journal: null };
+  }
+
+  rewriteUndoJournal(handle, applied);
+
+  return { ...base, dry_run: false, summary, undo_journal: handle.path };
 }
