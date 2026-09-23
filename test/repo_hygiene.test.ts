@@ -66,6 +66,12 @@ describe('check-no-binaries', () => {
     expect(stderr).toContain('bytes of binary data');
   });
 
+  it('allows prose that opens with the words of the SQLite header', () => {
+    const prose = 'SQLite format 3 is the magic header every database starts with.\n';
+
+    expect(run(repoWith({ 'header.md': prose }))).toMatchObject({ code: 0 });
+  });
+
   it('rejects a large blob of control bytes that decodes as UTF-8', () => {
     const { code, stderr } = run(repoWith({ blob: Buffer.alloc(70_000, 0x01) }));
 
