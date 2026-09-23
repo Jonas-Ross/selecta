@@ -56,6 +56,22 @@ describe('check-no-binaries', () => {
     expect(run(repoWith({ 'icon.png': Buffer.alloc(512) }))).toMatchObject({ code: 0 });
   });
 
+  // `grep -I` would call this text, since its only binary signal is a NUL byte.
+  it('rejects a large binary holding no NUL byte', () => {
+    const cycle = Buffer.from(Array.from({ length: 255 }, (_, index) => index + 1));
+    const blob = Buffer.concat(Array.from({ length: 300 }, () => cycle)).subarray(0, 70_000);
+    const { code, stderr } = run(repoWith({ blob }));
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('bytes of binary data');
+  });
+
+  it('allows a large document that is mostly non-ASCII', () => {
+    const prose = 'h\u00e9llo w\u00f6rld \u65e5\u672c\u8a9e\u30c6\u30ad\u30b9\u30c8\n'.repeat(3000);
+
+    expect(run(repoWith({ 'notes.md': prose }))).toMatchObject({ code: 0 });
+  });
+
   it('finds nothing to reject in this repository', () => {
     expect(run(join(import.meta.dirname, '..'))).toMatchObject({ code: 0 });
   });
