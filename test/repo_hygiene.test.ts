@@ -66,6 +66,19 @@ describe('check-no-binaries', () => {
     expect(stderr).toContain('bytes of binary data');
   });
 
+  it('rejects a large blob of control bytes that decodes as UTF-8', () => {
+    const { code, stderr } = run(repoWith({ blob: Buffer.alloc(70_000, 0x01) }));
+
+    expect(code).toBe(1);
+    expect(stderr).toContain('bytes of binary data');
+  });
+
+  it('allows a large document using tabs, newlines and form feeds', () => {
+    expect(run(repoWith({ 'doc.txt': 'a\tb\r\nc\fd\n'.repeat(9000) }))).toMatchObject({
+      code: 0,
+    });
+  });
+
   it('allows a large document that is mostly non-ASCII', () => {
     const prose = 'h\u00e9llo w\u00f6rld \u65e5\u672c\u8a9e\u30c6\u30ad\u30b9\u30c8\n'.repeat(3000);
 
