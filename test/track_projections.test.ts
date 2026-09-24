@@ -37,6 +37,8 @@ const bare: TrackRow = {
   bpmMaturity: null,
   keyConfidence: null,
   keyMaturity: null,
+  bpmSource: null,
+  keySource: null,
   noteBody: null,
   noteCreatedAt: null,
   noteUpdatedAt: null,
@@ -58,6 +60,8 @@ const populated: TrackRow = {
   bpmMaturity: 'validated',
   keyConfidence: 0.42,
   keyMaturity: 'provisional',
+  bpmSource: 'metrognome/onset-autocorrelation-comb@2',
+  keySource: 'acousticbrainz',
   locationKind: 'cloud',
   playCount: 12,
   skipCount: 1,
@@ -77,7 +81,7 @@ const fullJson =
   noteJson +
   ',"signal":{"play_count":12,"skip_count":1,"rating":4.5,"loved":true,"disliked":true,"last_played":"2026-09-01T00:00:00.000Z","date_added":"2026-01-01T00:00:00.000Z"}}';
 const inspectedJson =
-  '{"persistent_id":"T-FULL","title":"Title","artist":"Artist","album":"Album","duration_seconds":210.25,"bpm":118.5,"musical_key":"F# minor","camelot":"11A","danceability":0.74,"bpm_confidence":0.92,"bpm_maturity":"validated","key_confidence":0.42,"key_maturity":"provisional","note":' +
+  '{"persistent_id":"T-FULL","title":"Title","artist":"Artist","album":"Album","duration_seconds":210.25,"bpm":118.5,"musical_key":"F# minor","camelot":"11A","danceability":0.74,"bpm_confidence":0.92,"bpm_maturity":"validated","key_confidence":0.42,"key_maturity":"provisional","bpm_source":"metrognome/onset-autocorrelation-comb@2","key_source":"acousticbrainz","note":' +
   noteJson +
   ',"signal":{"play_count":12,"skip_count":1,"rating":4.5,"loved":true}}';
 
@@ -119,6 +123,8 @@ describe('serialized track contracts', () => {
       'bpm_maturity',
       'key_confidence',
       'key_maturity',
+      'bpm_source',
+      'key_source',
       'note',
       'signal',
     ]);

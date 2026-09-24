@@ -117,6 +117,15 @@ is the deliberate look at a tracklist someone has already settled on, which is
 exactly where "this key is provisional" should change what gets built on it.
 Scanning is cheap there and expensive everywhere else.
 
+`bpm_source` and `key_source` ride the same view for the same reason, so the
+model can say where a value came from instead of inferring it from maturity.
+They are the stored provenance strings verbatim (`metrognome/<algorithm>@<n>`,
+`acousticbrainz`, `deezer`), plus `music_app` when the tempo is Music.app's own
+BPM tag — the fallback `EFFECTIVE_BPM` projects when nothing was enriched. A
+feature value stored without provenance gets no source rather than a guessed
+one. Draft tools embed this inspection, so their responses carry both fields
+too; the draft card itself does not render them.
+
 ## An uncertain estimate is not stored
 
 metrognome flags an estimate `uncertain` when a preview is a beatless intro or

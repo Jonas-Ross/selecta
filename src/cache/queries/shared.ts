@@ -11,6 +11,15 @@ const featureColumn = (column: string): string =>
 // matches can't disagree.
 export const EFFECTIVE_BPM = `COALESCE(${featureColumn('bpm')}, t.bpm)`;
 
+// Provenance of the stored value, or null for a row written before provenance was.
+const featureSource = (column: string, field: string): string =>
+  featureColumn(`CASE WHEN ${column} IS NOT NULL AND json_valid(sources)
+    THEN json_extract(sources, '$.${field}') END`);
+
+// Mirrors EFFECTIVE_BPM's fallback, so a tag-derived tempo names its origin too.
+const BPM_SOURCE = `CASE WHEN ${featureColumn('bpm')} IS NOT NULL
+  THEN ${featureSource('bpm', 'bpm')} WHEN t.bpm IS NOT NULL THEN 'music_app' END`;
+
 // The model's own note rides every track and playlist projection the same
 // way features do (PK probe per column). Projection only: no filter, sort, or
 // FTS ever reads the notes table — a note is memory, not signal.
@@ -23,8 +32,8 @@ const noteColumns = (kind: NoteSubject, subjectIdExpr: string): string => `
 `;
 
 // SELECT fragment aliasing snake_case columns to TrackRow's camelCase fields.
-// The confidence/maturity columns reach only inspect_tracklist's projection but
-// ride here anyway, so one fragment stays the whole of a track read.
+// The confidence/maturity/source columns reach only inspect_tracklist's
+// projection but ride here anyway, so one fragment stays the whole of a track read.
 export const TRACK_COLUMNS = `
   t.persistent_id AS persistentId, t.title, t.artist,
   t.album_artist AS albumArtist, t.album, t.genre, t.year,
@@ -40,6 +49,8 @@ export const TRACK_COLUMNS = `
   ${featureColumn('bpm_maturity')} AS bpmMaturity,
   ${featureColumn('key_confidence')} AS keyConfidence,
   ${featureColumn('key_maturity')} AS keyMaturity,
+  ${BPM_SOURCE} AS bpmSource,
+  ${featureSource('musical_key', 'musicalKey')} AS keySource,
   ${noteColumns('track', 't.persistent_id')}
 `;
 
