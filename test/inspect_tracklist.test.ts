@@ -11,7 +11,7 @@ import { orderedTrackIdsFingerprint } from '../src/domain/tracklist_inspection.j
 import type { ToolDeps } from '../src/tools/deps.js';
 import type { LibrarySnapshot, RawTrack } from '../src/types/bridge.js';
 import type { AudioFeaturesRow } from '../src/types/cache.js';
-import { asError, makeBridge } from './helpers.js';
+import { asError, featuresRow, makeBridge } from './helpers.js';
 import fixture from './fixtures/inspect-tracklist.json' with { type: 'json' };
 
 const inspectFixture = fixture as {
@@ -158,6 +158,8 @@ describe('inspect_tracklist', () => {
       bpm_maturity: 'validated',
       key_confidence: 0.61,
       key_maturity: 'provisional',
+      bpm_source: 'deezer',
+      key_source: 'acousticbrainz',
       signal: { play_count: 12, skip_count: 1, rating: 4, loved: true },
     });
     // Only this view carries trust, and only where a source recorded it.
@@ -171,6 +173,51 @@ describe('inspect_tracklist', () => {
     expect(out.tracks[0]).not.toHaveProperty('location_kind');
     expect(out.tracks[0]!.signal).not.toHaveProperty('last_played');
     expect(out).not.toHaveProperty('playlists');
+  });
+
+  it('names what produced each tempo and key, and omits what was never recorded', async () => {
+    const deps = makeDeps();
+
+    deps.cache().saveAudioFeatures([
+      featuresRow({
+        trackPersistentId: 'T-BARE',
+        bpm: 124,
+        musicalKey: 'A minor',
+        danceability: null,
+        sources: {
+          bpm: 'metrognome/onset-autocorrelation-comb@2',
+          musicalKey: 'metrognome/chroma-correlation-edm@2',
+        },
+      }),
+    ]);
+    const out = await inspect(deps);
+    const sources = out.tracks.map(({ bpm_source, key_source }) => ({ bpm_source, key_source }));
+
+    expect(JSON.parse(JSON.stringify(sources))).toEqual([
+      { bpm_source: 'deezer', key_source: 'acousticbrainz' },
+      // The native Music.app tag is the effective tempo when nothing was enriched.
+      { bpm_source: 'music_app' },
+      { key_source: 'acousticbrainz' },
+      { bpm_source: 'deezer', key_source: 'acousticbrainz' },
+      {
+        bpm_source: 'metrognome/onset-autocorrelation-comb@2',
+        key_source: 'metrognome/chroma-correlation-edm@2',
+      },
+    ]);
+  });
+
+  it('never credits the Music.app tag for an enriched tempo with no recorded source', async () => {
+    const deps = makeDeps();
+
+    deps
+      .cache()
+      .saveAudioFeatures([
+        featuresRow({ trackPersistentId: 'T-TURN', bpm: 120, musicalKey: null, sources: null }),
+      ]);
+    const turn = (await inspect(deps)).tracks[1]!;
+
+    expect(turn.bpm).toBe(120);
+    expect(JSON.parse(JSON.stringify(turn))).not.toHaveProperty('bpm_source');
   });
 
   it('computes runtime, artist occurrences, and every feature aggregate from the fixture', async () => {
