@@ -5,7 +5,12 @@ import {
   type DraftDependencies,
   type DraftHost,
 } from '../ui/draft-controller.js';
-import { acceptDraftResponse, decodeDraftResult, recoveredStatus } from '../ui/draft-state.js';
+import {
+  acceptDraftResponse,
+  decodeDraftResult,
+  previewStatus,
+  recoveredStatus,
+} from '../ui/draft-state.js';
 import { Draft, type DraftView } from '../src/drafts/contracts.js';
 import { Element } from './dom.js';
 
@@ -951,4 +956,18 @@ it('ignores an in-flight polling rejection after disposal without rendering or s
   await vi.advanceTimersByTimeAsync(9000);
   expect(f.el('status').textContent).toBe(status);
   expect(f.calls.length).toBe(reads);
+});
+
+it('names the playlist the preview fills and never implies playback', async () => {
+  const f = fixture();
+
+  await f.start();
+  expect(f.el('preview-status').textContent).toMatch(/Selecta Preview.*Nothing plays/);
+  expect(
+    previewStatus({
+      generation: '00000000-0000-4000-8000-000000000009',
+      version: 1,
+      status: 'current',
+    }),
+  ).toMatch(/Selecta Preview.*Play it from Music\.app/);
 });
