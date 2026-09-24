@@ -79,7 +79,7 @@ export const bridge: Bridge = {
       throw new BridgeError(
         'playlist_not_found',
         'Selecta Preview does not exist.',
-        'Start preview iteration before opening it in Music.app.',
+        'Load the draft into Selecta Preview before opening it in Music.app.',
       );
 
     if ('ambiguousPreview' in result)

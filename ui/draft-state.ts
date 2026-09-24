@@ -186,9 +186,9 @@ export function recoveredStatus(draft: Draft): { text: string; tone: 'ok' | 'err
 export function previewStatus(preview?: PreviewState): string {
   switch (preview?.status) {
     case 'current':
-      return 'Preview current at last write · Requested track edits update Music.app.';
+      return 'Loaded into Selecta Preview · Play it from Music.app; track edits keep it in sync.';
     case 'out_of_date':
-      return 'Preview out of date · Local draft kept. Start preview to synchronize explicitly.';
+      return 'Selecta Preview out of date · Local draft kept. Load it again to resync.';
     case 'pending':
       return 'Preview synchronization pending or interrupted · Inspect before recovery.';
     case 'conflict':
@@ -197,6 +197,6 @@ export function previewStatus(preview?: PreviewState): string {
     case 'uncertain':
       return 'Preview needs attention · Local draft kept. Inspect the outcome with the agent; no automatic retry.';
     default:
-      return 'Preview inactive · Start preview to audition and link requested track edits.';
+      return 'Not loaded · Fills the Selecta Preview playlist in Music.app and keeps it in sync with track edits. Nothing plays.';
   }
 }
