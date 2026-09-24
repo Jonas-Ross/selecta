@@ -28,6 +28,13 @@ the whole point, since that is exactly the 2022-and-later gap. The two
 backlogs are counted separately by `status` and by each pass's
 `pending_remaining`.
 
+Those columns record the latest attempt, so a retry that fails after an earlier
+success reads `no_match` while the earlier value stays on the row. `status`
+therefore reports each source's `owns` beside its attempt outcomes: how many
+stored values carry that source's provenance. `successful` can drop after a
+re-score; `owns` drops only when a value is cleared. Keeping `ok` on a failed
+retry instead would hide a preview that has genuinely gone.
+
 ## Neither pass overwrites the other
 
 `mergeFeatures` (`src/cache/audio_features.ts`) gap-fills: a feature already on
