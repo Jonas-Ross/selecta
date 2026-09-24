@@ -4,6 +4,7 @@
 
 import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
+import { sourceForProvenance, type SourceField } from '../cache/audio_features.js';
 import { LATEST_SCHEMA_VERSION } from '../cache/migrations.js';
 import type { FeatureSource } from '../types/cache.js';
 
@@ -65,6 +66,17 @@ type SourceCounts = {
   no_data: number;
   no_match: number;
   pending: number;
+  // Values on the row this source supplied. Unlike `successful`, a failed
+  // retry of an earlier success cannot lower it.
+  owns: Owned;
+};
+
+type Owned = { bpm: number; musical_key: number; danceability: number };
+
+const OWNED_KEYS: Record<SourceField, keyof Owned> = {
+  bpm: 'bpm',
+  musicalKey: 'musical_key',
+  danceability: 'danceability',
 };
 
 type CountsRow = {
@@ -138,7 +150,7 @@ function coverage(count: number, total: number): Coverage {
 
 // One source's terminal record. Pending is tracks that source has not
 // attempted, which is not the same as tracks without a features row.
-function sourceCounts(db: Database.Database, statusColumn: string): SourceCounts {
+function sourceCounts(db: Database.Database, statusColumn: string, owns: Owned): SourceCounts {
   const row = db
     .prepare(
       `SELECT
@@ -159,7 +171,31 @@ function sourceCounts(db: Database.Database, statusColumn: string): SourceCounts
     no_data: row.noData,
     no_match: row.noMatch,
     pending: row.pending,
+    owns,
   };
+}
+
+function ownership(db: Database.Database): Record<FeatureSource, Owned> {
+  const owned: Record<FeatureSource, Owned> = {
+    catalog: { bpm: 0, musical_key: 0, danceability: 0 },
+    analysis: { bpm: 0, musical_key: 0, danceability: 0 },
+  };
+  const rows = db
+    .prepare(
+      `SELECT je.key AS field, je.value AS provenance, COUNT(*) AS count
+         FROM audio_features af, json_each(af.sources) je
+        WHERE json_valid(af.sources)
+        GROUP BY je.key, je.value`,
+    )
+    .all() as { field: string; provenance: unknown; count: number }[];
+
+  for (const row of rows) {
+    if (!Object.hasOwn(OWNED_KEYS, row.field) || typeof row.provenance !== 'string') continue;
+
+    owned[sourceForProvenance(row.provenance)][OWNED_KEYS[row.field as SourceField]] += row.count;
+  }
+
+  return owned;
 }
 
 function lastRefresh(db: Database.Database): RefreshRow | null {
@@ -248,6 +284,7 @@ export function readStatus(dbPath: string, now = new Date()): StatusReport {
            (SELECT COUNT(*) FROM audio_features WHERE danceability IS NOT NULL) AS danceabilityCount`,
       )
       .get() as CountsRow;
+    const owned = ownership(db);
     const refresh = lastRefresh(db);
     const reconciliation = lastReconciliation(db);
     const refreshedAtMs = refresh ? Date.parse(refresh.refreshedAt) : Number.NaN;
@@ -283,10 +320,17 @@ export function readStatus(dbPath: string, now = new Date()): StatusReport {
           // Before migration 3 every row is a catalog attempt, which is what
           // that migration backfills; diagnostics never migrate, so read the
           // old shape rather than failing on a database a build hasn't opened.
-          catalog: sourceCounts(db, perSource ? 'catalog_status' : 'status'),
+          catalog: sourceCounts(db, perSource ? 'catalog_status' : 'status', owned.catalog),
           analysis: perSource
-            ? sourceCounts(db, 'analysis_status')
-            : { attempted: 0, successful: 0, no_data: 0, no_match: 0, pending: counts.trackCount },
+            ? sourceCounts(db, 'analysis_status', owned.analysis)
+            : {
+                attempted: 0,
+                successful: 0,
+                no_data: 0,
+                no_match: 0,
+                pending: counts.trackCount,
+                owns: owned.analysis,
+              },
         },
         coverage: {
           bpm: coverage(counts.bpmCount, counts.trackCount),

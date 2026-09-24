@@ -87,6 +87,51 @@ describe('readStatus', () => {
     expect(statSync(dbPath).mtimeMs).toBe(before.mtimeMs);
   });
 
+  it('keeps counting a value analysis owns after a failed retry re-records its attempt', () => {
+    const { dbPath } = seededDatabase();
+    const cache = SelectaCache.open(dbPath);
+    const analysisKey = 'metrognome/key-profile@1';
+
+    cache.saveAudioFeatures([
+      featuresRow({
+        trackPersistentId: 'T-ANGEL',
+        mbRecordingMbid: null,
+        deezerTrackId: null,
+        bpm: 132,
+        musicalKey: 'F minor',
+        danceability: null,
+        sources: { bpm: 'metrognome/onset-autocorrelation-comb@1', musicalKey: analysisKey },
+        catalogStatus: null,
+        analysisStatus: 'ok',
+      }),
+    ]);
+    cache.applySupersedeFeatures(cache.planSupersedeFeatures('analysis', [analysisKey]));
+    // The retry finds nothing; merge keeps the bpm and records the attempt.
+    cache.saveAudioFeatures([
+      featuresRow({
+        trackPersistentId: 'T-ANGEL',
+        bpm: null,
+        musicalKey: null,
+        camelot: null,
+        danceability: null,
+        sources: null,
+        mbRecordingMbid: null,
+        deezerTrackId: null,
+        status: 'no_match',
+        catalogStatus: null,
+        analysisStatus: 'no_match',
+      }),
+    ]);
+    cache.close();
+
+    const { analysis, catalog } = readStatus(dbPath).audio_features!.sources;
+
+    // The attempt outcome stays accurate: this retry did fail.
+    expect(analysis).toMatchObject({ attempted: 1, successful: 0, no_match: 1 });
+    expect(analysis.owns).toEqual({ bpm: 1, musical_key: 0, danceability: 0 });
+    expect(catalog.owns).toEqual({ bpm: 1, musical_key: 1, danceability: 1 });
+  });
+
   it('reads historical nonzero removal and failure counts without rewriting stored data', () => {
     const { dbPath, refreshedAt } = seededDatabase();
     const cache = SelectaCache.open(dbPath);
