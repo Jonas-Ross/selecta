@@ -185,13 +185,15 @@ export type InspectedTrack = Pick<
   | 'danceability'
   | 'note'
 > & {
-  // How far to trust the two estimated features, omitted when unknown. Only
-  // this view carries them: a settled tracklist is small and is being
-  // scrutinized, where discovery results are long and are being scanned.
+  // How far to trust the two estimated features and what produced them,
+  // omitted when unknown. Only this view carries them: a settled tracklist is
+  // small and scrutinized, where discovery results are long and scanned.
   bpm_confidence?: number; // 0..1, for this measurement
   bpm_maturity?: FeatureMaturity; // how far the estimator itself is validated
   key_confidence?: number;
   key_maturity?: FeatureMaturity;
+  bpm_source?: string; // what produced the value, e.g. "metrognome/<algorithm>@<n>"
+  key_source?: string;
   signal: Pick<ApiTrack['signal'], 'play_count' | 'skip_count' | 'rating' | 'loved'>;
 };
 
@@ -213,6 +215,8 @@ export function toInspectedTrack(row: TrackRow): InspectedTrack {
     bpm_maturity: row.bpmMaturity ?? undefined,
     key_confidence: round2(row.keyConfidence),
     key_maturity: row.keyMaturity ?? undefined,
+    bpm_source: row.bpmSource ?? undefined,
+    key_source: row.keySource ?? undefined,
     note: track.note,
     signal: {
       play_count: track.signal.play_count,

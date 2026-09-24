@@ -36,6 +36,8 @@ export type TrackRow = {
   bpmMaturity: FeatureMaturity | null;
   keyConfidence: number | null; // 0..1
   keyMaturity: FeatureMaturity | null;
+  bpmSource: string | null; // stored provenance, or 'music_app' for the native tag
+  keySource: string | null;
   // The model's own note on this track (issue #32), verbatim. Null until the
   // model writes one via set_note. Projection-only — never a filter or sort.
   noteBody: string | null;
