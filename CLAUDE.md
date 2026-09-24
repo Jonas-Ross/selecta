@@ -33,6 +33,7 @@ Shared storage and bridge types live in `src/types/`; the cross-cutting error en
 | `npm run lint` | oxlint |
 | `npm run format:check` | oxfmt check; `npm run format` applies lint fixes, then formats |
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |
+| `scripts/check-no-binaries.sh` | Fail on a tracked SQLite database or large binary (its own CI job) |
 | `npm run smoke` | End-to-end smoke against the real library (builds first) |
 | `npm run preview` | Consolidated draft and explorer fixture gallery at `http://127.0.0.1:8767` |
 | `npm run dev` | Run the MCP server over stdio |
@@ -55,7 +56,7 @@ Two tiers, cheapest first:
 
 - ⚠️ `npx vitest run` ignores the scripts' `--tags-filter` and runs *everything*, launching Music.app and firing the macOS Automation prompt. Use `npm test` / `npm run test:integration`.
 - The `integration` tag is the only gate (no env var).
-- CI runs `npm run check` on every PR and push to `main`. Integration and smoke never run hosted — they need a real Music.app.
+- CI runs `npm run check` and `scripts/check-no-binaries.sh` on every PR and push to `main`. Integration and smoke never run hosted — they need a real Music.app.
 - **Integration prerequisites:** a user playlist named **`Selecta Test`** with a few tracks (at least two — reorder coverage needs a permutable order) in Music.app, plus Automation permission (macOS prompt on first run; re-enable under System Settings → Privacy & Security → Automation).
 
 ## Hard rules
