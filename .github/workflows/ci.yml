@@ -82,7 +82,10 @@ jobs:
             select(.author.login != "dependabot[bot]" or .committer.login != "web-flow"
               or (.commit.verification.verified | not)) | .sha')
           [ -n "$others" ] || export DEPENDABOT_VERIFIED=1
-          echo "tier=$(scripts/risk-tier.sh HEAD^1 HEAD^2)" >> "$GITHUB_OUTPUT"
+          # The base's copy classifies the PR, as with the gate below.
+          git show HEAD^1:scripts/risk-tier.sh > "$RUNNER_TEMP/risk-tier.sh" ||
+            cp scripts/risk-tier.sh "$RUNNER_TEMP/risk-tier.sh"
+          echo "tier=$(bash "$RUNNER_TEMP/risk-tier.sh" HEAD^1 HEAD^2)" >> "$GITHUB_OUTPUT"
 
   claude-review:
     needs: tier
@@ -149,7 +152,12 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           APPROVER: Jonas-Ross
-        run: scripts/merge-gate.sh >> "$GITHUB_OUTPUT"
+        # The base's copy grades the PR, so an edit to the grader can't grade
+        # itself; the PR's copy only runs while the base has none.
+        run: |
+          git show "origin/$BASE_REF:scripts/merge-gate.sh" > "$RUNNER_TEMP/merge-gate.sh" ||
+            cp scripts/merge-gate.sh "$RUNNER_TEMP/merge-gate.sh"
+          bash "$RUNNER_TEMP/merge-gate.sh" >> "$GITHUB_OUTPUT"
       - name: Status
         env:
           GH_TOKEN: ${{ github.token }}

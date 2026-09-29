@@ -63,9 +63,10 @@ changes-requested review also turns auto-merge off at once, so a gate that
 already passed cannot merge past it;
 whoever addresses the review turns it back on.
 
-**It stops a mistake, not an adversary.** The gate runs from the PR's own
-workflow, so a PR that rewrote the workflow could pass it; that is why workflow
-changes are `jonas`. The only authors with write access are Jonas and his
+**It stops a mistake, not an adversary.** The tier and gate scripts run from
+`main`'s copy, so a buggy edit to them cannot pass itself. The workflow still
+comes from the PR, so a PR that rewrote it could pass the gate; that is why
+workflow changes are `jonas`. The only authors with write access are Jonas and his
 agents, and a fork's PR gets no secrets, so no review, so `jonas`. It also gets
 a read-only token, so its gate cannot post `merge-gate` at all; Jonas merges
 those by hand.
