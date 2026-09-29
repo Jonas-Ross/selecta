@@ -60,7 +60,8 @@ blocks every tier. A review from him re-runs only the gate job
 re-run needs a `MERGE_GATE_TOKEN` secret, because `GITHUB_TOKEN` gets a 403
 re-running a job. Without it the gate has to be re-run by hand. A
 changes-requested review also turns auto-merge off at once, so a gate that
-already passed cannot merge past it; the next push turns it back on.
+already passed cannot merge past it;
+whoever addresses the review turns it back on.
 
 **It stops a mistake, not an adversary.** The gate runs from the PR's own
 workflow, so a PR that rewrote the workflow could pass it; that is why workflow
