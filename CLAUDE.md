@@ -1,6 +1,6 @@
 # Selecta
 
-A local MCP server that exposes the user's Apple Music library to AI agents through MCP so playlists can be built from owned tracks and written back to Music.app. The model is the brain — it does all sequencing, ranking, and taste; Selecta surfaces facts (inventory, behavioral signal, audio features) and executes reads and writes.
+A local engine over an Apple Music library that anyone on a Mac can install: it caches the library, enriches it with audio features, and reads and writes Music.app so playlists can be built from owned tracks. Front ends share that core: the MCP server that exposes it to AI agents, and a planned desktop app. The model is the brain — it does all sequencing, ranking, and taste; Selecta surfaces facts (inventory, behavioral signal, audio features) and executes reads and writes.
 
 `AGENTS.md` is a symlink to this file. `docs/music-app.md` records what Music.app actually does when scripted.
 `docs/cache-migrations.md` covers schema upgrades and the backup policy for future destructive migrations.
@@ -62,13 +62,13 @@ Two tiers, cheapest first:
 
 ## Hard rules
 
-- **No taste in the MCP.** No similarity scoring, candidate ranking, or recommendation inside Selecta — sequencing and taste are the model's job. Surfacing and enriching objective facts (BPM/key/energy, including from external sources like MusicBrainz/AcousticBrainz) is in scope. A feature drifting toward ranking is the wrong feature — stop and flag it.
+- **No taste in Selecta.** No similarity scoring, candidate ranking, or recommendation inside Selecta, in any front end — sequencing and taste are the model's job. Surfacing and enriching objective facts (BPM/key/energy, including from external sources like MusicBrainz/AcousticBrainz) is in scope. A feature drifting toward ranking is the wrong feature — stop and flag it.
 - **All Music.app coupling stays in `src/bridge/`.** No `osascript`/JXA in `tools/` or `cache/`.
 - **`stdout` is the MCP protocol channel.** All logging to `stderr`; optional file log at `~/Library/Logs/Selecta/selecta.log` only when `SELECTA_DEBUG=1`.
 - **Destructive CLI commands are dry-run by default.** A command that deletes or overwrites cache rows reports what it would change — with counts per source, not just totals — and writes only with `--apply`, dumping every row it overwrites or removes to an undo journal beside the database first. Its tests snapshot the whole cache and assert the delta is exactly what the summary reported, and empty for a dry run. `docs/destructive-commands.md` has the convention and what is deliberately outside it.
 - **No hidden retries, no fallbacks, no auto-refresh.** Bridge fails → structured error; the model decides what to do. Write paths patch the cache surgically but never trigger a full reread.
 - **CLI no-arg must start the MCP server over stdio** — clients spawn it that way; never print help on no-arg. Commander output routes to stderr (`configureOutput`).
-- **macOS only.** Out of scope: Spotify integration, Last.fm scrobbling, multi-user, cloud, auth, standalone UI.
+- **macOS only, local-first.** Out of scope: Spotify integration, Last.fm scrobbling, multi-user, cloud, auth. A standalone UI is in scope as another front end on the same core, calling the operations the MCP tools do.
 
 ## Standing decisions
 
@@ -87,7 +87,7 @@ Settled calls — don't re-litigate without the user:
 ## Engineering defaults
 
 - **Tests land with the code.** Unit coverage ships in the same commit(s); bugfixes get a test that reproduces the bug.
-- **Small, readable, minimal-dependency code wins.** Core deps: `@modelcontextprotocol/sdk`, `better-sqlite3`, `commander`, `zod`, `vitest`, TS toolchain. Add beyond that only when it clearly earns its keep, and say why in the commit message.
+- **Small, readable, minimal-dependency code wins.** Core deps: `@modelcontextprotocol/sdk`, `better-sqlite3`, `commander`, `zod`, `vitest`, TS toolchain. A UI front end's dependencies stay out of the core. Add beyond that only when it clearly earns its keep, and say why in the commit message.
 - **Stay on the ticket.** A pre-existing bug, cleanup, or refactor noticed mid-task is a follow-up issue, not part of this change, unless the requested behavior can't work without it. Scratch verification scripts stay out of the repo.
 
 ## Working style
