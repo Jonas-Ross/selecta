@@ -49,9 +49,12 @@ merging `main` into it, which moves the head. The gate hashes the PR's diff
 from its merge base at the approved commit and at the head, byte for byte apart
 from line positions and blob ids, so merging `main` keeps an approval and any
 edit to the change itself, down to whitespace, drops it. (`git patch-id` would
-ignore whitespace, which a shell string can depend on.) Jonas requesting changes blocks every tier. A
-review from him re-runs only the gate job (`merge-gate-review.yml`), so an
-approval merges without re-running CI.
+ignore whitespace, which a shell string can depend on.) Jonas requesting changes
+blocks every tier. A review from him re-runs only the gate job
+(`merge-gate-review.yml`), so an approval merges without re-running CI. That
+re-run needs a `MERGE_GATE_TOKEN` secret, because `GITHUB_TOKEN` gets a 403
+re-running a job. Without it the gate has to be re-run by hand, and a
+changes-requested review cannot stop an auto-merge the gate already passed.
 
 **It stops a mistake, not an adversary.** The gate runs from the PR's own
 workflow, so a PR that rewrote the workflow could pass it; that is why workflow
