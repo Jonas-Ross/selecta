@@ -45,10 +45,11 @@ merging it unreviewed. It is skipped where Jonas reviews anyway, and on
 Dependabot PRs, which get no secrets.
 
 **An approval covers a change, not a commit.** Keeping a PR up to date means
-merging `main` into it, which moves the head. The gate compares `git patch-id`
-of the PR's diff from its merge base at the approved commit and at the head, so
-merging `main` keeps an approval and any edit to the change itself, including a
-conflict resolution, drops it. Jonas requesting changes blocks every tier. A
+merging `main` into it, which moves the head. The gate hashes the PR's diff
+from its merge base at the approved commit and at the head, byte for byte apart
+from line positions and blob ids, so merging `main` keeps an approval and any
+edit to the change itself, down to whitespace, drops it. (`git patch-id` would
+ignore whitespace, which a shell string can depend on.) Jonas requesting changes blocks every tier. A
 review from him re-runs only the gate job (`merge-gate-review.yml`), so an
 approval merges without re-running CI.
 
