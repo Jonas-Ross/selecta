@@ -1,10 +1,12 @@
 # Merge gate
 
 Every PR used to wait for Jonas's approval, which made him the bottleneck for
-changes nobody needed him to read. The `merge-gate` CI job now decides, from the
-files a PR touches (`scripts/risk-tier.sh`), whether it can merge without him.
-GitHub's auto-merge (squash) does the merging; `merge-gate` is a required check,
-so auto-merge fires only once the gate passes.
+changes nobody needed him to read. The `gate` CI job now decides, from the
+files a PR touches (`scripts/risk-tier.sh`), whether it can merge without him,
+and posts the answer as the `merge-gate` commit status. GitHub's auto-merge
+(squash) does the merging; `merge-gate` is a required status, so auto-merge
+fires only once the gate passes. Waiting on Jonas is `pending`, not a failed
+job, because a red job emails him on every push.
 
 ## Tiers
 
