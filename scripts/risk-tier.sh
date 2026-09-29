@@ -16,9 +16,12 @@ head=$2
 
 # Every commit is Dependabot's and none of its bumps is a major, which the
 # grouping in dependabot.yml sends as its own PR for exactly this reason. No
-# merge commits: Dependabot rebases, and a merge can carry any edit.
+# merge commits: Dependabot rebases, and a merge can carry any edit. Author
+# text survives an amend, so the caller must also set DEPENDABOT_VERIFIED=1 from
+# GitHub's own record of who signed the commits.
 dependabot_minor() {
   local authors types
+  [ "${DEPENDABOT_VERIFIED:-}" = 1 ] || return 1
   [ -z "$(git rev-list --merges "$base..$head")" ] || return 1
   authors=$(git log --format=%an "$base..$head" | sort -u)
   types=$(git log --no-merges --format=%B "$base..$head" | sed -n 's/^ *update-type: //p' | sort -u)

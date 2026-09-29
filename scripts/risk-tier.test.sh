@@ -4,6 +4,8 @@ set -euo pipefail
 
 tier_script=$(cd "$(dirname "$0")" && pwd)/risk-tier.sh
 failures=0
+# The workflow sets this from GitHub's commit records; see the case that unsets it.
+export DEPENDABOT_VERIFIED=1
 
 # Each case starts from a base commit carrying these files.
 fresh_repo() {
@@ -88,5 +90,7 @@ echo x >> package-lock.json && commit_as 'dependabot[bot]' "$(bump patch)"
 git checkout -q main && echo y >> docs/music-app.md && commit_as test 'main moves' && git checkout -q pr
 git -c user.name='dependabot[bot]' merge -q --no-edit --no-ff main
 expect auto 'dependabot bump with a plain merge of main is judged by its files'
+fresh_repo; echo x >> package.json; commit_as 'dependabot[bot]' "$(bump patch)"
+DEPENDABOT_VERIFIED= expect jonas 'dependabot author text without a verified signature'
 
 [ "$failures" -eq 0 ] || { printf '%d failed\n' "$failures"; exit 1; }

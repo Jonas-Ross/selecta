@@ -58,6 +58,9 @@ jobs:
   tier:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       tier: ${{ steps.tier.outputs.tier }}
     steps:
@@ -68,7 +71,18 @@ jobs:
       # HEAD is GitHub's merge commit; HEAD^2 is the PR head, whose own commits
       # the Dependabot check reads.
       - id: tier
-        run: echo "tier=$(scripts/risk-tier.sh HEAD^1 HEAD^2)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # An amend keeps the author, so trust only commits GitHub itself signed
+          # for Dependabot.
+          others=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" --jq '.[] |
+            select(.author.login != "dependabot[bot]" or .committer.login != "web-flow"
+              or (.commit.verification.verified | not)) | .sha')
+          [ -n "$others" ] || export DEPENDABOT_VERIFIED=1
+          echo "tier=$(scripts/risk-tier.sh HEAD^1 HEAD^2)" >> "$GITHUB_OUTPUT"
 
   claude-review:
     needs: tier

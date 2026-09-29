@@ -12,7 +12,7 @@ job, because a red job emails him on every push.
 
 | Tier | Files | Merges when |
 |---|---|---|
-| `deps` | any, when every commit is Dependabot's and no bump is a major | CI is green |
+| `deps` | any, when every commit is Dependabot's, as signed by GitHub, and no bump is a major | CI is green |
 | `auto` | Markdown other than `CLAUDE.md`, `test/` apart from the list below, `package-lock.json` | CI is green and the Claude review passes |
 | `jonas` | everything else | CI is green and Jonas approved this change |
 
