@@ -203,4 +203,15 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --squash "$PR_URL"
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Changes requested since the gate read the reviews would find no
+          # auto-merge to turn off, so look again right before turning it on.
+          latest=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/reviews" --jq '.[] |
+            select(.user.login == "Jonas-Ross" and (.state | IN("APPROVED", "CHANGES_REQUESTED", "DISMISSED"))) | .state' | tail -n 1)
+          if [ "$latest" = CHANGES_REQUESTED ]; then
+            echo "Jonas requested changes; leaving auto-merge off"
+            exit 0
+          fi
+          gh pr merge --auto --squash "$PR_URL"
