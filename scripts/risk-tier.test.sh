@@ -74,4 +74,17 @@ expect jonas 'dependabot bump with a commit on top'
 
 fresh_repo; echo x >> src/cache/schema.ts; commit_as test "$(bump patch)"; expect jonas 'a bump message from someone else'
 
+fresh_repo
+echo x >> package-lock.json && commit_as 'dependabot[bot]' "$(bump patch)"
+git checkout -q main && echo y >> docs/music-app.md && commit_as test 'main moves' && git checkout -q pr
+git -c user.name='dependabot[bot]' merge -q --no-edit --no-ff main
+echo x >> src/cache/schema.ts && git add -A && git -c user.name='dependabot[bot]' commit -q --amend --no-edit
+expect jonas 'dependabot bump with an edit hidden in a merge'
+
+fresh_repo
+echo x >> package-lock.json && commit_as 'dependabot[bot]' "$(bump patch)"
+git checkout -q main && echo y >> docs/music-app.md && commit_as test 'main moves' && git checkout -q pr
+git -c user.name='dependabot[bot]' merge -q --no-edit --no-ff main
+expect auto 'dependabot bump with a plain merge of main is judged by its files'
+
 [ "$failures" -eq 0 ] || { printf '%d failed\n' "$failures"; exit 1; }

@@ -15,10 +15,12 @@ base=$(git merge-base "$1" "$2")
 head=$2
 
 # Every commit is Dependabot's and none of its bumps is a major, which the
-# grouping in dependabot.yml sends as its own PR for exactly this reason.
+# grouping in dependabot.yml sends as its own PR for exactly this reason. No
+# merge commits: Dependabot rebases, and a merge can carry any edit.
 dependabot_minor() {
   local authors types
-  authors=$(git log --no-merges --format=%an "$base..$head" | sort -u)
+  [ -z "$(git rev-list --merges "$base..$head")" ] || return 1
+  authors=$(git log --format=%an "$base..$head" | sort -u)
   types=$(git log --no-merges --format=%B "$base..$head" | sed -n 's/^ *update-type: //p' | sort -u)
   [ "$authors" = 'dependabot[bot]' ] && [ -n "$types" ] &&
     ! grep -qvE '^version-update:semver-(minor|patch)$' <<< "$types"
