@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -19,6 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: scripts/check-no-binaries.sh
+      - name: gate scripts
+        run: |
+          scripts/risk-tier.test.sh
+          scripts/merge-gate.test.sh
 
   check:
     name: ${{ matrix.name }}
@@ -45,3 +53,95 @@ jobs:
           cache: npm
       - run: npm ci
       - run: ${{ matrix.run }}
+
+  # The jobs below decide whether a PR can merge without Jonas; docs/merge-gate.md.
+  tier:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      tier: ${{ steps.tier.outputs.tier }}
+    steps:
+      # Full history: a Dependabot PR is judged on every commit in it.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: tier
+        run: echo "tier=$(scripts/risk-tier.sh HEAD^1 HEAD)" >> "$GITHUB_OUTPUT"
+
+  claude-review:
+    needs: tier
+    if: needs.tier.outputs.tier == 'auto'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - id: review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          # Threads open PRs as the Claude GitHub App.
+          allowed_bots: claude
+          prompt: |
+            You are the only reviewer of this pull request before it merges
+            unattended, so review adversarially. The change is `git diff HEAD^1 HEAD`;
+            read CLAUDE.md and the surrounding code for context.
+
+            Block on: a correctness bug, a broken hard rule from CLAUDE.md, a test
+            weakened or removed without cause, a test that could launch Music.app
+            or reach the network, or documentation that now contradicts the code.
+            Style preferences are not blocking. Pass when nothing blocking remains.
+          claude_args: >-
+            --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+            --json-schema '{"type":"object","properties":{"verdict":{"enum":["pass","block"]},"summary":{"type":"string"},"blocking":{"type":"array","items":{"type":"string"}}},"required":["verdict","summary","blocking"]}'
+      - name: verdict
+        env:
+          OUTPUT: ${{ steps.review.outputs.structured_output }}
+        run: |
+          jq -r '"verdict: \(.verdict)\n\n\(.summary)\n", (.blocking[] | "- \(.)")' <<< "$OUTPUT" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$(jq -r .verdict <<< "$OUTPUT")" = pass ]
+
+  merge-gate:
+    needs: [files, check, tier, claude-review]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TIER: ${{ needs.tier.outputs.tier }}
+          CHECK_RESULT: ${{ needs.files.result == 'success' && needs.check.result || 'failure' }}
+          REVIEW_RESULT: ${{ needs.claude-review.result }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          APPROVER: Jonas-Ross
+        run: scripts/merge-gate.sh >> "$GITHUB_OUTPUT"
+      - name: label
+        # Labels are for reading the PR list; the gate's result is what merges.
+        if: always() && steps.gate.outputs.auto != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          AUTO: ${{ steps.gate.outputs.auto }}
+        run: |
+          gh label create auto-ok --color 0e8a16 --description 'Merges without Jonas once CI and review pass' --force
+          gh label create needs-jonas --color d93f0b --description 'Merges only with Jonas approval' --force
+          if [ "$AUTO" = true ]; then
+            gh pr edit "$PR" --add-label auto-ok --remove-label needs-jonas
+          else
+            gh pr edit "$PR" --add-label needs-jonas --remove-label auto-ok
+          fi

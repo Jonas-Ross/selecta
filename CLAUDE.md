@@ -7,6 +7,7 @@ A local MCP server that exposes the user's Apple Music library to AI agents thro
 `docs/cache-architecture.md` records transaction boundaries and refresh-pruning ownership.
 `docs/audio-features.md` covers the two enrichment sources, per-source terminal status, the merge rule and which of it reaches the model.
 `docs/destructive-commands.md` covers the dry-run/`--apply` convention, the undo journal and the test pattern every destructive command owes.
+`docs/merge-gate.md` covers which PRs merge without the user and why.
 
 ## Architecture
 
@@ -56,7 +57,7 @@ Two tiers, cheapest first:
 
 - ⚠️ `npx vitest run` ignores the scripts' `--tags-filter` and runs *everything*, launching Music.app and firing the macOS Automation prompt. Use `npm test` / `npm run test:integration`.
 - The `integration` tag is the only gate (no env var).
-- CI runs `npm run check` and `scripts/check-no-binaries.sh` on every PR and push to `main`. Integration and smoke never run hosted — they need a real Music.app.
+- CI runs `npm run check` and `scripts/check-no-binaries.sh` on every PR and push to `main`. On a PR, `merge-gate` then decides by the files it touches whether it needs the user (`scripts/risk-tier.sh`). Integration and smoke never run hosted — they need a real Music.app.
 - **Integration prerequisites:** a user playlist named **`Selecta Test`** with a few tracks (at least two — reorder coverage needs a permutable order) in Music.app, plus Automation permission (macOS prompt on first run; re-enable under System Settings → Privacy & Security → Automation).
 
 ## Hard rules
@@ -97,7 +98,7 @@ Build autonomously: design, implement, test, branch, and open PRs without per-st
 
 - Feature branches off `main`; never commit directly on `main`. Branch names: `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `refactor/<slug>`, `chore/<slug>`.
 - [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`, imperative, lowercase, no trailing period. One concern per commit; keep the build green where reasonable.
-- Pushing feature branches and opening PRs is normal flow — no per-action confirmation. Never push to `main` or use an unguarded force-push. `--force-with-lease` is allowed when publishing rebased feature branches, including stacked PRs; if the lease fails, inspect the remote changes before proceeding. Never merge without explicit ask. Don't amend committed work.
+- Pushing feature branches and opening PRs is normal flow — no per-action confirmation. Never push to `main` or use an unguarded force-push. `--force-with-lease` is allowed when publishing rebased feature branches, including stacked PRs; if the lease fails, inspect the remote changes before proceeding. Enable auto-merge (squash) on every PR you open and let `merge-gate` decide; never merge by hand without explicit ask, and never split a change to dodge a `needs-jonas` tier. Don't amend committed work.
 - Before opening a PR, run `/simplify` over the diff and address what it surfaces.
 - Work that depends on an unmerged PR is stacked, not held: `gh stack` where the extension is installed (`gh stack submit --open` — bare `--auto` opens drafts), otherwise branch off that PR's head and open the follow-up against it by hand. Branches are named per the convention above either way. After editing a lower layer, rebase the upper layers onto it and publish with lease protection; copying fixes between branches does not maintain stack ancestry.
 - **During PR review cycles:** commit fixes for reviewer feedback (Codex, humans) and push only once **every** comment in the review batch is addressed (fixed or skipped with a reply saying why) — one push per batch, so a reviewer re-reads once instead of per fix. Never push with review comments still unaddressed. CodeRabbit is not active on this repo: don't wait for its pass or ask it to review.
