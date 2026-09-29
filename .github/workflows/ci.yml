@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -19,6 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: scripts/check-no-binaries.sh
+      - name: gate scripts
+        run: |
+          scripts/risk-tier.test.sh
 
   check:
     name: ${{ matrix.name }}
@@ -45,3 +52,115 @@ jobs:
           cache: npm
       - run: npm ci
       - run: ${{ matrix.run }}
+
+  # The jobs below decide whether a PR can merge without Jonas; docs/merge-gate.md.
+  tier:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      tier: ${{ steps.tier.outputs.tier }}
+    steps:
+      # Full history: a Dependabot PR is judged on every commit in it.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # HEAD is GitHub's merge commit; HEAD^2 is the PR head, whose own commits
+      # the Dependabot check reads.
+      - id: tier
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # An amend keeps the author, so trust only commits GitHub itself signed
+          # for Dependabot.
+          others=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" --jq '.[] |
+            select(.author.login != "dependabot[bot]" or .committer.login != "web-flow"
+              or (.commit.verification.verified | not)) | .sha')
+          [ -n "$others" ] || export DEPENDABOT_VERIFIED=1
+          # The base's copy classifies the PR, so an edit to the classifier can't
+          # classify itself; the PR's copy only runs while the base has none.
+          git show HEAD^1:scripts/risk-tier.sh > "$RUNNER_TEMP/risk-tier.sh" ||
+            cp scripts/risk-tier.sh "$RUNNER_TEMP/risk-tier.sh"
+          echo "tier=$(bash "$RUNNER_TEMP/risk-tier.sh" HEAD^1 HEAD^2)" >> "$GITHUB_OUTPUT"
+
+  claude-review:
+    needs: tier
+    if: needs.tier.outputs.tier == 'auto'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # id-token only matters if the action falls back to its OIDC app token.
+    permissions:
+      contents: read
+      pull-requests: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - id: review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          # Threads open PRs as the Claude GitHub App.
+          allowed_bots: claude
+          prompt: |
+            You are the only reviewer of this pull request before it merges
+            unattended, so review adversarially. The change is `git diff HEAD^1 HEAD`;
+            read CLAUDE.md and the surrounding code for context.
+
+            Block on: a correctness bug, a broken hard rule from CLAUDE.md, a test
+            weakened or removed without cause, a test that could launch Music.app
+            or reach the network, or documentation that now contradicts the code.
+            Style preferences are not blocking. Pass when nothing blocking remains.
+          claude_args: >-
+            --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+            --json-schema '{"type":"object","properties":{"verdict":{"enum":["pass","block"]},"summary":{"type":"string"},"blocking":{"type":"array","items":{"type":"string"}}},"required":["verdict","summary","blocking"]}'
+      - name: verdict
+        env:
+          OUTPUT: ${{ steps.review.outputs.structured_output }}
+        run: |
+          jq -r '"verdict: \(.verdict)\n\n\(.summary)\n", (.blocking[] | "- \(.)")' <<< "$OUTPUT" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$(jq -r .verdict <<< "$OUTPUT")" = pass ]
+
+  # Turns auto-merge on when the tier passes and off when it does not, and never
+  # fails: waiting on Jonas is a label, not a red or pending check.
+  gate:
+    needs: [files, check, tier, claude-review]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          TIER: ${{ needs.tier.outputs.tier }}
+          RESULTS: ${{ needs.files.result == 'success' && needs.check.result || 'failure' }}:${{ needs.claude-review.result }}
+        run: |
+          case $TIER:$RESULTS in
+            deps:success:* | auto:success:success) auto=true ;;
+            *) auto=false ;;
+          esac
+          echo "tier $TIER, check:review $RESULTS, merges without Jonas: $auto" | tee -a "$GITHUB_STEP_SUMMARY"
+          gh label create auto-ok --color 0e8a16 --description 'Merges on its own once CI and review pass' --force
+          gh label create needs-jonas --color d93f0b --description 'Jonas merges this one' --force
+          # A failure here is a settings problem, so it warns instead of turning
+          # the job red.
+          if [ "$auto" = true ]; then
+            gh pr edit "$PR" --add-label auto-ok --remove-label needs-jonas
+            gh pr merge "$PR" --auto --squash || echo "::warning::could not turn on auto-merge; is it allowed in the repository settings?"
+          else
+            gh pr edit "$PR" --add-label needs-jonas --remove-label auto-ok
+            if [ "$(gh pr view "$PR" --json autoMergeRequest --jq '.autoMergeRequest != null')" = true ]; then
+              gh pr merge "$PR" --disable-auto || echo "::warning::could not turn off auto-merge"
+            fi
+          fi
