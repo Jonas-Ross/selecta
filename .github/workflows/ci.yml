@@ -65,8 +65,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      # HEAD is GitHub's merge commit; HEAD^2 is the PR head, whose own commits
+      # the Dependabot check reads.
       - id: tier
-        run: echo "tier=$(scripts/risk-tier.sh HEAD^1 HEAD)" >> "$GITHUB_OUTPUT"
+        run: echo "tier=$(scripts/risk-tier.sh HEAD^1 HEAD^2)" >> "$GITHUB_OUTPUT"
 
   claude-review:
     needs: tier
