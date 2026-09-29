@@ -59,9 +59,9 @@ blocks every tier. A review from him re-runs only the gate job
 (`merge-gate-review.yml`), so an approval merges without re-running CI. That
 re-run needs a `MERGE_GATE_TOKEN` secret, because `GITHUB_TOKEN` gets a 403
 re-running a job. Without it the gate has to be re-run by hand. A
-changes-requested review also turns auto-merge off at once, so a gate that
-already passed cannot merge past it;
-whoever addresses the review turns it back on.
+changes-requested review or a dismissed approval also turns auto-merge off at
+once, so a gate that already passed cannot merge past it; whoever addresses the
+review turns it back on.
 
 **It stops a mistake, not an adversary.** The tier and gate scripts run from
 `main`'s copy, so a buggy edit to them cannot pass itself. The workflow still
