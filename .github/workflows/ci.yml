@@ -131,6 +131,8 @@ jobs:
       issues: write
       pull-requests: write
       statuses: write
+    outputs:
+      auto: ${{ steps.gate.outputs.auto }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -174,3 +176,18 @@ jobs:
           else
             gh pr edit "$PR" --add-label needs-jonas --remove-label auto-ok
           fi
+
+  # Nobody opens Dependabot's PRs to turn auto-merge on, so this does. Its own job
+  # keeps the write token away from the PR's checked-out code.
+  dependabot-auto-merge:
+    needs: [tier, gate]
+    if: needs.tier.outputs.tier == 'deps' && needs.gate.outputs.auto == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"

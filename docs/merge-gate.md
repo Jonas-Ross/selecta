@@ -36,8 +36,9 @@ pass it has graded itself:
   off the network and the repository free of databases.
 
 So CI configuration changes do not merge on their own, and neither does a
-hand-edited `package.json`. Dependabot's minor and patch bumps do; its majors
-arrive as their own PRs (`.github/dependabot.yml`) and wait for Jonas.
+hand-edited `package.json`. Dependabot's minor and patch bumps do, and CI turns
+on auto-merge for them since no one else opens those PRs; its majors arrive as
+their own PRs (`.github/dependabot.yml`) and wait for Jonas.
 
 ## What the gate trusts
 
