@@ -2,11 +2,11 @@
 
 Every PR used to wait for Jonas's approval, which made him the bottleneck for
 changes nobody needed him to read. The `gate` CI job now decides, from the
-files a PR touches (`scripts/risk-tier.sh`), whether it can merge without him,
-and posts the answer as the `merge-gate` commit status. GitHub's auto-merge
-(squash) does the merging; `merge-gate` is a required status, so auto-merge
-fires only once the gate passes. Waiting on Jonas is `pending`, not a failed
-job, because a red job emails him on every push.
+files a PR touches (`scripts/risk-tier.sh`), whether it can merge without him.
+When it can, the gate labels it `auto-ok` and turns on GitHub's auto-merge
+(squash), which fires once the required checks pass. When it can't, the gate
+labels it `needs-jonas` and turns auto-merge off. The gate job itself always
+finishes green.
 
 ## Tiers
 
@@ -14,7 +14,7 @@ job, because a red job emails him on every push.
 |---|---|---|
 | `deps` | any, when every commit is Dependabot's, as signed by GitHub, and no bump is a major | CI is green |
 | `auto` | Markdown other than `CLAUDE.md`, `test/` apart from the list below, `package-lock.json` | CI is green and the Claude review passes |
-| `jonas` | everything else | CI is green and Jonas approved this change |
+| `jonas` | everything else | Jonas merges it |
 
 `jonas` is the default, so a file nobody classified fails closed. It covers
 `src/` whole: the cache and its migrations, Music.app writes, and the
@@ -49,24 +49,18 @@ With no token configured the job fails, which routes the PR to Jonas instead of
 merging it unreviewed. It is skipped where Jonas reviews anyway, and on
 Dependabot PRs, which get no secrets.
 
-**An approval covers a change, not a commit.** Keeping a PR up to date means
-merging `main` into it, which moves the head. The gate merges the approved
-commit and the head each into `main` as it is now (`git merge-tree`) and
-requires the same tree, so merging `main` in keeps an approval, and any other
-edit, down to whitespace or which of two identical blocks changed, drops it. So
-does a conflict with `main`. Jonas requesting changes
-blocks every tier. A review from him re-runs only the gate job
-(`merge-gate-review.yml`), so an approval merges without re-running CI. That
-re-run needs a `MERGE_GATE_TOKEN` secret, because `GITHUB_TOKEN` gets a 403
-re-running a job. Without it the gate has to be re-run by hand. A
-changes-requested review or a dismissed approval also turns auto-merge off at
-once, so a gate that already passed cannot merge past it; whoever addresses the
-review turns it back on.
+**Nothing waits in a pending or red state for Jonas.** An earlier version
+posted a `merge-gate` status that sat `pending` until he approved. Sessions
+watching CI waited on it forever, and he cannot approve a PR his own account
+opened, which is every thread's PR. For the same reason there is no CODEOWNERS
+file or required review. A `needs-jonas` PR merges when Jonas merges it or tells
+a thread to. Agents never turn auto-merge on themselves, and the gate turns it
+back off on every push to a `needs-jonas` PR. To hold an `auto-ok` PR, turn its
+auto-merge off. A red job now means something actually broke.
 
-**It stops a mistake, not an adversary.** The tier and gate scripts run from
-`main`'s copy, so a buggy edit to them cannot pass itself. The workflow still
-comes from the PR, so a PR that rewrote it could pass the gate; that is why
-workflow changes are `jonas`. The only authors with write access are Jonas and his
-agents, and a fork's PR gets no secrets, so no review, so `jonas`. It also gets
-a read-only token, so its gate cannot post `merge-gate` at all; Jonas merges
-those by hand.
+**It stops a mistake, not an adversary.** The tier script runs from `main`'s
+copy, so a buggy edit to it cannot classify itself. The workflow still comes from
+the PR, so a PR that rewrote it could pass the gate; that is why workflow changes
+are `jonas`. The only authors with write access are Jonas and his agents, and a
+fork's PR gets no secrets, so no review, so `jonas`. It also gets a read-only
+token, so its gate cannot turn auto-merge on; Jonas merges those by hand.
