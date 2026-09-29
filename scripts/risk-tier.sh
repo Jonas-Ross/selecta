@@ -35,7 +35,9 @@ classify() {
   case $1 in
     # The gate itself and the rules agents follow: a change cannot grade its own
     # grader. Lint and compiler config can loosen what CI checks.
-    .github/* | scripts/* | CLAUDE.md | AGENTS.md | LICENSE | .claude/* | .codex/*) echo jonas ;;
+    .github/* | scripts/* | LICENSE) echo jonas ;;
+    # Agent instructions nest, so they are the gate's inputs at any depth.
+    CLAUDE.md | */CLAUDE.md | AGENTS.md | */AGENTS.md | .claude/* | */.claude/* | .codex/* | */.codex/*) echo jonas ;;
     package.json | tsconfig*.json | vitest.config.ts | .oxlintrc.json | .oxfmtrc.json) echo jonas ;;
     # The tests that stand between a flag typo and lost data, and the one that
     # keeps the suite off the network and off Music.app.

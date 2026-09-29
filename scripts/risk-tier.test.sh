@@ -55,6 +55,8 @@ fresh_repo; echo x >> src/cache/schema.ts; commit_as test s; expect jonas 'cache
 fresh_repo; echo x >> src/tools/search.ts; commit_as test s; expect jonas 'unlisted source'
 fresh_repo; echo x >> docs/music-app.md; echo x >> .github/workflows/ci.yml; commit_as test c; expect jonas 'docs plus workflow'
 fresh_repo; echo x > CLAUDE.md; commit_as test c; expect jonas 'agent rules'
+fresh_repo; mkdir -p src; echo x > src/AGENTS.md; commit_as test c; expect jonas 'nested agent rules'
+fresh_repo; mkdir -p ui/.claude; echo x > ui/.claude/x.md; commit_as test c; expect jonas 'nested agent skill'
 fresh_repo; echo x >> package.json; commit_as test p; expect jonas 'manifest by hand'
 fresh_repo; echo x >> package-lock.json; commit_as test p; expect auto 'lockfile by hand'
 fresh_repo; commit_as test empty; expect jonas 'empty diff'

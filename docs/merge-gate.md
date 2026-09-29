@@ -25,8 +25,10 @@ Some files are `jonas` even though they look like tests or config, because
 they are the gate's own inputs, and a change that could edit its grader and then
 pass it has graded itself:
 
-- `.github/`, `scripts/`, `CLAUDE.md`/`AGENTS.md`, `package.json`, and the
-  TypeScript, Vitest and lint config, any of which can loosen what CI checks.
+- `.github/`, `scripts/`, `package.json`, and the TypeScript, Vitest and lint
+  config, any of which can loosen what CI checks.
+- `CLAUDE.md`, `AGENTS.md`, `.claude/` and `.codex/` at any depth, which steer
+  the agents and the Claude review.
 - `test/table_diff.ts` and the destructive-command, supersede, reopen, migration
   and state-safety tests, which `docs/destructive-commands.md` makes the
   guardrail against lost data.
