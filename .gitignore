@@ -14,5 +14,5 @@ coverage/
 .idea/
 .claude/worktrees/
 
-# Built by site/build.sh from a metrognome checkout; Pages builds its own copy.
+# Built by scripts/build-site.sh from a metrognome checkout; Pages builds its own copy.
 /site/metrognome.wasm
