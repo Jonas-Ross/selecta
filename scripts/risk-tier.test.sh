@@ -50,6 +50,12 @@ bump() {
   for t in "$@"; do printf -- '- dependency-name: x\n  update-type: version-update:semver-%s\n' "$t"; done
 }
 
+# What Dependabot writes for a transitive dependency: a version, no update type.
+bump_indirect() {
+  printf 'chore(deps-dev): bump\n\n---\nupdated-dependencies:\n'
+  printf -- '- dependency-name: x\n  dependency-version: 5.0.12\n  dependency-type: indirect\n'
+}
+
 fresh_repo; echo more >> docs/music-app.md; commit_as test docs; expect auto 'docs only'
 fresh_repo; echo t > packages/core/test/new.test.ts; echo x >> packages/core/test/cache.test.ts; commit_as test tests; expect auto 'ordinary tests'
 fresh_repo; echo x >> packages/mcp/test/destructive.test.ts; commit_as test t; expect jonas 'destructive-command test'
@@ -72,6 +78,13 @@ expect deps 'dependabot minor and patch'
 
 fresh_repo; echo x >> package.json; commit_as 'dependabot[bot]' "$(bump minor major)"; expect jonas 'dependabot group with a major'
 fresh_repo; echo x >> package.json; commit_as 'dependabot[bot]' 'chore(deps): bump'; expect jonas 'dependabot without an update type'
+
+# No update type to bound, so the bump misses `deps` and its files decide. CI
+# keeps the Claude review off Dependabot PRs, which leaves this one for Jonas.
+fresh_repo
+echo x >> package-lock.json
+commit_as 'dependabot[bot]' "$(bump_indirect)"
+expect auto 'dependabot indirect bump is judged by its files'
 
 fresh_repo
 echo x >> package.json && commit_as 'dependabot[bot]' "$(bump patch)"
