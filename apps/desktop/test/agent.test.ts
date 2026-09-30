@@ -65,6 +65,9 @@ it('runs with no built-in tools and only the read and draft selecta tools', () =
   expect(flag(args, '--tools')).toBe('');
   expect(flag(args, '--permission-mode')).toBe('dontAsk');
   expect(args).toContain('--strict-mcp-config');
+  expect(JSON.parse(flag(args, '--mcp-config'))).toMatchObject({
+    mcpServers: { selecta: { env: { SELECTA_LOCAL_DRAFTS: '1' } } },
+  });
   expect(args).toContain('mcp__selecta__edit_playlist_draft');
   expect(args.slice(args.indexOf('--disallowedTools'))).toContain(
     'mcp__selecta__save_playlist_draft',
@@ -79,13 +82,11 @@ it('resumes the session the first turn reported', async () => {
   const { agent, events } = sessions(spawn);
 
   agent.start(DRAFT, 'warmup');
-  expect(agent.isRunning(DRAFT)).toBe(true);
   runs[0].child.finish([
     { type: 'assistant', message: { content: [{ type: 'text', text: 'Built it.' }] } },
     { type: 'result', subtype: 'success', session_id: 'S-1' },
   ]);
   await settle();
-  expect(agent.isRunning(DRAFT)).toBe(false);
   agent.send(DRAFT, 'less vocal');
 
   expect(runs[0].args).toContain('--session-id');

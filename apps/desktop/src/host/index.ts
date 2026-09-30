@@ -29,7 +29,7 @@ const call = createApi(
   {
     cache: () => (cache ??= SelectaCache.open(dbPath)),
     bridge,
-    drafts: () => new DraftStore(draftDbPath(dbPath)),
+    drafts: () => new DraftStore(draftDbPath(dbPath), { localOnly: true }),
   },
   agent,
 );

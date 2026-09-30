@@ -1,19 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
+import { DraftStore } from '@selecta/core/drafts/store.js';
 import { makeToolDeps } from '../../../packages/core/test/helpers.js';
 import { createApi } from '../src/host/api.js';
 import type { AgentSessions } from '../src/host/agent.js';
 
-const deps = makeToolDeps();
-const agent = { start: vi.fn(), send: vi.fn(), cancel: vi.fn(), isRunning: vi.fn(() => false) };
-const call = createApi({ ...deps, drafts: deps.drafts! }, agent as unknown as AgentSessions);
+const base = makeToolDeps();
+const local = new DraftStore(base.drafts!().path, { localOnly: true });
+const deps = { ...base, drafts: () => local };
+const agent = { start: vi.fn(), send: vi.fn(), cancel: vi.fn() };
+const call = createApi(deps, agent as unknown as AgentSessions);
 
 afterEach(() => vi.clearAllMocks());
 
 it('lists, reads and edits drafts through the same handlers as the MCP tools', async () => {
   const draftId = randomUUID();
 
-  deps.drafts!().create(draftId, 'Warmup', ['T-TEARDROP', 'T-ROADS']);
+  deps.drafts().create(draftId, 'Warmup', ['T-TEARDROP', 'T-ROADS']);
 
   expect(await call('drafts.list', undefined)).toMatchObject([
     { draft_id: draftId, track_count: 2 },
@@ -63,27 +66,18 @@ it('rejects anything outside the method table', async () => {
 
 it('keeps a draft linked to the Music preview read-only for the user and Claude', async () => {
   const draftId = randomUUID();
-  const store = deps.drafts!();
+  const store = base.drafts!();
 
   store.create(draftId, 'Linked', ['T-TEARDROP', 'T-ROADS']);
   store.claimPreview(draftId, 1, true);
 
   const linked = /linked to the Selecta Preview playlist/;
 
-  await expect(call('drafts.edit', { draft_id: draftId, revision: 1, name: 'x' })).rejects.toThrow(
-    linked,
-  );
+  expect(await call('drafts.edit', { draft_id: draftId, revision: 1, name: 'x' })).toMatchObject({
+    error: 'preview_conflict',
+  });
   await expect(call('agent.start', { draft_id: draftId, brief: 'go' })).rejects.toThrow(linked);
   await expect(call('agent.send', { draft_id: draftId, message: 'go' })).rejects.toThrow(linked);
   expect(agent.start).not.toHaveBeenCalled();
   expect(store.get(draftId).revision).toBe(1);
-});
-
-it('reports whether Claude is still working on a draft', async () => {
-  const draftId = randomUUID();
-
-  agent.isRunning.mockReturnValueOnce(true);
-
-  expect(await call('agent.running', { draft_id: draftId })).toBe(true);
-  expect(agent.isRunning).toHaveBeenCalledWith(draftId);
 });

@@ -3,6 +3,7 @@
 import { spawn as nodeSpawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
+import { LOCAL_DRAFTS_ENV } from '@selecta/core/drafts/store.js';
 import type { AgentEvent } from '../shared/protocol.js';
 import { parseStreamLine } from './stream.js';
 
@@ -69,10 +70,6 @@ export class AgentSessions {
     );
   }
 
-  isRunning(draftId: string): boolean {
-    return this.running.has(draftId);
-  }
-
   cancel(draftId: string): void {
     this.running.get(draftId)?.();
   }
@@ -103,7 +100,14 @@ export class AgentSessions {
       '--strict-mcp-config',
       '--mcp-config',
       JSON.stringify({
-        mcpServers: { selecta: { command: process.execPath, args: [this.options.mcpEntry] } },
+        mcpServers: {
+          selecta: {
+            command: process.execPath,
+            args: [this.options.mcpEntry],
+            // A draft linked to a preview mid-run stays untouched, not synced to Music.
+            env: { [LOCAL_DRAFTS_ENV]: '1' },
+          },
+        },
       }),
       '--permission-mode',
       'dontAsk',

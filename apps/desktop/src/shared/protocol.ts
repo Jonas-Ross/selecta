@@ -13,7 +13,6 @@ export type Methods = {
   'agent.start': (args: { draft_id: string; brief: string }) => void;
   'agent.send': (args: { draft_id: string; message: string }) => void;
   'agent.cancel': (args: { draft_id: string }) => void;
-  'agent.running': (args: { draft_id: string }) => boolean;
 };
 
 export type Method = keyof Methods;

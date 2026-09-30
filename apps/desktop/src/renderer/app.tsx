@@ -2,18 +2,20 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { createRoot } from 'react-dom/client';
 import type { AgentEvent, DraftSummary, SelectaApi } from '../shared/protocol.js';
 import {
+  askRun,
   feedbackMessage,
   formatDuration,
-  logAgentEvent,
   move,
+  orphanRuns,
   previewLinked,
   rows,
+  runEvent,
   saveLabel,
   saveOutcome,
   totalDuration,
   type DraftView,
-  type LogItem,
   type Row,
+  type Run,
 } from './state.js';
 
 declare global {
@@ -24,41 +26,86 @@ declare global {
 
 const { selecta } = window;
 
-type Screen =
-  | { name: 'home' }
-  | { name: 'brief' }
-  | { name: 'draft'; draftId: string; brief?: string };
+type Screen = { name: 'home' } | { name: 'brief' } | { name: 'draft'; draftId: string };
 
 function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
+  const [runs, setRuns] = useState<Record<string, Run>>({});
+
+  const onAgent = useCallback(
+    (draftId: string, event: AgentEvent) =>
+      setRuns((current) => ({ ...current, [draftId]: runEvent(current[draftId], event) })),
+    [],
+  );
+
+  useEffect(
+    () =>
+      selecta.on((event) => {
+        if (event.event === 'agent') onAgent(event.draft_id, event.data);
+      }),
+    [onAgent],
+  );
+
+  // A call the host rejects never starts Claude, so no event would clear `working`.
+  const ask = useCallback(
+    (draftId: string, text: string, call: Promise<unknown>) => {
+      setRuns((current) => ({ ...current, [draftId]: askRun(current[draftId], text) }));
+      call.catch((e: Error) => onAgent(draftId, { kind: 'error', message: e.message }));
+    },
+    [onAgent],
+  );
+
+  const start = (draftId: string, brief: string) =>
+    ask(draftId, brief, selecta.call('agent.start', { draft_id: draftId, brief }));
 
   if (screen.name === 'brief')
     return (
       <Brief
         onCancel={() => setScreen({ name: 'home' })}
-        onStart={(brief) => setScreen({ name: 'draft', draftId: crypto.randomUUID(), brief })}
+        onStart={(brief) => {
+          const draftId = crypto.randomUUID();
+
+          start(draftId, brief);
+          setScreen({ name: 'draft', draftId });
+        }}
       />
     );
 
-  if (screen.name === 'draft')
+  if (screen.name === 'draft') {
+    const { draftId } = screen;
+
     return (
       <Draft
-        key={screen.draftId}
-        draftId={screen.draftId}
-        brief={screen.brief}
+        key={draftId}
+        draftId={draftId}
+        run={runs[draftId]}
+        onStart={(brief) => start(draftId, brief)}
+        onSend={(text, message) =>
+          ask(draftId, text, selecta.call('agent.send', { draft_id: draftId, message }))
+        }
         onBack={() => setScreen({ name: 'home' })}
       />
     );
+  }
 
   return (
     <Home
+      runs={runs}
       onNew={() => setScreen({ name: 'brief' })}
       onOpen={(draftId) => setScreen({ name: 'draft', draftId })}
     />
   );
 }
 
-function Home({ onNew, onOpen }: { onNew: () => void; onOpen: (draftId: string) => void }) {
+function Home({
+  runs,
+  onNew,
+  onOpen,
+}: {
+  runs: Record<string, Run>;
+  onNew: () => void;
+  onOpen: (draftId: string) => void;
+}) {
   const [drafts, setDrafts] = useState<DraftSummary[]>();
   const [error, setError] = useState<string>();
 
@@ -71,6 +118,8 @@ function Home({ onNew, onOpen }: { onNew: () => void; onOpen: (draftId: string) 
     return selecta.on((event) => event.event === 'drafts.changed' && load());
   }, []);
 
+  const orphans = drafts ? orphanRuns(runs, drafts) : [];
+
   return (
     <main>
       <header>
@@ -80,8 +129,16 @@ function Home({ onNew, onOpen }: { onNew: () => void; onOpen: (draftId: string) 
         </button>
       </header>
       {error && <p className="error">{error}</p>}
-      {drafts?.length === 0 && <p className="muted">No drafts yet.</p>}
+      {drafts?.length === 0 && !orphans.length && <p className="muted">No drafts yet.</p>}
       <ul className="drafts">
+        {orphans.map((run) => (
+          <li key={run.draft_id}>
+            <button onClick={() => onOpen(run.draft_id)}>
+              <strong>{run.brief.split('\n')[0]}</strong>
+              <span className="muted">{run.working ? 'Building…' : 'Build failed'}</span>
+            </button>
+          </li>
+        ))}
         {drafts?.map((draft) => (
           <li key={draft.draft_id}>
             <button onClick={() => onOpen(draft.draft_id)}>
@@ -153,16 +210,20 @@ function Brief({ onCancel, onStart }: { onCancel: () => void; onStart: (brief: s
 
 function Draft({
   draftId,
-  brief,
+  run,
+  onStart,
+  onSend,
   onBack,
 }: {
   draftId: string;
-  brief?: string;
+  run?: Run;
+  onStart: (brief: string) => void;
+  onSend: (text: string, message: string) => void;
   onBack: () => void;
 }) {
   const [view, setView] = useState<DraftView>();
-  const [log, setLog] = useState<LogItem[]>(brief ? [{ kind: 'you', text: brief }] : []);
-  const [working, setWorking] = useState(brief !== undefined);
+  const log = run?.log ?? [];
+  const working = run?.working ?? false;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState('');
   const [dragFrom, setDragFrom] = useState<number>();
@@ -174,7 +235,7 @@ function Draft({
 
   useEffect(() => {
     logEnd.current?.scrollIntoView({ block: 'end' });
-  }, [log, working]);
+  }, [run]);
 
   const load = useCallback(
     () =>
@@ -185,35 +246,11 @@ function Draft({
     [draftId],
   );
 
-  const onAgent = useCallback((event: AgentEvent) => {
-    setLog((current) => logAgentEvent(current, event));
-
-    if (event.kind === 'done' || event.kind === 'error') setWorking(false);
-  }, []);
-
-  // A call the host rejects never starts Claude, so no event would clear `working`.
-  const runAgent = useCallback(
-    (call: Promise<unknown>) =>
-      call.catch((e: Error) => onAgent({ kind: 'error', message: e.message })),
-    [onAgent],
-  );
-
   useEffect(() => {
     load();
 
-    const unsubscribe = selecta.on((event) => {
-      if (event.event === 'drafts.changed') load();
-
-      if (event.event === 'agent' && event.draft_id === draftId) onAgent(event.data);
-    });
-
-    // Start only once listening, so an immediate failure (no claude CLI) still lands.
-    if (brief) runAgent(selecta.call('agent.start', { draft_id: draftId, brief }));
-    // Reopened from Home: Claude may still be on it.
-    else selecta.call('agent.running', { draft_id: draftId }).then(setWorking);
-
-    return unsubscribe;
-  }, [draftId, brief, load, onAgent, runAgent]);
+    return selecta.on((event) => event.event === 'drafts.changed' && load());
+  }, [load]);
 
   const draft = view?.draft;
   const items = rows(view ?? {});
@@ -249,18 +286,23 @@ function Draft({
   const setEntries = (next: Row[]) =>
     edit({ entries: next.map(({ entry_id, track_id }) => ({ entry_id, track_id })) });
 
-  async function send(event: FormEvent) {
+  function send(event: FormEvent) {
     event.preventDefault();
 
-    const message = feedbackMessage(
-      feedback.trim(),
-      items.filter((row) => selected.has(row.entry_id)),
-    );
+    const text = feedback.trim();
 
-    setLog((current) => [...current, { kind: 'you', text: feedback.trim() }]);
     setFeedback('');
-    setWorking(true);
-    await runAgent(selecta.call('agent.send', { draft_id: draftId, message }));
+
+    // A build that failed before creating the draft has nothing to revise.
+    if (!draft) return onStart(text);
+
+    onSend(
+      text,
+      feedbackMessage(
+        text,
+        items.filter((row) => selected.has(row.entry_id)),
+      ),
+    );
   }
 
   async function save() {
@@ -300,7 +342,7 @@ function Draft({
             }}
           />
         ) : (
-          <h1>Building…</h1>
+          <h1>{working ? 'Building…' : 'No draft yet'}</h1>
         )}
         <button className="primary" disabled={!draft || saved || saving || working} onClick={save}>
           {saving ? 'Saving…' : saveLabel(draft?.save)}
@@ -385,7 +427,11 @@ function Draft({
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               placeholder={
-                selected.size ? `About ${selected.size} selected…` : 'Tell Claude what to change'
+                !draft && !working
+                  ? 'Describe the playlist to try again'
+                  : selected.size
+                    ? `About ${selected.size} selected…`
+                    : 'Tell Claude what to change'
               }
             />
             <div className="row">

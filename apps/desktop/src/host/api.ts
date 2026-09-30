@@ -9,8 +9,6 @@ import type { Method } from '../shared/protocol.js';
 import type { AgentSessions } from './agent.js';
 
 const DraftId = z.strictObject(getDraftInputShape);
-// Just the draft ID out of a call core validates in full.
-const Target = z.looseObject(getDraftInputShape);
 const Brief = z.strictObject({ ...getDraftInputShape, brief: z.string().trim().min(1).max(4000) });
 const Message = z.strictObject({
   ...getDraftInputShape,
@@ -21,8 +19,8 @@ const Message = z.strictObject({
 export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: AgentSessions) {
   const drafts = new PlaylistDraftTools(deps);
 
-  // Core syncs ordered edits of a preview-linked draft to Music.app, and the
-  // app's only Music write is Save, so a linked draft stays read-only here.
+  // The store refuses linked drafts atomically; this only fails a run before
+  // it starts rather than partway through.
   function localOnly(draftId: string): string {
     const slot = deps.drafts().preview();
 
@@ -37,11 +35,7 @@ export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: 
   const handlers: Record<Method, (args: unknown) => unknown> = {
     'drafts.list': () => deps.drafts().list(),
     'drafts.get': (args) => drafts.get(args),
-    'drafts.edit': (args) => {
-      localOnly(Target.parse(args).draft_id);
-
-      return drafts.edit(args);
-    },
+    'drafts.edit': (args) => drafts.edit(args),
     'drafts.save': (args) => drafts.save(args),
     'agent.start': (args) => {
       const { draft_id, brief } = Brief.parse(args);
@@ -54,7 +48,6 @@ export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: 
       agent.send(localOnly(draft_id), message);
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),
-    'agent.running': (args) => agent.isRunning(DraftId.parse(args).draft_id),
   };
 
   return async (method: string, args: unknown): Promise<unknown> => {

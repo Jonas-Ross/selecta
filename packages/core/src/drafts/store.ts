@@ -24,8 +24,24 @@ export type DraftSummary = {
   save_status?: 'pending' | 'finished';
 };
 
+// Set by front ends whose only Music.app write is Save: a preview-linked draft
+// is read-only there, checked in the same transaction as the write.
+export const LOCAL_DRAFTS_ENV = 'SELECTA_LOCAL_DRAFTS';
+
 export class DraftStore {
-  constructor(readonly path = draftDbPath()) {}
+  constructor(
+    readonly path = draftDbPath(),
+    private options: { localOnly?: boolean } = {},
+  ) {}
+
+  private refuseLinked(slot: PreviewState | undefined, id: string): void {
+    if (this.options.localOnly && slot?.owner === id && slot.status !== 'inactive')
+      throw new BridgeError(
+        'preview_conflict',
+        'This draft is linked to the Selecta Preview playlist in Music.',
+        'Detach the preview where you started it to edit the draft here.',
+      );
+  }
 
   private access<T>(write: boolean, run: (db: Database.Database) => T): T {
     let db: Database.Database | undefined;
@@ -205,6 +221,12 @@ export class DraftStore {
             throw new BridgeError('operation_busy', 'Permanent save is pending.');
 
           const previous = this.readPreview(db);
+
+          this.refuseLinked(previous, id);
+
+          if (this.options.localOnly && explicit)
+            throw new BridgeError('preview_conflict', 'Previews are off in this front end.');
+
           const owned = previous?.owner === id;
 
           if (!explicit && (!owned || previous.status !== 'out_of_date')) return;
@@ -381,9 +403,11 @@ export class DraftStore {
               `Draft ${id} is now revision ${previous.revision}. Use get_playlist_draft to recover it and reconcile your edits; do not replay the stale edit.`,
             );
 
-          const next = Draft.parse({ ...change(previous), draft_id: id, revision: revision + 1 });
-
           const slot = this.readPreview(db);
+
+          this.refuseLinked(slot, id);
+
+          const next = Draft.parse({ ...change(previous), draft_id: id, revision: revision + 1 });
 
           if (
             slot?.owner === id &&

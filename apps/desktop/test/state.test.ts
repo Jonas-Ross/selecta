@@ -1,14 +1,18 @@
 import { expect, it } from 'vitest';
 import {
+  askRun,
   feedbackMessage,
   formatDuration,
   logAgentEvent,
   move,
+  orphanRuns,
   previewLinked,
   rows,
+  runEvent,
   saveLabel,
   saveOutcome,
   totalDuration,
+  type Run,
 } from '../src/renderer/state.js';
 
 const entry = (id: string) => ({ entry_id: id, track_id: `T-${id}` });
@@ -103,4 +107,30 @@ it('treats a draft as linked only while it owns an active preview', () => {
   expect(previewLinked({ draft, preview: { owner: 'other', status: 'current' } })).toBe(false);
   expect(previewLinked({ draft, preview: { status: 'inactive' } })).toBe(false);
   expect(previewLinked({})).toBe(false);
+});
+
+it('keeps how a run ended, including builds that failed before creating a draft', () => {
+  let runs: Record<string, Run> = { a: askRun(undefined, 'deep house\nLength: 12') };
+
+  expect(orphanRuns(runs, [])).toEqual([
+    { draft_id: 'a', brief: 'deep house\nLength: 12', working: true },
+  ]);
+
+  runs = {
+    ...runs,
+    a: runEvent(runs.a, { kind: 'error', message: 'Could not find the claude CLI.' }),
+  };
+  runs = { ...runs, b: runEvent(askRun(undefined, 'techno'), { kind: 'done' }) };
+
+  expect(runs.a).toEqual({
+    log: [
+      { kind: 'you', text: 'deep house\nLength: 12' },
+      { kind: 'error', text: 'Could not find the claude CLI.' },
+    ],
+    working: false,
+  });
+  expect(orphanRuns(runs, [{ draft_id: 'b' }])).toEqual([
+    { draft_id: 'a', brief: 'deep house\nLength: 12', working: false },
+  ]);
+  expect(askRun(runs.b, 'slower')).toMatchObject({ working: true, log: [{}, { text: 'slower' }] });
 });

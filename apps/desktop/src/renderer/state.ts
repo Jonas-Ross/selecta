@@ -88,6 +88,34 @@ export function logAgentEvent(log: LogItem[], event: AgentEvent): LogItem[] {
   }
 }
 
+/** A draft's conversation, held above the screens so leaving one never drops how a run ended. */
+export type Run = { log: LogItem[]; working: boolean };
+
+export function askRun(run: Run | undefined, text: string): Run {
+  return { log: [...(run?.log ?? []), { kind: 'you', text }], working: true };
+}
+
+export function runEvent(run: Run | undefined, event: AgentEvent): Run {
+  return {
+    log: logAgentEvent(run?.log ?? [], event),
+    working: (run?.working ?? false) && event.kind !== 'done' && event.kind !== 'error',
+  };
+}
+
+/** Runs with no stored draft yet: a build still starting, or one that failed before creating it. */
+export function orphanRuns(runs: Record<string, Run>, drafts: { draft_id: string }[]) {
+  const stored = new Set(drafts.map((draft) => draft.draft_id));
+
+  return Object.entries(runs)
+    .filter(([draftId]) => !stored.has(draftId))
+    .map(([draft_id, run]) => ({
+      draft_id,
+      brief: run.log.find((item) => item.kind === 'you')?.text ?? '',
+      working: run.working,
+    }))
+    .reverse();
+}
+
 /** A plain sentence for whatever the save call returned. */
 export function saveOutcome(response: DraftView & { result?: Record<string, unknown> }): string {
   if (response.error) return [response.error, response.hint].filter(Boolean).join(' ');
