@@ -16,6 +16,14 @@ export function draftDbPath(libraryDbPath: string = defaultDbPath()): string {
   return join(dirname(libraryDbPath), 'drafts.db');
 }
 
+export type DraftSummary = {
+  draft_id: string;
+  name: string;
+  revision: number;
+  track_count: number;
+  save_status?: 'pending' | 'finished';
+};
+
 export class DraftStore {
   constructor(readonly path = draftDbPath()) {}
 
@@ -87,6 +95,10 @@ export class DraftStore {
 
     if (!row) throw new BridgeError('draft_not_found', 'Draft not found.');
 
+    return this.parse(row.body);
+  }
+
+  private parse(body: string): Draft {
     // Retire the prototype pin field at the storage boundary. Reads preserve the
     // original file and revision; later explicit edits persist the current shape.
     const stored = Draft.extend({
@@ -94,7 +106,7 @@ export class DraftStore {
         .array(Entry.extend({ pinned: z.boolean().optional() }))
         .min(1)
         .max(500),
-    }).parse(JSON.parse(row.body));
+    }).parse(JSON.parse(body));
 
     return Draft.parse({
       ...stored,
@@ -104,6 +116,32 @@ export class DraftStore {
 
   get(id: string): Draft {
     return this.access(false, (db) => this.read(db, id));
+  }
+
+  /** Newest first. A store nobody has written to yet is simply empty. */
+  list(): DraftSummary[] {
+    if (!existsSync(this.path)) return [];
+
+    return this.access(false, (db) => {
+      if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'drafts'").get())
+        return [];
+
+      const rows = db.prepare('SELECT body FROM drafts ORDER BY rowid DESC').all() as {
+        body: string;
+      }[];
+
+      return rows.map(({ body }) => {
+        const draft = this.parse(body);
+
+        return {
+          draft_id: draft.draft_id,
+          name: draft.name,
+          revision: draft.revision,
+          track_count: draft.entries.length,
+          save_status: draft.save?.status,
+        };
+      });
+    });
   }
 
   private readPreview(db: Database.Database): PreviewState | undefined {
