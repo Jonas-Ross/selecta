@@ -50,7 +50,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # CI only typechecks and bundles the desktop app; it never launches Electron.
       - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
       - run: ${{ matrix.run }}
 
   # The jobs below decide whether a PR can merge without Jonas; docs/merge-gate.md.

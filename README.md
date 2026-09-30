@@ -144,6 +144,17 @@ After updating Selecta, run `npm ci && npm run build` in the checkout your conne
 
 Selecta only writes where you point it: it creates playlists, overwrites its own preview slot, edits or deletes the user playlists you ask it to, and sets favorites and ratings on the tracks you name. Smart, subscription and folder playlists are never modified.
 
+## Desktop app (early)
+
+A desktop app is in progress on the same core. Press New playlist, describe what you want, and Claude builds a draft from your library while you watch. You can drag to reorder, send feedback, and save it to Music. It uses your own `claude` CLI login, so there's no API key. Claude can read your library and edit the draft, but only you can save.
+
+```bash
+npm run build
+npm run desktop
+```
+
+It needs the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) signed in. The UI is deliberately bare for now. [`docs/desktop-app.md`](docs/desktop-app.md) has the details.
+
 ## Development
 
 The application version is maintained in `packages/core/package.json`; MCP server metadata and the enrichment User-Agent read it through `packages/core/src/version.ts`. Bump `packages/mcp/package.json` and the root `package.json` with it, and keep `package-lock.json` in sync.
@@ -153,7 +164,8 @@ The application version is maintained in `packages/core/package.json`; MCP serve
 | `npm test` | Unit suite (fast, no Music.app) |
 | `npm run test:integration` | Bridge tests against your real Music.app. Needs a user playlist named `Selecta Test` with at least two tracks. |
 | `npm run smoke` | End-to-end scenario over real MCP stdio: refresh → search → context → preview → create, then cleans up after itself. |
-| `npm run build` | TypeScript and bundled widget → `dist/` |
+| `npm run build` | TypeScript and bundled widget → `dist/`, then the desktop app bundle |
+| `npm run desktop` | Build and launch the desktop app |
 | `npm run lint` | oxlint |
 | `npm run format:check` | oxfmt check (`npm run format` rewrites) |
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |

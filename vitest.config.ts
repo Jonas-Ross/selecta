@@ -10,7 +10,7 @@ export default defineConfig({
     alias: [{ find: /^@selecta\/core\/(.*)\.js$/, replacement: `${coreSource}$1.ts` }],
   },
   test: {
-    include: ['packages/*/test/**/*.test.ts'],
+    include: ['packages/*/test/**/*.test.ts', 'apps/*/test/**/*.test.ts'],
     // Blocks live network access from every test (see the file header).
     setupFiles: ['packages/core/test/network-guard.ts'],
     // Declare the `integration` tag (strictTags is on by default, so a tag used

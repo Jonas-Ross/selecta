@@ -8,6 +8,7 @@ A local engine over an Apple Music library that anyone on a Mac can install: it 
 `docs/audio-features.md` covers the two enrichment sources, per-source terminal status, the merge rule and which of it reaches the model.
 `docs/destructive-commands.md` covers the dry-run/`--apply` convention, the undo journal and the test pattern every destructive command owes.
 `docs/merge-gate.md` covers which PRs merge without the user and why.
+`docs/desktop-app.md` covers the desktop app's processes, the in-app agent's tool allowlist and how drafts update live.
 
 ## Architecture
 
@@ -21,6 +22,8 @@ Tools on top, three external/storage peers below — cache, bridge, and enrich a
 - **`packages/core/src/bridge/`** — wraps Music.app. Builds JXA snippets, shells out via `osascript -l JavaScript`, parses JSON. Read `docs/music-app.md` before touching the playlist edit scripts: scripted entry edits race iCloud sync (entry doubles, wiped edits, oscillating reads during churn).
 - **`packages/core/src/enrich/`** — two independent passes onto one `audio_features` row, selected by `source`; `docs/audio-features.md` is the reference. `source: 'catalog'` wraps the external metadata services (MusicBrainz→AcousticBrainz, Deezer; free, no API keys), which self-throttle to each host's documented limit (MusicBrainz 1 req/s, AcousticBrainz 10 req/10s; throttles start "as if a call just happened" so run boundaries can't burst); a source failure (AcousticBrainz throws intermittent 5xx) skips that 25-track chunk — nothing saved for it, tracks stay pending for a later run, skip reported in the summary — and the run continues. `source: 'analysis'` drives the metrognome binary (`metrognome.ts`) in `batch` mode over one long-lived pipe, feeding artist/title plus the persistent ID as metrognome's opaque `client_ref` and saving results in chunks as they stream; a missing binary fails soft (everything skipped, reason in `source_errors`). Attempts are terminal **per source** (`catalog_status`/`analysis_status`), so analysis still reaches tracks the catalogs had nothing for, and neither pass overwrites a feature the other supplied. An estimate metrognome flags `uncertain` is discarded, never stored as fact. `camelot` is derived from whichever `musical_key` a row ends up with (`packages/core/src/domain/camelot.ts`), not carried by one source, so a catalog key gets a wheel position too. No request is ever reissued within a run. Runs only when explicitly invoked (`enrich_features` tool, `enrich` CLI) — never as a side effect of refresh. Coverage is partial by nature: a live probe of this library measured roughly 57% of tracks with bpm and 37% with key from the catalogs, weakest on 2022+ releases.
 
+- **`apps/desktop/`** — the Electron front end. The renderer is sandboxed and reaches core only through the host's method table (`src/host/api.ts`). The host runs under system Node rather than Electron, so `better-sqlite3` keeps one native build. The in-app agent is `claude -p` over the real MCP server, and its tool allowlist excludes save and every Music.app write; `docs/desktop-app.md` has the details. The UI is intentionally plain until a design pass.
+
 All MCP widgets share the `npm run preview` design gallery. Add future widget previews there rather than creating separate preview servers or commands.
 
 Shared storage and bridge types live in `packages/core/src/types/`; the cross-cutting error envelope in `packages/core/src/types/errors.ts`. `packages/core/src/domain/` owns explicit track projections, inspection/overview transforms, and the browser-safe recent-activity window. Tool dependencies, validation/errors, freshness, and filters have dedicated modules under `packages/core/src/tools/`; shared cache resource preflights live in `packages/core/src/operations/resources.ts`.
@@ -30,7 +33,8 @@ Shared storage and bridge types live in `packages/core/src/types/`; the cross-cu
 | Command | Use |
 |---|---|
 | `npm install` | Install deps |
-| `npm run build` | Compile core, then the MCP server and widgets, then write the root `dist/index.js` entry |
+| `npm run build` | Compile core, then the MCP server and widgets, then write the root `dist/index.js` entry, then bundle the desktop app |
+| `npm run desktop` | Build and launch the desktop app (needs a signed-in `claude` CLI) |
 | `npm test` | Unit suite (fast, no Music.app) |
 | `npm run test:integration` | Bridge integration suite against real Music.app (slow, opt-in) |
 | `npm run lint` | oxlint |
