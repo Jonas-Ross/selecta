@@ -7,6 +7,7 @@ import {
   move,
   orphanRuns,
   previewLinked,
+  recoverActive,
   rows,
   runEvent,
   saveLabel,
@@ -133,4 +134,16 @@ it('keeps how a run ended, including builds that failed before creating a draft'
     { draft_id: 'a', brief: 'deep house\nLength: 12', working: false },
   ]);
   expect(askRun(runs.b, 'slower')).toMatchObject({ working: true, log: [{}, { text: 'slower' }] });
+});
+
+it('recovers runs still going after a reload without undoing what already arrived', () => {
+  const streaming = runEvent(undefined, { kind: 'tool', name: 'search' });
+  const finished = runEvent(undefined, { kind: 'done' });
+
+  expect(streaming.working).toBe(true);
+  expect(recoverActive({ a: streaming, b: finished }, ['a', 'b', 'c'])).toEqual({
+    a: streaming,
+    b: finished,
+    c: { log: [], working: true },
+  });
 });

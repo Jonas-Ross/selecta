@@ -95,10 +95,19 @@ export function askRun(run: Run | undefined, text: string): Run {
   return { log: [...(run?.log ?? []), { kind: 'you', text }], working: true };
 }
 
+// Any event but the last one means a run is live, even one this renderer didn't start.
 export function runEvent(run: Run | undefined, event: AgentEvent): Run {
   return {
     log: logAgentEvent(run?.log ?? [], event),
-    working: (run?.working ?? false) && event.kind !== 'done' && event.kind !== 'error',
+    working: event.kind !== 'done' && event.kind !== 'error',
+  };
+}
+
+/** Runs the host still has going after a reload; one that already reported keeps its own state. */
+export function recoverActive(runs: Record<string, Run>, active: string[]): Record<string, Run> {
+  return {
+    ...Object.fromEntries(active.map((id) => [id, { log: [], working: true }])),
+    ...runs,
   };
 }
 

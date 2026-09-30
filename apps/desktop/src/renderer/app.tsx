@@ -8,6 +8,7 @@ import {
   move,
   orphanRuns,
   previewLinked,
+  recoverActive,
   rows,
   runEvent,
   saveLabel,
@@ -45,12 +46,7 @@ function App() {
 
     // After a renderer reload the host may still be running Claude; a run that
     // already reported back keeps its own state.
-    selecta.call('agent.active').then((ids) =>
-      setRuns((current) => ({
-        ...Object.fromEntries(ids.map((id) => [id, { log: [], working: true }])),
-        ...current,
-      })),
-    );
+    selecta.call('agent.active').then((ids) => setRuns((current) => recoverActive(current, ids)));
 
     return unsubscribe;
   }, [onAgent]);
