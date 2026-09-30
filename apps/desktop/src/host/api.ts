@@ -12,7 +12,8 @@ const DraftId = z.strictObject(getDraftInputShape);
 const Brief = z.strictObject({ ...getDraftInputShape, brief: z.string().trim().min(1).max(4000) });
 const Message = z.strictObject({
   ...getDraftInputShape,
-  message: z.string().trim().min(1).max(4000),
+  // Selected tracks ride along one line each, up to a draft's 500 entries.
+  message: z.string().trim().min(1).max(60_000),
 });
 
 export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: AgentSessions) {

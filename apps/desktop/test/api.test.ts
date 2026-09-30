@@ -45,10 +45,12 @@ it('hands briefs and feedback to the agent only when they validate', async () =>
 
   await call('agent.start', { draft_id: draftId, brief: '  deep house  ' });
   await call('agent.send', { draft_id: draftId, message: 'slower' });
+  await call('agent.send', { draft_id: draftId, message: 'x'.repeat(50_000) });
   await call('agent.cancel', { draft_id: draftId });
 
   expect(agent.start).toHaveBeenCalledWith(draftId, 'deep house');
   expect(agent.send).toHaveBeenCalledWith(draftId, 'slower');
+  expect(agent.send).toHaveBeenCalledTimes(2);
   expect(agent.cancel).toHaveBeenCalledWith(draftId);
   await expect(call('agent.start', { draft_id: draftId, brief: ' ' })).rejects.toThrow();
   await expect(call('agent.start', { draft_id: 'nope', brief: 'x' })).rejects.toThrow();

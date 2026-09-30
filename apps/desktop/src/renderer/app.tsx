@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { DraftSummary, SelectaApi } from '../shared/protocol.js';
+import type { AgentEvent, DraftSummary, SelectaApi } from '../shared/protocol.js';
 import {
   feedbackMessage,
   formatDuration,
@@ -26,7 +26,7 @@ const { selecta } = window;
 type Screen =
   | { name: 'home' }
   | { name: 'brief' }
-  | { name: 'draft'; draftId: string; log: LogItem[] };
+  | { name: 'draft'; draftId: string; brief?: string };
 
 function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
@@ -35,9 +35,7 @@ function App() {
     return (
       <Brief
         onCancel={() => setScreen({ name: 'home' })}
-        onStart={(draftId, brief) =>
-          setScreen({ name: 'draft', draftId, log: [{ kind: 'you', text: brief }] })
-        }
+        onStart={(brief) => setScreen({ name: 'draft', draftId: crypto.randomUUID(), brief })}
       />
     );
 
@@ -46,7 +44,7 @@ function App() {
       <Draft
         key={screen.draftId}
         draftId={screen.draftId}
-        initialLog={screen.log}
+        brief={screen.brief}
         onBack={() => setScreen({ name: 'home' })}
       />
     );
@@ -54,7 +52,7 @@ function App() {
   return (
     <Home
       onNew={() => setScreen({ name: 'brief' })}
-      onOpen={(draftId) => setScreen({ name: 'draft', draftId, log: [] })}
+      onOpen={(draftId) => setScreen({ name: 'draft', draftId })}
     />
   );
 }
@@ -98,19 +96,12 @@ function Home({ onNew, onOpen }: { onNew: () => void; onOpen: (draftId: string) 
   );
 }
 
-function Brief({
-  onCancel,
-  onStart,
-}: {
-  onCancel: () => void;
-  onStart: (draftId: string, brief: string) => void;
-}) {
+function Brief({ onCancel, onStart }: { onCancel: () => void; onStart: (brief: string) => void }) {
   const [text, setText] = useState('');
   const [length, setLength] = useState('');
   const [tempo, setTempo] = useState('');
-  const [error, setError] = useState<string>();
 
-  async function submit(event: FormEvent) {
+  function submit(event: FormEvent) {
     event.preventDefault();
 
     const brief = [
@@ -120,14 +111,8 @@ function Brief({
     ]
       .filter(Boolean)
       .join('\n');
-    const draftId = crypto.randomUUID();
 
-    try {
-      await selecta.call('agent.start', { draft_id: draftId, brief });
-      onStart(draftId, brief);
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    onStart(brief);
   }
 
   return (
@@ -157,7 +142,6 @@ function Brief({
             <input value={tempo} onChange={(e) => setTempo(e.target.value)} placeholder="118-124" />
           </label>
         </div>
-        {error && <p className="error">{error}</p>}
         <button className="primary" disabled={!text.trim()}>
           Build it
         </button>
@@ -168,16 +152,16 @@ function Brief({
 
 function Draft({
   draftId,
-  initialLog,
+  brief,
   onBack,
 }: {
   draftId: string;
-  initialLog: LogItem[];
+  brief?: string;
   onBack: () => void;
 }) {
   const [view, setView] = useState<DraftView>();
-  const [log, setLog] = useState(initialLog);
-  const [working, setWorking] = useState(initialLog.length > 0);
+  const [log, setLog] = useState<LogItem[]>(brief ? [{ kind: 'you', text: brief }] : []);
+  const [working, setWorking] = useState(brief !== undefined);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState('');
   const [dragFrom, setDragFrom] = useState<number>();
@@ -198,19 +182,33 @@ function Draft({
     [draftId],
   );
 
+  const onAgent = useCallback((event: AgentEvent) => {
+    setLog((current) => logAgentEvent(current, event));
+
+    if (event.kind === 'done' || event.kind === 'error') setWorking(false);
+  }, []);
+
+  // A call the host rejects never starts Claude, so no event would clear `working`.
+  const runAgent = useCallback(
+    (call: Promise<unknown>) =>
+      call.catch((e: Error) => onAgent({ kind: 'error', message: e.message })),
+    [onAgent],
+  );
+
   useEffect(() => {
     load();
 
-    return selecta.on((event) => {
+    const unsubscribe = selecta.on((event) => {
       if (event.event === 'drafts.changed') load();
 
-      if (event.event === 'agent' && event.draft_id === draftId) {
-        setLog((current) => logAgentEvent(current, event.data));
-
-        if (event.data.kind === 'done' || event.data.kind === 'error') setWorking(false);
-      }
+      if (event.event === 'agent' && event.draft_id === draftId) onAgent(event.data);
     });
-  }, [draftId, load]);
+
+    // Start only once listening, so an immediate failure (no claude CLI) still lands.
+    if (brief) runAgent(selecta.call('agent.start', { draft_id: draftId, brief }));
+
+    return unsubscribe;
+  }, [draftId, brief, load, onAgent, runAgent]);
 
   const draft = view?.draft;
   const items = rows(view ?? {});
@@ -246,7 +244,7 @@ function Draft({
     setLog((current) => [...current, { kind: 'you', text: feedback.trim() }]);
     setFeedback('');
     setWorking(true);
-    await selecta.call('agent.send', { draft_id: draftId, message });
+    await runAgent(selecta.call('agent.send', { draft_id: draftId, message }));
   }
 
   async function save() {
