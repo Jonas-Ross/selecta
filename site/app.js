@@ -548,11 +548,11 @@ function deckLabel(title, loop) {
   return label(LABELS[1 + (h % (LABELS.length - 1))]);
 }
 
-const keyText = (key) => (key ? `${key.uncertain ? 'maybe ' : ''}${key.key}` : 'no key');
+const maybe = (est) => (est.uncertain ? 'maybe ' : '');
+const keyText = (key) => (key ? `${maybe(key)}${key.key}` : 'no key');
+const keyCode = (key) => (key ? `${maybe(key)}${key.camelot}` : 'no key');
 const discSub = (tempo, key) =>
-  tempo
-    ? `${tempo.uncertain ? '~' : ''}${Math.round(tempo.bpm)} BPM · ${key ? key.camelot : 'no key'}`
-    : 'no beat';
+  tempo ? `${tempo.uncertain ? '~' : ''}${Math.round(tempo.bpm)} BPM · ${keyCode(key)}` : 'no beat';
 
 function countTo(node, to, fmt, secs = 1, from = 0) {
   node._tw?.kill();
