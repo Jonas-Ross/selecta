@@ -7,14 +7,14 @@ import {
   readUndoJournal,
   runDestructive,
   type DestructiveOutcome,
-} from '../src/operations/destructive.js';
-import { planRestore } from '../src/operations/restore.js';
-import { SelectaCache } from '../src/cache/index.js';
-import type { SupersedeSummary } from '../src/cache/audio_features.js';
-import type { LibrarySnapshot } from '../src/types/bridge.js';
-import fixture from './fixtures/library.json' with { type: 'json' };
-import { featuresRow } from './helpers.js';
-import { expectOnlyChanged, snapshotCache } from './table_diff.js';
+} from '@selecta/core/operations/destructive.js';
+import { planRestore } from '@selecta/core/operations/restore.js';
+import { SelectaCache } from '@selecta/core/cache/index.js';
+import type { SupersedeSummary } from '@selecta/core/cache/audio_features.js';
+import type { LibrarySnapshot } from '@selecta/core/types/bridge.js';
+import fixture from '../../core/test/fixtures/library.json' with { type: 'json' };
+import { featuresRow } from '../../core/test/helpers.js';
+import { expectOnlyChanged, snapshotCache } from '../../core/test/table_diff.js';
 
 const ANALYSIS_KEY = 'metrognome/chroma-correlation-edm@1';
 const ANALYSIS_BPM = 'metrognome/onset-autocorrelation-comb@1';

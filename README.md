@@ -146,7 +146,7 @@ Selecta only writes where you point it: it creates playlists, overwrites its own
 
 ## Development
 
-The application version is maintained in `package.json`; MCP server metadata and the enrichment User-Agent read it through `src/version.ts`. Keep `package-lock.json` in sync when bumping it.
+The application version is maintained in `packages/core/package.json`; MCP server metadata and the enrichment User-Agent read it through `packages/core/src/version.ts`. Bump `packages/mcp/package.json` and the root `package.json` with it, and keep `package-lock.json` in sync.
 
 | Command | Use |
 |---|---|
@@ -160,7 +160,7 @@ The application version is maintained in `package.json`; MCP server metadata and
 
 ⚠️ Always use the npm scripts, never bare `vitest`. The bare runner ignores the tag filter and will launch Music.app from the unit suite.
 
-For tool discovery without library writes, run `node scripts/smoke.mjs --check-tools` after building. Positional edits use the explicit `playlist_positions` returned by playlist-order searches, never the search result index.
+For tool discovery without library writes, run `node packages/mcp/scripts/smoke.mjs --check-tools` after building. Positional edits use the explicit `playlist_positions` returned by playlist-order searches, never the search result index.
 
 Run `npm run check` before pushing. GitHub Actions runs the same gates on every pull request and push to `main`; the integration and smoke suites need a real Music.app and stay local.
 

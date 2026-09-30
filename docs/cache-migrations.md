@@ -1,13 +1,13 @@
 # Cache schema migrations
 
-Writable cache opens run `src/cache/migrations.ts` before preparing queries.
+Writable cache opens run `packages/core/src/cache/migrations.ts` before preparing queries.
 `PRAGMA user_version` records the installed version. Fresh memory and disk
 caches and upgrades all use this path. `status` and `doctor` open their own
 read-only connections and never migrate a database.
 
 Version 0 means an unversioned database (including an empty one). All released
 unversioned schemas evolved by adding tables and indexes. Version 1 applies
-the frozen `src/cache/schema.ts` with `IF NOT EXISTS`: existing tables, rowids,
+the frozen `packages/core/src/cache/schema.ts` with `IF NOT EXISTS`: existing tables, rowids,
 FTS contents, track and playlist IDs, features, history, notes, refresh logs,
 creation receipts, and enrichment cooldowns are retained. Missing objects are
 created. No refresh or persistent-ID remapping occurs.
@@ -32,8 +32,8 @@ Version 4 backfills `audio_features.camelot` from `musical_key` for keys
 already stored. It writes only that column, and only where the key maps to a
 position — an unparseable key keeps whatever it had — so it stays inside the
 additive gate below. Its `CASE` is a frozen literal rather than SQL generated
-from `src/domain/camelot.ts`, because a shipped migration's text must not
-change when that module does; `test/camelot.test.ts` pins the two together, so
+from `packages/core/src/domain/camelot.ts`, because a shipped migration's text must not
+change when that module does; `packages/core/test/camelot.test.ts` pins the two together, so
 a later change to the mapping fails there and has to ship as its own migration.
 
 Read-only diagnostics never migrate, so `status` and `doctor` must keep working

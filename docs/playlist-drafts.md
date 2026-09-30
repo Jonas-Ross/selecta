@@ -70,10 +70,10 @@ Before marking the PR ready:
 
 ## Controller and host data
 
-`ui/playlist-draft.js` wires the host SDK and DOM into `createDraftController`.
+`packages/mcp/ui/playlist-draft.js` wires the host SDK and DOM into `createDraftController`.
 The controller is directly importable without connecting a host. Pure decoding,
 revision acceptance, feedback retention and recovery status live in
-`ui/draft-state.ts`. Browser-safe schemas in `src/drafts/contracts.ts` are shared
+`packages/mcp/ui/draft-state.ts`. Browser-safe schemas in `packages/core/src/drafts/contracts.ts` are shared
 with the store; the widget imports no SQLite or filesystem code. The decoder
 validates host responses before accepting draft state, including occurrence
 identity and inspection order, while retaining unknown receipt fields.

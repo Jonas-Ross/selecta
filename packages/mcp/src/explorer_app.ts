@@ -5,12 +5,12 @@ import {
   registerAppTool,
   RESOURCE_MIME_TYPE,
 } from '@modelcontextprotocol/ext-apps/server';
-import type { ToolDeps } from './tools/deps.js';
+import type { ToolDeps } from '@selecta/core/tools/deps.js';
 import {
   explorerInputShape,
   EXPLORER_DESCRIPTION,
   handleLibraryExplorer,
-} from './tools/library_explorer.js';
+} from '@selecta/core/tools/library_explorer.js';
 
 export const EXPLORER_RESOURCE = 'ui://selecta/library-explorer.html';
 

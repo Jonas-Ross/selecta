@@ -8,10 +8,10 @@ import {
   decadeFilters,
 } from '../ui/explorer-state.js';
 import { connectExplorer } from '../ui/explorer-controller.js';
-import { handleLibraryExplorer } from '../src/tools/library_explorer.js';
-import { makeToolDeps } from './helpers.js';
+import { handleLibraryExplorer } from '@selecta/core/tools/library_explorer.js';
+import { makeToolDeps } from '../../core/test/helpers.js';
 import { elementLookup, Element } from './dom.js';
-import fixture from './fixtures/library.json' with { type: 'json' };
+import fixture from '../../core/test/fixtures/library.json' with { type: 'json' };
 
 const closers: (() => void)[] = [];
 

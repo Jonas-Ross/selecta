@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createCliProgram } from '../src/cli.js';
-import { runDestructive } from '../src/operations/destructive.js';
-import { SelectaCache } from '../src/cache/index.js';
-import { reopenFeatures, type ReopenPlan } from '../src/cache/audio_features.js';
-import type { LibrarySnapshot } from '../src/types/bridge.js';
-import fixture from './fixtures/library.json' with { type: 'json' };
-import { featuresRow } from './helpers.js';
-import { expectOnlyChanged, snapshotCache } from './table_diff.js';
+import { runDestructive } from '@selecta/core/operations/destructive.js';
+import { SelectaCache } from '@selecta/core/cache/index.js';
+import { reopenFeatures, type ReopenPlan } from '@selecta/core/cache/audio_features.js';
+import type { LibrarySnapshot } from '@selecta/core/types/bridge.js';
+import fixture from '../../core/test/fixtures/library.json' with { type: 'json' };
+import { featuresRow } from '../../core/test/helpers.js';
+import { expectOnlyChanged, snapshotCache } from '../../core/test/table_diff.js';
 
 const ANALYSIS_BPM = 'metrognome/onset-autocorrelation-comb@1';
 

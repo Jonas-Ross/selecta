@@ -38,17 +38,19 @@ classify() {
   case $1 in
     # The gate itself and the rules agents follow: a change cannot grade its own
     # grader. Lint and compiler config can loosen what CI checks.
-    .github/* | scripts/* | LICENSE) echo jonas ;;
+    .github/* | scripts/* | */scripts/* | LICENSE) echo jonas ;;
     # Agent instructions nest, so they are the gate's inputs at any depth.
     CLAUDE*.md | */CLAUDE*.md | AGENTS*.md | */AGENTS*.md | REVIEW.md | */REVIEW.md | \
       .claude/* | */.claude/* | .codex/* | */.codex/*) echo jonas ;;
-    package.json | tsconfig*.json | vitest.config.ts | .oxlintrc.json | .oxfmtrc.json) echo jonas ;;
+    package.json | */package.json | tsconfig*.json | */tsconfig*.json | vitest.config.ts | \
+      .oxlintrc.json | .oxfmtrc.json) echo jonas ;;
     # The tests that stand between a flag typo and lost data, and the one that
     # keeps the suite off the network and off Music.app.
-    test/table_diff.ts | test/destructive.test.ts | test/supersede.test.ts | \
-      test/reopen.test.ts | test/migrations.test.ts | test/state_safety.test.ts | \
-      test/network-guard.ts | test/repo_hygiene.test.ts) echo jonas ;;
-    *.md | test/* | package-lock.json) echo auto ;;
+    packages/core/test/table_diff.ts | packages/mcp/test/destructive.test.ts | \
+      packages/core/test/supersede.test.ts | packages/mcp/test/reopen.test.ts | \
+      packages/core/test/migrations.test.ts | packages/mcp/test/state_safety.test.ts | \
+      packages/core/test/network-guard.ts | packages/core/test/repo_hygiene.test.ts) echo jonas ;;
+    *.md | packages/*/test/* | package-lock.json) echo auto ;;
     *) echo jonas ;;
   esac
 }

@@ -1,4 +1,4 @@
-import { recentSinceIso } from '../src/domain/recent_activity.ts';
+import { recentSinceIso } from '@selecta/core/domain/recent_activity.js';
 import {
   unpackRefresh,
   unpackExplorer,

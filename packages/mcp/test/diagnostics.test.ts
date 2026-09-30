@@ -3,18 +3,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createCliProgram } from '../src/cli.js';
-import { SelectaCache } from '../src/cache/index.js';
-import { LATEST_SCHEMA_VERSION } from '../src/cache/migrations.js';
-import { runDoctor } from '../src/diagnostics/doctor.js';
+import { SelectaCache } from '@selecta/core/cache/index.js';
+import { LATEST_SCHEMA_VERSION } from '@selecta/core/cache/migrations.js';
+import { runDoctor } from '@selecta/core/diagnostics/doctor.js';
 import {
   formatReconciliationSummary,
   readStatus,
   type ReconciliationSummary,
-} from '../src/diagnostics/status.js';
-import type { LibrarySnapshot } from '../src/types/bridge.js';
-import { BridgeError } from '../src/types/errors.js';
-import fixture from './fixtures/library.json' with { type: 'json' };
-import { featuresRow } from './helpers.js';
+} from '@selecta/core/diagnostics/status.js';
+import type { LibrarySnapshot } from '@selecta/core/types/bridge.js';
+import { BridgeError } from '@selecta/core/types/errors.js';
+import fixture from '../../core/test/fixtures/library.json' with { type: 'json' };
+import { featuresRow } from '../../core/test/helpers.js';
 
 const snapshot = fixture as LibrarySnapshot;
 

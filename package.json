@@ -1,9 +1,14 @@
 {
-  "name": "selecta",
+  "name": "selecta-workspace",
   "version": "0.1.0",
   "private": true,
-  "description": "Local MCP server exposing the Apple Music library to AI agents through MCP.",
+  "description": "Selecta: the MCP server, the core it runs on, and the apps built on that core.",
   "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/mcp",
+    "apps/*"
+  ],
   "bin": {
     "selecta": "dist/index.js"
   },
@@ -11,26 +16,17 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc && npm run typecheck:ui && node scripts/build-ui.mjs",
+    "build": "npm run build -w @selecta/core && npm run build -w selecta && node scripts/link-entry.mjs",
     "test": "npm run build && vitest run --tags-filter='!integration'",
     "test:integration": "vitest run --tags-filter=integration",
-    "smoke": "npm run build && node scripts/smoke.mjs",
+    "smoke": "npm run build && node packages/mcp/scripts/smoke.mjs",
     "dev": "node dist/index.js",
     "lint": "oxlint",
     "format": "oxlint --fix && oxfmt",
     "format:check": "oxfmt --check",
     "check": "npm test && npm run lint && npm run format:check",
-    "preview": "npm run build && node scripts/preview.mjs",
-    "typecheck:ui": "tsc -p tsconfig.ui.json"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/client": "2.0.0",
-    "@modelcontextprotocol/core": "2.0.0",
-    "@modelcontextprotocol/ext-apps": "2.0.0",
-    "@modelcontextprotocol/server": "2.0.0",
-    "better-sqlite3": "^13.0.3",
-    "commander": "^15.0.0",
-    "zod": "^4.6.2"
+    "preview": "npm run build && node packages/mcp/scripts/preview.mjs",
+    "typecheck:ui": "npm run typecheck:ui -w selecta"
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.10.0",

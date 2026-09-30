@@ -13,7 +13,7 @@ accident's path.
 
 A destructive command decides what it would change, prints it, and stops. The
 same invocation with `--apply` carries it out. `--apply` is spelled the same
-everywhere (`APPLY_FLAG_DESCRIPTION` in `src/operations/destructive.ts`).
+everywhere (`APPLY_FLAG_DESCRIPTION` in `packages/core/src/operations/destructive.ts`).
 
 The report says what is at stake, not just how much: `supersede`'s dry run
 counts cleared fields per algorithm string, so "12 tracks" is also "12 tracks
@@ -27,7 +27,7 @@ another is the same bug wearing a safety flag.
 
 ## 2. The summary accounts for every row that moved
 
-`test/table_diff.ts` snapshots every user table, diffs two snapshots, and
+`packages/core/test/table_diff.ts` snapshots every user table, diffs two snapshots, and
 `expectOnlyChanged` asserts the delta is exactly a stated list — empty for a
 dry run. Every destructive command owes two tests using it:
 

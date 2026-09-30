@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const guard = join(import.meta.dirname, '..', 'scripts', 'check-no-binaries.sh');
+const guard = join(import.meta.dirname, '..', '..', '..', 'scripts', 'check-no-binaries.sh');
 
 function repoWith(files: Record<string, Buffer | string>): string {
   const directory = mkdtempSync(join(tmpdir(), 'selecta-hygiene-'));
@@ -92,6 +92,6 @@ describe('check-no-binaries', () => {
   });
 
   it('finds nothing to reject in this repository', () => {
-    expect(run(join(import.meta.dirname, '..'))).toMatchObject({ code: 0 });
+    expect(run(join(import.meta.dirname, '..', '..', '..'))).toMatchObject({ code: 0 });
   });
 });

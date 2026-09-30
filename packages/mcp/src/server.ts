@@ -8,80 +8,88 @@ import {
   handleOpenPreview,
   OPEN_PREVIEW_DESCRIPTION,
   openPreviewInputShape,
-} from './tools/open_preview.js';
+} from '@selecta/core/tools/open_preview.js';
 import { registerExplorerApp } from './explorer_app.js';
-import { APP_VERSION } from './version.js';
+import { APP_VERSION } from '@selecta/core/version.js';
 import { McpServer } from '@modelcontextprotocol/server';
-import type { ToolDeps } from './tools/deps.js';
-import { isSelectaError } from './tools/errors.js';
-import { handleSearch, searchInputShape, SEARCH_DESCRIPTION } from './tools/search.js';
+import type { ToolDeps } from '@selecta/core/tools/deps.js';
+import { isSelectaError } from '@selecta/core/tools/errors.js';
+import { handleSearch, searchInputShape, SEARCH_DESCRIPTION } from '@selecta/core/tools/search.js';
 import {
   handleGetTrackContext,
   getTrackContextInputShape,
   GET_TRACK_CONTEXT_DESCRIPTION,
-} from './tools/get_track_context.js';
+} from '@selecta/core/tools/get_track_context.js';
 import {
   handleListPlaylists,
   listPlaylistsInputShape,
   LIST_PLAYLISTS_DESCRIPTION,
-} from './tools/list_playlists.js';
+} from '@selecta/core/tools/list_playlists.js';
 import {
   handleRefreshLibrary,
   refreshLibraryInputShape,
   REFRESH_LIBRARY_DESCRIPTION,
-} from './tools/refresh_library.js';
+} from '@selecta/core/tools/refresh_library.js';
 import {
   handleCreatePlaylist,
   createPlaylistInputShape,
   CREATE_PLAYLIST_DESCRIPTION,
-} from './tools/create_playlist.js';
+} from '@selecta/core/tools/create_playlist.js';
 import {
   handlePreviewPlaylist,
   previewPlaylistInputShape,
   PREVIEW_PLAYLIST_DESCRIPTION,
-} from './tools/preview_playlist.js';
+} from '@selecta/core/tools/preview_playlist.js';
 import {
   handleAddTracks,
   addTracksInputShape,
   ADD_TRACKS_DESCRIPTION,
-} from './tools/add_tracks.js';
+} from '@selecta/core/tools/add_tracks.js';
 import {
   handleRemoveTracks,
   removeTracksInputShape,
   REMOVE_TRACKS_DESCRIPTION,
-} from './tools/remove_tracks.js';
+} from '@selecta/core/tools/remove_tracks.js';
 import {
   handleReorderTracks,
   reorderTracksInputShape,
   REORDER_TRACKS_DESCRIPTION,
-} from './tools/reorder_tracks.js';
+} from '@selecta/core/tools/reorder_tracks.js';
 import {
   handleDeletePlaylist,
   deletePlaylistInputShape,
   DELETE_PLAYLIST_DESCRIPTION,
-} from './tools/delete_playlist.js';
+} from '@selecta/core/tools/delete_playlist.js';
 import {
   handleLibraryOverview,
   libraryOverviewInputShape,
   LIBRARY_OVERVIEW_DESCRIPTION,
-} from './tools/library_overview.js';
+} from '@selecta/core/tools/library_overview.js';
 import {
   handleEnrichFeatures,
   enrichFeaturesInputShape,
   ENRICH_FEATURES_DESCRIPTION,
-} from './tools/enrich_features.js';
-import { handleSetLoved, setLovedInputShape, SET_LOVED_DESCRIPTION } from './tools/set_loved.js';
+} from '@selecta/core/tools/enrich_features.js';
+import {
+  handleSetLoved,
+  setLovedInputShape,
+  SET_LOVED_DESCRIPTION,
+} from '@selecta/core/tools/set_loved.js';
 import {
   handleSetRating,
   setRatingInputShape,
   SET_RATING_DESCRIPTION,
-} from './tools/set_rating.js';
+} from '@selecta/core/tools/set_rating.js';
 import {
   handleInspectTracklist,
   inspectTracklistInputShape,
   INSPECT_TRACKLIST_DESCRIPTION,
-} from './tools/inspect_tracklist.js';
-import { handleSetNote, setNoteInputShape, SET_NOTE_DESCRIPTION } from './tools/set_note.js';
+} from '@selecta/core/tools/inspect_tracklist.js';
+import {
+  handleSetNote,
+  setNoteInputShape,
+  SET_NOTE_DESCRIPTION,
+} from '@selecta/core/tools/set_note.js';
 import {
   PlaylistDraftTools,
   getDraftInputShape,
@@ -92,7 +100,7 @@ import {
   GET_DRAFT_DESCRIPTION,
   EDIT_DRAFT_DESCRIPTION,
   SAVE_DRAFT_DESCRIPTION,
-} from './tools/playlist_draft.js';
+} from '@selecta/core/tools/playlist_draft.js';
 
 export const SERVER_INFO = { name: 'selecta', version: APP_VERSION };
 

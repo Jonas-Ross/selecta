@@ -5,7 +5,7 @@ import {
   DraftSaveOutcome,
   type DraftView,
   type PreviewState,
-} from '../src/drafts/contracts.js';
+} from '@selecta/core/drafts/contracts.js';
 
 const record = z.record(z.string(), z.unknown());
 const envelope = z.object({

@@ -5,17 +5,17 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import Database from 'better-sqlite3';
-import { DraftStore, draftDbPath } from '../src/drafts/store.js';
-import { PlaylistDraftTools } from '../src/tools/playlist_draft.js';
+import { DraftStore, draftDbPath } from '@selecta/core/drafts/store.js';
+import { PlaylistDraftTools } from '@selecta/core/tools/playlist_draft.js';
 // The wire test runs the built server because the widget resource resolves
 // relative to dist/; its store must come from the same module graph so the
 // BridgeError class identity used by the error envelope matches.
 import { createServer } from '../dist/server.js';
-import { DraftStore as BuiltDraftStore } from '../dist/drafts/store.js';
+import { DraftStore as BuiltDraftStore } from '@selecta/core/drafts/store.js';
 import { DRAFT_RESOURCE } from '../src/draft_app.js';
-import { withOperation } from '../src/operations/lock.js';
-import { BridgeError } from '../src/types/errors.js';
-import { makeToolDeps } from './helpers.js';
+import { withOperation } from '@selecta/core/operations/lock.js';
+import { BridgeError } from '@selecta/core/types/errors.js';
+import { makeToolDeps } from '../../core/test/helpers.js';
 
 let dir: string;
 let store: DraftStore;
