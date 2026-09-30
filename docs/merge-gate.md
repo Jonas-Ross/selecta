@@ -12,7 +12,7 @@ finishes green.
 
 | Tier | Files | Merges when |
 |---|---|---|
-| `deps` | any, when every commit is Dependabot's, as signed by GitHub, and no bump is a major | CI is green |
+| `deps` | any, when every commit is Dependabot's, as signed by GitHub, and every bump's `update-type:` trailer reads minor or patch | CI is green |
 | `auto` | Markdown other than `CLAUDE.md`, `packages/*/test/` apart from the list below, `package-lock.json` | CI is green and the Claude review passes |
 | `jonas` | everything else | Jonas merges it |
 
@@ -39,6 +39,11 @@ So CI configuration changes do not merge on their own, and neither does a
 hand-edited `package.json`. Dependabot's minor and patch bumps do, and CI turns
 on auto-merge for them since no one else opens those PRs; its majors arrive as
 their own PRs (`.github/dependabot.yml`) and wait for Jonas.
+
+A bump of a transitive dependency is the exception. Dependabot writes
+`update-type:` only for a direct dependency, so nothing bounds an indirect bump
+to a minor or patch; it misses `deps`, its `package-lock.json` puts it in `auto`,
+and with the Claude review skipped it waits for Jonas.
 
 ## What the gate trusts
 
