@@ -705,6 +705,7 @@ function render(report, ms) {
   );
   $('build').textContent = `This is algorithm ${report.algorithm_version}.`;
   record($('deck-vinyl'), { sub: discSub(tempo, key) });
+  $('play-label').textContent = playLabel();
   $('play').disabled = false;
 }
 
@@ -794,9 +795,16 @@ async function takeFile(file) {
   }
 }
 
+// A guessed tempo gets no metronome, so the button doesn't promise one.
+const playLabel = () => {
+  const tempo = state.report?.features.tempo;
+
+  return tempo && !tempo.uncertain ? 'Play with metronome' : 'Play';
+};
+
 function deckIdle() {
   $('play').classList.remove('on');
-  $('play-label').textContent = 'Play with metronome';
+  $('play-label').textContent = playLabel();
   $$('#beats i').forEach((d) => d.classList.remove('on'));
   deckSpin.speed(IDLE_RATE, 1);
 }
