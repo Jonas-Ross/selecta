@@ -236,11 +236,13 @@ function Draft({
   const working = run?.working ?? false;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState('');
-  const [dragFrom, setDragFrom] = useState<number>();
+  const [dragged, setDragged] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const naming = useRef(false);
+  // Only typing commits a name, so blurring never writes back a name Claude has since changed.
+  const typed = useRef(false);
   // Edits queue behind each other on the newest revision, so the rename a blur
   // starts lands before the click that caused the blur.
   const latest = useRef<DraftView['draft']>(undefined);
@@ -383,12 +385,18 @@ function Draft({
             className="name"
             value={name}
             disabled={locked}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              typed.current = true;
+              setName(e.target.value);
+            }}
             onFocus={() => (naming.current = true)}
             onBlur={() => {
-              naming.current = false;
+              const next = typed.current && name.trim();
 
-              if (name.trim() && name.trim() !== draft.name) edit(() => ({ name: name.trim() }));
+              naming.current = false;
+              typed.current = false;
+
+              if (next && next !== draft.name) edit(() => ({ name: next }));
               else setName(draft.name);
             }}
           />
@@ -418,13 +426,12 @@ function Draft({
               <li
                 key={row.entry_id}
                 draggable={!locked}
-                className={dragFrom === index ? 'dragging' : undefined}
-                onDragStart={() => setDragFrom(index)}
-                onDragEnd={() => setDragFrom(undefined)}
+                className={dragged === row.entry_id ? 'dragging' : undefined}
+                onDragStart={() => setDragged(row.entry_id)}
+                onDragEnd={() => setDragged(undefined)}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => {
-                  if (dragFrom !== undefined && dragFrom !== index)
-                    moveEntry(items[dragFrom].entry_id, index);
+                  if (dragged !== undefined && dragged !== row.entry_id) moveEntry(dragged, index);
                 }}
               >
                 <input
