@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AgentEvent, DraftSummary, SelectaApi } from '../shared/protocol.js';
+import type { DraftSummary, SelectaApi } from '../shared/protocol.js';
 import {
-  askRun,
   feedbackMessage,
   formatDuration,
   move,
   orphanRuns,
   previewLinked,
-  recoverActive,
+  recoverRuns,
+  rejectRun,
   rows,
   runEvent,
   saveLabel,
@@ -33,35 +33,40 @@ function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [runs, setRuns] = useState<Record<string, Run>>({});
 
-  const onAgent = useCallback(
-    (draftId: string, event: AgentEvent) =>
-      setRuns((current) => ({ ...current, [draftId]: runEvent(current[draftId], event) })),
+  // The host keeps every run's record, so a reload or a missed event catches up from it.
+  const resync = useCallback(
+    () =>
+      selecta
+        .call('agent.history')
+        .then((history) => setRuns((current) => recoverRuns(current, history))),
     [],
   );
 
   useEffect(() => {
     const unsubscribe = selecta.on((event) => {
-      if (event.event === 'agent') onAgent(event.draft_id, event.data);
+      if (event.event !== 'agent') return;
+
+      setRuns((current) => {
+        const run = runEvent(current[event.draft_id], event.data, event.seq);
+
+        if (!run) queueMicrotask(resync);
+
+        return run ? { ...current, [event.draft_id]: run } : current;
+      });
     });
 
-    // After a renderer reload the host may still be running Claude; a run that
-    // already reported back keeps its own state.
-    selecta.call('agent.active').then((ids) => setRuns((current) => recoverActive(current, ids)));
+    resync();
 
     return unsubscribe;
-  }, [onAgent]);
+  }, [resync]);
 
-  // A call the host rejects never starts Claude, so no event would clear `working`.
-  const ask = useCallback(
-    (draftId: string, text: string, call: Promise<unknown>) => {
-      setRuns((current) => ({ ...current, [draftId]: askRun(current[draftId], text) }));
-      call.catch((e: Error) => onAgent(draftId, { kind: 'error', message: e.message }));
-    },
-    [onAgent],
-  );
+  const ask = (draftId: string, call: Promise<unknown>) =>
+    call.catch((e: Error) =>
+      setRuns((current) => ({ ...current, [draftId]: rejectRun(current[draftId], e.message) })),
+    );
 
   const start = (draftId: string, brief: string) =>
-    ask(draftId, brief, selecta.call('agent.start', { draft_id: draftId, brief }));
+    ask(draftId, selecta.call('agent.start', { draft_id: draftId, brief }));
 
   if (screen.name === 'brief')
     return (
@@ -86,7 +91,7 @@ function App() {
         run={runs[draftId]}
         onStart={(brief) => start(draftId, brief)}
         onSend={(text, message) =>
-          ask(draftId, text, selecta.call('agent.send', { draft_id: draftId, message }))
+          ask(draftId, selecta.call('agent.send', { draft_id: draftId, message, text }))
         }
         onBack={() => setScreen({ name: 'home' })}
       />

@@ -1,13 +1,13 @@
 import { expect, it } from 'vitest';
 import {
-  askRun,
   feedbackMessage,
   formatDuration,
   logAgentEvent,
   move,
   orphanRuns,
   previewLinked,
-  recoverActive,
+  recoverRuns,
+  rejectRun,
   rows,
   runEvent,
   saveLabel,
@@ -110,40 +110,55 @@ it('treats a draft as linked only while it owns an active preview', () => {
   expect(previewLinked({})).toBe(false);
 });
 
-it('keeps how a run ended, including builds that failed before creating a draft', () => {
-  let runs: Record<string, Run> = { a: askRun(undefined, 'deep house\nLength: 12') };
+it('builds a run from numbered host events and resyncs on a gap', () => {
+  let a = runEvent(undefined, { kind: 'asked', text: 'deep house\nLength: 12' }, 0)!;
 
-  expect(orphanRuns(runs, [])).toEqual([
+  expect(orphanRuns({ a }, [])).toEqual([
     { draft_id: 'a', brief: 'deep house\nLength: 12', working: true },
   ]);
 
-  runs = {
-    ...runs,
-    a: runEvent(runs.a, { kind: 'error', message: 'Could not find the claude CLI.' }),
-  };
-  runs = { ...runs, b: runEvent(askRun(undefined, 'techno'), { kind: 'done' }) };
+  a = runEvent(a, { kind: 'error', message: 'Could not find the claude CLI.' }, 1)!;
 
-  expect(runs.a).toEqual({
+  expect(a).toEqual({
     log: [
       { kind: 'you', text: 'deep house\nLength: 12' },
       { kind: 'error', text: 'Could not find the claude CLI.' },
     ],
     working: false,
+    seen: 2,
   });
-  expect(orphanRuns(runs, [{ draft_id: 'b' }])).toEqual([
+  expect(runEvent(a, { kind: 'done' }, 1)).toBe(a);
+  expect(runEvent(a, { kind: 'done' }, 3)).toBeUndefined();
+  expect(orphanRuns({ a, b: a }, [{ draft_id: 'b' }])).toEqual([
     { draft_id: 'a', brief: 'deep house\nLength: 12', working: false },
   ]);
-  expect(askRun(runs.b, 'slower')).toMatchObject({ working: true, log: [{}, { text: 'slower' }] });
 });
 
-it('recovers runs still going after a reload without undoing what already arrived', () => {
-  const streaming = runEvent(undefined, { kind: 'tool', name: 'search' });
-  const finished = runEvent(undefined, { kind: 'done' });
+it('catches up from the host record without undoing what already arrived', () => {
+  const streaming = runEvent(undefined, { kind: 'asked', text: 'x' }, 0)!;
+  const ahead: Run = { ...streaming, seen: 5 };
+  const recovered = recoverRuns(
+    { a: streaming, b: ahead },
+    {
+      a: { events: [{ kind: 'asked', text: 'x' }, { kind: 'done' }], working: false },
+      b: { events: [{ kind: 'asked', text: 'x' }], working: true },
+      c: { events: [{ kind: 'asked', text: 'lost in a reload' }], working: true },
+    },
+  );
 
-  expect(streaming.working).toBe(true);
-  expect(recoverActive({ a: streaming, b: finished }, ['a', 'b', 'c'])).toEqual({
-    a: streaming,
-    b: finished,
-    c: { log: [], working: true },
+  expect(recovered.a).toMatchObject({ working: false, seen: 2 });
+  expect(recovered.b).toBe(ahead);
+  expect(recovered.c).toEqual({
+    log: [{ kind: 'you', text: 'lost in a reload' }],
+    working: true,
+    seen: 1,
+  });
+  expect(rejectRun(streaming, 'Too long.')).toEqual({
+    log: [
+      { kind: 'you', text: 'x' },
+      { kind: 'error', text: 'Too long.' },
+    ],
+    working: true,
+    seen: 1,
   });
 });

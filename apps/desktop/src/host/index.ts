@@ -23,7 +23,7 @@ const agent = new AgentSessions({
   claudePath: process.env.SELECTA_CLAUDE_PATH,
   // Outside any project, so no CLAUDE.md or project settings leak into the run.
   cwd: tmpdir(),
-  emit: (draft_id, data) => emit({ event: 'agent', draft_id, data }),
+  emit: (draft_id, data, seq) => emit({ event: 'agent', draft_id, seq, data }),
 });
 const call = createApi(
   {

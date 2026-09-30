@@ -4,7 +4,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { LOCAL_DRAFTS_ENV } from '@selecta/core/drafts/store.js';
-import type { AgentEvent } from '../shared/protocol.js';
+import type { AgentEvent, RunSnapshot } from '../shared/protocol.js';
 import { parseStreamLine } from './stream.js';
 
 const READ_TOOLS = [
@@ -44,7 +44,7 @@ type Spawn = typeof nodeSpawn;
 
 export type AgentOptions = {
   mcpEntry: string;
-  emit: (draftId: string, event: AgentEvent) => void;
+  emit: (draftId: string, event: AgentEvent, seq: number) => void;
   claudePath?: string;
   cwd?: string;
   spawn?: Spawn;
@@ -53,26 +53,50 @@ export type AgentOptions = {
 export class AgentSessions {
   private sessions = new Map<string, string>();
   private running = new Map<string, () => void>();
+  // The host outlives any renderer, so it keeps the record a reload replays.
+  private events = new Map<string, AgentEvent[]>();
 
   constructor(private options: AgentOptions) {}
 
   start(draftId: string, brief: string): void {
+    this.idle(draftId);
+    this.record(draftId, { kind: 'asked', text: brief });
     this.run(draftId, `Draft ID: ${draftId}\n\nBrief:\n${brief}`);
   }
 
   // The user may have reordered since Claude last looked, so every feedback
   // turn re-reads the draft. A draft with no session (the app restarted) just
   // starts a new one.
-  send(draftId: string, message: string): void {
+  send(draftId: string, message: string, text = message): void {
+    this.idle(draftId);
+    this.record(draftId, { kind: 'asked', text });
     this.run(
       draftId,
       `Draft ID: ${draftId}\n\nRead the current draft with get_playlist_draft before changing it; the user may have edited it.\n\nFeedback:\n${message}`,
     );
   }
 
-  /** Drafts Claude is still working on, for a renderer that lost track after a reload. */
-  active(): string[] {
-    return [...this.running.keys()];
+  /** A request refused before Claude started, kept in the draft's log like any other outcome. */
+  refuse(draftId: string, text: string, message: string): void {
+    this.record(draftId, { kind: 'asked', text });
+    this.record(draftId, { kind: 'error', message });
+  }
+
+  history(): Record<string, RunSnapshot> {
+    return Object.fromEntries(
+      [...this.events].map(([id, events]) => [id, { events, working: this.running.has(id) }]),
+    );
+  }
+
+  private idle(draftId: string): void {
+    if (this.running.has(draftId)) throw new Error('Claude is already working on this draft.');
+  }
+
+  private record(draftId: string, event: AgentEvent): void {
+    const events = this.events.get(draftId) ?? [];
+
+    this.events.set(draftId, [...events, event]);
+    this.options.emit(draftId, event, events.length);
   }
 
   cancel(draftId: string): void {
@@ -84,14 +108,7 @@ export class AgentSessions {
   }
 
   private run(draftId: string, prompt: string): void {
-    const { emit } = this.options;
-
-    if (this.running.has(draftId)) {
-      emit(draftId, { kind: 'error', message: 'Claude is already working on this draft.' });
-
-      return;
-    }
-
+    const emit = (id: string, event: AgentEvent) => this.record(id, event);
     const resume = this.sessions.get(draftId);
     const args = [
       '-p',

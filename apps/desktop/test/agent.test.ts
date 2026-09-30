@@ -44,7 +44,10 @@ function sessions(spawn: never) {
   const events: AgentEvent[] = [];
   const agent = new AgentSessions({
     mcpEntry: '/repo/dist/index.js',
-    emit: (_id, event) => events.push(event),
+    emit: (_id, event, seq) => {
+      expect(seq).toBe(events.length);
+      events.push(event);
+    },
     spawn,
   });
 
@@ -82,22 +85,26 @@ it('resumes the session the first turn reported', async () => {
   const { agent, events } = sessions(spawn);
 
   agent.start(DRAFT, 'warmup');
-  expect(agent.active()).toEqual([DRAFT]);
+  expect(agent.history()[DRAFT].working).toBe(true);
   runs[0].child.finish([
     { type: 'assistant', message: { content: [{ type: 'text', text: 'Built it.' }] } },
     { type: 'result', subtype: 'success', session_id: 'S-1' },
   ]);
   await settle();
-  expect(agent.active()).toEqual([]);
-  agent.send(DRAFT, 'less vocal');
+  expect(agent.history()[DRAFT].working).toBe(false);
+  agent.send(DRAFT, 'less vocal', 'typed');
 
   expect(runs[0].args).toContain('--session-id');
   expect(flag(runs[1].args, '--resume')).toBe('S-1');
   expect(flag(runs[1].args, '-p')).toContain('get_playlist_draft');
   expect(events).toEqual([
+    { kind: 'asked', text: 'warmup' },
     { kind: 'text', text: 'Built it.' },
     { kind: 'done', session_id: 'S-1' },
+    { kind: 'asked', text: 'typed' },
   ]);
+  // The host's record is what a reloaded renderer replays.
+  expect(agent.history()).toEqual({ [DRAFT]: { events, working: true } });
 });
 
 it('refuses a second run on a draft that is still working', () => {
@@ -105,10 +112,23 @@ it('refuses a second run on a draft that is still working', () => {
   const { agent, events } = sessions(spawn);
 
   agent.start(DRAFT, 'one');
-  agent.send(DRAFT, 'two');
 
+  expect(() => agent.send(DRAFT, 'two')).toThrow('Claude is already working on this draft.');
   expect(runs).toHaveLength(1);
-  expect(events).toEqual([{ kind: 'error', message: 'Claude is already working on this draft.' }]);
+  expect(events).toEqual([{ kind: 'asked', text: 'one' }]);
+});
+
+it('records a refused request like any other outcome', () => {
+  const { spawn } = fakeClaude();
+  const { agent, events } = sessions(spawn);
+
+  agent.refuse(DRAFT, 'go', 'Linked.');
+
+  expect(events).toEqual([
+    { kind: 'asked', text: 'go' },
+    { kind: 'error', message: 'Linked.' },
+  ]);
+  expect(agent.history()[DRAFT].working).toBe(false);
 });
 
 it('reports a stop, a crash and a missing CLI as one error each', async () => {
@@ -129,7 +149,7 @@ it('reports a stop, a crash and a missing CLI as one error each', async () => {
   runs[2].child.emit('close', -2);
   await settle();
 
-  expect(events).toEqual([
+  expect(events.filter((event) => event.kind !== 'asked')).toEqual([
     { kind: 'error', message: 'Stopped.' },
     { kind: 'error', message: 'Not logged in.' },
     {

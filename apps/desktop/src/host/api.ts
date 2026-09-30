@@ -14,6 +14,8 @@ const Message = z.strictObject({
   ...getDraftInputShape,
   // Selected tracks ride along one line each, up to a draft's 500 entries.
   message: z.string().trim().min(1).max(60_000),
+  // What the user typed, for the log; the message adds the selected tracks.
+  text: z.string().max(60_000).optional(),
 });
 
 export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: AgentSessions) {
@@ -21,16 +23,14 @@ export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: 
 
   // The store refuses linked drafts atomically; this only fails a run before
   // it starts rather than partway through.
-  function localOnly(draftId: string): string {
+  function linked(draftId: string): boolean {
     const slot = deps.drafts().preview();
 
-    if (slot?.owner === draftId && slot.status !== 'inactive')
-      throw new Error(
-        'This draft is linked to the Selecta Preview playlist in Music. Detach the preview where you started it to edit the draft here.',
-      );
-
-    return draftId;
+    return slot?.owner === draftId && slot.status !== 'inactive';
   }
+
+  const LINKED =
+    'This draft is linked to the Selecta Preview playlist in Music. Detach the preview where you started it to edit the draft here.';
 
   const handlers: Record<Method, (args: unknown) => unknown> = {
     'drafts.list': () => deps.drafts().list(),
@@ -40,15 +40,17 @@ export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: 
     'agent.start': (args) => {
       const { draft_id, brief } = Brief.parse(args);
 
-      agent.start(localOnly(draft_id), brief);
+      if (linked(draft_id)) agent.refuse(draft_id, brief, LINKED);
+      else agent.start(draft_id, brief);
     },
     'agent.send': (args) => {
-      const { draft_id, message } = Message.parse(args);
+      const { draft_id, message, text } = Message.parse(args);
 
-      agent.send(localOnly(draft_id), message);
+      if (linked(draft_id)) agent.refuse(draft_id, text ?? message, LINKED);
+      else agent.send(draft_id, message, text);
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),
-    'agent.active': () => agent.active(),
+    'agent.history': () => agent.history(),
   };
 
   return async (method: string, args: unknown): Promise<unknown> => {

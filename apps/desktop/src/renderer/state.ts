@@ -1,6 +1,6 @@
 // Pure view logic, kept out of the components so it tests without a DOM.
 import type { Draft } from '@selecta/core/drafts/contracts.js';
-import type { AgentEvent } from '../shared/protocol.js';
+import type { AgentEvent, RunSnapshot } from '../shared/protocol.js';
 
 export type Track = {
   title?: string;
@@ -75,6 +75,8 @@ export function feedbackMessage(text: string, selected: Row[]): string {
 
 export function logAgentEvent(log: LogItem[], event: AgentEvent): LogItem[] {
   switch (event.kind) {
+    case 'asked':
+      return [...log, { kind: 'you', text: event.text }];
     case 'text':
       return [...log, { kind: 'claude', text: event.text }];
     case 'tool':
@@ -88,26 +90,44 @@ export function logAgentEvent(log: LogItem[], event: AgentEvent): LogItem[] {
   }
 }
 
-/** A draft's conversation, held above the screens so leaving one never drops how a run ended. */
-export type Run = { log: LogItem[]; working: boolean };
+/** A draft's conversation as the host numbered it; `seen` is how many host events it holds. */
+export type Run = { log: LogItem[]; working: boolean; seen: number };
 
-export function askRun(run: Run | undefined, text: string): Run {
-  return { log: [...(run?.log ?? []), { kind: 'you', text }], working: true };
-}
+/** Host event `seq` applied in order; undefined means one was missed, so resync from the host. */
+export function runEvent(run: Run | undefined, event: AgentEvent, seq: number): Run | undefined {
+  const seen = run?.seen ?? 0;
 
-// Any event but the last one means a run is live, even one this renderer didn't start.
-export function runEvent(run: Run | undefined, event: AgentEvent): Run {
+  if (seq < seen) return run;
+
+  if (seq > seen) return;
+
   return {
     log: logAgentEvent(run?.log ?? [], event),
     working: event.kind !== 'done' && event.kind !== 'error',
+    seen: seen + 1,
   };
 }
 
-/** Runs the host still has going after a reload; one that already reported keeps its own state. */
-export function recoverActive(runs: Record<string, Run>, active: string[]): Record<string, Run> {
+/** The host's record wins wherever it holds more than this renderer has seen. */
+export function recoverRuns(
+  runs: Record<string, Run>,
+  history: Record<string, RunSnapshot>,
+): Record<string, Run> {
+  const next = { ...runs };
+
+  for (const [id, { events, working }] of Object.entries(history))
+    if (events.length > (runs[id]?.seen ?? 0))
+      next[id] = { log: events.reduce(logAgentEvent, []), working, seen: events.length };
+
+  return next;
+}
+
+/** A call the host rejected outright: nothing started, so nothing changes but the log. */
+export function rejectRun(run: Run | undefined, message: string): Run {
   return {
-    ...Object.fromEntries(active.map((id) => [id, { log: [], working: true }])),
-    ...runs,
+    log: [...(run?.log ?? []), { kind: 'error', text: message }],
+    working: run?.working ?? false,
+    seen: run?.seen ?? 0,
   };
 }
 

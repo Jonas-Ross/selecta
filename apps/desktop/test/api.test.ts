@@ -8,7 +8,13 @@ import type { AgentSessions } from '../src/host/agent.js';
 const base = makeToolDeps();
 const local = new DraftStore(base.drafts!().path, { localOnly: true });
 const deps = { ...base, drafts: () => local };
-const agent = { start: vi.fn(), send: vi.fn(), cancel: vi.fn(), active: vi.fn(() => ['d']) };
+const agent = {
+  start: vi.fn(),
+  send: vi.fn(),
+  refuse: vi.fn(),
+  cancel: vi.fn(),
+  history: vi.fn(() => ({})),
+};
 const call = createApi(deps, agent as unknown as AgentSessions);
 
 afterEach(() => vi.clearAllMocks());
@@ -47,13 +53,13 @@ it('hands briefs and feedback to the agent only when they validate', async () =>
   const draftId = randomUUID();
 
   await call('agent.start', { draft_id: draftId, brief: '  deep house  ' });
-  await call('agent.send', { draft_id: draftId, message: 'slower' });
+  await call('agent.send', { draft_id: draftId, message: 'slower', text: 'typed' });
   await call('agent.send', { draft_id: draftId, message: 'x'.repeat(50_000) });
   await call('agent.cancel', { draft_id: draftId });
-  expect(await call('agent.active', undefined)).toEqual(['d']);
+  expect(await call('agent.history', undefined)).toEqual({});
 
   expect(agent.start).toHaveBeenCalledWith(draftId, 'deep house');
-  expect(agent.send).toHaveBeenCalledWith(draftId, 'slower');
+  expect(agent.send).toHaveBeenCalledWith(draftId, 'slower', 'typed');
   expect(agent.send).toHaveBeenCalledTimes(2);
   expect(agent.cancel).toHaveBeenCalledWith(draftId);
   await expect(call('agent.start', { draft_id: draftId, brief: ' ' })).rejects.toThrow();
@@ -77,8 +83,11 @@ it('keeps a draft linked to the Music preview read-only for the user and Claude'
   expect(await call('drafts.edit', { draft_id: draftId, revision: 1, name: 'x' })).toMatchObject({
     error: 'preview_conflict',
   });
-  await expect(call('agent.start', { draft_id: draftId, brief: 'go' })).rejects.toThrow(linked);
-  await expect(call('agent.send', { draft_id: draftId, message: 'go' })).rejects.toThrow(linked);
+  await call('agent.start', { draft_id: draftId, brief: 'go' });
+  await call('agent.send', { draft_id: draftId, message: 'go', text: 'typed' });
+  expect(agent.refuse).toHaveBeenCalledWith(draftId, 'go', expect.stringMatching(linked));
+  expect(agent.refuse).toHaveBeenCalledWith(draftId, 'typed', expect.stringMatching(linked));
   expect(agent.start).not.toHaveBeenCalled();
+  expect(agent.send).not.toHaveBeenCalled();
   expect(store.get(draftId).revision).toBe(1);
 });
