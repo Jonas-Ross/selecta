@@ -6,11 +6,11 @@ import { describe, it, expect } from 'vitest';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 // Use the production module graph so bundled resource URLs resolve from dist.
 import { createServer } from '../dist/server.js';
-import { SelectaCache } from '../dist/cache/index.js';
-import type { LibrarySnapshot } from '../src/types/bridge.js';
-import { makeBridge } from './helpers.js';
+import { SelectaCache } from '@selecta/core/cache/index.js';
+import type { LibrarySnapshot } from '@selecta/core/types/bridge.js';
+import { makeBridge } from '../../core/test/helpers.js';
 import packageInfo from '../package.json' with { type: 'json' };
-import fixture from './fixtures/library.json' with { type: 'json' };
+import fixture from '../../core/test/fixtures/library.json' with { type: 'json' };
 
 const snapshot = fixture as LibrarySnapshot;
 

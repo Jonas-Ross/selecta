@@ -13,6 +13,9 @@ import { featuresRow, makeToolDeps } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 import type { LibrarySnapshot } from '../src/types/bridge.js';
 
+// Child scripts import the built package, so they run from its directory.
+const packageRoot = join(import.meta.dirname, '..');
+
 describe('operation lifecycle', () => {
   it('rejects a write during refresh, allows cache reads, and releases after failure', async () => {
     let fail!: (error: Error) => void;
@@ -64,7 +67,9 @@ describe('operation lifecycle', () => {
           cache.db
             .transaction(() => {
               expect(() =>
-                execFileSync(process.execPath, ['--input-type=module', '-e', script]),
+                execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+                  cwd: packageRoot,
+                }),
               ).not.toThrow();
             })
             .immediate();
@@ -82,6 +87,7 @@ describe('operation lifecycle', () => {
     function holder(script: string) {
       const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
         stdio: ['ignore', 'pipe', 'inherit'],
+        cwd: packageRoot,
       });
       const waiting: (() => void)[] = [];
       let seen = '';

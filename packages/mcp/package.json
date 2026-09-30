@@ -1,0 +1,26 @@
+{
+  "name": "selecta",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local MCP server exposing the Apple Music library to AI agents through MCP.",
+  "type": "module",
+  "bin": {
+    "selecta": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc && npm run typecheck:ui && node scripts/build-ui.mjs",
+    "typecheck:ui": "tsc -p tsconfig.ui.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/core": "2.0.0",
+    "@modelcontextprotocol/ext-apps": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "@selecta/core": "0.1.0",
+    "commander": "^15.0.0",
+    "zod": "^4.6.2"
+  }
+}

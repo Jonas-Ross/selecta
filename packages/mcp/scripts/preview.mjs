@@ -9,10 +9,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import { CallToolRequestParamsSchema } from '@modelcontextprotocol/core';
-import { SelectaCache } from '../dist/cache/index.js';
-import { DraftStore } from '../dist/drafts/store.js';
-import { handleLibraryExplorer } from '../dist/tools/library_explorer.js';
-import { PlaylistDraftTools } from '../dist/tools/playlist_draft.js';
+import { SelectaCache } from '@selecta/core/cache/index.js';
+import { DraftStore } from '@selecta/core/drafts/store.js';
+import { handleLibraryExplorer } from '@selecta/core/tools/library_explorer.js';
+import { PlaylistDraftTools } from '@selecta/core/tools/playlist_draft.js';
 
 const root = new URL('../', import.meta.url);
 const directory = await mkdtemp(join(tmpdir(), 'selecta-preview-'));
@@ -20,7 +20,7 @@ const caches = { draft: SelectaCache.open(':memory:'), explorer: SelectaCache.op
 const resources = { draft: 'playlist-draft', explorer: 'library-explorer' };
 const ResetInput = z.strictObject({ scenario: z.string() });
 const fixture = JSON.parse(
-  await readFile(new URL('../test/fixtures/library.json', import.meta.url), 'utf8'),
+  await readFile(new URL('../../core/test/fixtures/library.json', import.meta.url), 'utf8'),
 );
 
 const handlers = new PlaylistDraftTools({

@@ -7,12 +7,12 @@ import {
   registerAppTool,
   RESOURCE_MIME_TYPE,
 } from '@modelcontextprotocol/ext-apps/server';
-import { Appearance } from './drafts/store.js';
+import { Appearance } from '@selecta/core/drafts/store.js';
 import {
   type PlaylistDraftTools,
   showDraftInputShape,
   SHOW_DRAFT_DESCRIPTION,
-} from './tools/playlist_draft.js';
+} from '@selecta/core/tools/playlist_draft.js';
 
 export const DRAFT_RESOURCE = 'ui://selecta/playlist-draft.html';
 

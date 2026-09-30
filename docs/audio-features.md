@@ -37,7 +37,7 @@ retry instead would hide a preview that has genuinely gone.
 
 ## Neither pass overwrites the other
 
-`mergeFeatures` (`src/cache/audio_features.ts`) gap-fills: a feature already on
+`mergeFeatures` (`packages/core/src/cache/audio_features.ts`) gap-fills: a feature already on
 the row keeps its value, confidence and provenance, and each pass writes only
 its own terminal status. The catalogs describe the whole recording where
 analysis hears a 30-second preview; neither has been measured against the
@@ -60,7 +60,7 @@ Camelot notation is the key written on a clock face — the number is a position
 on the circle of fifths, the letter the mode — so keys that sit next to each
 other mix cleanly. It carries no information the key does not, which is why
 `camelot` is derived from whatever `musical_key` a row ends up with
-(`src/domain/camelot.ts`) rather than stored only when the source that reported
+(`packages/core/src/domain/camelot.ts`) rather than stored only when the source that reported
 the key happened to include one. A catalog key earns its position exactly as an
 analyzed one does; a key string with no mode (AcousticBrainz can supply a bare
 tonic) has no position and keeps whatever it had. Migration 4 backfills the
@@ -69,7 +69,7 @@ column for keys already stored.
 ## Harmonic relations are geometry, not a score
 
 `inspect_tracklist` reports a `harmonic` block: one entry per adjacent pair in
-the draft, naming how the two wheel positions relate (`src/domain/harmonic.ts`).
+the draft, naming how the two wheel positions relate (`packages/core/src/domain/harmonic.ts`).
 
 - `same` — identical position.
 - `adjacent` — one step either way, which is a fifth apart.
@@ -215,7 +215,7 @@ supplied it, since gap-fill would discard a fresh estimate anyway.
 A field the named source cannot measure is refused: metrognome reports tempo
 and key and nothing else, so `--source analysis --missing danceability` would
 reopen every analysed track, fill none of them and mark them all terminal
-again. `FIELDS_BY_SOURCE` in `src/enrich/` records what each pass can supply,
+again. `FIELDS_BY_SOURCE` in `packages/core/src/enrich/` records what each pass can supply,
 pinned by a test against what the adapters actually write.
 
 Like `supersede` it is dry-run by default, journals what it overwrites and runs

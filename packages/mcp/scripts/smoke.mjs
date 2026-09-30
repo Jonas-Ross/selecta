@@ -140,7 +140,7 @@ if (!playlists.playlists.some((p) => p.id === created.playlist_id)) {
   fail('created playlist not visible in cache');
 }
 
-const { deletePlaylistsByName } = await import(join(root, 'dist/bridge/index.js'));
+const { deletePlaylistsByName } = await import('@selecta/core/bridge/index.js');
 
 await deletePlaylistsByName(SMOKE_PLAYLIST);
 console.log('smoke playlist deleted from Music.app (by name — fresh playlist IDs are transient)');

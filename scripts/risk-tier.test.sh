@@ -14,8 +14,8 @@ fresh_repo() {
   git init -q -b main
   git config user.email test@example.com
   git config user.name test
-  mkdir -p src/cache src/tools test docs .github/workflows
-  for f in src/cache/schema.ts src/tools/search.ts test/cache.test.ts test/destructive.test.ts; do
+  mkdir -p packages/core/src/cache packages/core/src/tools packages/core/test packages/mcp/test docs .github/workflows
+  for f in packages/core/src/cache/schema.ts packages/core/src/tools/search.ts packages/core/test/cache.test.ts packages/mcp/test/destructive.test.ts; do
     echo "// $f" > "$f"
   done
   echo '# x' > docs/music-app.md
@@ -51,16 +51,17 @@ bump() {
 }
 
 fresh_repo; echo more >> docs/music-app.md; commit_as test docs; expect auto 'docs only'
-fresh_repo; echo t > test/new.test.ts; echo x >> test/cache.test.ts; commit_as test tests; expect auto 'ordinary tests'
-fresh_repo; echo x >> test/destructive.test.ts; commit_as test t; expect jonas 'destructive-command test'
-fresh_repo; echo x >> src/cache/schema.ts; commit_as test s; expect jonas 'cache schema'
-fresh_repo; echo x >> src/tools/search.ts; commit_as test s; expect jonas 'unlisted source'
+fresh_repo; echo t > packages/core/test/new.test.ts; echo x >> packages/core/test/cache.test.ts; commit_as test tests; expect auto 'ordinary tests'
+fresh_repo; echo x >> packages/mcp/test/destructive.test.ts; commit_as test t; expect jonas 'destructive-command test'
+fresh_repo; echo x >> packages/core/src/cache/schema.ts; commit_as test s; expect jonas 'cache schema'
+fresh_repo; echo x >> packages/core/src/tools/search.ts; commit_as test s; expect jonas 'unlisted source'
 fresh_repo; echo x >> docs/music-app.md; echo x >> .github/workflows/ci.yml; commit_as test c; expect jonas 'docs plus workflow'
 fresh_repo; echo x > CLAUDE.md; commit_as test c; expect jonas 'agent rules'
-fresh_repo; mkdir -p src; echo x > src/AGENTS.md; commit_as test c; expect jonas 'nested agent rules'
+fresh_repo; echo x > packages/core/src/AGENTS.md; commit_as test c; expect jonas 'nested agent rules'
 fresh_repo; echo x > CLAUDE.local.md; commit_as test c; expect jonas 'local agent rules'
 fresh_repo; mkdir -p ui/.claude; echo x > ui/.claude/x.md; commit_as test c; expect jonas 'nested agent skill'
 fresh_repo; echo x >> package.json; commit_as test p; expect jonas 'manifest by hand'
+fresh_repo; mkdir -p packages/mcp; echo x > packages/mcp/package.json; commit_as test p; expect jonas 'package manifest by hand'
 fresh_repo; echo x >> package-lock.json; commit_as test p; expect auto 'lockfile by hand'
 fresh_repo; commit_as test empty; expect jonas 'empty diff'
 
@@ -74,16 +75,16 @@ fresh_repo; echo x >> package.json; commit_as 'dependabot[bot]' 'chore(deps): bu
 
 fresh_repo
 echo x >> package.json && commit_as 'dependabot[bot]' "$(bump patch)"
-echo x >> src/cache/schema.ts && commit_as test 'fix: follow the bump'
+echo x >> packages/core/src/cache/schema.ts && commit_as test 'fix: follow the bump'
 expect jonas 'dependabot bump with a commit on top'
 
-fresh_repo; echo x >> src/cache/schema.ts; commit_as test "$(bump patch)"; expect jonas 'a bump message from someone else'
+fresh_repo; echo x >> packages/core/src/cache/schema.ts; commit_as test "$(bump patch)"; expect jonas 'a bump message from someone else'
 
 fresh_repo
 echo x >> package-lock.json && commit_as 'dependabot[bot]' "$(bump patch)"
 git checkout -q main && echo y >> docs/music-app.md && commit_as test 'main moves' && git checkout -q pr
 git -c user.name='dependabot[bot]' merge -q --no-edit --no-ff main
-echo x >> src/cache/schema.ts && git add -A && git -c user.name='dependabot[bot]' commit -q --amend --no-edit
+echo x >> packages/core/src/cache/schema.ts && git add -A && git -c user.name='dependabot[bot]' commit -q --amend --no-edit
 expect jonas 'dependabot bump with an edit hidden in a merge'
 
 fresh_repo

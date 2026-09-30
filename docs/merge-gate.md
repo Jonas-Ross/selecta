@@ -13,26 +13,26 @@ finishes green.
 | Tier | Files | Merges when |
 |---|---|---|
 | `deps` | any, when every commit is Dependabot's, as signed by GitHub, and no bump is a major | CI is green |
-| `auto` | Markdown other than `CLAUDE.md`, `test/` apart from the list below, `package-lock.json` | CI is green and the Claude review passes |
+| `auto` | Markdown other than `CLAUDE.md`, `packages/*/test/` apart from the list below, `package-lock.json` | CI is green and the Claude review passes |
 | `jonas` | everything else | Jonas merges it |
 
 `jonas` is the default, so a file nobody classified fails closed. It covers
-`src/` whole: the cache and its migrations, Music.app writes, and the
+every package's `src/` whole: the cache and its migrations, Music.app writes, and the
 destructive commands are where wrong data is the one thing selecta cannot cheaply
-undo, and the rest of `src/` waits until the Claude review has a track record.
+undo, and the rest of the source waits until the Claude review has a track record.
 
 Some files are `jonas` even though they look like tests or config, because
 they are the gate's own inputs, and a change that could edit its grader and then
 pass it has graded itself:
 
-- `.github/`, `scripts/`, `package.json`, and the TypeScript, Vitest and lint
-  config, any of which can loosen what CI checks.
+- `.github/`, `scripts/` at any depth, every `package.json`, and the TypeScript,
+  Vitest and lint config, any of which can loosen what CI checks.
 - `CLAUDE.md`, `AGENTS.md`, `.claude/` and `.codex/` at any depth, which steer
   the agents and the Claude review.
-- `test/table_diff.ts` and the destructive-command, supersede, reopen, migration
-  and state-safety tests, which `docs/destructive-commands.md` makes the
+- `packages/core/test/table_diff.ts` and the destructive-command, supersede, reopen, migration
+  and state-safety tests (split between `packages/core/test/` and `packages/mcp/test/`), which `docs/destructive-commands.md` makes the
   guardrail against lost data.
-- `test/network-guard.ts` and `test/repo_hygiene.test.ts`, which keep the suite
+- `packages/core/test/network-guard.ts` and `packages/core/test/repo_hygiene.test.ts`, which keep the suite
   off the network and the repository free of databases.
 
 So CI configuration changes do not merge on their own, and neither does a

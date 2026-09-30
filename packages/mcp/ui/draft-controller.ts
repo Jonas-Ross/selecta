@@ -5,7 +5,7 @@ import {
   type Draft,
   type DraftResponse,
   type DraftView,
-} from '../src/drafts/contracts.js';
+} from '@selecta/core/drafts/contracts.js';
 import {
   acceptDraftResponse,
   decodeDraftResult,

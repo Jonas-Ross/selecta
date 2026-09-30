@@ -4,29 +4,33 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { Command, InvalidArgumentError, Option } from 'commander';
-import { refreshLibrary } from './operations/refresh.js';
-import { releaseLocksOnShutdown } from './operations/shutdown.js';
-import { withOperation } from './operations/lock.js';
+import { refreshLibrary } from '@selecta/core/operations/refresh.js';
+import { releaseLocksOnShutdown } from '@selecta/core/operations/shutdown.js';
+import { withOperation } from '@selecta/core/operations/lock.js';
 import {
   APPLY_FLAG_DESCRIPTION,
   readUndoJournal,
   runDestructive,
   type DestructiveOutcome,
-} from './operations/destructive.js';
-import { planRestore } from './operations/restore.js';
-import { bridge as defaultBridge } from './bridge/index.js';
-import { SelectaCache, defaultDbPath } from './cache/index.js';
-import { runDoctor } from './diagnostics/doctor.js';
-import { readStatus, type SchemaVersions } from './diagnostics/status.js';
-import { DraftStore, draftDbPath } from './drafts/store.js';
-import { FIELDS_BY_SOURCE, METROGNOME_PATH_ENV, enrichPendingTracks } from './enrich/index.js';
-import type { FeatureSource } from './types/cache.js';
-import type { SourceField } from './cache/audio_features.js';
-import { log as defaultLogger, type Logger } from './log.js';
-import { createProgressReporter, formatDuration } from './progress.js';
+} from '@selecta/core/operations/destructive.js';
+import { planRestore } from '@selecta/core/operations/restore.js';
+import { bridge as defaultBridge } from '@selecta/core/bridge/index.js';
+import { SelectaCache, defaultDbPath } from '@selecta/core/cache/index.js';
+import { runDoctor } from '@selecta/core/diagnostics/doctor.js';
+import { readStatus, type SchemaVersions } from '@selecta/core/diagnostics/status.js';
+import { DraftStore, draftDbPath } from '@selecta/core/drafts/store.js';
+import {
+  FIELDS_BY_SOURCE,
+  METROGNOME_PATH_ENV,
+  enrichPendingTracks,
+} from '@selecta/core/enrich/index.js';
+import type { FeatureSource } from '@selecta/core/types/cache.js';
+import type { SourceField } from '@selecta/core/cache/audio_features.js';
+import { log as defaultLogger, type Logger } from '@selecta/core/log.js';
+import { createProgressReporter, formatDuration } from '@selecta/core/progress.js';
 import { createServer } from './server.js';
-import type { Bridge } from './types/bridge.js';
-import { BridgeError, defaultHints } from './types/errors.js';
+import type { Bridge } from '@selecta/core/types/bridge.js';
+import { BridgeError, defaultHints } from '@selecta/core/types/errors.js';
 
 export type CliOptions = {
   bridge?: Bridge;

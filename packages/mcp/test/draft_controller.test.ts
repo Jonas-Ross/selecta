@@ -11,7 +11,7 @@ import {
   previewStatus,
   recoveredStatus,
 } from '../ui/draft-state.js';
-import { Draft, type DraftView } from '../src/drafts/contracts.js';
+import { Draft, type DraftView } from '@selecta/core/drafts/contracts.js';
 import { Element } from './dom.js';
 
 const id = '00000000-0000-4000-8000-000000000001';

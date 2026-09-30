@@ -2,17 +2,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SelectaCache } from '../src/cache/index.js';
+import { SelectaCache } from '@selecta/core/cache/index.js';
 import { createCliProgram } from '../src/cli.js';
-import { handleRefreshLibrary } from '../src/tools/refresh_library.js';
-import { handleSearch } from '../src/tools/search.js';
-import { handleRemoveTracks } from '../src/tools/remove_tracks.js';
+import { handleRefreshLibrary } from '@selecta/core/tools/refresh_library.js';
+import { handleSearch } from '@selecta/core/tools/search.js';
+import { handleRemoveTracks } from '@selecta/core/tools/remove_tracks.js';
 import {
   buildAddTracksScript,
   buildRemoveTracksScript,
-} from '../src/bridge/scripts/edit_playlist.js';
-import { buildReadLibraryScript } from '../src/bridge/scripts/read_library.js';
-import { makeBridge } from './helpers.js';
+} from '@selecta/core/bridge/scripts/edit_playlist.js';
+import { buildReadLibraryScript } from '@selecta/core/bridge/scripts/read_library.js';
+import { makeBridge } from '../../core/test/helpers.js';
 const tracks = [
   { persistentId: 'A', title: 'A', artist: 'Artist', playCount: 100 },
   { persistentId: 'B', title: 'B', artist: 'Artist' },
