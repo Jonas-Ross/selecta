@@ -236,7 +236,10 @@ function Draft({
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const naming = useRef(false);
-  const renaming = useRef<Promise<DraftView | undefined>>(undefined);
+  // Edits queue behind each other on the newest revision, so the rename a blur
+  // starts lands before the click that caused the blur.
+  const latest = useRef<DraftView['draft']>(undefined);
+  const edits = useRef<Promise<unknown>>(Promise.resolve());
   const logEnd = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -246,7 +249,7 @@ function Draft({
   const load = useCallback(
     () =>
       selecta.call('drafts.get', { draft_id: draftId }).then(
-        (value) => setView(value as DraftView),
+        (value) => show(value as DraftView),
         (e: Error) => setNotice(e.message),
       ),
     [draftId],
@@ -269,25 +272,34 @@ function Draft({
     if (draft && !naming.current) setName(draft.name);
   }, [draft]);
 
+  function show(next: DraftView) {
+    latest.current = next.draft;
+    setView(next);
+  }
+
+  function edit(change: Record<string, unknown>): Promise<void> {
+    const next = edits.current.then(() => apply(change));
+
+    edits.current = next;
+
+    return next;
+  }
+
   // Revision checks mean a stale edit fails rather than clobbering Claude's.
-  async function edit(change: Record<string, unknown>): Promise<DraftView | undefined> {
-    if (!draft) return;
+  async function apply(change: Record<string, unknown>) {
+    if (!latest.current) return;
 
     try {
       const result = (await selecta.call('drafts.edit', {
         draft_id: draftId,
-        revision: draft.revision,
+        revision: latest.current.revision,
         ...change,
       })) as DraftView;
 
       if (result.error) {
         setNotice([result.error, result.hint].filter(Boolean).join(' '));
         await load();
-      } else {
-        setView(result);
-
-        return result;
-      }
+      } else show(result);
     } catch (e) {
       setNotice((e as Error).message);
     }
@@ -316,17 +328,18 @@ function Draft({
   }
 
   async function save() {
-    // Clicking Save blurs the name field first; save the renamed revision, not this render's.
-    const latest = (await renaming.current)?.draft ?? draft;
+    await edits.current;
 
-    if (!latest || !window.confirm(`Save "${latest.name}" to Music as a new playlist?`)) return;
+    const current = latest.current;
+
+    if (!current || !window.confirm(`Save "${current.name}" to Music as a new playlist?`)) return;
 
     setSaving(true);
 
     try {
       const result = (await selecta.call('drafts.save', {
         draft_id: draftId,
-        revision: latest.revision,
+        revision: current.revision,
       })) as DraftView & { result?: Record<string, unknown> };
 
       setNotice(saveOutcome(result));
@@ -350,20 +363,14 @@ function Draft({
             onBlur={() => {
               naming.current = false;
 
-              if (name.trim() && name.trim() !== draft.name) {
-                const pending = edit({ name: name.trim() });
-
-                renaming.current = pending;
-                pending.finally(() => {
-                  if (renaming.current === pending) renaming.current = undefined;
-                });
-              } else setName(draft.name);
+              if (name.trim() && name.trim() !== draft.name) edit({ name: name.trim() });
+              else setName(draft.name);
             }}
           />
         ) : (
           <h1>{working ? 'Building…' : 'No draft yet'}</h1>
         )}
-        <button className="primary" disabled={!draft || saved || saving || working} onClick={save}>
+        <button className="primary" disabled={!draft || locked || saving || working} onClick={save}>
           {saving ? 'Saving…' : saveLabel(draft?.save)}
         </button>
       </header>
