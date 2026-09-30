@@ -18,7 +18,26 @@
     <script src="vendor/gsap.min.js" defer></script>
     <script src="vendor/ScrollTrigger.min.js" defer></script>
     <script src="vendor/SplitText.min.js" defer></script>
-    <script type="module" src="app.js"></script>
+    <script type="module" src="js/main.js"></script>
+    <!-- Fetched up front, so the browser doesn't find the imports one level at a time. -->
+    <link rel="modulepreload" href="js/audio.js" />
+    <link rel="modulepreload" href="js/beat.js" />
+    <link rel="modulepreload" href="js/camelot.js" />
+    <link rel="modulepreload" href="js/deck.js" />
+    <link rel="modulepreload" href="js/dom.js" />
+    <link rel="modulepreload" href="js/engine.js" />
+    <link rel="modulepreload" href="js/hero.js" />
+    <link rel="modulepreload" href="js/intro.js" />
+    <link rel="modulepreload" href="js/machine.js" />
+    <link rel="modulepreload" href="js/motion.js" />
+    <link rel="modulepreload" href="js/pulse.js" />
+    <link rel="modulepreload" href="js/readout.js" />
+    <link rel="modulepreload" href="js/record.js" />
+    <link rel="modulepreload" href="js/report.js" />
+    <link rel="modulepreload" href="js/reveals.js" />
+    <link rel="modulepreload" href="js/spinner.js" />
+    <link rel="modulepreload" href="js/story.js" />
+    <link rel="modulepreload" href="js/synth.js" />
   </head>
   <body>
     <div class="veil" aria-hidden="true">

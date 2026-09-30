@@ -1,6 +1,6 @@
 // Runs metrognome off the main thread. The wasm module sees mono PCM and a
 // sample rate, nothing else; this file only moves samples in and JSON out.
-const ready = fetch(new URL('metrognome.wasm', self.location.href))
+const ready = fetch(new URL('../metrognome.wasm', self.location.href))
   .then((r) => {
     if (!r.ok) throw new Error(`metrognome.wasm: HTTP ${r.status}`);
 
