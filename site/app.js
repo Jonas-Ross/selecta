@@ -1476,7 +1476,13 @@ function wire() {
   $('hear').addEventListener('click', () => (player?.kind === 'hero' ? stopAll() : playHero()));
   $('play').addEventListener('click', () => (player?.kind === 'deck' ? stopAll() : playDeck()));
   $('loop').addEventListener('click', () => load(loopSamples, LOOP_TITLE, loopReading));
-  $('file').addEventListener('change', (e) => takeFile(e.target.files[0]));
+  $('file').addEventListener('change', (e) => {
+    const [file] = e.target.files;
+
+    // Cleared so picking the same file again still fires change.
+    e.target.value = '';
+    takeFile(file);
+  });
   $('deck-platter').addEventListener('click', () => $('file').click());
 
   let depth = 0;
