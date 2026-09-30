@@ -836,6 +836,10 @@ function playDeck() {
 
   const tick = () => {
     const now = ctx.currentTime;
+    const due = fromSec + now - t0;
+
+    // A hidden tab stops frames but not the audio clock; skip the clicks it missed, don't burst them.
+    if (next < due) next += Math.ceil((due - next) / period) * period;
 
     // Clicks are scheduled a little ahead so the audio clock, not the frame rate, keeps time.
     while (t0 + (next - fromSec) < now + 0.15) {
@@ -1066,6 +1070,10 @@ function tickMachine() {
 
   if (live) {
     const { ctx } = live;
+
+    // A hidden tab stops frames but not the audio clock; skip the steps it missed, don't burst them.
+    live.step = Math.max(live.step, Math.ceil((ctx.currentTime - live.t0) / stepSecs));
+    live.next = live.t0 + live.step * stepSecs;
 
     // Hits are scheduled a little ahead on the audio clock; the lights follow what is heard.
     while (live.next < ctx.currentTime + 0.12) {
