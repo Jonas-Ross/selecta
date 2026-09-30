@@ -741,8 +741,8 @@ async function load(samples, title, pending) {
     const tempo = report.features.tempo;
 
     state.report = report;
-    // Playback starts at the measured window, so nothing before it is kept.
-    state.buffer = toBuffer(samples.subarray(head.start));
+    // Playback is the measured window alone: the metronome only knows that stretch's tempo.
+    state.buffer = toBuffer(samples.subarray(head.start, head.end));
 
     if (tempo)
       state.origin = beatOrigin(
