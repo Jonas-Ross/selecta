@@ -11,6 +11,7 @@ export type Track = {
 };
 export type DraftView = {
   draft?: Draft;
+  preview?: { owner?: string; status: string };
   inspection?: { tracks: Track[] };
   error?: string;
   hint?: string;
@@ -23,6 +24,15 @@ export function rows(view: DraftView): Row[] {
   const tracks = view.inspection?.tracks ?? [];
 
   return (view.draft?.entries ?? []).map((entry, index) => ({ ...tracks[index], ...entry }));
+}
+
+/** Core mirrors ordered edits of a linked draft into Music.app's preview playlist. */
+export function previewLinked(view: DraftView): boolean {
+  return (
+    view.preview?.owner !== undefined &&
+    view.preview.owner === view.draft?.draft_id &&
+    view.preview.status !== 'inactive'
+  );
 }
 
 export function move<T>(items: T[], from: number, to: number): T[] {

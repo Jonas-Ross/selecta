@@ -79,11 +79,13 @@ it('resumes the session the first turn reported', async () => {
   const { agent, events } = sessions(spawn);
 
   agent.start(DRAFT, 'warmup');
+  expect(agent.isRunning(DRAFT)).toBe(true);
   runs[0].child.finish([
     { type: 'assistant', message: { content: [{ type: 'text', text: 'Built it.' }] } },
     { type: 'result', subtype: 'success', session_id: 'S-1' },
   ]);
   await settle();
+  expect(agent.isRunning(DRAFT)).toBe(false);
   agent.send(DRAFT, 'less vocal');
 
   expect(runs[0].args).toContain('--session-id');

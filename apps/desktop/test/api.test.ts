@@ -5,7 +5,7 @@ import { createApi } from '../src/host/api.js';
 import type { AgentSessions } from '../src/host/agent.js';
 
 const deps = makeToolDeps();
-const agent = { start: vi.fn(), send: vi.fn(), cancel: vi.fn() };
+const agent = { start: vi.fn(), send: vi.fn(), cancel: vi.fn(), isRunning: vi.fn(() => false) };
 const call = createApi({ ...deps, drafts: deps.drafts! }, agent as unknown as AgentSessions);
 
 afterEach(() => vi.clearAllMocks());
@@ -59,4 +59,31 @@ it('hands briefs and feedback to the agent only when they validate', async () =>
 it('rejects anything outside the method table', async () => {
   await expect(call('toString', undefined)).rejects.toThrow('Unknown method: toString');
   await expect(call('drafts.delete', undefined)).rejects.toThrow('Unknown method');
+});
+
+it('keeps a draft linked to the Music preview read-only for the user and Claude', async () => {
+  const draftId = randomUUID();
+  const store = deps.drafts!();
+
+  store.create(draftId, 'Linked', ['T-TEARDROP', 'T-ROADS']);
+  store.claimPreview(draftId, 1, true);
+
+  const linked = /linked to the Selecta Preview playlist/;
+
+  await expect(call('drafts.edit', { draft_id: draftId, revision: 1, name: 'x' })).rejects.toThrow(
+    linked,
+  );
+  await expect(call('agent.start', { draft_id: draftId, brief: 'go' })).rejects.toThrow(linked);
+  await expect(call('agent.send', { draft_id: draftId, message: 'go' })).rejects.toThrow(linked);
+  expect(agent.start).not.toHaveBeenCalled();
+  expect(store.get(draftId).revision).toBe(1);
+});
+
+it('reports whether Claude is still working on a draft', async () => {
+  const draftId = randomUUID();
+
+  agent.isRunning.mockReturnValueOnce(true);
+
+  expect(await call('agent.running', { draft_id: draftId })).toBe(true);
+  expect(agent.isRunning).toHaveBeenCalledWith(draftId);
 });

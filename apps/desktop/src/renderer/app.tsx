@@ -6,6 +6,7 @@ import {
   formatDuration,
   logAgentEvent,
   move,
+  previewLinked,
   rows,
   saveLabel,
   saveOutcome,
@@ -167,6 +168,8 @@ function Draft({
   const [dragFrom, setDragFrom] = useState<number>();
   const [notice, setNotice] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [name, setName] = useState('');
+  const naming = useRef(false);
   const logEnd = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -206,6 +209,8 @@ function Draft({
 
     // Start only once listening, so an immediate failure (no claude CLI) still lands.
     if (brief) runAgent(selecta.call('agent.start', { draft_id: draftId, brief }));
+    // Reopened from Home: Claude may still be on it.
+    else selecta.call('agent.running', { draft_id: draftId }).then(setWorking);
 
     return unsubscribe;
   }, [draftId, brief, load, onAgent, runAgent]);
@@ -213,21 +218,32 @@ function Draft({
   const draft = view?.draft;
   const items = rows(view ?? {});
   const saved = draft?.save !== undefined;
+  const linked = previewLinked(view ?? {});
+  const locked = saved || linked;
+
+  // Live revisions keep arriving from Claude; don't overwrite a name being typed.
+  useEffect(() => {
+    if (draft && !naming.current) setName(draft.name);
+  }, [draft]);
 
   // Revision checks mean a stale edit fails rather than clobbering Claude's.
   async function edit(change: Record<string, unknown>) {
     if (!draft) return;
 
-    const result = (await selecta.call('drafts.edit', {
-      draft_id: draftId,
-      revision: draft.revision,
-      ...change,
-    })) as DraftView;
+    try {
+      const result = (await selecta.call('drafts.edit', {
+        draft_id: draftId,
+        revision: draft.revision,
+        ...change,
+      })) as DraftView;
 
-    if (result.error) {
-      setNotice([result.error, result.hint].filter(Boolean).join(' '));
-      await load();
-    } else setView(result);
+      if (result.error) {
+        setNotice([result.error, result.hint].filter(Boolean).join(' '));
+        await load();
+      } else setView(result);
+    } catch (e) {
+      setNotice((e as Error).message);
+    }
   }
 
   const setEntries = (next: Row[]) =>
@@ -272,12 +288,16 @@ function Draft({
         {draft ? (
           <input
             className="name"
-            defaultValue={draft.name}
-            key={draft.revision}
-            disabled={saved}
-            onBlur={(e) =>
-              e.target.value.trim() !== draft.name && edit({ name: e.target.value.trim() })
-            }
+            value={name}
+            disabled={locked}
+            onChange={(e) => setName(e.target.value)}
+            onFocus={() => (naming.current = true)}
+            onBlur={() => {
+              naming.current = false;
+
+              if (name.trim() && name.trim() !== draft.name) edit({ name: name.trim() });
+              else setName(draft.name);
+            }}
           />
         ) : (
           <h1>Building…</h1>
@@ -286,6 +306,12 @@ function Draft({
           {saving ? 'Saving…' : saveLabel(draft?.save)}
         </button>
       </header>
+      {linked && (
+        <p className="notice">
+          This draft is linked to the Selecta Preview playlist in Music, so it's read-only here.
+          Detach the preview where you started it to edit.
+        </p>
+      )}
       {notice && (
         <p className="notice" onClick={() => setNotice(undefined)}>
           {notice}
@@ -298,7 +324,7 @@ function Draft({
             {items.map((row, index) => (
               <li
                 key={row.entry_id}
-                draggable={!saved}
+                draggable={!locked}
                 className={dragFrom === index ? 'dragging' : undefined}
                 onDragStart={() => setDragFrom(index)}
                 onDragEnd={() => setDragFrom(undefined)}
@@ -330,7 +356,7 @@ function Draft({
                 <span className="muted">{formatDuration(row.duration_seconds)}</span>
                 <button
                   className="remove"
-                  disabled={saved || items.length === 1}
+                  disabled={locked || items.length === 1}
                   onClick={() =>
                     setEntries(items.filter((other) => other.entry_id !== row.entry_id))
                   }
@@ -371,7 +397,7 @@ function Draft({
                   Stop
                 </button>
               ) : (
-                <button className="primary" disabled={!feedback.trim() || saved}>
+                <button className="primary" disabled={!feedback.trim() || locked}>
                   Send
                 </button>
               )}

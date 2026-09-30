@@ -69,6 +69,10 @@ export class AgentSessions {
     );
   }
 
+  isRunning(draftId: string): boolean {
+    return this.running.has(draftId);
+  }
+
   cancel(draftId: string): void {
     this.running.get(draftId)?.();
   }

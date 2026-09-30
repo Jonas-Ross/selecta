@@ -4,6 +4,7 @@ import {
   formatDuration,
   logAgentEvent,
   move,
+  previewLinked,
   rows,
   saveLabel,
   saveOutcome,
@@ -85,4 +86,21 @@ it('labels the save button by what the draft recorded', () => {
   expect(saveLabel({ status: 'pending' })).toBe('Save pending');
   expect(saveLabel({ status: 'finished', result: { playlist_id: 'P' } })).toBe('Saved');
   expect(saveLabel({ status: 'finished', result: { error: 'jxa_error' } })).toBe('Save uncertain');
+});
+
+it('treats a draft as linked only while it owns an active preview', () => {
+  const draft = {
+    draft_id: 'd',
+    revision: 1,
+    name: 'n',
+    entries: [entry('a')],
+    selected_entry_ids: [],
+    feedback: '',
+  };
+
+  expect(previewLinked({ draft, preview: { owner: 'd', status: 'current' } })).toBe(true);
+  expect(previewLinked({ draft, preview: { owner: 'd', status: 'inactive' } })).toBe(false);
+  expect(previewLinked({ draft, preview: { owner: 'other', status: 'current' } })).toBe(false);
+  expect(previewLinked({ draft, preview: { status: 'inactive' } })).toBe(false);
+  expect(previewLinked({})).toBe(false);
 });

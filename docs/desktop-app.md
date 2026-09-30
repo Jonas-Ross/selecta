@@ -25,7 +25,9 @@ Each turn is one `claude -p --output-format stream-json` run on the user's own C
 
 Claude never saves. Save is the app's button, calling the same revision-checked operation as `save_playlist_draft`. A recorded save attempt, good or uncertain, blocks another from the app, as it does over MCP.
 
-The app mints the draft ID and passes it in the brief, so the screen can open before the draft exists. Later turns `--resume` the session the first turn reported, and always tell Claude to re-read the draft, since the user may have reordered it. Sessions are held in memory: after a restart, feedback starts a fresh session on the same draft. `SELECTA_CLAUDE_PATH` overrides the `claude` binary.
+A draft linked to the Selecta Preview playlist (started with `preview_playlist_draft` over MCP) is read-only in the app, for you and for Claude. Core mirrors every ordered edit of a linked draft into that Music.app playlist, and the app's only Music write is Save. Detach the preview where it was started to edit the draft here.
+
+The app mints the draft ID and passes it in the brief, so the screen can open before the draft exists. Later turns `--resume` the session the first turn reported, and always tell Claude to re-read the draft, since the user may have reordered it. Sessions are held in memory: after a restart, feedback starts a fresh session on the same draft. Leaving a draft doesn't stop Claude; reopening it asks the host whether a run is still going. `SELECTA_CLAUDE_PATH` overrides the `claude` binary.
 
 ## Live updates
 
