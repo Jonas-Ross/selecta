@@ -1,0 +1,32 @@
+.rules {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: clamp(40px, 8vw, 120px) var(--gutter);
+  display: grid;
+  gap: clamp(64px, 12vw, 150px);
+}
+.rule {
+  display: grid;
+  gap: 18px;
+}
+@media (min-width: 641px) {
+  .rule:nth-child(2) {
+    justify-items: end;
+    text-align: right;
+  }
+}
+.big-line {
+  max-width: 16ch;
+  font: 800 clamp(2.2rem, 5.8vw, 5.6rem)/1 var(--display);
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.big-line em {
+  font-style: normal;
+  color: var(--acid);
+}
+.rule > p:last-child {
+  max-width: 40ch;
+  font-size: clamp(1.02rem, 1.3vw, 1.2rem);
+  color: var(--mute);
+}
