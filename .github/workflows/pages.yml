@@ -1,0 +1,47 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'scripts/build-site.sh', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a deploy halfway; the next one queues behind it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # The metrognome commit the try-it demo runs. Bump it to put a newer engine on the page.
+  METROGNOME_REF: 478bbed0b0c231dfa85365a891b6aebc4ff0f577
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: Jonas-Ross/metrognome
+          ref: ${{ env.METROGNOME_REF }}
+          path: metrognome
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      # No build cache: deploys are rare and a cold engine build takes under half a minute.
+      - name: Build the engine
+        run: scripts/build-site.sh metrognome
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
