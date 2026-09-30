@@ -613,6 +613,9 @@ function reading(kind, est) {
 
 function blank(title, loop) {
   $('deck-title').textContent = title;
+  // A reading still counting up from the last track would overwrite the placeholders.
+  $('bpm')._tw?.kill();
+  $('camelot')._tw?.kill();
   $('bpm').textContent = '---';
   $('camelot').textContent = '--';
   $('keyname').textContent = 'key';
@@ -767,6 +770,8 @@ async function takeFile(file) {
   const run = ++state.run;
   const name = file.name.replace(/\.[^.]+$/, '');
 
+  // Decoding can take seconds; the old track's readings and Play must not linger meanwhile.
+  blank(name, false);
   status(`Decoding ${file.name}…`);
   deckSpin.speed(LISTEN_RATE, 0.4);
 
