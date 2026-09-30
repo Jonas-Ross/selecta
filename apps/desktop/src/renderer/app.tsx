@@ -277,7 +277,11 @@ function Draft({
     setView(next);
   }
 
-  function edit(change: Record<string, unknown>): Promise<void> {
+  type Change = (draft: NonNullable<DraftView['draft']>) => Record<string, unknown> | undefined;
+
+  // A change is worked out from the draft as it stands when its turn comes, so
+  // queued clicks compose instead of replaying the snapshot they were made on.
+  function edit(change: Change): Promise<void> {
     const next = edits.current.then(() => apply(change));
 
     edits.current = next;
@@ -286,14 +290,17 @@ function Draft({
   }
 
   // Revision checks mean a stale edit fails rather than clobbering Claude's.
-  async function apply(change: Record<string, unknown>) {
-    if (!latest.current) return;
+  async function apply(change: Change) {
+    const base = latest.current;
+    const args = base && change(base);
+
+    if (!base || !args) return;
 
     try {
       const result = (await selecta.call('drafts.edit', {
         draft_id: draftId,
-        revision: latest.current.revision,
-        ...change,
+        revision: base.revision,
+        ...args,
       })) as DraftView;
 
       if (result.error) {
@@ -305,8 +312,21 @@ function Draft({
     }
   }
 
-  const setEntries = (next: Row[]) =>
-    edit({ entries: next.map(({ entry_id, track_id }) => ({ entry_id, track_id })) });
+  const setEntries = (change: (entries: Row[]) => Row[] | undefined) =>
+    edit((current) => {
+      const next = change(current.entries);
+
+      return next?.length
+        ? { entries: next.map(({ entry_id, track_id }) => ({ entry_id, track_id })) }
+        : undefined;
+    });
+
+  const moveEntry = (entryId: string, to: number) =>
+    setEntries((entries) => {
+      const from = entries.findIndex((entry) => entry.entry_id === entryId);
+
+      return from < 0 ? undefined : move(entries, from, Math.min(to, entries.length - 1));
+    });
 
   function send(event: FormEvent) {
     event.preventDefault();
@@ -363,7 +383,7 @@ function Draft({
             onBlur={() => {
               naming.current = false;
 
-              if (name.trim() && name.trim() !== draft.name) edit({ name: name.trim() });
+              if (name.trim() && name.trim() !== draft.name) edit(() => ({ name: name.trim() }));
               else setName(draft.name);
             }}
           />
@@ -399,7 +419,7 @@ function Draft({
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => {
                   if (dragFrom !== undefined && dragFrom !== index)
-                    setEntries(move(items, dragFrom, index));
+                    moveEntry(items[dragFrom].entry_id, index);
                 }}
               >
                 <input
@@ -426,7 +446,9 @@ function Draft({
                   className="remove"
                   disabled={locked || items.length === 1}
                   onClick={() =>
-                    setEntries(items.filter((other) => other.entry_id !== row.entry_id))
+                    setEntries((entries) =>
+                      entries.filter((other) => other.entry_id !== row.entry_id),
+                    )
                   }
                   aria-label="Remove"
                 >
