@@ -25,9 +25,9 @@ Each turn is one `claude -p --output-format stream-json` run on the user's own C
 
 Claude never saves. Save is the app's button, calling the same revision-checked operation as `save_playlist_draft`. A recorded save attempt, good or uncertain, blocks another from the app, as it does over MCP.
 
-A draft linked to the Selecta Preview playlist (started with `preview_playlist_draft` over MCP) is read-only in the app, for you and for Claude. Core mirrors every ordered edit of a linked draft into that Music.app playlist, and the app's only Music write is Save. Detach the preview where it was started to edit the draft here.
+A draft linked to the Selecta Preview playlist (started with `preview_playlist_draft` over MCP) is read-only in the app, for you and for Claude. Core mirrors every ordered edit of a linked draft into that Music.app playlist, and the app's only Music write is Save. Detach the preview where it was started to edit the draft here. The refusal is the draft store's local-only mode, checked inside the write transaction, so a preview linked mid-run can't slip an agent edit through to Music; the agent's MCP server gets the mode through `SELECTA_LOCAL_DRAFTS=1`.
 
-The app mints the draft ID and passes it in the brief, so the screen can open before the draft exists. Later turns `--resume` the session the first turn reported, and always tell Claude to re-read the draft, since the user may have reordered it. Sessions are held in memory: after a restart, feedback starts a fresh session on the same draft. Leaving a draft doesn't stop Claude; reopening it asks the host whether a run is still going. `SELECTA_CLAUDE_PATH` overrides the `claude` binary.
+The app mints the draft ID and passes it in the brief, so the screen can open before the draft exists. Later turns `--resume` the session the first turn reported, and always tell Claude to re-read the draft, since the user may have reordered it. Sessions are held in memory: after a restart, feedback starts a fresh session on the same draft. Leaving a draft doesn't stop Claude: each draft's conversation lives above the screens, so a run that finishes or fails while you're elsewhere is there when you reopen it, and a build that failed before creating its draft stays on Home to retry. `SELECTA_CLAUDE_PATH` overrides the `claude` binary.
 
 ## Live updates
 
