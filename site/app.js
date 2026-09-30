@@ -618,7 +618,7 @@ function blank(title, loop) {
   $('keyname').textContent = 'key';
   reading('tempo', null);
   reading('key', null);
-  $('blend').hidden = true;
+  $('wheel').hidden = true;
   $('said').textContent = 'Listening…';
   $('play').disabled = true;
   record($('deck-vinyl'), {
@@ -643,11 +643,11 @@ function render(report, ms) {
   reading('tempo', tempo);
   reading('key', key);
 
-  const blend = key && !key.uncertain;
+  const onWheel = key && !key.uncertain;
 
-  $('blend').hidden = !blend;
+  $('wheel').hidden = !onWheel;
 
-  if (blend) {
+  if (onWheel) {
     const { n, ring } = parseCamelot(key.camelot);
     const other = ring === 'A' ? 'B' : 'A';
     const near = [
@@ -656,7 +656,7 @@ function render(report, ms) {
       [n, other],
     ];
 
-    $('blend-keys').replaceChildren(
+    $('wheel-keys').replaceChildren(
       ...near.map(([m, r]) => {
         const chip = el(
           'span',

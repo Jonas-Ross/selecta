@@ -1386,11 +1386,11 @@ button {
 .sure .flag {
   color: var(--coral);
 }
-.blend {
+.wheel {
   display: grid;
   gap: 10px;
 }
-.blend-keys {
+.wheel-keys {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
