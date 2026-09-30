@@ -48,6 +48,7 @@ export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: 
       agent.send(localOnly(draft_id), message);
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),
+    'agent.active': () => agent.active(),
   };
 
   return async (method: string, args: unknown): Promise<unknown> => {

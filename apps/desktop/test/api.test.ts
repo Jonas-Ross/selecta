@@ -8,7 +8,7 @@ import type { AgentSessions } from '../src/host/agent.js';
 const base = makeToolDeps();
 const local = new DraftStore(base.drafts!().path, { localOnly: true });
 const deps = { ...base, drafts: () => local };
-const agent = { start: vi.fn(), send: vi.fn(), cancel: vi.fn() };
+const agent = { start: vi.fn(), send: vi.fn(), cancel: vi.fn(), active: vi.fn(() => ['d']) };
 const call = createApi(deps, agent as unknown as AgentSessions);
 
 afterEach(() => vi.clearAllMocks());
@@ -50,6 +50,7 @@ it('hands briefs and feedback to the agent only when they validate', async () =>
   await call('agent.send', { draft_id: draftId, message: 'slower' });
   await call('agent.send', { draft_id: draftId, message: 'x'.repeat(50_000) });
   await call('agent.cancel', { draft_id: draftId });
+  expect(await call('agent.active', undefined)).toEqual(['d']);
 
   expect(agent.start).toHaveBeenCalledWith(draftId, 'deep house');
   expect(agent.send).toHaveBeenCalledWith(draftId, 'slower');

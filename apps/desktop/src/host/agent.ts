@@ -70,6 +70,11 @@ export class AgentSessions {
     );
   }
 
+  /** Drafts Claude is still working on, for a renderer that lost track after a reload. */
+  active(): string[] {
+    return [...this.running.keys()];
+  }
+
   cancel(draftId: string): void {
     this.running.get(draftId)?.();
   }

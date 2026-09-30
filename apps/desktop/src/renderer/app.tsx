@@ -38,13 +38,22 @@ function App() {
     [],
   );
 
-  useEffect(
-    () =>
-      selecta.on((event) => {
-        if (event.event === 'agent') onAgent(event.draft_id, event.data);
-      }),
-    [onAgent],
-  );
+  useEffect(() => {
+    const unsubscribe = selecta.on((event) => {
+      if (event.event === 'agent') onAgent(event.draft_id, event.data);
+    });
+
+    // After a renderer reload the host may still be running Claude; a run that
+    // already reported back keeps its own state.
+    selecta.call('agent.active').then((ids) =>
+      setRuns((current) => ({
+        ...Object.fromEntries(ids.map((id) => [id, { log: [], working: true }])),
+        ...current,
+      })),
+    );
+
+    return unsubscribe;
+  }, [onAgent]);
 
   // A call the host rejects never starts Claude, so no event would clear `working`.
   const ask = useCallback(
@@ -134,7 +143,7 @@ function Home({
         {orphans.map((run) => (
           <li key={run.draft_id}>
             <button onClick={() => onOpen(run.draft_id)}>
-              <strong>{run.brief.split('\n')[0]}</strong>
+              <strong>{run.brief.split('\n')[0] || 'New playlist'}</strong>
               <span className="muted">{run.working ? 'Building…' : 'Build failed'}</span>
             </button>
           </li>
@@ -231,6 +240,7 @@ function Draft({
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const naming = useRef(false);
+  const renaming = useRef<Promise<DraftView | undefined>>(undefined);
   const logEnd = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -264,7 +274,7 @@ function Draft({
   }, [draft]);
 
   // Revision checks mean a stale edit fails rather than clobbering Claude's.
-  async function edit(change: Record<string, unknown>) {
+  async function edit(change: Record<string, unknown>): Promise<DraftView | undefined> {
     if (!draft) return;
 
     try {
@@ -277,7 +287,11 @@ function Draft({
       if (result.error) {
         setNotice([result.error, result.hint].filter(Boolean).join(' '));
         await load();
-      } else setView(result);
+      } else {
+        setView(result);
+
+        return result;
+      }
     } catch (e) {
       setNotice((e as Error).message);
     }
@@ -306,14 +320,17 @@ function Draft({
   }
 
   async function save() {
-    if (!draft || !window.confirm(`Save "${draft.name}" to Music as a new playlist?`)) return;
+    // Clicking Save blurs the name field first; save the renamed revision, not this render's.
+    const latest = (await renaming.current)?.draft ?? draft;
+
+    if (!latest || !window.confirm(`Save "${latest.name}" to Music as a new playlist?`)) return;
 
     setSaving(true);
 
     try {
       const result = (await selecta.call('drafts.save', {
         draft_id: draftId,
-        revision: draft.revision,
+        revision: latest.revision,
       })) as DraftView & { result?: Record<string, unknown> };
 
       setNotice(saveOutcome(result));
@@ -337,8 +354,14 @@ function Draft({
             onBlur={() => {
               naming.current = false;
 
-              if (name.trim() && name.trim() !== draft.name) edit({ name: name.trim() });
-              else setName(draft.name);
+              if (name.trim() && name.trim() !== draft.name) {
+                const pending = edit({ name: name.trim() });
+
+                renaming.current = pending;
+                pending.finally(() => {
+                  if (renaming.current === pending) renaming.current = undefined;
+                });
+              } else setName(draft.name);
             }}
           />
         ) : (
