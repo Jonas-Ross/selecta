@@ -1,7 +1,8 @@
-Unbounded, Onest and DM Mono, latin subset for this site.
+Hubot Sans, Mona Sans, Bitcount Grid Single and DM Mono, latin subset for this site.
 
-Copyright 2022 The Unbounded Project Authors (https://github.com/googlefonts/unbounded)
-Copyright 2021 The Onest Project Authors (https://github.com/simpals/onest)
+Copyright 2021 The Hubot Sans Project Authors (https://github.com/github/hubot-sans), with Reserved Font Name "Hubot"
+Copyright 2022 The Mona Sans Project Authors (https://github.com/github/mona-sans), with Reserved Font Name "Mona"
+Copyright 1980 The Bitcount Project Authors (https://github.com/petrvanblokland/TYPETR-Bitcount)
 Copyright 2020 The DM Mono Project Authors (https://www.github.com/googlefonts/dm-mono)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.

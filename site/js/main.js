@@ -6,7 +6,7 @@ import { initHero } from './hero.js';
 import { intro } from './intro.js';
 import { initMachine } from './machine.js';
 import { gsap, motion } from './motion.js';
-import { label, record, redrawRecords } from './record.js';
+import { label, record, redrawRecords, titleFont } from './record.js';
 import { reveals } from './reveals.js';
 import { Spinner } from './spinner.js';
 import { story, waveBars } from './story.js';
@@ -39,7 +39,7 @@ record($('get-vinyl'), {
   seed: 21,
 });
 
-Promise.all(['800 40px Unbounded', '500 20px "DM Mono"'].map((f) => document.fonts.load(f))).then(
+Promise.all([titleFont(40), '500 20px "DM Mono"'].map((f) => document.fonts.load(f))).then(
   redrawRecords,
   () => {},
 );

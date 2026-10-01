@@ -40,7 +40,7 @@
   font-size: clamp(2.8rem, 7vw, 6.8rem);
   font-weight: 900;
   line-height: 0.92;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.025em;
 }
 .get-copy > p {
   font-size: clamp(1.05rem, 1.4vw, 1.3rem);

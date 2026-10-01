@@ -4,8 +4,8 @@
   padding: clamp(60px, 10vw, 120px) var(--gutter) calc(32px + env(safe-area-inset-bottom, 0px));
 }
 .wordmark {
-  font: 900 clamp(4rem, 15.5vw, 17rem)/0.84 var(--display);
-  letter-spacing: -0.06em;
+  font: 900 clamp(4rem, 14vw, 15.5rem)/0.84 var(--display);
+  letter-spacing: -0.03em;
   text-align: center;
   color: var(--surface-2);
   user-select: none;

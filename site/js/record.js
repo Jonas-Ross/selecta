@@ -27,7 +27,7 @@ function ringText(g, text, r, size) {
   });
 }
 
-const titleFont = (px) => `800 ${px}px Unbounded, "Arial Black", sans-serif`;
+export const titleFont = (px) => `800 ${px}px "Hubot Sans", "Arial Black", sans-serif`;
 
 // Wraps a title onto at most two lines, shrinking it until it fits; leaves g.font set to match.
 function fitLines(g, text, maxW, size) {

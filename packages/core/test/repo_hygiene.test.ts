@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const guard = join(import.meta.dirname, '..', '..', '..', 'scripts', 'check-no-binaries.sh');
@@ -11,7 +11,10 @@ function repoWith(files: Record<string, Buffer | string>): string {
 
   execFileSync('git', ['init', '-q'], { cwd: directory });
 
-  for (const [name, body] of Object.entries(files)) writeFileSync(join(directory, name), body);
+  for (const [name, body] of Object.entries(files)) {
+    mkdirSync(dirname(join(directory, name)), { recursive: true });
+    writeFileSync(join(directory, name), body);
+  }
 
   execFileSync('git', ['add', '-A'], { cwd: directory });
 
@@ -89,6 +92,48 @@ describe('check-no-binaries', () => {
     const prose = 'h\u00e9llo w\u00f6rld \u65e5\u672c\u8a9e\u30c6\u30ad\u30b9\u30c8\n'.repeat(3000);
 
     expect(run(repoWith({ 'notes.md': prose }))).toMatchObject({ code: 0 });
+  });
+
+  describe('the website film', () => {
+    const film = (bytes: number) =>
+      Buffer.concat([
+        Buffer.from([0, 0, 0, 0x20]),
+        Buffer.from('ftypisom'),
+        Buffer.alloc(bytes, 1),
+      ]);
+
+    it('allows an MP4 under site/media up to the film limit', () => {
+      expect(run(repoWith({ 'site/media/hero.mp4': film(1_000_000) }))).toMatchObject({ code: 0 });
+    });
+
+    it('rejects the same film anywhere else', () => {
+      const { code, stderr } = run(repoWith({ 'site/hero.mp4': film(1_000_000) }));
+
+      expect(code).toBe(1);
+      expect(stderr).toContain('site/hero.mp4 is');
+    });
+
+    it('rejects a large binary that only has the film name', () => {
+      const { code, stderr } = run(repoWith({ 'site/media/hero.mp4': Buffer.alloc(70_000) }));
+
+      expect(code).toBe(1);
+      expect(stderr).toContain('bytes of binary data');
+    });
+
+    it('rejects a film over the film limit', () => {
+      const { code, stderr } = run(repoWith({ 'site/media/hero.mp4': film(1_600_000) }));
+
+      expect(code).toBe(1);
+      expect(stderr).toContain('bytes of binary data');
+    });
+
+    it('still rejects a database named like the film', () => {
+      const database = Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(64)]);
+      const { code, stderr } = run(repoWith({ 'site/media/hero.mp4': database }));
+
+      expect(code).toBe(1);
+      expect(stderr).toContain('is a SQLite database');
+    });
   });
 
   it('finds nothing to reject in this repository', () => {
