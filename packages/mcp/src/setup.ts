@@ -554,6 +554,20 @@ export async function runSetup(
   { apply = false, clients = CLIENTS }: { apply?: boolean; clients?: readonly Client[] } = {},
 ): Promise<SetupReport> {
   const now = (deps.now ?? (() => new Date()))();
+  const metrognome = await checkMetrognome(deps);
+  const pin = deps.server.env?.[METROGNOME_PATH_ENV];
+
+  // A pin the user asked for but that fails the check would break analysis in
+  // every client, so it is an error and stays out of the entries.
+  if (pin !== undefined && metrognome.status !== 'ok') {
+    const { [METROGNOME_PATH_ENV]: _, ...env } = deps.server.env ?? {};
+    const { env: __, ...server } = deps.server;
+
+    deps = { ...deps, server: Object.keys(env).length > 0 ? { ...server, env } : server };
+    metrognome.status = 'error';
+    metrognome.detail = `${pin}: ${metrognome.detail} Not pinned into the client entries.`;
+  }
+
   const planners: Record<Client, () => Planned> = {
     desktop: () => planDesktop(deps, now),
     code: () => planCode(deps, now),
@@ -588,7 +602,7 @@ export async function runSetup(
     }
   }
 
-  steps.push(await checkMetrognome(deps));
+  steps.push(metrognome);
   steps.push(await checkMusicApp(deps));
   steps.push(checkLibrary(deps));
 
