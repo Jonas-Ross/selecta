@@ -5,6 +5,7 @@ import { SR, analyze, engine, headline } from './engine.js';
 import { initHero } from './hero.js';
 import { intro } from './intro.js';
 import { initMachine } from './machine.js';
+import { driftMark } from './mark.js';
 import { gsap, motion } from './motion.js';
 import { label, record, redrawRecords } from './record.js';
 import { reveals } from './reveals.js';
@@ -26,6 +27,7 @@ const head = headline(samples.length);
 // Measured once here and shared: the hero shows this reading and the deck opens on it.
 const loop = { samples, reading: analyze(samples.subarray(head.start, head.end)) };
 
+driftMark();
 waveBars();
 initMachine();
 nav();
@@ -39,10 +41,9 @@ record($('get-vinyl'), {
   seed: 21,
 });
 
-Promise.all(['800 40px Unbounded', '500 20px "DM Mono"'].map((f) => document.fonts.load(f))).then(
-  redrawRecords,
-  () => {},
-);
+Promise.all(
+  ['800 40px "Hubot Sans"', '500 20px "DM Mono"'].map((f) => document.fonts.load(f)),
+).then(redrawRecords, () => {});
 
 if (motion) {
   gsap.registerPlugin(ScrollTrigger, SplitText);

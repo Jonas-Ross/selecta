@@ -4,8 +4,8 @@ import { gsap } from './motion.js';
 
 // A headline's lines rise out of their own masks as its section arrives.
 function lineReveal(title, trigger, start) {
-  gsap.from(SplitText.create(title, { type: 'lines', mask: 'lines' }).lines, {
-    yPercent: 110,
+  gsap.from(SplitText.create(title, { type: 'lines', mask: 'lines', linesClass: 'ln' }).lines, {
+    yPercent: 130,
     stagger: 0.1,
     duration: 1,
     ease: 'expo.out',
@@ -30,10 +30,14 @@ export function reveals() {
     scrollTrigger: { trigger: '.machine', start: 'top 80%' },
   });
 
-  const tryTitle = SplitText.create('#try-title', { type: 'chars', mask: 'chars' });
+  const tryTitle = SplitText.create('#try-title', {
+    type: 'chars',
+    mask: 'chars',
+    charsClass: 'ch',
+  });
 
   gsap.from(tryTitle.chars, {
-    yPercent: 110,
+    yPercent: 130,
     stagger: 0.03,
     duration: 0.9,
     ease: 'expo.out',

@@ -22,11 +22,8 @@ const PULSES = {
   live: [
     liveDot,
     ['#sticker', hit({ transform: 'scale(1.08)' }, { transform: 'scale(1)' }), 0],
-    [
-      '.glow',
-      hit({ opacity: 1, transform: 'scale(1.07)' }, { opacity: 0.6, transform: 'scale(1)' }),
-      0,
-    ],
+    // The film brightens on every kick, as if the room's lights were on the beat.
+    ['#film', hit({ filter: 'brightness(1.4)' }, { filter: 'brightness(1)' }), 0],
     [
       '#hero-title .dot',
       hit(
@@ -34,12 +31,6 @@ const PULSES = {
         { transform: 'scale(1)', color: css('--coral') },
       ),
       0,
-    ],
-    // Every other sleeve bounces on the offbeat.
-    [
-      '.float .sleeve',
-      hit({ transform: 'translateY(-7%)' }, { transform: 'translateY(0)' }),
-      (i) => (i % 2) / 2,
     ],
     meter('#hear .eq i'),
   ],

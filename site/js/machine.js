@@ -22,6 +22,20 @@ const GROOVES = [
 ];
 const LANES = ['kick', 'snare', 'hat'];
 const STEPS = 16;
+// Where the pads sit in media/machine-*.avif, in percent of the photo: each column's left
+// edge, the pad width, and each lane's top and height.
+const PHOTO = {
+  cols: [
+    13.931, 18.27, 22.642, 26.981, 32.767, 37.107, 41.447, 45.818, 51.604, 55.975, 60.314, 64.686,
+    70.535, 74.906, 79.277, 83.648,
+  ],
+  padW: 3.396,
+  lanes: { kick: [25.349, 13.372], snare: [42.326, 13.256], hat: [59.186, 13.372] },
+};
+// Room around each pad for its glow, which spills onto the aluminium in the lit photo.
+const BLOOM = { x: 0.9, y: 3.2 };
+// A hit flashes the pad to full and settles back to its resting glow in machine.css.
+const FLASH = [{ opacity: 1 }];
 // Unattended, the machine moves to the next genre at the first bar line after this long.
 const AUTO_SECS = 5;
 const groove = { i: 1, t0: 0, last: -1, auto: true, seen: false, raf: 0, pads: {}, marks: [] };
@@ -40,23 +54,34 @@ function build() {
       return b;
     }),
   );
-  $('g-bpm').textContent = GROOVES[groove.i].bpm;
+  $('g-bpm').textContent = $('lcd').textContent = GROOVES[groove.i].bpm;
   $('g-name').textContent = GROOVES[groove.i].name;
 
-  for (let s = 0; s < STEPS; s++)
-    groove.marks.push(
-      $('count-row').appendChild(el('i', { textContent: s % 4 ? '' : String(s / 4 + 1) })),
-    );
+  for (let s = 0; s < STEPS; s++) {
+    const mark = el('i', { textContent: s % 4 ? '' : String(s / 4 + 1) });
+
+    mark.style.left = `${PHOTO.cols[s] + PHOTO.padW / 2}%`;
+    groove.marks.push($('count-row').appendChild(mark));
+  }
 
   for (const lane of LANES) {
+    const [top, h] = PHOTO.lanes[lane];
+
     groove.pads[lane] = [];
 
-    for (let s = 0; s < STEPS; s++)
-      groove.pads[lane].push(
-        $('grid').appendChild(
-          el('i', { className: `${lane}${Math.floor(s / 4) % 2 ? ' alt' : ''}` }, el('b')),
-        ),
-      );
+    for (let s = 0; s < STEPS; s++) {
+      const pad = el('i', { className: lane }, el('b'));
+      const box = {
+        x: PHOTO.cols[s] - BLOOM.x,
+        y: top - BLOOM.y,
+        w: PHOTO.padW + 2 * BLOOM.x,
+        h: h + 2 * BLOOM.y,
+      };
+
+      for (const [k, v] of Object.entries(box)) pad.style.setProperty(`--${k}`, v.toFixed(3));
+
+      groove.pads[lane].push($('grid').appendChild(pad));
+    }
   }
 
   paintPattern(false);
@@ -75,11 +100,14 @@ function paintPattern(animate) {
       pad.classList.toggle('on', on);
     });
 
-  if (animate && motion && lit.length)
-    gsap.fromTo(
-      lit,
-      { scale: 0.55 },
-      { scale: 1, duration: 0.5, ease: 'back.out(3)', stagger: 0.012 },
+  if (animate && motion)
+    lit.forEach((pad, i) =>
+      pad.firstChild.animate(FLASH, {
+        duration: 500,
+        delay: i * 12,
+        easing: 'ease-out',
+        fill: 'backwards',
+      }),
     );
 }
 
@@ -94,6 +122,7 @@ function setGroove(i, byHand) {
 
   [...$('presets').children].forEach((b, j) => b.setAttribute('aria-pressed', String(j === i)));
   countTo($('g-bpm'), g.bpm, (v) => Math.round(v), 0.6, was);
+  countTo($('lcd'), g.bpm, (v) => Math.round(v), 0.6, was);
   $('g-name').textContent = g.name;
 
   if (motion)
@@ -194,10 +223,10 @@ function light(s) {
 
     if (!pads[s].classList.contains('on')) continue;
 
-    const fade = { duration: 180 + 15000 / GROOVES[groove.i].bpm, easing: 'ease-out' };
-
-    pads[s].animate([{ transform: 'scale(1.1)' }, { transform: 'scale(1)' }], fade);
-    pads[s].firstChild.animate([{ opacity: 1 }, { opacity: 0 }], fade);
+    pads[s].firstChild.animate(FLASH, {
+      duration: 180 + 15000 / GROOVES[groove.i].bpm,
+      easing: 'ease-out',
+    });
   }
 }
 

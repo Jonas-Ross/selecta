@@ -22,22 +22,24 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font: 700 19px/1 var(--display);
-  letter-spacing: -0.02em;
+  font: 800 19px/1 var(--display);
+  letter-spacing: -0.01em;
   text-decoration: none;
 }
-.disc {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    var(--bg) 0 9%,
-    var(--acid) 10% 32%,
-    #1c1c20 33% 36%,
-    #0e0e10 37%
-  );
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+.mark {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  overflow: visible;
+}
+.mark .groove {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+.mark .kick {
+  fill: var(--acid);
 }
 .nav nav {
   display: flex;

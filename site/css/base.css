@@ -1,15 +1,23 @@
 /* Club-night dark: acid lime and hot coral on near-black, loud display type, and
    everything that moves is keyed to a beat. */
 @font-face {
-  font-family: 'Unbounded';
-  src: url('../fonts/unbounded.woff2') format('woff2');
-  font-weight: 200 900;
+  font-family: 'Hubot Sans';
+  src: url('../fonts/hubot-sans.woff2') format('woff2');
+  font-weight: 600 900;
+  font-stretch: 125%;
   font-display: swap;
 }
 @font-face {
-  font-family: 'Onest';
-  src: url('../fonts/onest.woff2') format('woff2');
-  font-weight: 100 900;
+  font-family: 'Mona Sans';
+  src: url('../fonts/mona-sans.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+/* A dot-matrix face for the numbers the engine and the machine read out, like a hardware display. */
+@font-face {
+  font-family: 'Bitcount';
+  src: url('../fonts/bitcount.woff2') format('woff2');
+  font-weight: 400 700;
   font-display: swap;
 }
 @font-face {
@@ -45,8 +53,9 @@
   --on-uv: #ffffff;
   --on-teal: #04130f;
   --on-pink: #1a0913;
-  --display: 'Unbounded', 'Arial Black', system-ui, sans-serif;
-  --body: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display: 'Hubot Sans', 'Arial Black', system-ui, sans-serif;
+  --body: 'Mona Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --led: 'Bitcount', 'DM Mono', ui-monospace, monospace;
   --mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --gutter: clamp(16px, 4vw, 56px);
   --max: 1400px;
@@ -92,7 +101,7 @@ h3 {
   font-family: var(--display);
   font-weight: 700;
   text-wrap: balance;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 }
 a {
   color: inherit;
@@ -112,10 +121,23 @@ button {
 [hidden] {
   display: none !important;
 }
+/* SplitText clips each mask to its line box, which cut off descenders and overhanging
+   letters. The padding widens the clip; the matching negative margin keeps the layout. */
+.w-mask,
+.ch-mask {
+  padding: 0.1em 0.14em 0.26em;
+  margin: -0.1em -0.14em -0.26em;
+}
+/* Line masks are blocks, so only one side may go negative or the margins collapse. */
+.ln-mask {
+  padding: 0 0.14em 0.26em;
+  margin: 0 -0.14em -0.26em;
+}
 
 /* Held back until the intro animates them in; the delay is a failsafe if scripts never run. */
 .intro .hero-copy > *,
-.intro .hero-stage {
+.intro .hero-reading,
+.intro .film {
   visibility: hidden;
   animation: failsafe 0s 2.5s forwards;
 }
