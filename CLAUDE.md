@@ -43,6 +43,7 @@ Shared storage and bridge types live in `packages/core/src/types/`; the cross-cu
 | `scripts/build-site.sh [metrognome checkout]` | Build the website's demo engine into `site/` (default `../metrognome`); serve `site/` with any static server |
 | `npm run preview` | Consolidated draft and explorer fixture gallery at `http://127.0.0.1:8767` |
 | `npm run dev` | Run the MCP server over stdio |
+| `node dist/index.js setup [--client desktop\|code] [--apply]` | Register Selecta with Claude Desktop and Claude Code (backing up the Desktop config first), then check metrognome, Music.app automation and the cache, naming the fix for each gap |
 | `node dist/index.js status` | Read-only cache integrity, schema version and pending migrations, freshness, counts, and enrichment diagnostics |
 | `node dist/index.js doctor` | `status` plus a read-only Music.app availability and Automation probe, and which metrognome binary analysis would run |
 | `node dist/index.js refresh` | Refresh the library cache from the CLI, no MCP client needed |

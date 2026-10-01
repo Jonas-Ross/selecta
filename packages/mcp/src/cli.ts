@@ -2,6 +2,8 @@
 // starts the MCP server, and stdout contains only protocol traffic or one JSON
 // result from an explicit CLI verb.
 
+import { homedir } from 'node:os';
+import { basename, isAbsolute, relative, resolve } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { Command, InvalidArgumentError, Option } from 'commander';
 import { refreshLibrary } from '@selecta/core/operations/refresh.js';
@@ -16,13 +18,14 @@ import {
 import { planRestore } from '@selecta/core/operations/restore.js';
 import { bridge as defaultBridge } from '@selecta/core/bridge/index.js';
 import { SelectaCache, defaultDbPath } from '@selecta/core/cache/index.js';
-import { runDoctor } from '@selecta/core/diagnostics/doctor.js';
+import { checkMusicApp, runDoctor } from '@selecta/core/diagnostics/doctor.js';
 import { readStatus, type SchemaVersions } from '@selecta/core/diagnostics/status.js';
 import { DraftStore, draftDbPath } from '@selecta/core/drafts/store.js';
 import {
   FIELDS_BY_SOURCE,
   METROGNOME_PATH_ENV,
   enrichPendingTracks,
+  resolveMetrognome,
   type MetrognomeBinary,
 } from '@selecta/core/enrich/index.js';
 import type { FeatureSource } from '@selecta/core/types/cache.js';
@@ -30,6 +33,15 @@ import type { SourceField } from '@selecta/core/cache/audio_features.js';
 import { log as defaultLogger, type Logger } from '@selecta/core/log.js';
 import { createProgressReporter, formatDuration } from '@selecta/core/progress.js';
 import { createServer } from './server.js';
+import {
+  CLIENTS,
+  runCommand,
+  runSetup,
+  serverEntry,
+  whichOnPath,
+  type Client,
+  type SetupDeps,
+} from './setup.js';
 import type { Bridge } from '@selecta/core/types/bridge.js';
 import { BridgeError, defaultHints } from '@selecta/core/types/errors.js';
 
@@ -39,6 +51,7 @@ export type CliOptions = {
   logger?: Logger;
   musicCheck?: () => Promise<void>;
   metrognomeCheck?: () => Promise<MetrognomeBinary>;
+  setup?: Partial<SetupDeps>;
   // Whether stderr can carry a redrawn progress line; a redirected run gets
   // plain lines instead.
   isTty?: boolean;
@@ -465,7 +478,87 @@ export function createCliProgram(options: CliOptions = {}): Command {
       }
     });
 
+  program
+    .command('setup')
+    .description(
+      'Register Selecta with Claude Desktop and Claude Code, then check metrognome, Music.app access and the library cache; reports what it would change unless --apply is given',
+    )
+    .addOption(
+      new Option('-c, --client <client...>', 'which clients to register with').choices([
+        ...CLIENTS,
+      ]),
+    )
+    .option(
+      '--metrognome-path <path>',
+      `path to the metrognome binary (default: $${METROGNOME_PATH_ENV}, then metrognome on PATH or in Homebrew's bin)`,
+    )
+    .option('--apply', APPLY_FLAG_DESCRIPTION)
+    .action(
+      async ({
+        client,
+        metrognomePath: metrognomeBinary,
+        apply = false,
+      }: {
+        client?: Client[];
+        metrognomePath?: string;
+        apply?: boolean;
+      }) => {
+        try {
+          const entry = resolve(process.argv[1] ?? '');
+          const report = await runSetup(
+            {
+              home: homedir(),
+              dbPath,
+              server: serverEntry(entry),
+              invocation: basename(entry) === 'selecta' ? 'selecta' : `node ${displayPath(entry)}`,
+              which: (name) => whichOnPath(name),
+              run: runCommand,
+              musicCheck: options.musicCheck ?? checkMusicApp,
+              metrognomeCheck:
+                options.metrognomeCheck ??
+                (() => resolveMetrognome({ binaryPath: metrognomeBinary })),
+              ...options.setup,
+            },
+            { apply, clients: client ?? CLIENTS },
+          );
+
+          writeJson(report);
+
+          for (const step of report.steps) {
+            logger.info(`${STEP_MARKS[step.status]} ${step.step}: ${step.detail}`);
+
+            if (step.fix) logger.info(`  fix: ${step.fix}`);
+          }
+
+          if (report.steps.some((step) => step.status === 'would_change')) {
+            logger.info('dry run: nothing was written. Re-run with --apply to carry this out.');
+          }
+
+          if (!report.ok) setExitCode(1);
+        } catch (err) {
+          reportError(err);
+          setExitCode(1);
+        }
+      },
+    );
+
   return program;
+}
+
+const STEP_MARKS = {
+  ok: '✓',
+  changed: '✓',
+  would_change: '→',
+  skipped: '·',
+  missing: '✗',
+  error: '✗',
+} as const;
+
+// Fix lines are pasted back into the same shell, so keep them short.
+function displayPath(path: string): string {
+  const fromHere = relative(process.cwd(), path);
+
+  return fromHere.startsWith('..') || isAbsolute(fromHere) ? path : fromHere;
 }
 
 export async function runCli(args = process.argv, options: CliOptions = {}): Promise<void> {

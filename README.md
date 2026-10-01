@@ -18,7 +18,11 @@ git clone https://github.com/Jonas-Ross/selecta.git
 cd selecta
 npm install
 npm run build
+node dist/index.js setup           # reports what is missing; changes nothing
+node dist/index.js setup --apply   # registers Selecta with Claude Desktop and Claude Code
 ```
+
+`setup` adds Selecta to whichever of Claude Desktop and Claude Code is installed, using absolute paths so the apps can launch it without your shell's `PATH`. It backs up the Desktop config before writing it, keeps every other server and any `env` you set on Selecta's entry, and does nothing on a rerun once everything is registered. It then checks for metrognome, Music.app automation access and the library cache, and prints the command that fixes each one that is missing. Restart Claude Desktop afterwards. Limit it to one client with `--client desktop` or `--client code`.
 
 Then populate the cache. macOS will ask for Music.app automation permission the first time; allow it.
 
@@ -53,7 +57,7 @@ Set `SELECTA_DEBUG=1` to mirror stderr logging to `~/Library/Logs/Selecta/select
 
 ## Register with an MCP client
 
-Selecta is agent-independent: use an MCP client that can launch a local server over stdio. Configure it to run `node` with `/ABSOLUTE/PATH/TO/selecta/dist/index.js` as its argument, with no subcommand. The server exposes the same tools regardless of which agent uses them. The Claude configurations below are examples.
+`node dist/index.js setup --apply` does this for Claude Desktop and Claude Code. To do it by hand, or for another client: Selecta is agent-independent: use an MCP client that can launch a local server over stdio. Configure it to run `node` with `/ABSOLUTE/PATH/TO/selecta/dist/index.js` as its argument, with no subcommand. The server exposes the same tools regardless of which agent uses them. The Claude configurations below are examples.
 
 For Claude Desktop, add this to `~/Library/Application Support/Claude/claude_desktop_config.json` (create the `mcpServers` key if it isn't there) and restart the app:
 

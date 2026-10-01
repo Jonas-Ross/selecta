@@ -1,0 +1,333 @@
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import { createCliProgram } from '../src/cli.js';
+import {
+  codeConfigPath,
+  desktopConfigPath,
+  runSetup,
+  serverEntry,
+  type CommandResult,
+  type SetupDeps,
+} from '../src/setup.js';
+import { BridgeError } from '@selecta/core/types/errors.js';
+
+const SERVER = { command: '/opt/homebrew/bin/node', args: ['/Users/x/selecta/dist/index.js'] };
+const OK: CommandResult = { code: 0, stdout: '', stderr: '' };
+
+type Fixture = { deps: SetupDeps; calls: string[][]; home: string };
+
+function fixture(
+  options: {
+    desktop?: string | null;
+    code?: unknown;
+    claude?: boolean;
+    run?: (command: string, args: string[]) => CommandResult;
+  } = {},
+): Fixture {
+  const home = mkdtempSync(join(tmpdir(), 'selecta-setup-'));
+  const calls: string[][] = [];
+
+  if (options.desktop !== null) {
+    mkdirSync(dirname(desktopConfigPath(home)), { recursive: true });
+
+    if (options.desktop != null) writeFileSync(desktopConfigPath(home), options.desktop);
+  }
+
+  if (options.code !== undefined) {
+    writeFileSync(codeConfigPath(home), JSON.stringify(options.code));
+  }
+
+  const deps: SetupDeps = {
+    home,
+    dbPath: join(home, 'Library', 'Application Support', 'Selecta', 'library.db'),
+    server: SERVER,
+    invocation: 'node dist/index.js',
+    which: (name) =>
+      name === 'claude' && options.claude !== false ? '/usr/local/bin/claude' : null,
+    run: async (command, args) => {
+      calls.push([command, ...args]);
+
+      if (options.run) return options.run(command, args);
+
+      return OK;
+    },
+    musicCheck: async () => {},
+    metrognomeCheck: async () => ({ path: '/opt/homebrew/bin/metrognome', version: '0.1.0' }),
+    now: () => new Date('2026-10-01T12:00:00Z'),
+  };
+
+  return { deps, calls, home };
+}
+
+const step = (report: { steps: { step: string }[] }, name: string): any =>
+  report.steps.find((s) => s.step === name);
+
+const mcpCalls = (calls: string[][]): string[][] => calls.filter((call) => call[1] === 'mcp');
+
+describe('setup dry run', () => {
+  it('reports what it would register and writes nothing', async () => {
+    const original = '{"mcpServers":{"other":{"command":"x"}},"theme":"dark"}';
+    const { deps, calls, home } = fixture({ desktop: original });
+
+    const report = await runSetup(deps);
+
+    expect(report.dry_run).toBe(true);
+    expect(step(report, 'claude_desktop').status).toBe('would_change');
+    expect(step(report, 'claude_code').status).toBe('would_change');
+    expect(readFileSync(desktopConfigPath(home), 'utf8')).toBe(original);
+    expect(readdirSync(dirname(desktopConfigPath(home)))).toEqual(['claude_desktop_config.json']);
+    expect(mcpCalls(calls)).toEqual([]);
+  });
+});
+
+describe('setup --apply', () => {
+  it('adds selecta to Claude Desktop, keeping every other key, after a backup', async () => {
+    const original = '{"mcpServers":{"other":{"command":"x"}},"theme":"dark"}';
+    const { deps, home } = fixture({ desktop: original });
+
+    const report = await runSetup(deps, { apply: true });
+    const desktop = step(report, 'claude_desktop');
+
+    expect(desktop.status).toBe('changed');
+    expect(JSON.parse(readFileSync(desktopConfigPath(home), 'utf8'))).toEqual({
+      mcpServers: { other: { command: 'x' }, selecta: SERVER },
+      theme: 'dark',
+    });
+    expect(readFileSync(desktop.backup, 'utf8')).toBe(original);
+  });
+
+  it('creates the Desktop config when Claude Desktop has none yet, with no backup', async () => {
+    const { deps, home } = fixture();
+
+    const desktop = step(await runSetup(deps, { apply: true }), 'claude_desktop');
+
+    expect(desktop).toMatchObject({ status: 'changed' });
+    expect(desktop.backup).toBeUndefined();
+    expect(JSON.parse(readFileSync(desktopConfigPath(home), 'utf8'))).toEqual({
+      mcpServers: { selecta: SERVER },
+    });
+  });
+
+  it('replaces a stale entry but keeps the env the user set on it', async () => {
+    const stale = { command: 'node', args: ['/old/dist/index.js'], env: { SELECTA_DEBUG: '1' } };
+    const { deps, home } = fixture({ desktop: JSON.stringify({ mcpServers: { selecta: stale } }) });
+
+    const desktop = step(await runSetup(deps, { apply: true }), 'claude_desktop');
+
+    expect(desktop).toMatchObject({ status: 'changed', previous: stale });
+    expect(JSON.parse(readFileSync(desktopConfigPath(home), 'utf8')).mcpServers.selecta).toEqual({
+      ...SERVER,
+      env: { SELECTA_DEBUG: '1' },
+    });
+  });
+
+  it('registers with Claude Code through its own CLI', async () => {
+    const { deps, calls } = fixture();
+
+    await runSetup(deps, { apply: true });
+
+    expect(mcpCalls(calls)).toEqual([
+      [
+        '/usr/local/bin/claude',
+        'mcp',
+        'add',
+        '--scope',
+        'user',
+        'selecta',
+        '--',
+        SERVER.command,
+        ...SERVER.args,
+      ],
+    ]);
+  });
+
+  it('removes a stale Claude Code entry first, saving it and carrying its env over', async () => {
+    const stale = { type: 'stdio', command: 'node', args: ['/old.js'], env: { A: 'b' } };
+    const { deps, calls } = fixture({ code: { mcpServers: { selecta: stale } } });
+
+    const code = step(await runSetup(deps, { apply: true }), 'claude_code');
+
+    expect(code.status).toBe('changed');
+    expect(JSON.parse(readFileSync(code.backup, 'utf8'))).toEqual({ selecta: stale });
+    expect(mcpCalls(calls)).toEqual([
+      ['/usr/local/bin/claude', 'mcp', 'remove', '--scope', 'user', 'selecta'],
+      [
+        '/usr/local/bin/claude',
+        'mcp',
+        'add',
+        '--scope',
+        'user',
+        '-e',
+        'A=b',
+        'selecta',
+        '--',
+        SERVER.command,
+        ...SERVER.args,
+      ],
+    ]);
+  });
+
+  it('reports a failed `claude mcp add` instead of claiming success', async () => {
+    const { deps } = fixture({
+      run: () => ({ code: 1, stdout: '', stderr: 'boom' }),
+    });
+
+    const report = await runSetup(deps, { apply: true });
+
+    expect(step(report, 'claude_code')).toMatchObject({
+      status: 'error',
+      detail: expect.stringContaining('boom'),
+    });
+    expect(report.ok).toBe(false);
+  });
+
+  it('is idempotent: a second run finds everything registered and touches nothing', async () => {
+    const { deps, calls, home } = fixture({ desktop: '{}' });
+
+    await runSetup(deps, { apply: true });
+    writeFileSync(
+      codeConfigPath(home),
+      JSON.stringify({ mcpServers: { selecta: { type: 'stdio', ...SERVER, env: {} } } }),
+    );
+    const before = readdirSync(dirname(desktopConfigPath(home)));
+
+    calls.length = 0;
+
+    const report = await runSetup(deps, { apply: true });
+
+    expect(step(report, 'claude_desktop').status).toBe('ok');
+    expect(step(report, 'claude_code').status).toBe('ok');
+    expect(readdirSync(dirname(desktopConfigPath(home)))).toEqual(before);
+    expect(mcpCalls(calls)).toEqual([]);
+  });
+});
+
+describe('setup refuses what it cannot read', () => {
+  it('leaves an unparseable Desktop config alone', async () => {
+    const { deps, home } = fixture({ desktop: '{ not json' });
+
+    const report = await runSetup(deps, { apply: true });
+
+    expect(step(report, 'claude_desktop').status).toBe('error');
+    expect(readFileSync(desktopConfigPath(home), 'utf8')).toBe('{ not json');
+    expect(report.ok).toBe(false);
+  });
+
+  it('leaves a config whose mcpServers is not an object alone', async () => {
+    const { deps, home } = fixture({ desktop: '{"mcpServers":[]}' });
+
+    expect(step(await runSetup(deps, { apply: true }), 'claude_desktop').status).toBe('error');
+    expect(readFileSync(desktopConfigPath(home), 'utf8')).toBe('{"mcpServers":[]}');
+  });
+});
+
+describe('setup says what is missing', () => {
+  it('flags the clients as missing when neither is installed', async () => {
+    const { deps } = fixture({ desktop: null, claude: false });
+
+    const report = await runSetup(deps);
+
+    expect(step(report, 'claude_desktop').status).toBe('missing');
+    expect(step(report, 'claude_code').status).toBe('missing');
+    expect(report.ok).toBe(false);
+  });
+
+  it('skips an absent client quietly when the other one is there', async () => {
+    const { deps } = fixture({ claude: false });
+
+    const report = await runSetup(deps);
+
+    expect(step(report, 'claude_code').status).toBe('skipped');
+  });
+
+  it('leaves out a client not asked for', async () => {
+    const { deps, calls } = fixture();
+
+    const report = await runSetup(deps, { apply: true, clients: ['desktop'] });
+
+    expect(step(report, 'claude_code').status).toBe('skipped');
+    expect(mcpCalls(calls)).toEqual([]);
+  });
+
+  it('names the fix for a missing metrognome, Automation denial and an empty cache', async () => {
+    const { deps } = fixture();
+
+    deps.metrognomeCheck = async () => {
+      throw new BridgeError('enrichment_error', 'metrognome was not found on PATH.');
+    };
+
+    deps.musicCheck = async () => {
+      throw new BridgeError(
+        'automation_permission_denied',
+        'Not authorized to send Apple events to Music.',
+      );
+    };
+
+    const report = await runSetup(deps);
+
+    expect(step(report, 'metrognome')).toMatchObject({
+      status: 'missing',
+      detail: expect.stringContaining('was not found'),
+      fix: expect.stringContaining('brew install jonas-ross/tap/metrognome'),
+    });
+    expect(step(report, 'music_app')).toMatchObject({
+      status: 'missing',
+      fix: expect.stringContaining('Automation'),
+    });
+    expect(step(report, 'library')).toMatchObject({
+      status: 'missing',
+      fix: 'node dist/index.js refresh',
+    });
+    expect(report.ok).toBe(false);
+  });
+
+  it('reports the metrognome version it found', async () => {
+    const { deps } = fixture();
+
+    expect(step(await runSetup(deps), 'metrognome')).toMatchObject({
+      status: 'ok',
+      detail: 'metrognome 0.1.0 at /opt/homebrew/bin/metrognome.',
+    });
+  });
+});
+
+describe('serverEntry', () => {
+  it('prefers the linked node over the versioned path behind it', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'selecta-node-'));
+    const real = join(dir, 'node-22.1');
+
+    writeFileSync(real, '');
+
+    expect(serverEntry('/x/dist/index.js', real, () => real).command).toBe(real);
+    expect(serverEntry('/x/dist/index.js', real, () => '/elsewhere/node').command).toBe(real);
+    expect(serverEntry('/x/dist/index.js', real, () => null)).toEqual({
+      command: real,
+      args: ['/x/dist/index.js'],
+    });
+  });
+});
+
+describe('selecta setup CLI', () => {
+  it('prints one JSON report, narrates on stderr and exits 1 while something is missing', async () => {
+    const { deps } = fixture();
+    const stdout: string[] = [];
+    const info = vi.fn();
+    const setExitCode = vi.fn();
+
+    await createCliProgram({
+      dbPath: deps.dbPath,
+      logger: { info, debug: vi.fn(), error: vi.fn() },
+      setExitCode,
+      writeStdout: (text) => stdout.push(text),
+      setup: deps,
+    }).parseAsync(['node', 'selecta', 'setup']);
+
+    expect(stdout).toHaveLength(1);
+    expect(JSON.parse(stdout[0]!)).toMatchObject({ dry_run: true, server: SERVER });
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('Re-run with --apply'));
+    // No cache yet in the fixture home.
+    expect(setExitCode).toHaveBeenCalledWith(1);
+  });
+});
