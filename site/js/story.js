@@ -4,6 +4,49 @@ import { $, $$, el } from './dom.js';
 import { countTo, gsap } from './motion.js';
 import { lcg } from './synth.js';
 
+// The dig in 3D, front of the crate first. The photo stays as the fallback until it loads.
+const COVERS = [
+  'night-bus',
+  'neon-rain',
+  'side-b',
+  'glasshouse',
+  'basement',
+  'warm-static',
+  'blue-hour',
+  'low-tide',
+].map((name) => `media/cover-${name}.avif`);
+// Scroll progress through the dig, kept so a crate that loads late starts in the right pose.
+const dig = { p: 0, crate: null };
+const digTo = () => dig.crate?.render(dig.p);
+
+// Three.js is the page's heaviest script, so it loads only as the crate comes near.
+function load3d(visual) {
+  const canvas = visual.querySelector('canvas');
+  const near = new IntersectionObserver(
+    async ([entry]) => {
+      if (!entry.isIntersecting) return;
+
+      near.disconnect();
+
+      try {
+        const { crate3d } = await import('./crate.js');
+
+        canvas.hidden = false;
+        dig.crate = await crate3d(canvas, { covers: COVERS, wood: 'media/wood.avif' });
+        new ResizeObserver(() => dig.crate.resize()).observe(canvas);
+        digTo();
+        visual.classList.add('is-3d');
+      } catch {
+        // No WebGL, or a texture failed: the photographed crate is still there.
+        canvas.hidden = true;
+      }
+    },
+    { rootMargin: '800px 0px' },
+  );
+
+  near.observe(visual);
+}
+
 function crateScene(step, enter) {
   const tl = gsap.timeline();
   const q = gsap.utils.selector(step);
@@ -124,7 +167,7 @@ export function story() {
     box.classList.add('pin');
     gsap.set([s2, s3], { autoAlpha: 0 });
     const tl = gsap.timeline({
-      scrollTrigger: { trigger: box, pin: true, start: 'top top', end: '+=320%', scrub: 0.8 },
+      scrollTrigger: { trigger: box, pin: true, start: 'top top', end: '+=420%', scrub: 0.8 },
     });
     const counter = $$('.story-count .now span', box);
     const swap = (from, to, n, at) => {
@@ -138,11 +181,15 @@ export function story() {
         .to(counter, { yPercent: -100 * n, duration: 0.5, ease: 'power2.inOut' }, at);
     };
 
+    // The dig gets the first stretch of the scroll to itself; the other steps follow it.
+    const at = 3.4;
+
     tl.add(crateScene(s1, false), 0);
-    swap(s1, s2, 1, 2.3);
-    tl.add(listenScene(s2, false), 3.2);
-    swap(s2, s3, 2, 5.4);
-    tl.add(setScene(s3), 5.8);
+    tl.to(dig, { p: 1, duration: at - 0.2, ease: 'none', onUpdate: digTo }, 0);
+    swap(s1, s2, 1, at);
+    tl.add(listenScene(s2, false), at + 0.9);
+    swap(s2, s3, 2, at + 3.1);
+    tl.add(setScene(s3), at + 3.5);
     tl.to({}, { duration: 0.8 });
 
     return () => box.classList.remove('pin');
@@ -163,5 +210,18 @@ export function story() {
         0,
       ).add(scene(s, true), 0.2);
     });
+    gsap.to(dig, {
+      p: 1,
+      ease: 'none',
+      onUpdate: digTo,
+      scrollTrigger: {
+        trigger: s1.querySelector('.step-visual'),
+        start: 'top 85%',
+        end: 'bottom 20%',
+        scrub: 0.6,
+      },
+    });
   });
+
+  load3d(s1.querySelector('.v-crate'));
 }
