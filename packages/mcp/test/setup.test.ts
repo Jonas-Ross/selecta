@@ -44,6 +44,7 @@ function fixture(
     dbPath: join(home, 'Library', 'Application Support', 'Selecta', 'library.db'),
     server: SERVER,
     invocation: 'node dist/index.js',
+    desktopApps: [join(home, 'Applications', 'Claude.app')],
     which: (name) =>
       name === 'claude' && options.claude !== false ? '/usr/local/bin/claude' : null,
     run: async (command, args) => {
@@ -183,6 +184,38 @@ describe('setup --apply', () => {
     expect(report.ok).toBe(false);
   });
 
+  it('puts the old Claude Code entry back when the replacement fails', async () => {
+    const stale = { type: 'stdio', command: 'node', args: ['/old.js'] };
+    const { deps, calls } = fixture({
+      code: { mcpServers: { selecta: stale } },
+      run: (_command, args) => (args[1] === 'add' ? { code: 1, stdout: '', stderr: 'boom' } : OK),
+    });
+
+    const code = step(await runSetup(deps, { apply: true }), 'claude_code');
+
+    expect(code).toMatchObject({ status: 'error', detail: expect.stringContaining('restored') });
+    expect(mcpCalls(calls).at(-1)).toEqual([
+      '/usr/local/bin/claude',
+      'mcp',
+      'add-json',
+      '--scope',
+      'user',
+      'selecta',
+      JSON.stringify(stale),
+    ]);
+  });
+
+  it('configures a Claude Desktop that is installed but never launched', async () => {
+    const { deps, home } = fixture({ desktop: null });
+
+    mkdirSync(join(home, 'Applications', 'Claude.app'), { recursive: true });
+
+    expect(step(await runSetup(deps, { apply: true }), 'claude_desktop').status).toBe('changed');
+    expect(JSON.parse(readFileSync(desktopConfigPath(home), 'utf8'))).toEqual({
+      mcpServers: { selecta: SERVER },
+    });
+  });
+
   it('is idempotent: a second run finds everything registered and touches nothing', async () => {
     const { deps, calls, home } = fixture({ desktop: '{}' });
 
@@ -281,6 +314,18 @@ describe('setup says what is missing', () => {
       fix: 'node dist/index.js refresh',
     });
     expect(report.ok).toBe(false);
+  });
+
+  it('reports an unreadable cache as an error, not as an empty library', async () => {
+    const { deps } = fixture();
+
+    mkdirSync(dirname(deps.dbPath), { recursive: true });
+    writeFileSync(deps.dbPath, 'not a database');
+
+    expect(step(await runSetup(deps), 'library')).toMatchObject({
+      status: 'error',
+      detail: expect.stringContaining('could not be read'),
+    });
   });
 
   it('reports the metrognome version it found', async () => {

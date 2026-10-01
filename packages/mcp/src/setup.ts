@@ -70,6 +70,8 @@ export type SetupDeps = {
   run: (command: string, args: string[]) => Promise<CommandResult>;
   musicCheck: () => Promise<void>;
   metrognomeCheck: () => Promise<MetrognomeBinary>;
+  // Where Claude Desktop's app bundle may be installed.
+  desktopApps?: readonly string[];
   now?: () => Date;
 };
 
@@ -158,12 +160,19 @@ type Planned = { step: SetupStep; apply?: () => Promise<SetupStep> };
 function planDesktop(deps: SetupDeps, now: Date): Planned {
   const path = desktopConfigPath(deps.home);
 
-  if (!existsSync(dirname(path))) {
+  // A freshly installed app has no Application Support folder until first launch.
+  const apps = deps.desktopApps ?? [
+    '/Applications/Claude.app',
+    join(deps.home, 'Applications', 'Claude.app'),
+  ];
+
+  if (!existsSync(dirname(path)) && !apps.some((app) => existsSync(app))) {
     return {
       step: {
         step: 'claude_desktop',
         status: 'skipped',
-        detail: 'Claude Desktop is not installed (no Claude folder in Application Support).',
+        detail:
+          'Claude Desktop is not installed (no Claude.app and no Claude folder in Application Support).',
       },
     };
   }
@@ -235,6 +244,7 @@ function planDesktop(deps: SetupDeps, now: Date): Planned {
       const backup = exists ? `${path}.selecta-backup-${stamp(now)}` : undefined;
 
       if (backup != null) copyFileSync(path, backup);
+      else mkdirSync(dirname(path), { recursive: true });
 
       const body = JSON.stringify(
         { ...config, mcpServers: { ...servers, [SERVER_NAME]: next } },
@@ -327,7 +337,26 @@ function planCode(deps: SetupDeps, now: Date): Planned {
 
       const added = await deps.run(claude, addArgs);
 
-      if (added.code !== 0) return codeFailure('add', added, previous, backup);
+      if (added.code !== 0) {
+        const failure = codeFailure('add', added, previous, backup);
+
+        if (previous == null) return failure;
+
+        // Put the old registration back rather than leave the user with none.
+        const restored = await deps.run(claude, [
+          'mcp',
+          'add-json',
+          '--scope',
+          'user',
+          SERVER_NAME,
+          JSON.stringify(previous),
+        ]);
+
+        return {
+          ...failure,
+          detail: `${failure.detail}. ${restored.code === 0 ? 'The previous entry was restored.' : `Restoring the previous entry also failed, so Claude Code has no selecta server; it is saved in ${backup}.`}`,
+        };
+      }
 
       return {
         step: 'claude_code',
@@ -424,6 +453,15 @@ function checkLibrary(deps: SetupDeps): SetupStep {
       step: 'library',
       status: 'ok',
       detail: `${tracks} tracks cached at ${deps.dbPath}.`,
+    };
+  }
+
+  if (status.database.exists && !status.ok) {
+    return {
+      step: 'library',
+      status: 'error',
+      detail: `The cache at ${deps.dbPath} could not be read: ${status.database.errors.join('; ')}`,
+      fix: `${deps.invocation} status reports the same check; move the file aside and run ${deps.invocation} refresh to rebuild it.`,
     };
   }
 
