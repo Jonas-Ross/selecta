@@ -384,12 +384,15 @@ describe('setup --apply', () => {
 
 describe('setup refuses what it cannot read', () => {
   it('leaves an unparseable Desktop config alone', async () => {
-    const { deps, home } = fixture({ desktop: '{ not json' });
+    const broken = 'sk-secret-token { not json';
+    const { deps, home } = fixture({ desktop: broken });
 
     const report = await runSetup(deps, { apply: true });
 
     expect(step(report, 'claude_desktop').status).toBe('error');
-    expect(readFileSync(desktopConfigPath(home), 'utf8')).toBe('{ not json');
+    // The parser's message would quote the file.
+    expect(JSON.stringify(report)).not.toContain('sk-secret');
+    expect(readFileSync(desktopConfigPath(home), 'utf8')).toBe(broken);
     expect(report.ok).toBe(false);
   });
 

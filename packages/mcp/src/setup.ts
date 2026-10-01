@@ -258,12 +258,13 @@ function planDesktop(deps: SetupDeps, now: Date): Planned {
 
     try {
       parsed = JSON.parse(readFileSync(path, 'utf8'));
-    } catch (err) {
+    } catch {
+      // The parser's message can quote the file, secrets included.
       return {
         step: {
           step: 'claude_desktop',
           status: 'error',
-          detail: `${path} is not valid JSON (${(err as Error).message}); setup will not rewrite a file it cannot read.`,
+          detail: `${path} is not valid JSON; setup will not rewrite a file it cannot read.`,
           fix: `Fix or move that file, then rerun setup.`,
         },
       };
