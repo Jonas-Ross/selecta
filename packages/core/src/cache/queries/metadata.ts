@@ -192,11 +192,17 @@ export function createMetadataQueries(db: Database) {
     },
 
     upsertAudioFeatures(row: AudioFeaturesRow): void {
+      // Undo journals written before the window columns existed lack them;
+      // a metrognome tempo then gets the window migration 5 backfilled.
+      const legacyFolded =
+        row.bpmWindowLow === undefined &&
+        row.bpm != null &&
+        row.sources?.bpm?.startsWith('metrognome/') === true;
+
       upsertAudioFeaturesStmt.run({
         ...row,
-        // Undo journals written before the window columns existed lack them.
-        bpmWindowLow: row.bpmWindowLow ?? null,
-        bpmWindowHigh: row.bpmWindowHigh ?? null,
+        bpmWindowLow: row.bpmWindowLow ?? (legacyFolded ? 90 : null),
+        bpmWindowHigh: row.bpmWindowHigh ?? (legacyFolded ? 180 : null),
         sources: row.sources != null ? JSON.stringify(row.sources) : null,
       });
     },

@@ -68,6 +68,23 @@ describe('superseding a stale algorithm', () => {
     expect(cache.getAudioFeatures('T-TEARDROP')).toEqual(featuresRow());
   });
 
+  it("gives an old journal's metrognome tempo the window it was folded into", () => {
+    const cache = loaded([]);
+    const {
+      bpmWindowLow: _low,
+      bpmWindowHigh: _high,
+      ...old
+    } = featuresRow({
+      sources: { bpm: ANALYSIS_BPM },
+    });
+
+    cache.restoreAudioFeatures([old as never]);
+    expect(cache.getAudioFeatures('T-TEARDROP')).toMatchObject({
+      bpmWindowLow: 90,
+      bpmWindowHigh: 180,
+    });
+  });
+
   it('leaves a row whose provenance was not named alone', () => {
     const row = featuresRow({ sources: { musicalKey: 'acousticbrainz' } });
 
