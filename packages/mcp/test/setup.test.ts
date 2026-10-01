@@ -45,6 +45,7 @@ function fixture(
 
   if (options.desktop !== null) {
     mkdirSync(dirname(desktopConfigPath(home)), { recursive: true });
+    mkdirSync(join(home, 'Applications', 'Claude.app'), { recursive: true });
 
     if (options.desktop != null) writeFileSync(desktopConfigPath(home), options.desktop);
   }
@@ -298,6 +299,17 @@ describe('setup says what is missing', () => {
 
     expect(step(report, 'claude_desktop').status).toBe('missing');
     expect(step(report, 'claude_code').status).toBe('missing');
+    expect(report.ok).toBe(false);
+  });
+
+  it('does not count a support folder an uninstall left behind as Claude Desktop', async () => {
+    const { deps, home } = fixture({ desktop: null, claude: false });
+
+    mkdirSync(dirname(desktopConfigPath(home)), { recursive: true });
+
+    const report = await runSetup(deps, { apply: true });
+
+    expect(step(report, 'claude_desktop').status).toBe('missing');
     expect(report.ok).toBe(false);
   });
 

@@ -174,19 +174,19 @@ type Planned = { step: SetupStep; apply?: () => Promise<SetupStep> };
 function planDesktop(deps: SetupDeps, now: Date): Planned {
   const path = desktopConfigPath(deps.home);
 
-  // A freshly installed app has no Application Support folder until first launch.
+  // A fresh install has no config until first launch, and an uninstall can
+  // leave the support folder behind, so the app or the config file decides.
   const apps = deps.desktopApps ?? [
     '/Applications/Claude.app',
     join(deps.home, 'Applications', 'Claude.app'),
   ];
 
-  if (!existsSync(dirname(path)) && !apps.some((app) => existsSync(app))) {
+  if (!existsSync(path) && !apps.some((app) => existsSync(app))) {
     return {
       step: {
         step: 'claude_desktop',
         status: 'skipped',
-        detail:
-          'Claude Desktop is not installed (no Claude.app and no Claude folder in Application Support).',
+        detail: 'Claude Desktop is not installed (no Claude.app and no config file).',
       },
     };
   }
