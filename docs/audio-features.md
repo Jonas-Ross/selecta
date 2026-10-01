@@ -266,7 +266,10 @@ unset, so any release works without them:
   `no_match` keep that record. Run both `reopen -s analysis -m bpm --apply`
   and `reopen -s analysis -m musicalKey --apply` before the next `enrich`: each
   reopens only rows missing that field, so a track whose BPM came from a catalog
-  needs the second to get another try at a key.
+  needs the second to get another try at a key. Values an earlier run already
+  stored from the wrong store stay, since which of them were wrong matches was
+  never recorded; to re-measure them, `supersede -s analysis -p <provenance>...
+  --apply` with the provenances `supersede` lists, then `enrich`.
 - `SELECTA_KEY_PROFILE` (`--key-profile`): `edm` (metrognome's default, fitted
   to dance music) or `krumhansl` (fitted to classical and pop). Its key source
   label names the profile, so `supersede` can tell the two apart.
