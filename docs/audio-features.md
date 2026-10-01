@@ -263,7 +263,10 @@ unset, so any release works without them:
   library was bought in. metrognome searches the US store without it, which
   misses regional releases and stores that spell artists in their own script.
   Needs a metrognome release that has `--country`. Tracks already recorded
-  `no_match` keep that record; `reopen -s analysis -m bpm --apply` puts them back.
+  `no_match` keep that record. Run both `reopen -s analysis -m bpm --apply`
+  and `reopen -s analysis -m musicalKey --apply` before the next `enrich`: each
+  reopens only rows missing that field, so a track whose BPM came from a catalog
+  needs the second to get another try at a key.
 - `SELECTA_KEY_PROFILE` (`--key-profile`): `edm` (metrognome's default, fitted
   to dance music) or `krumhansl` (fitted to classical and pop). Its key source
   label names the profile, so `supersede` can tell the two apart.
