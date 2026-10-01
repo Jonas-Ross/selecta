@@ -211,6 +211,24 @@ describe('setup --apply', () => {
     ]);
   });
 
+  it('turns an old remote entry into a stdio one, keeping only its env', async () => {
+    const remote = { type: 'http', url: 'https://example.test/mcp', env: { A: 'b' } };
+    const { deps, calls, home } = fixture({
+      desktop: JSON.stringify({ mcpServers: { selecta: { ...remote, headers: { X: 'y' } } } }),
+      code: { mcpServers: { selecta: remote } },
+    });
+
+    await runSetup(deps, { apply: true });
+
+    expect(JSON.parse(readFileSync(desktopConfigPath(home), 'utf8')).mcpServers.selecta).toEqual({
+      ...SERVER,
+      env: { A: 'b' },
+    });
+    expect(mcpCalls(calls).at(-1)?.at(-1)).toBe(
+      JSON.stringify({ type: 'stdio', ...SERVER, env: { A: 'b' } }),
+    );
+  });
+
   it('reports a failed `claude mcp add` instead of claiming success', async () => {
     const { deps } = fixture({
       run: () => ({ code: 1, stdout: '', stderr: 'boom' }),

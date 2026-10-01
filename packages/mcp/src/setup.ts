@@ -174,6 +174,14 @@ function launchesThis(current: unknown, server: ServerEntry): boolean {
   return command === server.command && isDeepStrictEqual(args, server.args);
 }
 
+// The user's env is the one field that means the same on a stdio entry; a
+// url, headers or transport type from an old remote entry would contradict it.
+function replacement(previous: unknown, server: ServerEntry): Record<string, unknown> {
+  const env = (previous as { env?: unknown } | null | undefined)?.env;
+
+  return { command: server.command, args: server.args, ...(env != null && { env }) };
+}
+
 function stamp(now: Date): string {
   return now.toISOString().replace(/[:.]/g, '-');
 }
@@ -260,11 +268,7 @@ function planDesktop(deps: SetupDeps, now: Date): Planned {
     };
   }
 
-  const next: Record<string, unknown> = {
-    ...(previous as Record<string, unknown> | undefined),
-    command: deps.server.command,
-    args: deps.server.args,
-  };
+  const next = replacement(previous, deps.server);
   const verb = previous == null ? 'add' : 'replace';
 
   return {
@@ -334,14 +338,8 @@ function planCode(deps: SetupDeps, now: Date): Planned {
     };
   }
 
-  // add-json keeps every field of the old entry (env, headers) without
-  // `claude mcp add`'s variadic -e swallowing the server name.
-  const entry = {
-    type: 'stdio',
-    ...(previous as Record<string, unknown> | undefined),
-    command: deps.server.command,
-    args: deps.server.args,
-  };
+  // add-json, because `claude mcp add`'s variadic -e swallows the server name.
+  const entry = { type: 'stdio', ...replacement(previous, deps.server) };
   const addJson = (value: unknown): string[] => [
     'mcp',
     'add-json',
