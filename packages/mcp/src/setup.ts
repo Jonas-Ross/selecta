@@ -177,6 +177,16 @@ export function runCommand(command: string, args: string[]): Promise<CommandResu
   });
 }
 
+// A metrognome pin kept from an earlier run that no longer names a binary; the
+// check below would pass on another one while the client keeps failing.
+function stalePin(env: unknown, server: ServerEntry): boolean {
+  const pin = (env as Record<string, unknown> | undefined)?.[METROGNOME_PATH_ENV];
+
+  if (pin === undefined || server.env?.[METROGNOME_PATH_ENV] !== undefined) return false;
+
+  return typeof pin !== 'string' || !isAbsolute(pin) || !existsSync(pin);
+}
+
 /** A stdio entry running this build, with any env setup pins; other env is the user's. */
 function launchesThis(current: unknown, server: ServerEntry): boolean {
   if (current == null || typeof current !== 'object') return false;
@@ -191,17 +201,18 @@ function launchesThis(current: unknown, server: ServerEntry): boolean {
     url == null &&
     command === server.command &&
     isDeepStrictEqual(args, server.args) &&
-    pinned
+    pinned &&
+    !stalePin(env, server)
   );
 }
 
 // The user's env is the one field that means the same on a stdio entry; a
 // url, headers or transport type from an old remote entry would contradict it.
 function replacement(previous: unknown, server: ServerEntry): Record<string, unknown> {
-  const env = {
-    ...(previous as { env?: Record<string, string> } | null | undefined)?.env,
-    ...server.env,
-  };
+  const previousEnv = (previous as { env?: Record<string, string> } | null | undefined)?.env;
+  const env = { ...previousEnv, ...server.env };
+
+  if (stalePin(previousEnv, server)) delete env[METROGNOME_PATH_ENV];
 
   return {
     command: server.command,
