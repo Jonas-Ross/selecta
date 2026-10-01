@@ -63,7 +63,9 @@ export type SetupReport = {
   steps: SetupStep[];
 };
 
-export type ServerEntry = { command: string; args: string[] };
+// env carries only what setup must pin for a client that lacks the shell's
+// environment, such as a metrognome the user pointed at by hand.
+export type ServerEntry = { command: string; args: string[]; env?: Record<string, string> };
 
 export type CommandResult = { code: number | null; stdout: string; stderr: string };
 
@@ -160,26 +162,52 @@ export function runCommand(command: string, args: string[]): Promise<CommandResu
     execFile(command, args, { timeout: 30_000 }, (err, stdout, stderr) => {
       const code = err == null ? 0 : typeof err.code === 'number' ? err.code : null;
 
-      resolve({ code, stdout, stderr: stderr || (err != null && code == null ? err.message : '') });
+      // err.message repeats the whole command line, entry JSON and env included.
+      const failure =
+        err == null || code != null
+          ? ''
+          : err.killed
+            ? 'timed out'
+            : err.signal != null
+              ? `killed by ${err.signal}`
+              : String(err.code);
+
+      resolve({ code, stdout, stderr: stderr || failure });
     });
   });
 }
 
-/** Command and args are what setup owns; anything else on the entry is the user's. */
+/** A stdio entry running this build, with any env setup pins; other env is the user's. */
 function launchesThis(current: unknown, server: ServerEntry): boolean {
   if (current == null || typeof current !== 'object') return false;
 
-  const { command, args } = current as { command?: unknown; args?: unknown };
+  const { type, url, command, args, env } = current as Record<string, unknown>;
+  const pinned = Object.entries(server.env ?? {}).every(
+    ([key, value]) => (env as Record<string, unknown> | undefined)?.[key] === value,
+  );
 
-  return command === server.command && isDeepStrictEqual(args, server.args);
+  return (
+    (type == null || type === 'stdio') &&
+    url == null &&
+    command === server.command &&
+    isDeepStrictEqual(args, server.args) &&
+    pinned
+  );
 }
 
 // The user's env is the one field that means the same on a stdio entry; a
 // url, headers or transport type from an old remote entry would contradict it.
 function replacement(previous: unknown, server: ServerEntry): Record<string, unknown> {
-  const env = (previous as { env?: unknown } | null | undefined)?.env;
+  const env = {
+    ...(previous as { env?: Record<string, string> } | null | undefined)?.env,
+    ...server.env,
+  };
 
-  return { command: server.command, args: server.args, ...(env != null && { env }) };
+  return {
+    command: server.command,
+    args: server.args,
+    ...(Object.keys(env).length > 0 && { env }),
+  };
 }
 
 function stamp(now: Date): string {

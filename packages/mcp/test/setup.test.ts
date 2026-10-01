@@ -17,6 +17,7 @@ import {
   desktopConfigPath,
   runSetup,
   serverEntry,
+  runCommand,
   shellQuote,
   whichOnPath,
   type CommandResult,
@@ -227,6 +228,29 @@ describe('setup --apply', () => {
     expect(mcpCalls(calls).at(-1)?.at(-1)).toBe(
       JSON.stringify({ type: 'stdio', ...SERVER, env: { A: 'b' } }),
     );
+  });
+
+  it('re-registers an entry with the right command but a remote transport', async () => {
+    const { deps } = fixture({
+      desktop: JSON.stringify({ mcpServers: { selecta: { type: 'sse', url: 'x', ...SERVER } } }),
+    });
+
+    expect(step(await runSetup(deps), 'claude_desktop').status).toBe('would_change');
+  });
+
+  it('pins a hand-given metrognome path into the entry, keeping the user env', async () => {
+    const pin = { SELECTA_METROGNOME_PATH: '/opt/mg/metrognome' };
+    const { deps, home } = fixture({
+      desktop: JSON.stringify({ mcpServers: { selecta: { ...SERVER, env: { A: 'b' } } } }),
+    });
+
+    deps.server = { ...SERVER, env: pin };
+
+    expect(step(await runSetup(deps, { apply: true }), 'claude_desktop').status).toBe('changed');
+    expect(
+      JSON.parse(readFileSync(desktopConfigPath(home), 'utf8')).mcpServers.selecta.env,
+    ).toEqual({ A: 'b', ...pin });
+    expect(step(await runSetup(deps), 'claude_desktop').status).toBe('ok');
   });
 
   it('reports a failed `claude mcp add` instead of claiming success', async () => {
@@ -442,6 +466,15 @@ describe('setup says what is missing', () => {
       status: 'ok',
       detail: 'metrognome 0.1.0 at /opt/homebrew/bin/metrognome.',
     });
+  });
+});
+
+describe('runCommand', () => {
+  it('reports a spawn failure without echoing the arguments', async () => {
+    // Killed by a signal: Node's message for this repeats the full command line.
+    const result = await runCommand('/bin/sh', ['-c', 'kill -9 $$', '{"env":{"KEY":"secret"}}']);
+
+    expect(result).toMatchObject({ code: null, stderr: 'killed by SIGKILL' });
   });
 });
 

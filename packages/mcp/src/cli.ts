@@ -41,6 +41,7 @@ import {
   shellQuote,
   whichOnPath,
   type Client,
+  type ServerEntry,
   type SetupDeps,
 } from './setup.js';
 import type { Bridge } from '@selecta/core/types/bridge.js';
@@ -510,7 +511,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
             {
               home: homedir(),
               dbPath,
-              server: serverEntry(entry),
+              server: withMetrognomePin(serverEntry(entry), metrognomeBinary),
               invocation: basename(entry) === 'selecta' ? 'selecta' : `node ${displayPath(entry)}`,
               which: (name) => whichOnPath(name),
               run: runCommand,
@@ -544,6 +545,14 @@ export function createCliProgram(options: CliOptions = {}): Command {
     );
 
   return program;
+}
+
+// A path the user gave by hand reaches a GUI client only if the entry carries
+// it; one found on PATH or in Homebrew's bin is found there again.
+function withMetrognomePin(server: ServerEntry, flag: string | undefined): ServerEntry {
+  const override = flag ?? process.env[METROGNOME_PATH_ENV];
+
+  return override ? { ...server, env: { [METROGNOME_PATH_ENV]: resolve(override) } } : server;
 }
 
 const STEP_MARKS = {
