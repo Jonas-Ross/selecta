@@ -238,9 +238,12 @@ describe('setup --apply', () => {
     expect(step(await runSetup(deps), 'claude_desktop').status).toBe('would_change');
   });
 
-  it('refuses to pin a hand-given metrognome that fails the check', async () => {
-    const { deps, home } = fixture({
-      desktop: JSON.stringify({ mcpServers: { selecta: SERVER } }),
+  it('leaves client entries alone when a hand-given metrognome fails the check', async () => {
+    const working = { ...SERVER, env: { SELECTA_METROGNOME_PATH: '/opt/mg/metrognome' } };
+    const original = JSON.stringify({ mcpServers: { selecta: working } });
+    const { deps, home, calls } = fixture({
+      desktop: original,
+      code: { mcpServers: { selecta: { type: 'stdio', ...working } } },
     });
 
     deps.server = { ...SERVER, env: { SELECTA_METROGNOME_PATH: '/nope/metrognome' } };
@@ -251,15 +254,15 @@ describe('setup --apply', () => {
 
     const report = await runSetup(deps, { apply: true });
 
-    expect(step(report, 'claude_desktop').status).toBe('ok');
+    expect(step(report, 'claude_desktop').status).toBe('skipped');
+    expect(step(report, 'claude_code').status).toBe('skipped');
     expect(step(report, 'metrognome')).toMatchObject({
       status: 'error',
       detail: expect.stringContaining('/nope/metrognome'),
     });
     expect(report.ok).toBe(false);
-    expect(JSON.parse(readFileSync(desktopConfigPath(home), 'utf8')).mcpServers.selecta).toEqual(
-      SERVER,
-    );
+    expect(readFileSync(desktopConfigPath(home), 'utf8')).toBe(original);
+    expect(mcpCalls(calls)).toEqual([]);
   });
 
   it('pins a hand-given metrognome path into the entry, keeping the user env', async () => {

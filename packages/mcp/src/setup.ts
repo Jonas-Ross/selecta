@@ -557,15 +557,13 @@ export async function runSetup(
   const metrognome = await checkMetrognome(deps);
   const pin = deps.server.env?.[METROGNOME_PATH_ENV];
 
-  // A pin the user asked for but that fails the check would break analysis in
-  // every client, so it is an error and stays out of the entries.
-  if (pin !== undefined && metrognome.status !== 'ok') {
-    const { [METROGNOME_PATH_ENV]: _, ...env } = deps.server.env ?? {};
-    const { env: __, ...server } = deps.server;
+  // A pin the user asked for that fails the check would break analysis in every
+  // client, so no client entry is touched until it passes.
+  const badPin = pin !== undefined && metrognome.status !== 'ok';
 
-    deps = { ...deps, server: Object.keys(env).length > 0 ? { ...server, env } : server };
+  if (badPin) {
     metrognome.status = 'error';
-    metrognome.detail = `${pin}: ${metrognome.detail} Not pinned into the client entries.`;
+    metrognome.detail = `${pin}: ${metrognome.detail}`;
   }
 
   const planners: Record<Client, () => Planned> = {
@@ -586,14 +584,26 @@ export async function runSetup(
     }
 
     const planned = planners[client]();
-    const step = apply && planned.apply != null ? await applied(planned) : planned.step;
+    const step =
+      badPin && planned.step.status === 'would_change'
+        ? {
+            ...planned.step,
+            status: 'skipped' as const,
+            detail: 'Left as is: the metrognome path given failed its check.',
+          }
+        : apply && planned.apply != null
+          ? await applied(planned)
+          : planned.step;
 
     steps.push(step);
     requested.push(step);
   }
 
   // A missing client is only a gap when no requested client could take Selecta.
-  if (!requested.some((step) => ['ok', 'would_change', 'changed'].includes(step.status))) {
+  if (
+    !badPin &&
+    !requested.some((step) => ['ok', 'would_change', 'changed'].includes(step.status))
+  ) {
     for (const step of requested) {
       if (step.status !== 'skipped') continue;
 
