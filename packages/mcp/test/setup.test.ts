@@ -9,6 +9,7 @@ import {
   runSetup,
   serverEntry,
   shellQuote,
+  whichOnPath,
   type CommandResult,
   type SetupDeps,
 } from '../src/setup.js';
@@ -121,7 +122,11 @@ describe('setup --apply', () => {
 
     const desktop = step(await runSetup(deps, { apply: true }), 'claude_desktop');
 
-    expect(desktop).toMatchObject({ status: 'changed', previous: stale });
+    expect(desktop).toMatchObject({
+      status: 'changed',
+      previous: { ...stale, env: { SELECTA_DEBUG: '<redacted>' } },
+    });
+    expect(JSON.parse(readFileSync(desktop.backup, 'utf8')).mcpServers.selecta).toEqual(stale);
     expect(JSON.parse(readFileSync(desktopConfigPath(home), 'utf8')).mcpServers.selecta).toEqual({
       ...SERVER,
       env: { SELECTA_DEBUG: '1' },
@@ -381,6 +386,25 @@ describe('shellQuote', () => {
     expect(shellQuote("/Users/x/my repo/it's/dist/index.js")).toBe(
       "'/Users/x/my repo/it'\\''s/dist/index.js'",
     );
+  });
+});
+
+describe('whichOnPath', () => {
+  it('ignores relative PATH entries, which a client would resolve somewhere else', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'selecta-which-'));
+
+    mkdirSync(join(dir, 'bin'));
+    writeFileSync(join(dir, 'bin', 'node'), '', { mode: 0o755 });
+    const cwd = process.cwd();
+
+    process.chdir(dir);
+
+    try {
+      expect(whichOnPath('node', 'bin')).toBeNull();
+      expect(whichOnPath('node', join(dir, 'bin'))).toBe(join(dir, 'bin', 'node'));
+    } finally {
+      process.chdir(cwd);
+    }
   });
 });
 

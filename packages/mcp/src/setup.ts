@@ -16,7 +16,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { delimiter, dirname, join } from 'node:path';
+import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { readStatus } from '@selecta/core/diagnostics/status.js';
 import {
@@ -116,7 +116,8 @@ export function serverEntry(
 
 export function whichOnPath(name: string, path = process.env.PATH ?? ''): string | null {
   for (const directory of path.split(delimiter)) {
-    if (directory === '') continue;
+    // A relative entry would be saved relative to a directory the client never runs in.
+    if (!isAbsolute(directory)) continue;
 
     const candidate = join(directory, name);
 
@@ -554,6 +555,21 @@ export async function runSetup(
     ok: steps.every((step) => step.status !== 'missing' && step.status !== 'error'),
     dry_run: !apply,
     server: deps.server,
-    steps,
+    steps: steps.map(redactPrevious),
+  };
+}
+
+// Env often carries keys; the backup keeps the values, the printed report does not.
+function redactPrevious(step: SetupStep): SetupStep {
+  const env = (step.previous as { env?: unknown } | undefined)?.env;
+
+  if (env == null || typeof env !== 'object') return step;
+
+  return {
+    ...step,
+    previous: {
+      ...(step.previous as object),
+      env: Object.fromEntries(Object.keys(env).map((key) => [key, '<redacted>'])),
+    },
   };
 }
