@@ -35,23 +35,29 @@ createInterface({ input: host.stdout }).on('line', (line) => {
   else call?.resolve(message.result);
 });
 
-host.on('exit', (code) => {
-  for (const call of pending.values()) call.reject(new Error('The Selecta core process stopped.'));
+let stopped: string | undefined;
+
+// Spawn failure fires 'error' without 'exit', so both paths settle every call through here.
+function stop(reason: string) {
+  if (stopped !== undefined) return;
+
+  stopped = reason;
+
+  for (const call of pending.values()) call.reject(new Error(reason));
 
   pending.clear();
 
-  if (!quitting)
-    dialog.showErrorBox(
-      'Selecta',
-      `The core process stopped (exit code ${code}). Restart the app.`,
-    );
-});
+  if (!quitting) dialog.showErrorBox('Selecta', `${reason} Restart the app.`);
+}
 
-host.on('error', (error) =>
-  dialog.showErrorBox('Selecta', `Could not start Node for the core process: ${error.message}`),
-);
+host.on('exit', (code) => stop(`The Selecta core process stopped (exit code ${code}).`));
+host.on('error', (error) => stop(`Could not start Node for the core process: ${error.message}.`));
+// A write racing the failure gets EPIPE; stop() already reports it.
+host.stdin.on('error', () => {});
 
 ipcMain.handle('selecta:call', (_event, method: string, args: unknown) => {
+  if (stopped !== undefined) return Promise.reject(new Error(stopped));
+
   const id = nextId++;
 
   host.stdin.write(`${JSON.stringify({ id, method, args })}\n`);

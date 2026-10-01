@@ -38,7 +38,9 @@ function App() {
     () =>
       selecta
         .call('agent.history')
-        .then((history) => setRuns((current) => recoverRuns(current, history))),
+        .then((history) => setRuns((current) => recoverRuns(current, history)))
+        // A stopped host already surfaces through main's dialog and the screen's own read.
+        .catch(() => {}),
     [],
   );
 
