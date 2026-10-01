@@ -397,7 +397,9 @@ function Draft({
   return (
     <main className="draft">
       <header>
-        <button onClick={onBack}>Back</button>
+        <button disabled={saving} onClick={onBack}>
+          Back
+        </button>
         {draft ? (
           <input
             className="name"
