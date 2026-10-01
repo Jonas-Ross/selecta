@@ -1,14 +1,19 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DraftStore } from '@selecta/core/drafts/store.js';
 import { watchDrafts } from '../src/host/watch.js';
 
-const dir = mkdtempSync(join(tmpdir(), 'selecta-watch-'));
-const path = join(dir, 'drafts.db');
+let dir: string;
+let path: string;
 const stops: (() => void)[] = [];
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'selecta-watch-'));
+  path = join(dir, 'drafts.db');
+});
 
 afterEach(() => {
   for (const stop of stops.splice(0)) stop();
@@ -21,7 +26,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 40));
 it('fires when the store appears and when another process commits', async () => {
   const onChange = vi.fn();
 
-  stops.push(watchDrafts(path, onChange, 10));
+  stops.push(watchDrafts(path, onChange, () => {}, 10));
   await tick();
   expect(onChange).not.toHaveBeenCalled();
 
@@ -37,4 +42,20 @@ it('fires when the store appears and when another process commits', async () => 
   store.update(draft.draft_id, 1, (current) => ({ ...current, name: 'Peak' }));
   await tick();
   expect(onChange).toHaveBeenCalledTimes(2);
+});
+
+it('reports an unreadable store once and recovers when it becomes readable', async () => {
+  const onChange = vi.fn();
+  const onError = vi.fn();
+
+  writeFileSync(path, 'not a sqlite database, just bytes '.repeat(200));
+  stops.push(watchDrafts(path, onChange, onError, 10));
+  await tick();
+  await tick();
+  expect(onError).toHaveBeenCalledTimes(1);
+
+  rmSync(path);
+  new DraftStore(path).create(randomUUID(), 'Warmup', ['A']);
+  await tick();
+  expect(onChange).toHaveBeenCalled();
 });

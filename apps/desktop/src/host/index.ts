@@ -33,7 +33,11 @@ const call = createApi(
   },
   agent,
 );
-const stopWatching = watchDrafts(draftDbPath(dbPath), () => emit({ event: 'drafts.changed' }));
+const stopWatching = watchDrafts(
+  draftDbPath(dbPath),
+  () => emit({ event: 'drafts.changed' }),
+  (error) => console.error(`selecta: cannot watch drafts.db for changes: ${error.message}`),
+);
 
 createInterface({ input: process.stdin })
   .on('line', async (line) => {
