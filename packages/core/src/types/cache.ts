@@ -34,6 +34,9 @@ export type TrackRow = {
   // How far to trust the two estimated features; projected by inspect_tracklist only.
   bpmConfidence: number | null; // 0..1
   bpmMaturity: FeatureMaturity | null;
+  // The octave a folded tempo was reported in; null when bpm is not folded.
+  bpmWindowLow: number | null;
+  bpmWindowHigh: number | null;
   keyConfidence: number | null; // 0..1
   keyMaturity: FeatureMaturity | null;
   bpmSource: string | null; // stored provenance, or 'music_app' for the native tag
@@ -72,6 +75,8 @@ export type AudioFeaturesRow = {
   bpm: number | null;
   bpmConfidence: number | null;
   bpmMaturity: FeatureMaturity | null;
+  bpmWindowLow: number | null;
+  bpmWindowHigh: number | null;
   musicalKey: string | null;
   camelot: string | null;
   keyConfidence: number | null;

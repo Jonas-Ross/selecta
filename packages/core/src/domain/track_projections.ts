@@ -42,6 +42,10 @@ export type ApiTrack = {
   duration_seconds?: number;
   location_kind?: string;
   bpm?: number; // enriched or fallback to tag
+  // Set when bpm was folded into one octave: the estimator cannot tell a tempo
+  // from its half or double, so slow music can read at twice its tempo.
+  bpm_folded_into?: [low: number, high: number];
+  bpm_half_time?: number;
   musical_key?: string; // e.g. "F# minor"
   camelot?: string; // the same key on the DJ wheel, e.g. "11A"
   danceability?: number; // 0..1
@@ -78,6 +82,8 @@ export const COMPACT_TRACK_FIELDS = [
   'signal.last_played',
   'signal.date_added',
   'note',
+  // Appended, not beside bpm, so positions consumers already read stay put.
+  'bpm_half_time',
 ] as const;
 
 // Tuple aligned with COMPACT_TRACK_FIELDS. Null = unavailable.
@@ -101,11 +107,21 @@ export type CompactApiTrack = [
   lastPlayed: string | null,
   dateAdded: string | null,
   note: ApiNote | null,
+  bpmHalfTime: number | null,
 ];
 
 // Two decimals is all that survives of an analyzer's 0-1 scores on the wire.
 const round2 = (value: number | null): number | undefined =>
   value == null ? undefined : Math.round(value * 100) / 100;
+
+function foldedTempo(row: TrackRow): Pick<ApiTrack, 'bpm_folded_into' | 'bpm_half_time'> {
+  if (row.bpm == null || row.bpmWindowLow == null || row.bpmWindowHigh == null) return {};
+
+  return {
+    bpm_folded_into: [row.bpmWindowLow, row.bpmWindowHigh],
+    bpm_half_time: Math.round(row.bpm * 5) / 10,
+  };
+}
 
 export function toApiTrack(row: TrackRow): ApiTrack {
   return {
@@ -120,6 +136,7 @@ export function toApiTrack(row: TrackRow): ApiTrack {
     // Analyzer output carries noise decimals; one decimal of tempo is all the
     // precision that survives the wire.
     bpm: row.bpm != null ? Math.round(row.bpm * 10) / 10 : undefined,
+    ...foldedTempo(row),
     musical_key: row.musicalKey ?? undefined,
     camelot: row.camelot ?? undefined,
     danceability: round2(row.danceability),
@@ -158,6 +175,7 @@ export function toCompactApiTrack(track: ApiTrack): CompactApiTrack {
     track.signal.last_played ?? null,
     track.signal.date_added ?? null,
     track.note ?? null,
+    track.bpm_half_time ?? null,
   ];
 }
 
@@ -180,6 +198,8 @@ export type InspectedTrack = Pick<
   | 'album'
   | 'duration_seconds'
   | 'bpm'
+  | 'bpm_folded_into'
+  | 'bpm_half_time'
   | 'musical_key'
   | 'camelot'
   | 'danceability'
@@ -208,6 +228,8 @@ export function toInspectedTrack(row: TrackRow): InspectedTrack {
     album: track.album,
     duration_seconds: track.duration_seconds,
     bpm: track.bpm,
+    bpm_folded_into: track.bpm_folded_into,
+    bpm_half_time: track.bpm_half_time,
     musical_key: track.musical_key,
     camelot: track.camelot,
     danceability: track.danceability,

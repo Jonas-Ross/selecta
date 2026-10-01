@@ -121,7 +121,8 @@ describe('cache schema migrations', () => {
       // Added columns only: playlist_creations gained edit_conflict (version 2)
       // and takes its default; audio_features gained the analysis columns
       // (version 3), where catalog_status is filled from the status the row
-      // already had. Nothing that existed before is rewritten.
+      // already had, and the tempo window (version 5), set only on metrognome
+      // tempos. Nothing that existed before is rewritten.
       const expected = {
         ...before,
         ...(before.playlist_creations === undefined
@@ -143,6 +144,8 @@ describe('cache schema migrations', () => {
                 key_maturity: null,
                 catalog_status: row.status,
                 analysis_status: null,
+                bpm_window_low: null,
+                bpm_window_high: null,
               })),
             }),
       };
@@ -327,7 +330,11 @@ describe('cache schema migrations', () => {
     db.close();
     const stale = readStatus(path);
 
-    expect(stale.database.schema).toEqual({ version: 3, expected: MIGRATIONS.length, pending: 1 });
+    expect(stale.database.schema).toEqual({
+      version: 3,
+      expected: MIGRATIONS.length,
+      pending: MIGRATIONS.length - 3,
+    });
     expect(stale.audio_features!.coverage.camelot.track_count).toBe(1);
 
     openDatabase(path).close();
@@ -355,5 +362,34 @@ describe('cache schema migrations', () => {
     expect(
       track(new Database(path, { readonly: true })).pragma('user_version', { simple: true }),
     ).toBe(0);
+  });
+});
+
+describe('the tempo window migration', () => {
+  it('marks only metrognome tempos as folded into 90-180', () => {
+    const db = new Database(':memory:');
+
+    for (const step of MIGRATIONS.slice(0, 4)) db.exec(step.sql);
+
+    db.exec(`
+      INSERT INTO audio_features (track_persistent_id, bpm, sources, status, fetched_at) VALUES
+        ('T-MG', 170, '{"bpm":"metrognome/onset-autocorrelation-comb@3"}', 'ok', '2026-09-01'),
+        ('T-DZ', 85, '{"bpm":"deezer"}', 'ok', '2026-09-01'),
+        ('T-KEY', NULL, '{"musicalKey":"metrognome/chroma-correlation-edm@3"}', 'ok', '2026-09-01');
+    `);
+    db.exec(MIGRATIONS[4]!.sql);
+
+    expect(
+      db
+        .prepare(
+          'SELECT track_persistent_id AS id, bpm_window_low AS low, bpm_window_high AS high FROM audio_features ORDER BY id',
+        )
+        .all(),
+    ).toEqual([
+      { id: 'T-DZ', low: null, high: null },
+      { id: 'T-KEY', low: null, high: null },
+      { id: 'T-MG', low: 90, high: 180 },
+    ]);
+    db.close();
   });
 });

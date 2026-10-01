@@ -161,6 +161,9 @@ describe('reading recorded metrognome output', () => {
     });
     // The clip was synthesized at 124 BPM; the recorded estimate agrees.
     expect(rows[0]!.bpm).toBeCloseTo(124, 0);
+    // metrognome reports tempo folded into one octave; the row keeps which.
+    expect(fixture.features.tempo.canonical_window_bpm).toEqual([90, 180]);
+    expect(rows[0]).toMatchObject({ bpmWindowLow: 90, bpmWindowHigh: 180 });
   });
 
   it('drops an estimate the analyzer flagged uncertain rather than storing a hint', async () => {
@@ -426,11 +429,14 @@ describe('merging one pass into the other', () => {
       analysisStatus: 'ok',
     };
 
-    const merged = mergeFeatures(stored, analyzed);
+    const merged = mergeFeatures(stored, { ...analyzed, bpmWindowLow: 90, bpmWindowHigh: 180 });
 
     expect(merged.row).toMatchObject({
       bpm: 78.42, // Deezer's stands; metrognome's 156 is not an improvement it can prove.
       bpmConfidence: null,
+      // The fold describes metrognome's reading, never Deezer's unfolded one.
+      bpmWindowLow: null,
+      bpmWindowHigh: null,
       musicalKey: 'A minor',
       camelot: '8A',
       keyConfidence: 0.71,
@@ -447,6 +453,25 @@ describe('merging one pass into the other', () => {
     });
     // The key gap-filled even though bpm didn't — landed tracks the row, not the source.
     expect(merged.landed).toBe(true);
+  });
+
+  it('lands a folded tempo together with its window', () => {
+    const stored = featuresRow({ bpm: null, sources: { danceability: 'acousticbrainz' } });
+    const analyzed: AudioFeaturesRow = {
+      ...blankFeatures('T-TEARDROP', FETCHED_AT),
+      bpm: 170,
+      bpmWindowLow: 90,
+      bpmWindowHigh: 180,
+      sources: { bpm: 'metrognome/tempo@1' },
+      status: 'ok',
+      analysisStatus: 'ok',
+    };
+
+    expect(mergeFeatures(stored, analyzed).row).toMatchObject({
+      bpm: 170,
+      bpmWindowLow: 90,
+      bpmWindowHigh: 180,
+    });
   });
 
   it('keeps each pass’s own terminal record and reports the better one', () => {

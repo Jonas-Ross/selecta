@@ -305,6 +305,8 @@ export function toFeaturesRow(analysis: MgAnalysis, fetchedAt: string): AudioFea
     row.bpm = tempo.bpm;
     row.bpmConfidence = tempo.confidence;
     row.bpmMaturity = tempo.maturity;
+    row.bpmWindowLow = tempo.canonical_window_bpm?.[0] ?? null;
+    row.bpmWindowHigh = tempo.canonical_window_bpm?.[1] ?? null;
     sources.bpm = tempo.source;
   }
 

@@ -57,6 +57,8 @@ const noteShape = (body: string) => ({
   updated_at: expect.stringMatching(ISO_TIMESTAMP),
 });
 
+const NOTE_SLOT = COMPACT_TRACK_FIELDS.indexOf('note');
+
 describe('set_note', () => {
   it('stores a track note and returns it with provenance', async () => {
     const deps = makeDeps();
@@ -329,18 +331,18 @@ describe('note surfacing', () => {
     expect(byId.get('T-ANGEL')!.note).toBeUndefined();
   });
 
-  it('search: compact rows carry note in the last slot, null when unset', async () => {
+  it('search: compact rows carry note in its slot, null when unset', async () => {
     const deps = await annotated();
     const out = (await handleSearch(
       { artist: 'Massive Attack', compact: true },
       deps,
     )) as CompactSearchOutput;
 
-    expect(COMPACT_TRACK_FIELDS[COMPACT_TRACK_FIELDS.length - 1]).toBe('note');
+    expect(COMPACT_TRACK_FIELDS[NOTE_SLOT]).toBe('note');
     const byId = new Map(out.tracks.map(({ track }) => [track[0], track]));
 
-    expect(byId.get('T-TEARDROP')!.at(-1)).toEqual(noteShape(TRACK_NOTE));
-    expect(byId.get('T-ANGEL')!.at(-1)).toBeNull();
+    expect(byId.get('T-TEARDROP')![NOTE_SLOT]).toEqual(noteShape(TRACK_NOTE));
+    expect(byId.get('T-ANGEL')![NOTE_SLOT]).toBeNull();
   });
 
   it('get_track_context: seed, same-artist, co-occurring, and multi-seed all carry notes', async () => {
@@ -370,9 +372,9 @@ describe('note surfacing', () => {
       deps,
     )) as CompactTrackContextOutput;
 
-    expect(compact.seed.at(-1)).toEqual(noteShape(TRACK_NOTE));
+    expect(compact.seed[NOTE_SLOT]).toEqual(noteShape(TRACK_NOTE));
     expect(
-      compact.co_occurring_tracks.find((c) => c.track[0] === 'T-GLORYBOX')!.track.at(-1),
+      compact.co_occurring_tracks.find((c) => c.track[0] === 'T-GLORYBOX')!.track[NOTE_SLOT],
     ).toEqual(noteShape('co-occurring note'));
 
     const multi = (await handleGetTrackContext(

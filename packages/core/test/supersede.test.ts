@@ -46,6 +46,28 @@ describe('superseding a stale algorithm', () => {
     });
   });
 
+  it("takes a folded tempo's window with the tempo it described", () => {
+    const row = featuresRow({
+      bpmWindowLow: 90,
+      bpmWindowHigh: 180,
+      sources: { bpm: ANALYSIS_BPM, musicalKey: 'acousticbrainz', danceability: 'acousticbrainz' },
+      analysisStatus: 'ok',
+    });
+    const result = supersedeFeatures(row, 'analysis', new Set([ANALYSIS_BPM]));
+
+    if (result.action !== 'update') throw new Error('expected an update');
+
+    expect(result.row).toMatchObject({ bpm: null, bpmWindowLow: null, bpmWindowHigh: null });
+  });
+
+  it('restores a journal row written before the tempo window existed', () => {
+    const cache = loaded([]);
+    const { bpmWindowLow: _low, bpmWindowHigh: _high, ...old } = featuresRow();
+
+    cache.restoreAudioFeatures([old as never]);
+    expect(cache.getAudioFeatures('T-TEARDROP')).toEqual(featuresRow());
+  });
+
   it('leaves a row whose provenance was not named alone', () => {
     const row = featuresRow({ sources: { musicalKey: 'acousticbrainz' } });
 

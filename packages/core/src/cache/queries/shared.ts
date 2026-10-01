@@ -47,6 +47,8 @@ export const TRACK_COLUMNS = `
   ${featureColumn('danceability')} AS danceability,
   ${featureColumn('bpm_confidence')} AS bpmConfidence,
   ${featureColumn('bpm_maturity')} AS bpmMaturity,
+  ${featureColumn('bpm_window_low')} AS bpmWindowLow,
+  ${featureColumn('bpm_window_high')} AS bpmWindowHigh,
   ${featureColumn('key_confidence')} AS keyConfidence,
   ${featureColumn('key_maturity')} AS keyMaturity,
   ${BPM_SOURCE} AS bpmSource,
