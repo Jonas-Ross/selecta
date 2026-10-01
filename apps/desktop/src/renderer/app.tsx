@@ -250,8 +250,8 @@ function Draft({
   // starts lands before the click that caused the blur.
   const latest = useRef<DraftView['draft']>(undefined);
   const edits = useRef<Promise<unknown>>(Promise.resolve());
-  // Set when a queued edit doesn't land, so a Save queued behind it stops.
-  const failed = useRef(false);
+  // Edits not yet settled, each resolving to whether it landed; a Save waits on these.
+  const inflight = useRef(new Set<Promise<boolean>>());
   const logEnd = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -293,20 +293,22 @@ function Draft({
 
   // A change is worked out from the draft as it stands when its turn comes, so
   // queued clicks compose instead of replaying the snapshot they were made on.
-  function edit(change: Change): Promise<void> {
+  function edit(change: Change): Promise<boolean> {
     const next = edits.current.then(() => apply(change));
 
     edits.current = next;
+    inflight.current.add(next);
+    next.finally(() => inflight.current.delete(next));
 
     return next;
   }
 
   // Revision checks mean a stale edit fails rather than clobbering Claude's.
-  async function apply(change: Change) {
+  async function apply(change: Change): Promise<boolean> {
     const base = latest.current;
     const args = base && change(base);
 
-    if (!base || !args) return;
+    if (!base || !args) return true;
 
     try {
       const result = (await selecta.call('drafts.edit', {
@@ -315,15 +317,19 @@ function Draft({
         ...args,
       })) as DraftView;
 
-      if (result.error) {
-        failed.current = true;
-        setNotice([result.error, result.hint].filter(Boolean).join(' '));
-        await load();
-      } else show(result);
+      if (!result.error) {
+        show(result);
+
+        return true;
+      }
+
+      setNotice([result.error, result.hint].filter(Boolean).join(' '));
+      await load();
     } catch (e) {
-      failed.current = true;
       setNotice((e as Error).message);
     }
+
+    return false;
   }
 
   const setEntries = (change: (entries: Row[]) => Row[] | undefined) =>
@@ -364,12 +370,15 @@ function Draft({
   }
 
   // Save is a barrier in the edit queue: controls lock on the click, and it
-  // runs after every edit queued before it.
+  // runs only if every edit still pending at the click landed.
   function save() {
     setSaving(true);
-    failed.current = false;
 
-    const step = edits.current.then(commit).finally(() => setSaving(false));
+    const ahead = [...inflight.current];
+    const step = edits.current
+      .then(() => Promise.all(ahead))
+      .then((landed) => (landed.every(Boolean) ? commit() : undefined))
+      .finally(() => setSaving(false));
 
     edits.current = step;
 
@@ -377,8 +386,6 @@ function Draft({
   }
 
   async function commit() {
-    if (failed.current) return;
-
     const current = latest.current;
 
     if (!current || !window.confirm(`Save "${current.name}" to Music as a new playlist?`)) return;
