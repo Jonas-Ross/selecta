@@ -5,11 +5,14 @@ import { z } from 'zod';
 import type { ToolDeps } from '@selecta/core/tools/deps.js';
 import { PlaylistDraftTools, getDraftInputShape } from '@selecta/core/tools/playlist_draft.js';
 import type { DraftStore } from '@selecta/core/drafts/store.js';
-import type { Method } from '../shared/protocol.js';
+import { BRIEF_LIMIT, type Method } from '../shared/protocol.js';
 import type { AgentSessions } from './agent.js';
 
 const DraftId = z.strictObject(getDraftInputShape);
-const Brief = z.strictObject({ ...getDraftInputShape, brief: z.string().trim().min(1).max(4000) });
+const Brief = z.strictObject({
+  ...getDraftInputShape,
+  brief: z.string().trim().min(1).max(BRIEF_LIMIT),
+});
 const Message = z.strictObject({
   ...getDraftInputShape,
   // Selected tracks ride along one line each, up to a draft's 500 entries.

@@ -123,9 +123,14 @@ export function recoverRuns(
 }
 
 /** A call the host rejected outright: nothing started, so nothing changes but the log. */
-export function rejectRun(run: Run | undefined, message: string): Run {
+/** The host refuses before recording the request, so the request is kept here with its error. */
+export function rejectRun(run: Run | undefined, message: string, asked?: string): Run {
   return {
-    log: [...(run?.log ?? []), { kind: 'error', text: message }],
+    log: [
+      ...(run?.log ?? []),
+      ...(asked ? [{ kind: 'you' as const, text: asked }] : []),
+      { kind: 'error', text: message },
+    ],
     working: run?.working ?? false,
     seen: run?.seen ?? 0,
   };

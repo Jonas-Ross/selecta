@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { DraftSummary, SelectaApi } from '../shared/protocol.js';
+import { BRIEF_LIMIT, type DraftSummary, type SelectaApi } from '../shared/protocol.js';
 import {
   feedbackMessage,
   formatDuration,
@@ -62,13 +62,16 @@ function App() {
     return unsubscribe;
   }, [resync]);
 
-  const ask = (draftId: string, call: Promise<unknown>) =>
+  const ask = (draftId: string, text: string, call: Promise<unknown>) =>
     call.catch((e: Error) =>
-      setRuns((current) => ({ ...current, [draftId]: rejectRun(current[draftId], e.message) })),
+      setRuns((current) => ({
+        ...current,
+        [draftId]: rejectRun(current[draftId], e.message, text),
+      })),
     );
 
   const start = (draftId: string, brief: string) =>
-    ask(draftId, selecta.call('agent.start', { draft_id: draftId, brief }));
+    ask(draftId, brief, selecta.call('agent.start', { draft_id: draftId, brief }));
 
   if (screen.name === 'brief')
     return (
@@ -93,7 +96,7 @@ function App() {
         run={runs[draftId]}
         onStart={(brief) => start(draftId, brief)}
         onSend={(text, message) =>
-          ask(draftId, selecta.call('agent.send', { draft_id: draftId, message, text }))
+          ask(draftId, text, selecta.call('agent.send', { draft_id: draftId, message, text }))
         }
         onBack={() => setScreen({ name: 'home' })}
       />
@@ -172,17 +175,18 @@ function Brief({ onCancel, onStart }: { onCancel: () => void; onStart: (brief: s
   const [length, setLength] = useState('');
   const [tempo, setTempo] = useState('');
 
+  const brief = [
+    text.trim(),
+    length && `Length: about ${length} tracks.`,
+    tempo && `Tempo: ${tempo} BPM.`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  // Checked here as well as in the host, so an over-long brief stays on screen to fix.
+  const tooLong = brief.length > BRIEF_LIMIT;
+
   function submit(event: FormEvent) {
     event.preventDefault();
-
-    const brief = [
-      text.trim(),
-      length && `Length: about ${length} tracks.`,
-      tempo && `Tempo: ${tempo} BPM.`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
     onStart(brief);
   }
 
@@ -213,7 +217,8 @@ function Brief({ onCancel, onStart }: { onCancel: () => void; onStart: (brief: s
             <input value={tempo} onChange={(e) => setTempo(e.target.value)} placeholder="118-124" />
           </label>
         </div>
-        <button className="primary" disabled={!text.trim()}>
+        {tooLong && <p className="notice">Keep the brief under {BRIEF_LIMIT} characters.</p>}
+        <button className="primary" disabled={!text.trim() || tooLong}>
           Build it
         </button>
       </form>

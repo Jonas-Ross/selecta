@@ -183,4 +183,8 @@ it('catches up from the host record without undoing what already arrived', () =>
     working: true,
     seen: 1,
   });
+  expect(rejectRun(undefined, 'Refused.', 'my brief').log).toEqual([
+    { kind: 'you', text: 'my brief' },
+    { kind: 'error', text: 'Refused.' },
+  ]);
 });

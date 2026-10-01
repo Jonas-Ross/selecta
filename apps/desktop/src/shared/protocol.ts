@@ -5,6 +5,8 @@ import type { DraftSummary } from '@selecta/core/drafts/store.js';
 
 export type { DraftSummary };
 
+export const BRIEF_LIMIT = 4000;
+
 export type Methods = {
   'drafts.list': () => DraftSummary[];
   'drafts.get': (args: { draft_id: string }) => unknown;
