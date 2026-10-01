@@ -6,6 +6,9 @@ set -euo pipefail
 command -v perl > /dev/null || { printf 'error: perl is required\n' >&2; exit 2; }
 
 export MAX_BINARY_BYTES=${MAX_BINARY_BYTES:-65536}
+# The website's background film is the one large binary kept on purpose: an MP4 in
+# site/media/, identified by its header, and capped.
+export MAX_FILM_BYTES=${MAX_FILM_BYTES:-1572864}
 
 # One perl process for every file: a fork per file took over 5s on macOS.
 # `grep -I` would call any NUL-free blob text, so text here means valid UTF-8
@@ -33,6 +36,8 @@ git ls-files -z | perl -MEncode -0 -ne '
   # Only large binaries fail, so a small fixture stays possible without an
   # allowlist to keep in sync.
   my $size = length $body;
+  next if $file =~ m{\Asite/media/[^/]+\.mp4\z} && substr($body, 4, 4) eq q{ftyp}
+    && $size <= $ENV{MAX_FILM_BYTES};
   if ($size > $max) {
     print STDERR "error: $file is $size bytes of binary data (limit $max)\n";
     $status = 1;
