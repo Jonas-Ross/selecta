@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en" class="intro">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Selecta</title>
+    <meta
+      name="description"
+      content="Selecta lets Claude dig through your Apple Music library, with the tempo and key of every track it can measure, so the playlists it builds actually flow."
+    />
+    <meta name="theme-color" content="#08080a" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2308080a'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23d6ff3a'/%3E%3Ccircle cx='16' cy='16' r='1.3' fill='%2308080a'/%3E%3C/svg%3E"
+    />
+    <link rel="preload" href="fonts/unbounded.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/nav.css" />
+    <link rel="stylesheet" href="css/hero.css" />
+    <link rel="stylesheet" href="css/machine.css" />
+    <link rel="stylesheet" href="css/story.css" />
+    <link rel="stylesheet" href="css/deck.css" />
+    <link rel="stylesheet" href="css/rules.css" />
+    <link rel="stylesheet" href="css/get.css" />
+    <link rel="stylesheet" href="css/footer.css" />
+    <script src="vendor/gsap.min.js" defer></script>
+    <script src="vendor/ScrollTrigger.min.js" defer></script>
+    <script src="vendor/SplitText.min.js" defer></script>
+    <script type="module" src="js/main.js"></script>
+    <!-- Fetched up front, so the browser doesn't find the imports one level at a time. -->
+    <link rel="modulepreload" href="js/audio.js" />
+    <link rel="modulepreload" href="js/beat.js" />
+    <link rel="modulepreload" href="js/camelot.js" />
+    <link rel="modulepreload" href="js/deck.js" />
+    <link rel="modulepreload" href="js/dom.js" />
+    <link rel="modulepreload" href="js/engine.js" />
+    <link rel="modulepreload" href="js/hero.js" />
+    <link rel="modulepreload" href="js/intro.js" />
+    <link rel="modulepreload" href="js/machine.js" />
+    <link rel="modulepreload" href="js/motion.js" />
+    <link rel="modulepreload" href="js/pulse.js" />
+    <link rel="modulepreload" href="js/readout.js" />
+    <link rel="modulepreload" href="js/record.js" />
+    <link rel="modulepreload" href="js/report.js" />
+    <link rel="modulepreload" href="js/reveals.js" />
+    <link rel="modulepreload" href="js/spinner.js" />
+    <link rel="modulepreload" href="js/story.js" />
+    <link rel="modulepreload" href="js/synth.js" />
+  </head>
+  <body>
+    <div class="veil" aria-hidden="true">
+      <p>Drop it<small>It never leaves this tab.</small></p>
+    </div>
+
+    <header class="nav">
+      <a class="brand" href="#top"><i class="disc" aria-hidden="true"></i>Selecta</a>
+      <nav aria-label="Sections">
+        <a href="#how">How it works</a>
+        <a href="#try">Try it</a>
+      </nav>
+      <a class="nav-cta" href="https://github.com/Jonas-Ross/selecta">GitHub</a>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="chip" id="live">
+            <i aria-hidden="true"></i><span id="live-text">Warming up the engine</span>
+          </p>
+          <h1 id="hero-title">Let Claude dig your crates<span class="dot">.</span></h1>
+          <p class="lede">
+            Selecta hands Claude your Apple Music library, with the tempo and key of every track it
+            can measure, so the playlists it builds actually flow.
+          </p>
+          <div class="ctas">
+            <a class="btn acid" href="#get">Get Selecta</a>
+            <a class="btn ghost" href="#try">Try it on a song</a>
+          </div>
+        </div>
+
+        <div class="hero-stage">
+          <div class="glow" aria-hidden="true"></div>
+          <div class="float f1" data-depth="0.9" aria-hidden="true">
+            <div class="sleeve s1">
+              <span>Night<br />Bus</span>
+            </div>
+          </div>
+          <div class="float f2" data-depth="0.5" aria-hidden="true">
+            <div class="sleeve s2"></div>
+          </div>
+          <div class="float f3" data-depth="1.2" aria-hidden="true">
+            <div class="sleeve s3">
+              <span>Low<br />Tide</span>
+            </div>
+          </div>
+          <div class="float f4" data-depth="0.7" aria-hidden="true">
+            <div class="sleeve s4"></div>
+          </div>
+          <div class="float f5" data-depth="1.4" aria-hidden="true">
+            <div class="sleeve s5"><span>Side B</span></div>
+          </div>
+
+          <div class="turntable" id="turntable">
+            <div class="platter" id="platter">
+              <div class="spin"><canvas id="hero-vinyl" aria-hidden="true"></canvas></div>
+              <div class="gloss" aria-hidden="true"></div>
+            </div>
+            <svg class="arm" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="arm-base" cx="108" cy="6" r="8.5" />
+              <g id="arm-g">
+                <path class="arm-rod" d="M108 -3 L108 66 L104 76" />
+                <rect class="arm-weight" x="103" y="-12" width="10" height="9" rx="2" />
+                <rect
+                  class="arm-head"
+                  x="100"
+                  y="72"
+                  width="8"
+                  height="11"
+                  rx="1.5"
+                  transform="rotate(20 104 77.5)"
+                />
+                <circle class="arm-cap" cx="108" cy="6" r="3.6" />
+              </g>
+            </svg>
+            <p class="sticker" id="sticker">
+              <b id="st-bpm">---</b><span>BPM</span><em id="st-key">listening</em>
+            </p>
+          </div>
+
+          <button class="hear" id="hear" type="button" aria-pressed="false">
+            <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span
+            ><span id="hear-label">Hear the beat</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="groove" id="groove" aria-labelledby="groove-title">
+        <div class="groove-head">
+          <div class="groove-copy">
+            <h2 id="groove-title">Every groove has a number.</h2>
+            <p>
+              It's the tempo, in beats per minute. Selecta measures it for the tracks you own, so
+              Claude can keep a set moving.
+            </p>
+          </div>
+          <p class="groove-now" aria-live="polite">
+            <b id="g-bpm">124</b><em id="g-name">House</em><span>BPM</span>
+          </p>
+        </div>
+        <div class="machine">
+          <div class="machine-top">
+            <div class="presets" id="presets" role="group" aria-label="Pick a genre"></div>
+            <button class="btn acid g-hear" id="g-hear" type="button" aria-pressed="false">
+              <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span
+              ><span id="g-hear-label">Hear it</span>
+            </button>
+          </div>
+          <div class="count-row" id="count-row" aria-hidden="true"></div>
+          <div class="grid" id="grid" aria-hidden="true"></div>
+          <p class="legend">
+            <span class="l-kick">Kick</span><span class="l-snare">Snare</span
+            ><span class="l-hat">Hi-hat</span
+            ><span class="l-bar">One bar, four beats, sixteen steps</span>
+          </p>
+        </div>
+      </section>
+
+      <section class="how" id="how" aria-labelledby="how-title">
+        <h2 id="how-title" class="how-title">Three steps.<br /><span>Zero crate digging.</span></h2>
+        <div class="story" id="story">
+          <p class="story-count" aria-hidden="true">
+            <span class="now"><span>01</span><span>02</span><span>03</span></span
+            ><span class="of">/ 03</span>
+          </p>
+
+          <article class="step">
+            <div class="step-copy">
+              <p class="step-n">01</p>
+              <h3>It reads your library.</h3>
+              <p>
+                Every track and playlist in Apple Music, with play and skip counts, kept in a cache
+                on your Mac.
+              </p>
+            </div>
+            <div class="step-visual" aria-hidden="true">
+              <div class="crate">
+                <div class="rack">
+                  <i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i
+                  ><i class="c5"></i><i class="c6"></i><i class="c7"></i><i class="c8"></i>
+                </div>
+                <div class="crate-front"></div>
+              </div>
+              <p class="counts">
+                <span><b class="count" data-to="4218">4,218</b> tracks</span
+                ><span><b class="count" data-to="312">312</b> playlists</span>
+              </p>
+            </div>
+          </article>
+
+          <article class="step">
+            <div class="step-copy">
+              <p class="step-n">02</p>
+              <h3>It listens.</h3>
+              <p>
+                It hears each song's 30-second preview and writes down the tempo and key when it's
+                sure of them. The audio is never kept.
+              </p>
+            </div>
+            <div class="step-visual v-listen" aria-hidden="true">
+              <div class="wave" id="wave"></div>
+              <i class="scan"></i>
+              <div class="tags">
+                <p class="tag t-bpm">
+                  <b>124</b> BPM<span class="bar"><i style="--v: 0.92"></i></span>
+                </p>
+                <p class="tag t-key">
+                  <b>8A</b> A minor<span class="bar"><i style="--v: 0.71"></i></span>
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article class="step">
+            <div class="step-copy">
+              <p class="step-n">03</p>
+              <h3>Claude builds the set.</h3>
+              <p>
+                Ask for a vibe. Claude picks tracks whose tempos and keys blend, and you hear a
+                draft before anything is saved.
+              </p>
+            </div>
+            <div class="step-visual v-set" aria-hidden="true">
+              <p class="ask">A late-night set. Start slow, build it up.</p>
+              <div class="list">
+                <p class="row">
+                  <span class="t">Blue Hour<small>Nils Arden</small></span
+                  ><span class="b">92</span><span class="k" style="--n: 8">8A</span>
+                </p>
+                <p class="row">
+                  <span class="t">Low Tide<small>Mira Sol</small></span
+                  ><span class="b">96</span><span class="k" style="--n: 8">8A</span>
+                </p>
+                <p class="row">
+                  <span class="t">Glasshouse<small>The Lanterns</small></span
+                  ><span class="b">100</span><span class="k" style="--n: 9">9A</span>
+                </p>
+                <p class="row">
+                  <span class="t">Neon Rain<small>Kōji</small></span
+                  ><span class="b">106</span><span class="k" style="--n: 9">9B</span>
+                </p>
+                <p class="row">
+                  <span class="t">Warm Static<small>Delphine</small></span
+                  ><span class="b">112</span><span class="k" style="--n: 10">10B</span>
+                </p>
+                <svg class="curve" viewBox="0 0 300 60" preserveAspectRatio="none">
+                  <path d="M0 54 C60 52 80 46 120 40 S220 18 300 6" />
+                </svg>
+              </div>
+              <p class="saved">Saved to Apple Music</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="try" id="try" aria-labelledby="try-title">
+        <div class="try-head">
+          <h2 id="try-title">Try the ears.</h2>
+          <p>
+            Drop in any song. The engine inside Selecta measures it right here in your browser, and
+            nothing is uploaded.
+          </p>
+        </div>
+
+        <div class="deck" id="deck">
+          <div class="deck-disc" id="deck-disc">
+            <div class="beats" id="beats" aria-hidden="true"></div>
+            <button class="platter" id="deck-platter" type="button" aria-label="Choose a song">
+              <span class="spin"><canvas id="deck-vinyl" aria-hidden="true"></canvas></span>
+              <span class="gloss" aria-hidden="true"></span>
+            </button>
+          </div>
+
+          <div class="panel">
+            <p class="now-title"><span>Now measuring</span><b id="deck-title">Built-in loop</b></p>
+            <div class="readings">
+              <div class="reading" id="tempo-reading">
+                <p class="lab">Tempo</p>
+                <p class="big"><b id="bpm">---</b><span>BPM</span></p>
+                <div class="meter" id="tempo-meter" role="img" aria-label="Tempo confidence">
+                  <i></i>
+                </div>
+                <p class="sure" id="tempo-sure"></p>
+              </div>
+              <div class="reading" id="key-reading">
+                <p class="lab">Key</p>
+                <p class="big"><b id="camelot">--</b><span id="keyname">key</span></p>
+                <div class="meter" id="key-meter" role="img" aria-label="Key confidence">
+                  <i></i>
+                </div>
+                <p class="sure" id="key-sure"></p>
+              </div>
+            </div>
+            <div class="wheel" id="wheel" hidden>
+              <p class="lab">Next to it on the wheel</p>
+              <div class="wheel-keys" id="wheel-keys"></div>
+              <p class="fine">
+                DJs number the 24 keys around a clock, 1 to 12 in two rings. Keys side by side share
+                six of their seven notes; the same number in the other ring shares all seven.
+              </p>
+            </div>
+            <p class="said" id="said"></p>
+            <div class="controls">
+              <label class="btn acid file"
+                >Choose a song<input type="file" id="file" accept="audio/*"
+              /></label>
+              <button class="btn ghost" id="play" type="button" disabled>
+                <span class="tri" aria-hidden="true"></span
+                ><span id="play-label">Play with metronome</span>
+              </button>
+              <button class="btn text" id="loop" type="button">Built-in loop</button>
+            </div>
+            <p class="status" id="status" role="status"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="rules" aria-label="House rules">
+        <div class="rule">
+          <p class="big-line">Your music stays on your Mac.</p>
+          <p>
+            The library lives in a cache on your machine. Previews are heard once and thrown away.
+          </p>
+        </div>
+        <div class="rule">
+          <p class="big-line">It measures. <em>Claude chooses.</em></p>
+          <p>Selecta hands over facts. The taste is Claude's, and yours.</p>
+        </div>
+        <div class="rule">
+          <p class="big-line">When it's guessing, it says so.</p>
+          <p>Every tempo and key comes with how sure it is. Wrong data is worse than none.</p>
+        </div>
+      </section>
+
+      <section class="get" id="get" aria-labelledby="get-title">
+        <div class="get-disc" aria-hidden="true"><canvas id="get-vinyl"></canvas></div>
+        <div class="get-copy">
+          <h2 id="get-title">Put Claude<br />on the decks.</h2>
+          <p>Free and open source, for any Mac with Apple Music and Claude.</p>
+          <div class="ctas">
+            <a class="btn ink" href="https://github.com/Jonas-Ross/selecta">Get it on GitHub</a>
+            <a class="btn ink-ghost" href="https://github.com/Jonas-Ross/metrognome"
+              >Meet the engine</a
+            >
+          </div>
+          <details class="source">
+            <summary>Early days: no installer yet. Build it from source</summary>
+            <p>
+              You need a Mac with Node 22 and Rust. Install the engine, then Selecta, let it measure
+              your library, and tell Claude about it.
+            </p>
+            <pre><code>git clone https://github.com/Jonas-Ross/metrognome.git
+cd metrognome &amp;&amp; cargo install --path crates/metrognome-cli
+
+git clone https://github.com/Jonas-Ross/selecta.git
+cd selecta &amp;&amp; npm install &amp;&amp; npm run build
+node dist/index.js refresh
+node dist/index.js enrich &amp;&amp; node dist/index.js enrich --source analysis
+claude mcp add --scope user selecta -- node "$PWD/dist/index.js"</code></pre>
+            <p>
+              Apple allows about 20 preview lookups a minute, so a big library takes a few hours to
+              measure. Stop it whenever; it picks up where it left off.
+            </p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p class="wordmark" aria-hidden="true">Selecta</p>
+      <div class="foot-row">
+        <p>
+          The engine on this page is
+          <a href="https://github.com/Jonas-Ross/metrognome">metrognome</a>, compiled to
+          WebAssembly. <span id="build"></span>
+        </p>
+        <p>An independent project. Not affiliated with Apple.</p>
+      </div>
+    </footer>
+  </body>
+</html>

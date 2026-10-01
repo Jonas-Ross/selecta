@@ -13,3 +13,6 @@ coverage/
 .env.local
 .idea/
 .claude/worktrees/
+
+# Built by scripts/build-site.sh from a metrognome checkout; Pages builds its own copy.
+/site/metrognome.wasm
