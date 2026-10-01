@@ -23,6 +23,7 @@ import {
   FIELDS_BY_SOURCE,
   METROGNOME_PATH_ENV,
   enrichPendingTracks,
+  type MetrognomeBinary,
 } from '@selecta/core/enrich/index.js';
 import type { FeatureSource } from '@selecta/core/types/cache.js';
 import type { SourceField } from '@selecta/core/cache/audio_features.js';
@@ -37,6 +38,7 @@ export type CliOptions = {
   dbPath?: string;
   logger?: Logger;
   musicCheck?: () => Promise<void>;
+  metrognomeCheck?: () => Promise<MetrognomeBinary>;
   // Whether stderr can carry a redrawn progress line; a redirected run gets
   // plain lines instead.
   isTty?: boolean;
@@ -130,9 +132,9 @@ export function createCliProgram(options: CliOptions = {}): Command {
 
   program
     .command('doctor')
-    .description('Run status plus a read-only Music.app and Automation check')
+    .description('Run status plus a read-only Music.app and Automation check, and find metrognome')
     .action(async () => {
-      const result = await runDoctor(dbPath, options.musicCheck);
+      const result = await runDoctor(dbPath, options.musicCheck, options.metrognomeCheck);
 
       writeJson(result);
       reportPendingMigrations(result.database.schema);
@@ -195,7 +197,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
     )
     .option(
       '--metrognome-path <path>',
-      `path to the metrognome binary (--source analysis; default: $${METROGNOME_PATH_ENV} or metrognome on PATH)`,
+      `path to the metrognome binary (--source analysis; default: $${METROGNOME_PATH_ENV}, then metrognome on PATH or in Homebrew's bin)`,
     )
     .action(
       async ({
