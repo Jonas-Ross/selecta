@@ -146,15 +146,34 @@ export function orphanRuns(runs: Record<string, Run>, drafts: { draft_id: string
 }
 
 /** A plain sentence for whatever the save call returned. */
-export function saveOutcome(response: DraftView & { result?: Record<string, unknown> }): string {
-  if (response.error) return [response.error, response.hint].filter(Boolean).join(' ');
+export function saveOutcome(
+  response: DraftView & {
+    result?: Record<string, unknown>;
+    partial_write?: { playlist_id?: unknown; observed_track_ids?: unknown };
+  },
+): string {
+  const { result, partial_write: partial } = response;
+  const parts: string[] = [];
 
-  const result = response.result ?? {};
-  const saved = `Saved "${String(result.name)}" to Music with ${String(result.track_count)} tracks.`;
+  // An error can still carry what Music.app was seen to do; this app has no other view of it.
+  if (result?.name !== undefined) {
+    parts.push(
+      `Saved "${String(result.name)}" to Music with ${String(result.track_count)} tracks.`,
+    );
 
-  return result.order_matches_request === false
-    ? `${saved} Music.app reports a different order than the draft; check the playlist.`
-    : saved;
+    if (result.order_matches_request === false)
+      parts.push('Music.app reports a different order than the draft; check the playlist.');
+  } else if (partial?.playlist_id !== undefined) {
+    const seen = Array.isArray(partial.observed_track_ids)
+      ? ` and was seen holding ${partial.observed_track_ids.length} tracks`
+      : '';
+
+    parts.push(`Music.app created playlist ${String(partial.playlist_id)}${seen}.`);
+  }
+
+  if (response.error) parts.push(response.error, ...(response.hint ? [response.hint] : []));
+
+  return parts.join(' ');
 }
 
 type Save = NonNullable<NonNullable<DraftView['draft']>['save']>;

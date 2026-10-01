@@ -250,6 +250,8 @@ function Draft({
   // starts lands before the click that caused the blur.
   const latest = useRef<DraftView['draft']>(undefined);
   const edits = useRef<Promise<unknown>>(Promise.resolve());
+  // Set when a queued edit doesn't land, so a Save queued behind it stops.
+  const failed = useRef(false);
   const logEnd = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -314,10 +316,12 @@ function Draft({
       })) as DraftView;
 
       if (result.error) {
+        failed.current = true;
         setNotice([result.error, result.hint].filter(Boolean).join(' '));
         await load();
       } else show(result);
     } catch (e) {
+      failed.current = true;
       setNotice((e as Error).message);
     }
   }
@@ -361,6 +365,7 @@ function Draft({
   // runs after every edit queued before it.
   function save() {
     setSaving(true);
+    failed.current = false;
 
     const step = edits.current.then(commit).finally(() => setSaving(false));
 
@@ -370,6 +375,8 @@ function Draft({
   }
 
   async function commit() {
+    if (failed.current) return;
+
     const current = latest.current;
 
     if (!current || !window.confirm(`Save "${current.name}" to Music as a new playlist?`)) return;

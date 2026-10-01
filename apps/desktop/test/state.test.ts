@@ -86,6 +86,22 @@ it('describes save outcomes in a sentence', () => {
   );
 });
 
+it('keeps what Music.app was seen to do when the save also reports an error', () => {
+  expect(
+    saveOutcome({
+      error: 'storage_error',
+      hint: 'Do not repeat creation.',
+      result: { name: 'Peak', track_count: 12 },
+    }),
+  ).toBe('Saved "Peak" to Music with 12 tracks. storage_error Do not repeat creation.');
+  expect(
+    saveOutcome({
+      error: 'jxa_error',
+      partial_write: { playlist_id: 'P1', observed_track_ids: ['a', 'b'] },
+    }),
+  ).toBe('Music.app created playlist P1 and was seen holding 2 tracks. jxa_error');
+});
+
 it('labels the save button by what the draft recorded', () => {
   expect(saveLabel(undefined)).toBe('Save to Music');
   expect(saveLabel({ status: 'pending' })).toBe('Save pending');
