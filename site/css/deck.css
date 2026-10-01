@@ -43,9 +43,13 @@
   aspect-ratio: 1;
   justify-self: center;
 }
-.platter {
+.deck-disc .platter {
   position: absolute;
-  inset: 0;
+  inset: 7%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
   border-radius: 50%;
   box-shadow:
     0 40px 90px -20px rgba(0, 0, 0, 0.9),
@@ -79,13 +83,6 @@
   );
   -webkit-mask: radial-gradient(circle, transparent 0 34%, #000 35%);
   mask: radial-gradient(circle, transparent 0 34%, #000 35%);
-}
-.deck-disc .platter {
-  inset: 7%;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
 }
 .beats {
   position: absolute;

@@ -31,11 +31,16 @@ const PHOTO = {
   ],
   padW: 3.396,
   lanes: { kick: [25.349, 13.372], snare: [42.326, 13.256], hat: [59.186, 13.372] },
+  // The step marks' row, and the display window as left, top, width, height.
+  marksY: 18.6,
+  lcd: [4.53, 41.4, 7.17, 14.88],
 };
 // Room around each pad for its glow, which spills onto the aluminium in the lit photo.
 const BLOOM = { x: 0.9, y: 3.2 };
+// The tempo shows twice: big beside the heading, small on the machine's display.
+const READOUTS = ['g-bpm', 'lcd'];
 // A hit flashes the pad to full and settles back to its resting glow in machine.css.
-const FLASH = [{ opacity: 1 }];
+const FLASH = [{ opacity: 1, offset: 0 }];
 // Unattended, the machine moves to the next genre at the first bar line after this long.
 const AUTO_SECS = 5;
 const groove = { i: 1, t0: 0, last: -1, auto: true, seen: false, raf: 0, pads: {}, marks: [] };
@@ -54,8 +59,10 @@ function build() {
       return b;
     }),
   );
-  $('g-bpm').textContent = $('lcd').textContent = GROOVES[groove.i].bpm;
+  READOUTS.forEach((id) => ($(id).textContent = GROOVES[groove.i].bpm));
   $('g-name').textContent = GROOVES[groove.i].name;
+  ['left', 'top', 'width', 'height'].forEach((k, i) => ($('lcd').style[k] = `${PHOTO.lcd[i]}%`));
+  $('count-row').style.top = `${PHOTO.marksY}%`;
 
   for (let s = 0; s < STEPS; s++) {
     const mark = el('i', { textContent: s % 4 ? '' : String(s / 4 + 1) });
@@ -70,7 +77,7 @@ function build() {
     groove.pads[lane] = [];
 
     for (let s = 0; s < STEPS; s++) {
-      const pad = el('i', { className: lane }, el('b'));
+      const pad = el('i', {}, el('b'));
       const box = {
         x: PHOTO.cols[s] - BLOOM.x,
         y: top - BLOOM.y,
@@ -121,8 +128,7 @@ function setGroove(i, byHand) {
   const g = GROOVES[i];
 
   [...$('presets').children].forEach((b, j) => b.setAttribute('aria-pressed', String(j === i)));
-  countTo($('g-bpm'), g.bpm, (v) => Math.round(v), 0.6, was);
-  countTo($('lcd'), g.bpm, (v) => Math.round(v), 0.6, was);
+  READOUTS.forEach((id) => countTo($(id), g.bpm, (v) => Math.round(v), 0.6, was));
   $('g-name').textContent = g.name;
 
   if (motion)

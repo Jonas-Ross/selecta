@@ -1,11 +1,11 @@
 // Scroll reveals for everything below the story: headlines, the machine, the deck, the rules.
 import { $$ } from './dom.js';
-import { gsap } from './motion.js';
+import { HIDDEN, gsap, maskedSplit } from './motion.js';
 
 // A headline's lines rise out of their own masks as its section arrives.
 function lineReveal(title, trigger, start) {
-  gsap.from(SplitText.create(title, { type: 'lines', mask: 'lines', linesClass: 'ln' }).lines, {
-    yPercent: 130,
+  gsap.from(maskedSplit(title, 'lines').lines, {
+    yPercent: HIDDEN,
     stagger: 0.1,
     duration: 1,
     ease: 'expo.out',
@@ -30,14 +30,10 @@ export function reveals() {
     scrollTrigger: { trigger: '.machine', start: 'top 80%' },
   });
 
-  const tryTitle = SplitText.create('#try-title', {
-    type: 'chars',
-    mask: 'chars',
-    charsClass: 'ch',
-  });
+  const tryTitle = maskedSplit('#try-title', 'chars');
 
   gsap.from(tryTitle.chars, {
-    yPercent: 130,
+    yPercent: HIDDEN,
     stagger: 0.03,
     duration: 0.9,
     ease: 'expo.out',

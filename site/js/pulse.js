@@ -22,8 +22,8 @@ const PULSES = {
   live: [
     liveDot,
     ['#sticker', hit({ transform: 'scale(1.08)' }, { transform: 'scale(1)' }), 0],
-    // The film brightens on every kick, as if the room's lights were on the beat.
-    ['#film', hit({ filter: 'brightness(1.4)' }, { filter: 'brightness(1)' }), 0],
+    // A light over the film flashes on every kick, as if the room's lights were on the beat.
+    ['#beat-light', hit({ opacity: 1 }, { opacity: 0 }), 0],
     [
       '#hero-title .dot',
       hit(

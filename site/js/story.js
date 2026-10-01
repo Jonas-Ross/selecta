@@ -7,17 +7,17 @@ import { lcg } from './synth.js';
 function crateScene(step, enter) {
   const tl = gsap.timeline();
   const q = gsap.utils.selector(step);
-  const sleeves = q('.rack i');
+  // Last in the markup is the front of the crate.
+  const sleeves = q('.rack i').reverse();
 
   if (enter) tl.from(q('.crate'), { y: 50, autoAlpha: 0, duration: 0.6, ease: 'power3.out' }, 0);
 
-  sleeves.forEach((s, i) => (s.style.zIndex = sleeves.length - i));
   // Digging: the front record comes up for a look, then goes in at the back of the crate.
   sleeves.slice(0, 4).forEach((s, i) => {
     const at = 0.25 + i * 0.42;
 
     tl.to(s, { yPercent: -55, rotation: i % 2 ? 2.5 : -2, duration: 0.2, ease: 'power2.out' }, at)
-      .set(s, { zIndex: 0 }, at + 0.28)
+      .set(s, { zIndex: -1 }, at + 0.28)
       .to(s, { yPercent: 0, rotation: 0, duration: 0.18, ease: 'power2.in' }, at + 0.28);
   });
   tl.from(q('.counts'), { y: 14, autoAlpha: 0, duration: 0.35, ease: 'power2.out' }, 0.15);

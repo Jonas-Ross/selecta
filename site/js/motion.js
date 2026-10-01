@@ -3,6 +3,12 @@ export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').match
 export const gsap = window.gsap;
 export const motion = !!gsap && !reduceMotion;
 
+// Splits text into masked pieces. base.css pads every mask so tails and overhangs show,
+// so a piece has to travel further than its own height to hide.
+export const HIDDEN = 135;
+export const maskedSplit = (target, mask, type = mask) =>
+  SplitText.create(target, { type, mask, [`${mask}Class`]: mask });
+
 // Endless motion pauses while its element is off screen, so the page goes idle as it's read.
 const watchers = new Map();
 const onScreen = new IntersectionObserver((entries) =>

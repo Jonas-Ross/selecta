@@ -14,7 +14,7 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: var(--bg) url('../media/hero-poster.avif') 72% 50% / cover no-repeat;
+  background: var(--bg);
 }
 .film video {
   display: block;
@@ -32,12 +32,24 @@
     linear-gradient(
       90deg,
       var(--bg) 0%,
-      rgb(8 8 10 / 0.82) 24%,
-      rgb(8 8 10 / 0.2) 56%,
+      color-mix(in srgb, var(--bg) 82%, transparent) 24%,
+      color-mix(in srgb, var(--bg) 20%, transparent) 56%,
       transparent 74%
     ),
     linear-gradient(0deg, var(--bg) 0%, transparent 28%),
-    linear-gradient(180deg, rgb(8 8 10 / 0.55) 0%, transparent 20%);
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 55%, transparent) 0%, transparent 20%);
+}
+/* Flashes on the beat over the stylus, where the lime light already sits in the shot. */
+.beat-light {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    55% 60% at 70% 45%,
+    color-mix(in srgb, var(--acid) 16%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+  pointer-events: none;
 }
 .hero-copy {
   display: grid;
@@ -55,9 +67,7 @@
   border-radius: 999px;
   font: 500 12.5px/1.2 var(--mono);
   color: var(--ink-2);
-  background: rgb(8 8 10 / 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--bg) 75%, transparent);
 }
 .chip i {
   width: 8px;
@@ -138,7 +148,7 @@
   padding: 11px 17px 11px 14px;
   border: 1.5px solid var(--line-2);
   border-radius: 999px;
-  background: rgb(8 8 10 / 0.55);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   font-size: 14.5px;
@@ -185,8 +195,13 @@
   }
   .film::after {
     background:
-      linear-gradient(0deg, var(--bg) 0%, rgb(8 8 10 / 0.85) 42%, rgb(8 8 10 / 0.1) 70%),
-      linear-gradient(180deg, rgb(8 8 10 / 0.6) 0%, transparent 16%);
+      linear-gradient(
+        0deg,
+        var(--bg) 0%,
+        color-mix(in srgb, var(--bg) 85%, transparent) 42%,
+        color-mix(in srgb, var(--bg) 10%, transparent) 70%
+      ),
+      linear-gradient(180deg, color-mix(in srgb, var(--bg) 60%, transparent) 0%, transparent 16%);
   }
   .hero-copy {
     align-self: end;

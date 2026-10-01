@@ -108,14 +108,13 @@
   display: block;
   width: 100%;
   height: auto;
-  -webkit-mask:
-    linear-gradient(90deg, transparent, #000 8% 92%, transparent),
-    linear-gradient(transparent, #000 10% 86%, transparent);
-  -webkit-mask-composite: source-in;
-  mask:
-    linear-gradient(90deg, transparent, #000 8% 92%, transparent),
-    linear-gradient(transparent, #000 10% 86%, transparent);
-  mask-composite: intersect;
+  --fy: 12%;
+}
+/* Its own stacking context, so a sleeve sent to the back stays above the photo. */
+.rack {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 .rack i {
   position: absolute;

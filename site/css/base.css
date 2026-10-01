@@ -123,15 +123,29 @@ button {
 }
 /* SplitText clips each mask to its line box, which cut off descenders and overhanging
    letters. The padding widens the clip; the matching negative margin keeps the layout. */
-.w-mask,
-.ch-mask {
+.words-mask,
+.chars-mask {
   padding: 0.1em 0.14em 0.26em;
   margin: -0.1em -0.14em -0.26em;
 }
 /* Line masks are blocks, so only one side may go negative or the margins collapse. */
-.ln-mask {
+.lines-mask {
   padding: 0 0.14em 0.26em;
   margin: 0 -0.14em -0.26em;
+}
+
+/* A photo's backdrop fades out at its edges instead of ending in a hard rectangle. */
+.feather {
+  --fx: 8%;
+  --fy: 10%;
+  -webkit-mask:
+    linear-gradient(90deg, transparent, #000 var(--fx) calc(100% - var(--fx)), transparent),
+    linear-gradient(transparent, #000 var(--fy) calc(100% - var(--fy)), transparent);
+  -webkit-mask-composite: source-in;
+  mask:
+    linear-gradient(90deg, transparent, #000 var(--fx) calc(100% - var(--fx)), transparent),
+    linear-gradient(transparent, #000 var(--fy) calc(100% - var(--fy)), transparent);
+  mask-composite: intersect;
 }
 
 /* Held back until the intro animates them in; the delay is a failsafe if scripts never run. */

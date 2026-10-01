@@ -37,7 +37,9 @@ function ready({ report }) {
   const sure = tempo && !tempo.uncertain;
 
   setIdleBpm(sure ? tempo.bpm : 0);
-  settleMark(sure);
+
+  if (sure) settleMark();
+
   $('live').classList.add('ready');
   $('live-text').textContent = 'Engine live in this tab';
   countTo($('st-bpm'), tempo?.bpm, (v) => Math.round(v), 1.4);
@@ -47,7 +49,6 @@ function ready({ report }) {
 }
 
 function fail() {
-  settleMark(false);
   $('live').classList.add('fail');
   $('live-text').textContent = "The engine didn't load in this browser";
   $('st-bpm').textContent = '--';
@@ -57,10 +58,10 @@ function fail() {
 function film() {
   const video = $('film');
 
-  // Reduced motion keeps the poster and never fetches the film; otherwise it runs while seen.
+  // Reduced motion keeps the poster and never fetches the film; otherwise playing it
+  // the first time it is seen is what loads it.
   if (!motion) return;
 
-  video.preload = 'auto';
   whileSeen(video, (on) => (on ? video.play().catch(() => {}) : video.pause()));
 }
 

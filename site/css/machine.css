@@ -123,35 +123,27 @@
   display: block;
   width: 100%;
   height: auto;
-  /* The photo's tabletop fades out at its edges instead of ending in a hard rectangle. */
-  -webkit-mask:
-    linear-gradient(90deg, transparent, #000 6% 94%, transparent),
-    linear-gradient(transparent, #000 9% 91%, transparent);
-  -webkit-mask-composite: source-in;
-  mask:
-    linear-gradient(90deg, transparent, #000 6% 94%, transparent),
-    linear-gradient(transparent, #000 9% 91%, transparent);
-  mask-composite: intersect;
+  --fx: 6%;
+  --fy: 9%;
 }
 .lcd {
   position: absolute;
-  left: 4.53%;
-  top: 41.4%;
-  width: 7.17%;
-  height: 14.88%;
   display: grid;
   place-items: center;
   font: 600 2.1cqw/1 var(--led);
   color: var(--acid);
   text-shadow: 0 0 0.6cqw color-mix(in srgb, var(--acid) 70%, transparent);
 }
+.count-row {
+  position: absolute;
+  inset-inline: 0;
+}
 .count-row i {
   position: absolute;
-  top: 18.6%;
   translate: -50% -50%;
   font: 500 max(9px, 0.75cqw)/1 var(--mono);
   font-style: normal;
-  color: rgb(242 239 232 / 0.4);
+  color: color-mix(in srgb, var(--ink) 40%, transparent);
 }
 .count-row i:empty::before {
   content: '';
@@ -160,7 +152,7 @@
   min-width: 3px;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: rgb(242 239 232 / 0.22);
+  background: var(--line-2);
 }
 .count-row i.now {
   color: var(--acid);
