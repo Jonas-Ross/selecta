@@ -156,7 +156,8 @@ function Home({
             <button onClick={() => onOpen(draft.draft_id)}>
               <strong>{draft.name}</strong>
               <span className="muted">
-                {draft.track_count} tracks{draft.save_status === 'finished' ? ' · saved' : ''}
+                {draft.track_count} tracks
+                {draft.save ? ` · ${saveLabel(draft.save).toLowerCase()}` : ''}
               </span>
             </button>
           </li>

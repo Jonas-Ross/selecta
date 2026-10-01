@@ -14,14 +14,14 @@ it('lists nothing when only preferences exist', () => {
   expect(drafts.list()).toEqual([]);
 });
 
-it('lists drafts newest first with counts and save status', () => {
+it('lists drafts newest first with counts and save attempts', () => {
   const drafts = makeDraftStore();
   const first = drafts.create(randomUUID(), 'Warmup', ['A', 'B']);
   const second = drafts.create(randomUUID(), 'Peak', ['C', 'C', 'D']);
 
   drafts.update(first.draft_id, 1, (draft) => ({
     ...draft,
-    save: { revision: 1, status: 'finished' },
+    save: { revision: 1, status: 'finished', result: { error: 'jxa_error' } },
   }));
 
   expect(drafts.list()).toEqual([
@@ -30,14 +30,13 @@ it('lists drafts newest first with counts and save status', () => {
       name: 'Peak',
       revision: 1,
       track_count: 3,
-      save_status: undefined,
     },
     {
       draft_id: first.draft_id,
       name: 'Warmup',
       revision: 2,
       track_count: 2,
-      save_status: 'finished',
+      save: { revision: 1, status: 'finished', result: { error: 'jxa_error' } },
     },
   ]);
 });

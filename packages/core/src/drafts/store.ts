@@ -21,7 +21,7 @@ export type DraftSummary = {
   name: string;
   revision: number;
   track_count: number;
-  save_status?: 'pending' | 'finished';
+  save?: Draft['save'];
 };
 
 // Set by front ends whose only Music.app write is Save: a preview-linked draft
@@ -154,7 +154,7 @@ export class DraftStore {
           name: draft.name,
           revision: draft.revision,
           track_count: draft.entries.length,
-          save_status: draft.save?.status,
+          save: draft.save,
         };
       });
     });
