@@ -281,6 +281,24 @@ describe('setup --apply', () => {
     expect(step(report, 'claude_code').status).toBe('missing');
   });
 
+  it('repairs a matching entry whose env is malformed, keeping its string pairs', async () => {
+    const { deps, home } = fixture({
+      desktop: JSON.stringify({ mcpServers: { selecta: { ...SERVER, env: { A: 'b', N: 1 } } } }),
+    });
+
+    expect(step(await runSetup(deps), 'claude_desktop').status).toBe('would_change');
+    expect(step(await runSetup(deps, { apply: true }), 'claude_desktop').status).toBe('changed');
+    expect(
+      JSON.parse(readFileSync(desktopConfigPath(home), 'utf8')).mcpServers.selecta.env,
+    ).toEqual({ A: 'b' });
+
+    writeFileSync(
+      desktopConfigPath(home),
+      JSON.stringify({ mcpServers: { selecta: { ...SERVER, env: null } } }),
+    );
+    expect(step(await runSetup(deps), 'claude_desktop').status).toBe('would_change');
+  });
+
   it('pins a hand-given metrognome path into the entry, keeping the user env', async () => {
     const pin = { SELECTA_METROGNOME_PATH: '/opt/mg/metrognome' };
     const { deps, home } = fixture({

@@ -177,14 +177,23 @@ export function runCommand(command: string, args: string[]): Promise<CommandResu
   });
 }
 
+// The string pairs of an entry's env; anything else in it can't launch.
+function stringEnv(env: unknown): Record<string, string> {
+  if (env == null || typeof env !== 'object' || Array.isArray(env)) return {};
+
+  return Object.fromEntries(
+    Object.entries(env).filter((pair): pair is [string, string] => typeof pair[1] === 'string'),
+  );
+}
+
 /** A stdio entry running this build, with any env setup pins; other env is the user's. */
 function launchesThis(current: unknown, server: ServerEntry): boolean {
   if (current == null || typeof current !== 'object') return false;
 
   const { type, url, command, args, env } = current as Record<string, unknown>;
-  const currentEnv = env as Record<string, unknown> | undefined;
+  const currentEnv = stringEnv(env);
   const pinned = Object.entries(server.env ?? {}).every(
-    ([key, value]) => currentEnv?.[key] === value,
+    ([key, value]) => currentEnv[key] === value,
   );
 
   return (
@@ -192,8 +201,9 @@ function launchesThis(current: unknown, server: ServerEntry): boolean {
     url == null &&
     command === server.command &&
     isDeepStrictEqual(args, server.args) &&
+    (env === undefined || isDeepStrictEqual(env, currentEnv)) &&
     pinned &&
-    currentEnv?.[METROGNOME_PATH_ENV] === server.env?.[METROGNOME_PATH_ENV]
+    currentEnv[METROGNOME_PATH_ENV] === server.env?.[METROGNOME_PATH_ENV]
   );
 }
 
@@ -201,7 +211,7 @@ function launchesThis(current: unknown, server: ServerEntry): boolean {
 // url, headers or transport type from an old remote entry would contradict it.
 // The metrognome pin is setup's: only the binary this run checked may stay.
 function replacement(previous: unknown, server: ServerEntry): Record<string, unknown> {
-  const env = { ...(previous as { env?: Record<string, string> } | null | undefined)?.env };
+  const env = stringEnv((previous as { env?: unknown } | null | undefined)?.env);
 
   delete env[METROGNOME_PATH_ENV];
   Object.assign(env, server.env);
