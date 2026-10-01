@@ -571,7 +571,8 @@ export async function runSetup(
     code: () => planCode(deps, now),
   };
   const steps: SetupStep[] = [];
-  const requested: SetupStep[] = [];
+  const absentClients: SetupStep[] = [];
+  let canTakeSelecta = false;
 
   for (const client of CLIENTS) {
     if (!clients.includes(client)) {
@@ -584,6 +585,7 @@ export async function runSetup(
     }
 
     const planned = planners[client]();
+    const absent = planned.step.status === 'skipped';
     const step =
       badPin && planned.step.status === 'would_change'
         ? {
@@ -596,17 +598,15 @@ export async function runSetup(
           : planned.step;
 
     steps.push(step);
-    requested.push(step);
+
+    if (absent) absentClients.push(step);
+
+    canTakeSelecta ||= ['ok', 'would_change'].includes(planned.step.status);
   }
 
   // A missing client is only a gap when no requested client could take Selecta.
-  if (
-    !badPin &&
-    !requested.some((step) => ['ok', 'would_change', 'changed'].includes(step.status))
-  ) {
-    for (const step of requested) {
-      if (step.status !== 'skipped') continue;
-
+  if (!canTakeSelecta) {
+    for (const step of absentClients) {
       step.status = 'missing';
       step.fix = `Install it and rerun setup, or register another MCP client by hand: ${README}`;
     }

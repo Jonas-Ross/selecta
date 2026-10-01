@@ -266,6 +266,21 @@ describe('setup --apply', () => {
     expect(mcpCalls(calls)).toEqual([]);
   });
 
+  it('still names absent clients when a hand-given metrognome fails the check', async () => {
+    const { deps } = fixture({ desktop: null, claude: false });
+
+    deps.server = { ...SERVER, env: { SELECTA_METROGNOME_PATH: '/nope/metrognome' } };
+
+    deps.metrognomeCheck = async () => {
+      throw new Error('metrognome not found.');
+    };
+
+    const report = await runSetup(deps, { apply: true });
+
+    expect(step(report, 'claude_desktop').status).toBe('missing');
+    expect(step(report, 'claude_code').status).toBe('missing');
+  });
+
   it('pins a hand-given metrognome path into the entry, keeping the user env', async () => {
     const pin = { SELECTA_METROGNOME_PATH: '/opt/mg/metrognome' };
     const { deps, home } = fixture({
