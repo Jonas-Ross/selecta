@@ -235,13 +235,15 @@ function Draft({
 }: {
   draftId: string;
   run?: Run;
-  onStart: (brief: string) => void;
-  onSend: (text: string, message: string) => void;
+  onStart: (brief: string) => Promise<unknown>;
+  onSend: (text: string, message: string) => Promise<unknown>;
   onBack: () => void;
 }) {
   const [view, setView] = useState<DraftView>();
   const log = run?.log ?? [];
-  const working = run?.working ?? false;
+  // The host records a request before answering it, so until the answer the run may not show it yet.
+  const [asking, setAsking] = useState(false);
+  const working = (run?.working ?? false) || asking;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState('');
   const [dragged, setDragged] = useState<string>();
@@ -362,16 +364,25 @@ function Draft({
 
     setFeedback('');
 
-    // A build that failed before creating the draft has nothing to revise.
-    if (!draft) return onStart(text);
+    setAsking(true);
 
-    onSend(
-      text,
-      feedbackMessage(
-        text,
-        items.filter((row) => selected.has(row.entry_id)),
-      ),
-    );
+    // A build that failed before creating the draft has nothing to revise.
+    const request = draft
+      ? onSend(
+          text,
+          feedbackMessage(
+            text,
+            items.filter((row) => selected.has(row.entry_id)),
+          ),
+        )
+      : onStart(text);
+
+    request.finally(() => setAsking(false));
+  }
+
+  // Leaving waits for queued edits, and stays put if one didn't land so its notice is seen.
+  function back() {
+    Promise.all(inflight.current).then((landed) => landed.every(Boolean) && onBack());
   }
 
   // Save is a barrier in the edit queue: controls lock on the click, and it
@@ -411,7 +422,7 @@ function Draft({
   return (
     <main className="draft">
       <header>
-        <button disabled={saving} onClick={onBack}>
+        <button disabled={saving} onClick={back}>
           Back
         </button>
         {draft ? (
