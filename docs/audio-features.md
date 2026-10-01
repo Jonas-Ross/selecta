@@ -136,6 +136,12 @@ records the attempt. It also carries each estimate's own confidence (0-1) and
 is `validated` against published references, its key `provisional`, so a key
 from analysis is a hint however confident the number looks.
 
+The same goes for everything measured from a match metrognome flags
+`uncertain`: the preview is likely another recording (a US-store search for a
+Japanese library's 久石譲 "Summer" lands on another artist's "Summer"), so the
+attempt is recorded as `no_match` and nothing is stored, however confident the
+tempo.
+
 ## Watching a long run
 
 A whole-library `analysis` backlog is thousands of tracks at ~1-3s each, which
@@ -232,3 +238,18 @@ The binary is found at `SELECTA_METROGNOME_PATH`, the CLI's
 returns every track skipped with the reason in `source_errors` and changes
 nothing — Selecta is in daily use and an absent optional binary is not an
 outage.
+
+Two optional variables reach metrognome as flags, and neither is passed when
+unset, so any release works without them:
+
+- `SELECTA_STORE_COUNTRY` (`--country`): the two-letter code of the store the
+  library was bought in. metrognome searches the US store without it, which
+  misses regional releases and stores that spell artists in their own script.
+  Needs a metrognome release that has `--country`. Tracks already recorded
+  `no_match` keep that record; `reopen -s analysis -m bpm --apply` puts them back.
+- `SELECTA_KEY_PROFILE` (`--key-profile`): `edm` (metrognome's default, fitted
+  to dance music) or `krumhansl` (fitted to classical and pop). Its key source
+  label names the profile, so `supersede` can tell the two apart.
+
+A malformed value is refused before the run starts, with the reason in
+`source_errors`.

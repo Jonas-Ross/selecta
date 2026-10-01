@@ -12,8 +12,11 @@ export {
 } from './engine.js';
 export type { FetchLike } from './sources.js';
 export {
+  KEY_PROFILE_ENV,
   METROGNOME_PATH_ENV,
+  STORE_COUNTRY_ENV,
   analyzeTracks,
+  configuredArgs,
   metrognomePath,
   toFeaturesRow,
   type ChildLike,
