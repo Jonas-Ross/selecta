@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -104,6 +113,21 @@ describe('setup --apply', () => {
     expect(readFileSync(desktop.backup, 'utf8')).toBe(original);
   });
 
+  it('writes through a symlinked Desktop config instead of replacing the link', async () => {
+    const { deps, home } = fixture({ desktop: null });
+    const managed = join(home, 'dotfiles', 'claude.json');
+
+    mkdirSync(dirname(managed), { recursive: true });
+    mkdirSync(dirname(desktopConfigPath(home)), { recursive: true });
+    writeFileSync(managed, '{}');
+    symlinkSync(managed, desktopConfigPath(home));
+
+    await runSetup(deps, { apply: true });
+
+    expect(lstatSync(desktopConfigPath(home)).isSymbolicLink()).toBe(true);
+    expect(JSON.parse(readFileSync(managed, 'utf8'))).toEqual({ mcpServers: { selecta: SERVER } });
+  });
+
   it('creates the Desktop config when Claude Desktop has none yet, with no backup', async () => {
     const { deps, home } = fixture();
 
@@ -161,6 +185,7 @@ describe('setup --apply', () => {
 
     expect(code.status).toBe('changed');
     expect(JSON.parse(readFileSync(code.backup, 'utf8'))).toEqual({ selecta: stale });
+    expect(statSync(code.backup).mode & 0o777).toBe(0o600);
     expect(mcpCalls(calls)).toEqual([
       ['/usr/local/bin/claude', 'mcp', 'remove', '--scope', 'user', 'selecta'],
       [

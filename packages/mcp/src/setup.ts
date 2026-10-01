@@ -266,10 +266,12 @@ function planDesktop(deps: SetupDeps, now: Date): Planned {
         2,
       );
       // A rename never leaves Claude Desktop a half-written config to choke on.
-      const temp = `${path}.selecta-${process.pid}.tmp`;
+      // Write through a symlink (a dotfiles-managed config) rather than replace it.
+      const target = exists ? realpathSync(path) : path;
+      const temp = `${target}.selecta-${process.pid}.tmp`;
 
-      writeFileSync(temp, body + '\n', { mode: exists ? statSync(path).mode : 0o644 });
-      renameSync(temp, path);
+      writeFileSync(temp, body + '\n', { mode: exists ? statSync(target).mode : 0o644 });
+      renameSync(temp, target);
 
       return {
         step: 'claude_desktop',
@@ -341,8 +343,11 @@ function planCode(deps: SetupDeps, now: Date): Planned {
       if (previous != null) {
         // Claude Code owns ~/.claude.json, so the backup is the entry alone.
         backup = join(dirname(deps.dbPath), 'setup-backups', `claude-code-${stamp(now)}.json`);
-        mkdirSync(dirname(backup), { recursive: true });
-        writeFileSync(backup, JSON.stringify({ [SERVER_NAME]: previous }, null, 2) + '\n');
+        // The entry's env can hold keys, so only this user may read the copy.
+        mkdirSync(dirname(backup), { recursive: true, mode: 0o700 });
+        writeFileSync(backup, JSON.stringify({ [SERVER_NAME]: previous }, null, 2) + '\n', {
+          mode: 0o600,
+        });
 
         const removed = await deps.run(claude, ['mcp', 'remove', '--scope', 'user', SERVER_NAME]);
 
