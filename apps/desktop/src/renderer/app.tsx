@@ -249,6 +249,7 @@ function Draft({
   const [dragged, setDragged] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [name, setName] = useState('');
   const naming = useRef(false);
   // Only typing commits a name, so blurring never writes back a name Claude has since changed.
@@ -284,7 +285,7 @@ function Draft({
   const items = rows(view ?? {});
   const saved = draft?.save !== undefined;
   const linked = previewLinked(view ?? {});
-  const locked = saved || linked || saving;
+  const locked = saved || linked || saving || leaving;
 
   // Live revisions keep arriving from Claude; don't overwrite a name being typed.
   useEffect(() => {
@@ -380,9 +381,13 @@ function Draft({
     request.finally(() => setAsking(false));
   }
 
-  // Leaving waits for queued edits, and stays put if one didn't land so its notice is seen.
+  // Leaving locks the controls and waits for queued edits, and stays put if
+  // one didn't land so its notice is seen.
   function back() {
-    Promise.all(inflight.current).then((landed) => landed.every(Boolean) && onBack());
+    setLeaving(true);
+    Promise.all(inflight.current).then((landed) =>
+      landed.every(Boolean) ? onBack() : setLeaving(false),
+    );
   }
 
   // Save is a barrier in the edit queue: controls lock on the click, and it
@@ -422,7 +427,7 @@ function Draft({
   return (
     <main className="draft">
       <header>
-        <button disabled={saving} onClick={back}>
+        <button disabled={saving || leaving} onClick={back}>
           Back
         </button>
         {draft ? (
