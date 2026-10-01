@@ -275,7 +275,7 @@ function Draft({
   const items = rows(view ?? {});
   const saved = draft?.save !== undefined;
   const linked = previewLinked(view ?? {});
-  const locked = saved || linked;
+  const locked = saved || linked || saving;
 
   // Live revisions keep arriving from Claude; don't overwrite a name being typed.
   useEffect(() => {
@@ -357,14 +357,22 @@ function Draft({
     );
   }
 
-  async function save() {
-    await edits.current;
+  // Save is a barrier in the edit queue: controls lock on the click, and it
+  // runs after every edit queued before it.
+  function save() {
+    setSaving(true);
 
+    const step = edits.current.then(commit).finally(() => setSaving(false));
+
+    edits.current = step;
+
+    return step;
+  }
+
+  async function commit() {
     const current = latest.current;
 
     if (!current || !window.confirm(`Save "${current.name}" to Music as a new playlist?`)) return;
-
-    setSaving(true);
 
     try {
       const result = (await selecta.call('drafts.save', {
@@ -374,8 +382,8 @@ function Draft({
 
       setNotice(saveOutcome(result));
       await load();
-    } finally {
-      setSaving(false);
+    } catch (e) {
+      setNotice((e as Error).message);
     }
   }
 
