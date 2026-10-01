@@ -41,7 +41,6 @@ import {
   shellQuote,
   whichOnPath,
   type Client,
-  type ServerEntry,
   type SetupDeps,
 } from './setup.js';
 import type { Bridge } from '@selecta/core/types/bridge.js';
@@ -507,18 +506,20 @@ export function createCliProgram(options: CliOptions = {}): Command {
       }) => {
         try {
           const entry = resolve(process.argv[1] ?? '');
+          const pin = metrognomeOverride(metrognomeBinary);
           const report = await runSetup(
             {
               home: homedir(),
               dbPath,
-              server: withMetrognomePin(serverEntry(entry), metrognomeBinary),
+              server: pin
+                ? { ...serverEntry(entry), env: { [METROGNOME_PATH_ENV]: pin } }
+                : serverEntry(entry),
               invocation: basename(entry) === 'selecta' ? 'selecta' : `node ${displayPath(entry)}`,
               which: (name) => whichOnPath(name),
               run: runCommand,
               musicCheck: options.musicCheck ?? checkMusicApp,
               metrognomeCheck:
-                options.metrognomeCheck ??
-                (() => resolveMetrognome({ binaryPath: metrognomeBinary })),
+                options.metrognomeCheck ?? (() => resolveMetrognome({ binaryPath: pin })),
               ...options.setup,
             },
             { apply, clients: client ?? CLIENTS },
@@ -548,11 +549,12 @@ export function createCliProgram(options: CliOptions = {}): Command {
 }
 
 // A path the user gave by hand reaches a GUI client only if the entry carries
-// it; one found on PATH or in Homebrew's bin is found there again.
-function withMetrognomePin(server: ServerEntry, flag: string | undefined): ServerEntry {
+// it, so the absolute path pinned is the one checked; PATH and Homebrew's bin
+// are searched again by the client.
+function metrognomeOverride(flag: string | undefined): string | undefined {
   const override = flag ?? process.env[METROGNOME_PATH_ENV];
 
-  return override ? { ...server, env: { [METROGNOME_PATH_ENV]: resolve(override) } } : server;
+  return override ? resolve(override) : undefined;
 }
 
 const STEP_MARKS = {

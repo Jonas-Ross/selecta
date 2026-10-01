@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative as relativePath } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createCliProgram } from '../src/cli.js';
 import {
@@ -22,6 +22,7 @@ import {
   whichOnPath,
   type CommandResult,
   type SetupDeps,
+  type SetupReport,
 } from '../src/setup.js';
 import { BridgeError } from '@selecta/core/types/errors.js';
 import { SelectaCache } from '@selecta/core/cache/index.js';
@@ -584,5 +585,39 @@ describe('selecta setup CLI', () => {
     expect(info).toHaveBeenCalledWith(expect.stringContaining('Re-run with --apply'));
     // No cache yet in the fixture home.
     expect(setExitCode).toHaveBeenCalledWith(1);
+  });
+
+  it('checks and pins the same absolute metrognome path it was given', async () => {
+    const { deps, home } = fixture();
+    const { server: _, metrognomeCheck: __, ...rest } = deps;
+    const binary = join(home, 'metrognome');
+
+    writeFileSync(binary, '#!/bin/sh\necho "metrognome 0.1.0"\n', { mode: 0o755 });
+
+    const run = async (path: string) => {
+      const stdout: string[] = [];
+
+      await createCliProgram({
+        dbPath: deps.dbPath,
+        logger: { info: vi.fn(), debug: vi.fn(), error: vi.fn() },
+        setExitCode: vi.fn(),
+        writeStdout: (text) => stdout.push(text),
+        setup: rest,
+      }).parseAsync(['node', 'selecta', 'setup', '--metrognome-path', path]);
+
+      return JSON.parse(stdout[0]!) as SetupReport;
+    };
+
+    const relative = await run(relativePath(process.cwd(), binary));
+
+    expect(relative.server.env).toEqual({ SELECTA_METROGNOME_PATH: binary });
+    expect(step(relative, 'metrognome').status).toBe('ok');
+
+    // A bare name is a path relative to here, not a PATH lookup.
+    vi.stubEnv('PATH', home);
+    const bare = await run('metrognome').finally(() => vi.unstubAllEnvs());
+
+    expect(step(bare, 'metrognome').status).toBe('error');
+    expect(step(bare, 'claude_desktop').status).toBe('skipped');
   });
 });
