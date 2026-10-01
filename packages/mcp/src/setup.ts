@@ -9,6 +9,7 @@ import {
   constants,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   realpathSync,
@@ -50,8 +51,8 @@ export type SetupStep = {
   status: StepStatus;
   detail: string;
   fix?: string;
-  // The selecta entry as it stood before a change, and where it was saved.
-  previous?: unknown;
+  // Where the replaced entry was saved. The entry itself never prints: any
+  // field of it can carry a key.
   backup?: string;
 };
 
@@ -138,6 +139,14 @@ export function shellQuote(path: string): string {
   return /^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replaceAll("'", `'\\''`)}'`;
 }
 
+function isSymlink(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
 function sameFile(a: string, b: string): boolean {
   try {
     return realpathSync(a) === realpathSync(b);
@@ -180,6 +189,17 @@ function planDesktop(deps: SetupDeps, now: Date): Planned {
     '/Applications/Claude.app',
     join(deps.home, 'Applications', 'Claude.app'),
   ];
+
+  if (!existsSync(path) && isSymlink(path)) {
+    return {
+      step: {
+        step: 'claude_desktop',
+        status: 'error',
+        detail: `${path} is a symlink to a file that does not exist; setup will not replace the link.`,
+        fix: 'Restore the file it points to, or remove the link, then rerun setup.',
+      },
+    };
+  }
 
   if (!existsSync(path) && !apps.some((app) => existsSync(app))) {
     return {
@@ -252,7 +272,6 @@ function planDesktop(deps: SetupDeps, now: Date): Planned {
       step: 'claude_desktop',
       status: 'would_change',
       detail: `Would ${verb} the selecta server in ${path}${exists ? ', backing the file up first' : ''}.`,
-      ...(previous != null && { previous }),
     },
     apply: async () => {
       const backup = exists ? `${path}.selecta-backup-${stamp(now)}` : undefined;
@@ -277,7 +296,6 @@ function planDesktop(deps: SetupDeps, now: Date): Planned {
         step: 'claude_desktop',
         status: 'changed',
         detail: `${verb === 'add' ? 'Added' : 'Replaced'} the selecta server in ${path}. Restart Claude Desktop to load it.`,
-        ...(previous != null && { previous }),
         ...(backup != null && { backup }),
       };
     },
@@ -335,7 +353,6 @@ function planCode(deps: SetupDeps, now: Date): Planned {
       step: 'claude_code',
       status: 'would_change',
       detail: `Would ${verb} the selecta server at user scope with \`claude mcp add\`.`,
-      ...(previous != null && { previous }),
     },
     apply: async () => {
       let backup: string | undefined;
@@ -351,13 +368,13 @@ function planCode(deps: SetupDeps, now: Date): Planned {
 
         const removed = await deps.run(claude, ['mcp', 'remove', '--scope', 'user', SERVER_NAME]);
 
-        if (removed.code !== 0) return codeFailure('remove', removed, previous, backup);
+        if (removed.code !== 0) return codeFailure('remove', removed, backup);
       }
 
       const added = await deps.run(claude, addArgs);
 
       if (added.code !== 0) {
-        const failure = codeFailure('add', added, previous, backup);
+        const failure = codeFailure('add', added, backup);
 
         if (previous == null) return failure;
 
@@ -381,19 +398,13 @@ function planCode(deps: SetupDeps, now: Date): Planned {
         step: 'claude_code',
         status: 'changed',
         detail: `${verb === 'add' ? 'Added' : 'Replaced'} the selecta server at user scope. Start a new Claude Code session to load it.`,
-        ...(previous != null && { previous }),
         ...(backup != null && { backup }),
       };
     },
   };
 }
 
-function codeFailure(
-  action: string,
-  result: CommandResult,
-  previous: unknown,
-  backup: string | undefined,
-): SetupStep {
+function codeFailure(action: string, result: CommandResult, backup: string | undefined): SetupStep {
   const output = (result.stderr || result.stdout).trim();
 
   return {
@@ -401,7 +412,6 @@ function codeFailure(
     status: 'error',
     detail: `\`claude mcp ${action}\` failed (exit ${result.code ?? 'unknown'})${output ? `: ${output}` : ''}`,
     fix: `Register it by hand: ${README}`,
-    ...(previous != null && { previous }),
     ...(backup != null && { backup }),
   };
 }
@@ -560,21 +570,6 @@ export async function runSetup(
     ok: steps.every((step) => step.status !== 'missing' && step.status !== 'error'),
     dry_run: !apply,
     server: deps.server,
-    steps: steps.map(redactPrevious),
-  };
-}
-
-// Env often carries keys; the backup keeps the values, the printed report does not.
-function redactPrevious(step: SetupStep): SetupStep {
-  const env = (step.previous as { env?: unknown } | undefined)?.env;
-
-  if (env == null || typeof env !== 'object') return step;
-
-  return {
-    ...step,
-    previous: {
-      ...(step.previous as object),
-      env: Object.fromEntries(Object.keys(env).map((key) => [key, '<redacted>'])),
-    },
+    steps,
   };
 }

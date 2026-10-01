@@ -129,6 +129,19 @@ describe('setup --apply', () => {
     expect(JSON.parse(readFileSync(managed, 'utf8'))).toEqual({ mcpServers: { selecta: SERVER } });
   });
 
+  it('refuses to replace a symlinked Desktop config whose target is gone', async () => {
+    const { deps, home } = fixture({ desktop: null });
+
+    mkdirSync(join(home, 'Applications', 'Claude.app'), { recursive: true });
+    mkdirSync(dirname(desktopConfigPath(home)), { recursive: true });
+    symlinkSync(join(home, 'gone.json'), desktopConfigPath(home));
+
+    const desktop = step(await runSetup(deps, { apply: true }), 'claude_desktop');
+
+    expect(desktop.status).toBe('error');
+    expect(lstatSync(desktopConfigPath(home)).isSymbolicLink()).toBe(true);
+  });
+
   it('creates the Desktop config when Claude Desktop has none yet, with no backup', async () => {
     const { deps, home } = fixture();
 
@@ -147,10 +160,9 @@ describe('setup --apply', () => {
 
     const desktop = step(await runSetup(deps, { apply: true }), 'claude_desktop');
 
-    expect(desktop).toMatchObject({
-      status: 'changed',
-      previous: { ...stale, env: { SELECTA_DEBUG: '<redacted>' } },
-    });
+    expect(desktop.status).toBe('changed');
+    // The entry can carry keys anywhere, so only the backup holds it.
+    expect(JSON.stringify(desktop)).not.toContain('/old/dist/index.js');
     expect(JSON.parse(readFileSync(desktop.backup, 'utf8')).mcpServers.selecta).toEqual(stale);
     expect(JSON.parse(readFileSync(desktopConfigPath(home), 'utf8')).mcpServers.selecta).toEqual({
       ...SERVER,
