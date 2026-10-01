@@ -8,10 +8,14 @@ import {
   desktopConfigPath,
   runSetup,
   serverEntry,
+  shellQuote,
   type CommandResult,
   type SetupDeps,
 } from '../src/setup.js';
 import { BridgeError } from '@selecta/core/types/errors.js';
+import { SelectaCache } from '@selecta/core/cache/index.js';
+import type { LibrarySnapshot } from '@selecta/core/types/bridge.js';
+import library from '../../core/test/fixtures/library.json' with { type: 'json' };
 
 const SERVER = { command: '/opt/homebrew/bin/node', args: ['/Users/x/selecta/dist/index.js'] };
 const OK: CommandResult = { code: 0, stdout: '', stderr: '' };
@@ -301,7 +305,7 @@ describe('setup says what is missing', () => {
     const report = await runSetup(deps);
 
     expect(step(report, 'metrognome')).toMatchObject({
-      status: 'missing',
+      status: 'unavailable',
       detail: expect.stringContaining('was not found'),
       fix: expect.stringContaining('brew install jonas-ross/tap/metrognome'),
     });
@@ -328,6 +332,39 @@ describe('setup says what is missing', () => {
     });
   });
 
+  it('treats a missing metrognome as optional, not as a failed setup', async () => {
+    const { deps, home } = fixture({ desktop: '{}' });
+
+    deps.metrognomeCheck = async () => {
+      throw new BridgeError('enrichment_error', 'metrognome was not found on PATH.');
+    };
+
+    await runSetup(deps, { apply: true });
+    writeFileSync(codeConfigPath(home), JSON.stringify({ mcpServers: { selecta: SERVER } }));
+    const cache = SelectaCache.open(deps.dbPath);
+
+    cache.refreshFromSnapshot(library as LibrarySnapshot, { durationMs: 1 });
+    cache.close();
+
+    const report = await runSetup(deps);
+
+    expect(step(report, 'metrognome').status).toBe('unavailable');
+    expect(report.ok).toBe(true);
+  });
+
+  it('keeps checking after a client refuses the write', async () => {
+    const { deps, home } = fixture({ desktop: '{}' });
+
+    // A directory where the temp file goes makes the write fail.
+    mkdirSync(`${desktopConfigPath(home)}.selecta-${process.pid}.tmp`);
+
+    const report = await runSetup(deps, { apply: true });
+
+    expect(step(report, 'claude_desktop')).toMatchObject({ status: 'error' });
+    expect(step(report, 'claude_code').status).toBe('changed');
+    expect(step(report, 'library')).toBeDefined();
+  });
+
   it('reports the metrognome version it found', async () => {
     const { deps } = fixture();
 
@@ -335,6 +372,15 @@ describe('setup says what is missing', () => {
       status: 'ok',
       detail: 'metrognome 0.1.0 at /opt/homebrew/bin/metrognome.',
     });
+  });
+});
+
+describe('shellQuote', () => {
+  it('leaves a plain path alone and quotes one the shell would split', () => {
+    expect(shellQuote('dist/index.js')).toBe('dist/index.js');
+    expect(shellQuote("/Users/x/my repo/it's/dist/index.js")).toBe(
+      "'/Users/x/my repo/it'\\''s/dist/index.js'",
+    );
   });
 });
 

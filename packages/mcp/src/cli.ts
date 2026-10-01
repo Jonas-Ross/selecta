@@ -38,6 +38,7 @@ import {
   runCommand,
   runSetup,
   serverEntry,
+  shellQuote,
   whichOnPath,
   type Client,
   type SetupDeps,
@@ -549,16 +550,18 @@ const STEP_MARKS = {
   ok: '✓',
   changed: '✓',
   would_change: '→',
+  unavailable: '!',
   skipped: '·',
   missing: '✗',
   error: '✗',
 } as const;
 
-// Fix lines are pasted back into the same shell, so keep them short.
+// Fix lines are pasted back into the same shell, so keep them short and quoted.
 function displayPath(path: string): string {
   const fromHere = relative(process.cwd(), path);
+  const shown = fromHere.startsWith('..') || isAbsolute(fromHere) ? path : fromHere;
 
-  return fromHere.startsWith('..') || isAbsolute(fromHere) ? path : fromHere;
+  return shellQuote(shown);
 }
 
 export async function runCli(args = process.argv, options: CliOptions = {}): Promise<void> {

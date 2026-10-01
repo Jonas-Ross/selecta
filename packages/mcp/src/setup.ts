@@ -33,9 +33,17 @@ export type StepName = 'claude_desktop' | 'claude_code' | 'metrognome' | 'music_
 /**
  * `ok`: nothing to do. `would_change` / `changed`: a client entry Selecta
  * writes, before and after --apply. `missing`: only the user can fix it.
- * `skipped`: the client is not installed or was not asked for.
+ * `skipped`: the client is not installed or was not asked for. `unavailable`:
+ * an optional piece is absent, which never fails the report.
  */
-export type StepStatus = 'ok' | 'would_change' | 'changed' | 'missing' | 'skipped' | 'error';
+export type StepStatus =
+  | 'ok'
+  | 'would_change'
+  | 'changed'
+  | 'missing'
+  | 'unavailable'
+  | 'skipped'
+  | 'error';
 
 export type SetupStep = {
   step: StepName;
@@ -122,6 +130,11 @@ export function whichOnPath(name: string, path = process.env.PATH ?? ''): string
   }
 
   return null;
+}
+
+/** A path as one shell word, quoted only when it needs to be. */
+export function shellQuote(path: string): string {
+  return /^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replaceAll("'", `'\\''`)}'`;
 }
 
 function sameFile(a: string, b: string): boolean {
@@ -395,7 +408,7 @@ async function checkMetrognome(deps: SetupDeps): Promise<SetupStep> {
   } catch (err) {
     return {
       step: 'metrognome',
-      status: 'missing',
+      status: 'unavailable',
       detail: `${err instanceof Error ? err.message : String(err)} Without it \`enrich --source analysis\` skips every track; tempo and key then come from the catalogs alone.`,
       fix: `brew install jonas-ross/tap/metrognome (or brew upgrade metrognome), or point ${METROGNOME_PATH_ENV} at the binary.`,
     };
@@ -475,6 +488,20 @@ function checkLibrary(deps: SetupDeps): SetupStep {
   };
 }
 
+// A client that refuses the write must not hide the checks that follow it.
+async function applied(planned: Planned): Promise<SetupStep> {
+  try {
+    return await planned.apply!();
+  } catch (err) {
+    return {
+      step: planned.step.step,
+      status: 'error',
+      detail: `Writing the change failed: ${err instanceof Error ? err.message : String(err)}`,
+      fix: `Register it by hand: ${README}`,
+    };
+  }
+}
+
 /**
  * Plan every client change, apply them only when asked, and check the rest
  * read-only. The Music.app probe can raise the macOS Automation prompt, which
@@ -503,7 +530,7 @@ export async function runSetup(
     }
 
     const planned = planners[client]();
-    const step = apply && planned.apply != null ? await planned.apply() : planned.step;
+    const step = apply && planned.apply != null ? await applied(planned) : planned.step;
 
     steps.push(step);
     requested.push(step);
