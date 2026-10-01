@@ -1,0 +1,82 @@
+.nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) var(--gutter) 14px;
+  transition:
+    background-color 0.3s,
+    border-color 0.3s,
+    backdrop-filter 0.3s;
+  border-bottom: 1px solid transparent;
+}
+.nav.solid {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-color: var(--line);
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font: 800 19px/1 var(--display);
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+.mark {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  overflow: visible;
+}
+.mark .groove {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+.mark .kick {
+  fill: var(--acid);
+}
+.nav nav {
+  display: flex;
+  gap: 28px;
+  margin-left: auto;
+}
+.nav nav a {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.nav nav a:hover {
+  color: var(--acid);
+}
+.nav-cta {
+  padding: 9px 16px;
+  border: 1.5px solid var(--acid);
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--acid);
+  text-decoration: none;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+}
+.nav-cta:hover {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+@media (max-width: 640px) {
+  .nav nav {
+    display: none;
+  }
+  .nav-cta {
+    margin-left: auto;
+  }
+}

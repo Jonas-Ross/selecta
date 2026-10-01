@@ -1,0 +1,369 @@
+.how {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: clamp(80px, 12vw, 160px) var(--gutter) clamp(40px, 6vw, 80px);
+}
+.how-title {
+  font-size: clamp(2.3rem, 5.4vw, 5.2rem);
+  line-height: 1;
+  margin-bottom: clamp(48px, 8vw, 100px);
+}
+.how-title span {
+  color: var(--mute);
+}
+.story {
+  display: grid;
+  gap: clamp(72px, 10vw, 120px);
+  position: relative;
+}
+.story-count {
+  display: none;
+}
+.step {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: clamp(28px, 5vw, 80px);
+}
+.step-copy {
+  display: grid;
+  gap: 18px;
+}
+.step-n {
+  font: 500 14px/1 var(--mono);
+  color: var(--acid);
+  letter-spacing: 0.08em;
+}
+.step h3 {
+  font-size: clamp(1.9rem, 3.4vw, 3.2rem);
+  line-height: 1.02;
+}
+.step-copy > p:last-child {
+  max-width: 32ch;
+  font-size: clamp(1.05rem, 1.3vw, 1.22rem);
+  color: var(--ink-2);
+}
+.step-visual {
+  position: relative;
+  aspect-ratio: 5 / 4;
+  border-radius: 28px;
+  background:
+    radial-gradient(
+      120% 80% at 80% 0%,
+      color-mix(in srgb, var(--uv) 16%, transparent),
+      transparent 60%
+    ),
+    var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+/* Desktop pins the three steps in one place and scrubs between them; JS adds .pin. */
+.story.pin {
+  height: 100svh;
+  align-content: center;
+  gap: 0;
+}
+.story.pin .step {
+  grid-area: 1 / 1;
+}
+.story.pin .story-count {
+  display: flex;
+  position: absolute;
+  left: 0;
+  top: calc(50% - min(26vw, 290px));
+  gap: 10px;
+  align-items: baseline;
+  font: 500 14px/1 var(--mono);
+  color: var(--mute);
+  z-index: 2;
+}
+.story.pin .now {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+  color: var(--acid);
+}
+.story.pin .now span {
+  display: block;
+  height: 1em;
+}
+.story.pin .step-n {
+  display: none;
+}
+
+/* A photographed crate. The covers stand in its front compartment, over the photo's own
+   front sleeve, and the photo's front panel is laid back on top so they sit inside it. */
+.step-visual.v-crate {
+  background: none;
+  border: 0;
+  overflow: visible;
+}
+.crate {
+  position: absolute;
+  inset: 6% 0 auto;
+  aspect-ratio: 1600 / 1059;
+}
+.crate > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  --fy: 12%;
+}
+/* Its own stacking context, so a sleeve sent to the back stays above the photo. */
+.rack {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.rack i {
+  position: absolute;
+  left: 11.26%;
+  top: 18.85%;
+  width: 44.6%;
+  aspect-ratio: 1;
+  background: center / cover no-repeat;
+  box-shadow:
+    0 -1px 0 rgb(255 255 255 / 0.12),
+    0 -8px 18px -6px rgb(0 0 0 / 0.7);
+}
+/* The studio light comes from above, as on the photo around them. */
+.rack i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(0 0 0 / 0.45) 70%);
+}
+.crate-front {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: url('../media/crate.avif') 0 0 / 100% 100%;
+  clip-path: inset(41.45% 7.73% 9.54% 6.92%);
+}
+.counts {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  gap: clamp(18px, 3vw, 40px);
+  font-size: 14px;
+  color: var(--mute);
+}
+.counts b {
+  display: block;
+  font: 600 clamp(1.4rem, 2.4vw, 2.2rem)/1.1 var(--led);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.v-listen .wave {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 16%;
+  height: 46%;
+}
+.wave .layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.wave .layer i {
+  flex: 1;
+  min-width: 0;
+  height: calc(var(--h) * 100%);
+  border-radius: 2px;
+  background: #34343c;
+}
+.wave .layer.lit i {
+  background: var(--acid);
+}
+.wave .layer.lit i.k {
+  background: var(--coral);
+}
+.scan {
+  position: absolute;
+  top: 12%;
+  height: 54%;
+  left: 93%;
+  width: 2px;
+  background: var(--ink);
+  box-shadow: 0 0 18px 2px color-mix(in srgb, var(--acid) 70%, transparent);
+  border-radius: 2px;
+}
+.tags {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  bottom: 9%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.tag {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 15px;
+  color: var(--ink-2);
+}
+.tag b {
+  font: 600 clamp(1.5rem, 2.6vw, 2.3rem)/1 var(--led);
+  color: var(--ink);
+}
+.tag .bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+.tag .bar i {
+  display: block;
+  height: 100%;
+  width: calc(var(--v) * 100%);
+  background: var(--acid);
+  border-radius: inherit;
+}
+.t-key .bar i {
+  background: var(--pink);
+}
+
+.v-set {
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  padding: clamp(16px, 4%, 36px);
+}
+.ask {
+  justify-self: end;
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 18px 18px 4px 18px;
+  background: var(--uv);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+}
+.list {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+.row {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-2) 90%, transparent);
+  border: 1px solid var(--line);
+  font-size: 14.5px;
+  font-weight: 500;
+}
+.row img {
+  width: 32px;
+  height: 32px;
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.5);
+}
+.row .t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row small {
+  margin-left: 8px;
+  color: var(--mute);
+  font-size: 13px;
+  font-weight: 400;
+}
+.row .b {
+  font: 500 13px/1 var(--mono);
+  color: var(--ink-2);
+}
+.row .b::after {
+  content: ' bpm';
+  color: var(--mute);
+}
+.row .k,
+.bk {
+  /* A Camelot number's place on the wheel, as a hue. */
+  --h: calc((var(--n) - 1) * 30);
+}
+.row .k {
+  min-width: 3.2em;
+  text-align: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font: 500 12.5px/1 var(--mono);
+  background: hsl(var(--h) 80% 70% / 0.18);
+  color: hsl(var(--h) 90% 78%);
+}
+.curve {
+  position: absolute;
+  inset: auto -2% -6% -2%;
+  width: 104%;
+  height: 70%;
+  z-index: 0;
+  overflow: visible;
+}
+.curve path {
+  fill: none;
+  stroke: var(--acid);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+}
+.saved {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: var(--acid);
+  color: var(--on-acid);
+  font-size: 14px;
+  font-weight: 600;
+}
+.saved::before {
+  content: '';
+  width: 7px;
+  height: 12px;
+  border: solid currentColor;
+  border-width: 0 2.5px 2.5px 0;
+  rotate: 45deg;
+  margin: -3px 3px 0 2px;
+}
+@media (max-width: 959px) {
+  .step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .v-set {
+    aspect-ratio: auto;
+  }
+  .v-set .row {
+    font-size: 13px;
+  }
+  .row small {
+    display: none;
+  }
+}

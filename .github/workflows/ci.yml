@@ -92,7 +92,9 @@ jobs:
 
   claude-review:
     needs: tier
-    if: needs.tier.outputs.tier == 'auto'
+    # Dependabot PRs get no secrets, so the review could never authenticate on
+    # one; an indirect bump reaches `auto` because it carries no `update-type:`.
+    if: needs.tier.outputs.tier == 'auto' && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # id-token only matters if the action falls back to its OIDC app token.

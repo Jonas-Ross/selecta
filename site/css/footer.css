@@ -1,0 +1,38 @@
+.foot {
+  position: relative;
+  overflow: clip;
+  padding: clamp(60px, 10vw, 120px) var(--gutter) calc(32px + env(safe-area-inset-bottom, 0px));
+}
+.wordmark {
+  font: 900 clamp(4rem, 14vw, 15.5rem)/0.84 var(--display);
+  letter-spacing: -0.03em;
+  text-align: center;
+  color: var(--surface-2);
+  user-select: none;
+  white-space: nowrap;
+}
+.wordmark .char {
+  transition: color 0.5s;
+}
+.wordmark .char:hover {
+  color: var(--acid);
+  transition: none;
+}
+.foot-row {
+  max-width: var(--max);
+  margin: clamp(28px, 4vw, 48px) auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 32px;
+  font-size: 14px;
+  color: var(--mute);
+}
+.foot-row a {
+  color: var(--ink-2);
+  text-decoration-color: var(--line-2);
+  text-underline-offset: 3px;
+}
+.foot-row a:hover {
+  text-decoration-color: var(--acid);
+}

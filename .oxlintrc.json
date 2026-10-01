@@ -25,5 +25,5 @@
       }
     ]
   },
-  "ignorePatterns": ["dist/", "coverage/", ".claude/"]
+  "ignorePatterns": ["dist/", "coverage/", ".claude/", "site/vendor/"]
 }

@@ -1,0 +1,242 @@
+/* Club-night dark: acid lime and hot coral on near-black, loud display type, and
+   everything that moves is keyed to a beat. */
+@font-face {
+  font-family: 'Hubot Sans';
+  src: url('../fonts/hubot-sans.woff2') format('woff2');
+  font-weight: 600 900;
+  font-stretch: 125%;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Mona Sans';
+  src: url('../fonts/mona-sans.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+/* A dot-matrix face for the numbers the engine and the machine read out, like a hardware display. */
+@font-face {
+  font-family: 'Bitcount';
+  src: url('../fonts/bitcount.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'DM Mono';
+  src: url('../fonts/dm-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'DM Mono';
+  src: url('../fonts/dm-mono-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  --bg: #08080a;
+  --surface: #111114;
+  --surface-2: #19191e;
+  --line: color-mix(in srgb, var(--ink) 10%, transparent);
+  --line-2: color-mix(in srgb, var(--ink) 20%, transparent);
+  --ink: #f2efe8;
+  --ink-2: #c9c6bf;
+  --mute: #8d8a84;
+  --acid: #d6ff3a;
+  --coral: #ff5a36;
+  --uv: #7b6cff;
+  --teal: #1ec8a5;
+  --pink: #ff7ac8;
+  --on-acid: #0b0c05;
+  --on-coral: #140502;
+  --on-uv: #ffffff;
+  --on-teal: #04130f;
+  --on-pink: #1a0913;
+  --display: 'Hubot Sans', 'Arial Black', system-ui, sans-serif;
+  --body: 'Mona Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --led: 'Bitcount', 'DM Mono', ui-monospace, monospace;
+  --mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --gutter: clamp(16px, 4vw, 56px);
+  --max: 1400px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 17px/1.55 var(--body);
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+}
+/* Film grain keeps the big flat blacks from reading as a template. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  text-wrap: balance;
+  letter-spacing: -0.02em;
+}
+a {
+  color: inherit;
+}
+button {
+  font: inherit;
+  color: inherit;
+}
+::selection {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+:focus-visible {
+  outline: 2px solid var(--acid);
+  outline-offset: 3px;
+}
+[hidden] {
+  display: none !important;
+}
+/* SplitText clips each mask to its line box, which cut off descenders and overhanging
+   letters. The padding widens the clip; the matching negative margin keeps the layout. */
+.words-mask,
+.chars-mask {
+  padding: 0.1em 0.14em 0.26em;
+  margin: -0.1em -0.14em -0.26em;
+}
+/* Line masks are blocks, so only one side may go negative or the margins collapse. */
+.lines-mask {
+  padding: 0 0.14em 0.26em;
+  margin: 0 -0.14em -0.26em;
+}
+
+/* A photo's backdrop fades out at its edges instead of ending in a hard rectangle. */
+.feather {
+  --fx: 8%;
+  --fy: 10%;
+  -webkit-mask:
+    linear-gradient(90deg, transparent, #000 var(--fx) calc(100% - var(--fx)), transparent),
+    linear-gradient(transparent, #000 var(--fy) calc(100% - var(--fy)), transparent);
+  -webkit-mask-composite: source-in;
+  mask:
+    linear-gradient(90deg, transparent, #000 var(--fx) calc(100% - var(--fx)), transparent),
+    linear-gradient(transparent, #000 var(--fy) calc(100% - var(--fy)), transparent);
+  mask-composite: intersect;
+}
+
+/* Held back until the intro animates them in; the delay is a failsafe if scripts never run. */
+.intro .hero-copy > *,
+.intro .hero-reading,
+.intro .film {
+  visibility: hidden;
+  animation: failsafe 0s 2.5s forwards;
+}
+@keyframes failsafe {
+  to {
+    visibility: visible;
+  }
+}
+
+/* ---- buttons ---------------------------------------------------------------- */
+
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 24px;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  font: 600 16px/1 var(--body);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 0.25s var(--ease),
+    box-shadow 0.25s var(--ease),
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn:hover:not(:disabled, .text) {
+    transform: translateY(-2px);
+  }
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.btn.acid {
+  background: var(--acid);
+  color: var(--on-acid);
+}
+.btn.acid:hover {
+  box-shadow: 0 10px 40px -8px color-mix(in srgb, var(--acid) 55%, transparent);
+}
+.btn.ghost {
+  border-color: var(--line-2);
+  color: var(--ink);
+  background: transparent;
+}
+.btn.ghost:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+.btn.text {
+  background: none;
+  border: 0;
+  padding-inline: 8px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--line-2);
+}
+.btn.text:hover {
+  color: var(--ink);
+  text-decoration-color: var(--acid);
+}
+.btn.ink {
+  background: var(--bg);
+  color: var(--acid);
+}
+.btn.ink:hover {
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.6);
+}
+.btn.ink-ghost {
+  border-color: var(--on-acid);
+  color: var(--on-acid);
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .btn {
+    transition: none;
+  }
+}

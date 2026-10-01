@@ -1,0 +1,234 @@
+.groove {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: clamp(56px, 9vw, 120px) var(--gutter) clamp(24px, 4vw, 48px);
+}
+.groove-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px 48px;
+  margin-bottom: clamp(24px, 4vw, 44px);
+}
+.groove-copy {
+  flex: 1 1 26rem;
+  display: grid;
+  gap: 16px;
+  max-width: 40rem;
+}
+.groove-copy h2 {
+  font-size: clamp(2.2rem, 4.8vw, 4.6rem);
+  line-height: 1;
+}
+.groove-copy p {
+  max-width: 40ch;
+  font-size: clamp(1.02rem, 1.3vw, 1.2rem);
+  color: var(--ink-2);
+}
+.groove-now {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: end;
+  column-gap: 16px;
+}
+.groove-now b {
+  grid-row: span 2;
+  min-width: 3ch;
+  text-align: right;
+  font: 600 clamp(5.4rem, 12vw, 11.5rem)/0.78 var(--led);
+  color: var(--acid);
+  text-shadow: 0 0 40px color-mix(in srgb, var(--acid) 35%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.groove-now em {
+  font: 700 clamp(1.15rem, 1.9vw, 1.7rem)/1 var(--display);
+  font-style: normal;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.groove-now span {
+  font: 500 13px/1 var(--mono);
+  letter-spacing: 0.16em;
+  color: var(--mute);
+  padding-top: 10px;
+}
+.machine {
+  display: grid;
+  gap: clamp(10px, 1.4vw, 16px);
+}
+.machine-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.presets button {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 9px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: transparent;
+  font: 600 14px/1 var(--body);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s;
+}
+.presets button:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.presets small {
+  font: 500 12px/1 var(--mono);
+  color: var(--mute);
+}
+.presets button[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+.presets button[aria-pressed='true'] small {
+  color: #4a4843;
+}
+.g-hear {
+  padding: 12px 20px 12px 16px;
+  font-size: 15px;
+}
+.g-hear[aria-pressed='true'] {
+  background: var(--ink);
+}
+/* The machine is a photograph. The page lays the lit photo over it one pad at a time. */
+.plate {
+  position: relative;
+  margin-block: clamp(-24px, -2vw, -8px);
+}
+.plate-in {
+  position: relative;
+  container-type: inline-size;
+}
+.plate-in img {
+  display: block;
+  width: 100%;
+  height: auto;
+  --fx: 6%;
+  --fy: 9%;
+}
+.lcd {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  font: 600 2.1cqw/1 var(--led);
+  color: var(--acid);
+  text-shadow: 0 0 0.6cqw color-mix(in srgb, var(--acid) 70%, transparent);
+}
+.count-row {
+  position: absolute;
+  inset-inline: 0;
+}
+.count-row i {
+  position: absolute;
+  translate: -50% -50%;
+  font: 500 max(9px, 0.75cqw)/1 var(--mono);
+  font-style: normal;
+  color: color-mix(in srgb, var(--ink) 40%, transparent);
+}
+.count-row i:empty::before {
+  content: '';
+  display: block;
+  width: 0.28cqw;
+  min-width: 3px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+.count-row i.now {
+  color: var(--acid);
+  text-shadow: 0 0 8px var(--acid);
+}
+.count-row i.now:empty::before {
+  background: var(--acid);
+  box-shadow: 0 0 8px var(--acid);
+}
+.grid i {
+  position: absolute;
+  left: calc(var(--x) * 1%);
+  top: calc(var(--y) * 1%);
+  width: calc(var(--w) * 1%);
+  height: calc(var(--h) * 1%);
+}
+.grid i b {
+  position: absolute;
+  inset: 0;
+  background: url('../media/machine-on.avif') no-repeat;
+  background-size: calc(10000% / var(--w)) calc(10000% / var(--h));
+  background-position: calc(var(--x) / (100 - var(--w)) * 100%)
+    calc(var(--y) / (100 - var(--h)) * 100%);
+  opacity: 0;
+}
+/* A programmed pad glows faintly between hits. */
+.grid i.on b {
+  opacity: 0.45;
+}
+.grid i.now:not(.on) b {
+  opacity: 0.1;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font: 500 12.5px/1 var(--mono);
+  color: var(--mute);
+  margin-top: 4px;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.legend span:not(.l-bar)::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--acid);
+}
+.legend span.l-snare::before {
+  background: var(--coral);
+}
+.legend span.l-hat::before {
+  background: var(--teal);
+}
+.legend .l-bar {
+  margin-left: auto;
+}
+@media (max-width: 640px) {
+  .groove-now b {
+    font-size: 4.6rem;
+  }
+  .groove-now em {
+    font-size: 1.05rem;
+    white-space: normal;
+  }
+  /* Phones crop to the pads, edge to edge, so they stay big enough to read. */
+  .plate {
+    overflow: hidden;
+    margin-inline: calc(-1 * var(--gutter));
+  }
+  .plate-in {
+    width: 122%;
+    margin-left: -14%;
+  }
+}

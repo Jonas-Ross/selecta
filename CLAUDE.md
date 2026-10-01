@@ -24,6 +24,8 @@ Tools on top, three external/storage peers below — cache, bridge, and enrich a
 
 - **`apps/desktop/`** — the Electron front end. The renderer is sandboxed and reaches core only through the host's method table (`src/host/api.ts`). The host runs under system Node rather than Electron, so `better-sqlite3` keeps one native build. The in-app agent is `claude -p` over the real MCP server, and its tool allowlist excludes save and every Music.app write; `docs/desktop-app.md` has the details. The UI is intentionally plain until a design pass.
 
+`site/` is the website: plain static files outside the workspace, deployed to GitHub Pages from `main` by `.github/workflows/pages.yml`. Its try-it demo is metrognome compiled to WebAssembly, built from the metrognome commit pinned in that workflow; bump the pin to put a newer engine on the page. Its scripts are native ES modules in `site/js/`, one concern each with `main.js` as the entry and no bundler; a new module gets a `modulepreload` line in `index.html`. Styles are one sheet per page section in `site/css/`, linked in page order after `base.css`. GSAP is vendored in `site/vendor/` and left out of lint and format. The photos and the hero film in `site/media/` are generated: AVIF stills under the 64 KB binary limit, and an MP4 film that `scripts/check-no-binaries.sh` lets through by path, header and size. The drum machine is two registered photos of the same device, pads off and pads lit; `site/js/machine.js` holds where each pad sits in them, so a new photo needs new numbers.
+
 All MCP widgets share the `npm run preview` design gallery. Add future widget previews there rather than creating separate preview servers or commands.
 
 Shared storage and bridge types live in `packages/core/src/types/`; the cross-cutting error envelope in `packages/core/src/types/errors.ts`. `packages/core/src/domain/` owns explicit track projections, inspection/overview transforms, and the browser-safe recent-activity window. Tool dependencies, validation/errors, freshness, and filters have dedicated modules under `packages/core/src/tools/`; shared cache resource preflights live in `packages/core/src/operations/resources.ts`.
@@ -42,6 +44,7 @@ Shared storage and bridge types live in `packages/core/src/types/`; the cross-cu
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |
 | `scripts/check-no-binaries.sh` | Fail on a tracked SQLite database or large binary (its own CI job) |
 | `npm run smoke` | End-to-end smoke against the real library (builds first) |
+| `scripts/build-site.sh [metrognome checkout]` | Build the website's demo engine into `site/` (default `../metrognome`); serve `site/` with any static server |
 | `npm run preview` | Consolidated draft and explorer fixture gallery at `http://127.0.0.1:8767` |
 | `npm run dev` | Run the MCP server over stdio |
 | `node dist/index.js status` | Read-only cache integrity, schema version and pending migrations, freshness, counts, and enrichment diagnostics |
