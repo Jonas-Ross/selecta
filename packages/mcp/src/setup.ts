@@ -17,10 +17,11 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { delimiter, dirname, isAbsolute, join } from 'node:path';
+import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { readStatus } from '@selecta/core/diagnostics/status.js';
 import {
+  BREW_BIN_DIRS,
   METROGNOME_PATH_ENV,
   type MetrognomeBinary,
 } from '@selecta/core/enrich/metrognome_binary.js';
@@ -453,18 +454,28 @@ function codeFailure(action: string, result: CommandResult, backup: string | und
   };
 }
 
-async function checkMetrognome(deps: SetupDeps): Promise<SetupStep> {
+async function checkMetrognome(deps: SetupDeps): Promise<[SetupStep, MetrognomeBinary | null]> {
   try {
-    const { path, version } = await deps.metrognomeCheck();
+    const binary = await deps.metrognomeCheck();
 
-    return { step: 'metrognome', status: 'ok', detail: `metrognome ${version} at ${path}.` };
+    return [
+      {
+        step: 'metrognome',
+        status: 'ok',
+        detail: `metrognome ${binary.version} at ${binary.path}.`,
+      },
+      binary,
+    ];
   } catch (err) {
-    return {
-      step: 'metrognome',
-      status: 'unavailable',
-      detail: `${err instanceof Error ? err.message : String(err)} Without it \`enrich --source analysis\` skips every track; tempo and key then come from the catalogs alone.`,
-      fix: `brew install jonas-ross/tap/metrognome (or brew upgrade metrognome), or point ${METROGNOME_PATH_ENV} at the binary.`,
-    };
+    return [
+      {
+        step: 'metrognome',
+        status: 'unavailable',
+        detail: `${err instanceof Error ? err.message : String(err)} Without it \`enrich --source analysis\` skips every track; tempo and key then come from the catalogs alone.`,
+        fix: `brew install jonas-ross/tap/metrognome (or brew upgrade metrognome), or point ${METROGNOME_PATH_ENV} at the binary.`,
+      },
+      null,
+    ];
   }
 }
 
@@ -565,8 +576,20 @@ export async function runSetup(
   { apply = false, clients = CLIENTS }: { apply?: boolean; clients?: readonly Client[] } = {},
 ): Promise<SetupReport> {
   const now = (deps.now ?? (() => new Date()))();
-  const metrognome = await checkMetrognome(deps);
+  const [metrognome, binary] = await checkMetrognome(deps);
   const pin = deps.server.env?.[METROGNOME_PATH_ENV];
+
+  // A GUI client searches Homebrew's bin but not the shell's PATH, so a binary
+  // found anywhere else only reaches it pinned.
+  if (pin === undefined && binary != null && !BREW_BIN_DIRS.includes(dirname(binary.path))) {
+    deps = {
+      ...deps,
+      server: {
+        ...deps.server,
+        env: { ...deps.server.env, [METROGNOME_PATH_ENV]: resolve(binary.path) },
+      },
+    };
+  }
 
   // A pin the user asked for that fails the check would break analysis in every
   // client, so no client entry is touched until it passes.

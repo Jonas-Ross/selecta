@@ -314,6 +314,21 @@ describe('setup --apply', () => {
     expect(step(await runSetup(deps), 'claude_desktop').status).toBe('ok');
   });
 
+  it('pins a metrognome found only on the shell PATH, which GUI clients lack', async () => {
+    const { deps, home } = fixture({});
+
+    deps.metrognomeCheck = async () => ({
+      path: '/Users/x/.local/bin/metrognome',
+      version: '0.1.0',
+    });
+
+    await runSetup(deps, { apply: true });
+
+    expect(
+      JSON.parse(readFileSync(desktopConfigPath(home), 'utf8')).mcpServers.selecta.env,
+    ).toEqual({ SELECTA_METROGNOME_PATH: '/Users/x/.local/bin/metrognome' });
+  });
+
   it('drops a kept metrognome pin when run without one, since it was not checked', async () => {
     const { deps, home } = fixture({
       desktop: JSON.stringify({

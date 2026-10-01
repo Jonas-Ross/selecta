@@ -491,7 +491,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
     )
     .option(
       '--metrognome-path <path>',
-      `metrognome binary to check and pin into the client entries (default: $${METROGNOME_PATH_ENV}; without either, an old pin is dropped and PATH or Homebrew's bin is used)`,
+      `metrognome binary to check and pin into the client entries (default: $${METROGNOME_PATH_ENV}, then metrognome on PATH, pinned unless it is in Homebrew's bin)`,
     )
     .option('--apply', APPLY_FLAG_DESCRIPTION)
     .action(
