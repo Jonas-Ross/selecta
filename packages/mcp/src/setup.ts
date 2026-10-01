@@ -177,23 +177,14 @@ export function runCommand(command: string, args: string[]): Promise<CommandResu
   });
 }
 
-// A metrognome pin kept from an earlier run that no longer names a binary; the
-// check below would pass on another one while the client keeps failing.
-function stalePin(env: unknown, server: ServerEntry): boolean {
-  const pin = (env as Record<string, unknown> | undefined)?.[METROGNOME_PATH_ENV];
-
-  if (pin === undefined || server.env?.[METROGNOME_PATH_ENV] !== undefined) return false;
-
-  return typeof pin !== 'string' || !isAbsolute(pin) || !existsSync(pin);
-}
-
 /** A stdio entry running this build, with any env setup pins; other env is the user's. */
 function launchesThis(current: unknown, server: ServerEntry): boolean {
   if (current == null || typeof current !== 'object') return false;
 
   const { type, url, command, args, env } = current as Record<string, unknown>;
+  const currentEnv = env as Record<string, unknown> | undefined;
   const pinned = Object.entries(server.env ?? {}).every(
-    ([key, value]) => (env as Record<string, unknown> | undefined)?.[key] === value,
+    ([key, value]) => currentEnv?.[key] === value,
   );
 
   return (
@@ -202,17 +193,18 @@ function launchesThis(current: unknown, server: ServerEntry): boolean {
     command === server.command &&
     isDeepStrictEqual(args, server.args) &&
     pinned &&
-    !stalePin(env, server)
+    currentEnv?.[METROGNOME_PATH_ENV] === server.env?.[METROGNOME_PATH_ENV]
   );
 }
 
 // The user's env is the one field that means the same on a stdio entry; a
 // url, headers or transport type from an old remote entry would contradict it.
+// The metrognome pin is setup's: only the binary this run checked may stay.
 function replacement(previous: unknown, server: ServerEntry): Record<string, unknown> {
-  const previousEnv = (previous as { env?: Record<string, string> } | null | undefined)?.env;
-  const env = { ...previousEnv, ...server.env };
+  const env = { ...(previous as { env?: Record<string, string> } | null | undefined)?.env };
 
-  if (stalePin(previousEnv, server)) delete env[METROGNOME_PATH_ENV];
+  delete env[METROGNOME_PATH_ENV];
+  Object.assign(env, server.env);
 
   return {
     command: server.command,

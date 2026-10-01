@@ -253,23 +253,18 @@ describe('setup --apply', () => {
     expect(step(await runSetup(deps), 'claude_desktop').status).toBe('ok');
   });
 
-  it('drops a kept metrognome pin whose binary is gone, and keeps one that exists', async () => {
-    const { deps, home } = fixture({});
-    const live = join(home, 'metrognome');
+  it('drops a kept metrognome pin when run without one, since it was not checked', async () => {
+    const { deps, home } = fixture({
+      desktop: JSON.stringify({
+        mcpServers: { selecta: { ...SERVER, env: { A: 'b', SELECTA_METROGNOME_PATH: '/old/mg' } } },
+      }),
+    });
 
-    writeFileSync(live, '');
-    const configWith = (pin: string) =>
-      JSON.stringify({
-        mcpServers: { selecta: { ...SERVER, env: { A: 'b', SELECTA_METROGNOME_PATH: pin } } },
-      });
-
-    writeFileSync(desktopConfigPath(home), configWith(join(home, 'gone')));
+    expect(step(await runSetup(deps), 'claude_desktop').status).toBe('would_change');
     expect(step(await runSetup(deps, { apply: true }), 'claude_desktop').status).toBe('changed');
     expect(
       JSON.parse(readFileSync(desktopConfigPath(home), 'utf8')).mcpServers.selecta.env,
     ).toEqual({ A: 'b' });
-
-    writeFileSync(desktopConfigPath(home), configWith(live));
     expect(step(await runSetup(deps), 'claude_desktop').status).toBe('ok');
   });
 
