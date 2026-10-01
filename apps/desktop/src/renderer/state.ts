@@ -184,5 +184,6 @@ export function saveLabel(save?: Save): string {
 
   if (save.status === 'pending') return 'Save pending';
 
-  return save.result?.error ? 'Save uncertain' : 'Saved';
+  // A cleanup failure after a committed creation still means the playlist exists.
+  return save.result?.error && save.result.creation_committed !== true ? 'Save uncertain' : 'Saved';
 }

@@ -335,11 +335,13 @@ function Draft({
         : undefined;
     });
 
-  const moveEntry = (entryId: string, to: number) =>
+  // Both ends are resolved by entry ID when the edit runs; earlier queued edits may have moved them.
+  const moveEntry = (entryId: string, targetId: string) =>
     setEntries((entries) => {
       const from = entries.findIndex((entry) => entry.entry_id === entryId);
+      const to = entries.findIndex((entry) => entry.entry_id === targetId);
 
-      return from < 0 ? undefined : move(entries, from, Math.min(to, entries.length - 1));
+      return from < 0 || to < 0 ? undefined : move(entries, from, to);
     });
 
   function send(event: FormEvent) {
@@ -442,7 +444,7 @@ function Draft({
         <section>
           {draft && <p className="muted">{totalDuration(items)}</p>}
           <ol className="tracks">
-            {items.map((row, index) => (
+            {items.map((row) => (
               <li
                 key={row.entry_id}
                 draggable={!locked}
@@ -451,7 +453,8 @@ function Draft({
                 onDragEnd={() => setDragged(undefined)}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => {
-                  if (dragged !== undefined && dragged !== row.entry_id) moveEntry(dragged, index);
+                  if (dragged !== undefined && dragged !== row.entry_id)
+                    moveEntry(dragged, row.entry_id);
                 }}
               >
                 <input

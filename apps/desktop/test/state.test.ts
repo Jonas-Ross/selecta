@@ -107,6 +107,12 @@ it('labels the save button by what the draft recorded', () => {
   expect(saveLabel({ status: 'pending' })).toBe('Save pending');
   expect(saveLabel({ status: 'finished', result: { playlist_id: 'P' } })).toBe('Saved');
   expect(saveLabel({ status: 'finished', result: { error: 'jxa_error' } })).toBe('Save uncertain');
+  expect(
+    saveLabel({
+      status: 'finished',
+      result: { error: 'operation_cleanup_failed', creation_committed: true },
+    }),
+  ).toBe('Saved');
 });
 
 it('treats a draft as linked only while it owns an active preview', () => {
