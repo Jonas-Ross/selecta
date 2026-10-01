@@ -334,17 +334,21 @@ function planCode(deps: SetupDeps, now: Date): Planned {
     };
   }
 
-  const env = (previous as { env?: Record<string, string> } | undefined)?.env ?? {};
-  const addArgs = [
+  // add-json keeps every field of the old entry (env, headers) without
+  // `claude mcp add`'s variadic -e swallowing the server name.
+  const entry = {
+    type: 'stdio',
+    ...(previous as Record<string, unknown> | undefined),
+    command: deps.server.command,
+    args: deps.server.args,
+  };
+  const addJson = (value: unknown): string[] => [
     'mcp',
-    'add',
+    'add-json',
     '--scope',
     'user',
-    ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]),
     SERVER_NAME,
-    '--',
-    deps.server.command,
-    ...deps.server.args,
+    JSON.stringify(value),
   ];
   const verb = previous == null ? 'add' : 'replace';
 
@@ -352,7 +356,7 @@ function planCode(deps: SetupDeps, now: Date): Planned {
     step: {
       step: 'claude_code',
       status: 'would_change',
-      detail: `Would ${verb} the selecta server at user scope with \`claude mcp add\`.`,
+      detail: `Would ${verb} the selecta server at user scope with \`claude mcp add-json\`.`,
     },
     apply: async () => {
       let backup: string | undefined;
@@ -371,7 +375,7 @@ function planCode(deps: SetupDeps, now: Date): Planned {
         if (removed.code !== 0) return codeFailure('remove', removed, backup);
       }
 
-      const added = await deps.run(claude, addArgs);
+      const added = await deps.run(claude, addJson(entry));
 
       if (added.code !== 0) {
         const failure = codeFailure('add', added, backup);
@@ -379,14 +383,7 @@ function planCode(deps: SetupDeps, now: Date): Planned {
         if (previous == null) return failure;
 
         // Put the old registration back rather than leave the user with none.
-        const restored = await deps.run(claude, [
-          'mcp',
-          'add-json',
-          '--scope',
-          'user',
-          SERVER_NAME,
-          JSON.stringify(previous),
-        ]);
+        const restored = await deps.run(claude, addJson(previous));
 
         return {
           ...failure,

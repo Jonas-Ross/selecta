@@ -179,13 +179,11 @@ describe('setup --apply', () => {
       [
         '/usr/local/bin/claude',
         'mcp',
-        'add',
+        'add-json',
         '--scope',
         'user',
         'selecta',
-        '--',
-        SERVER.command,
-        ...SERVER.args,
+        JSON.stringify({ type: 'stdio', ...SERVER }),
       ],
     ]);
   });
@@ -204,15 +202,11 @@ describe('setup --apply', () => {
       [
         '/usr/local/bin/claude',
         'mcp',
-        'add',
+        'add-json',
         '--scope',
         'user',
-        '-e',
-        'A=b',
         'selecta',
-        '--',
-        SERVER.command,
-        ...SERVER.args,
+        JSON.stringify({ ...stale, ...SERVER }),
       ],
     ]);
   });
@@ -235,7 +229,11 @@ describe('setup --apply', () => {
     const stale = { type: 'stdio', command: 'node', args: ['/old.js'] };
     const { deps, calls } = fixture({
       code: { mcpServers: { selecta: stale } },
-      run: (_command, args) => (args[1] === 'add' ? { code: 1, stdout: '', stderr: 'boom' } : OK),
+      // The replacement add fails; the restore after it succeeds.
+      run: (_command, args) =>
+        args[1] === 'add-json' && args.at(-1) !== JSON.stringify(stale)
+          ? { code: 1, stdout: '', stderr: 'boom' }
+          : OK,
     });
 
     const code = step(await runSetup(deps, { apply: true }), 'claude_code');
