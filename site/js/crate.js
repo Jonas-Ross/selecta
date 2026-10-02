@@ -1,7 +1,6 @@
 // The crate in 3D, in centimetres. It is seen from the front, then from above while the
 // front records are flipped forward. render(p) poses everything for p in [0, 1].
 import {
-  ACESFilmicToneMapping,
   BackSide,
   BoxGeometry,
   CanvasTexture,
@@ -18,6 +17,7 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   MirroredRepeatWrapping,
+  NeutralToneMapping,
   SRGBColorSpace,
   Scene,
   SpotLight,
@@ -29,7 +29,12 @@ import {
 const SLEEVE = 31.4;
 const THICK = 0.34;
 const INNER = { w: 33, d: 40, wall: 1.6, floor: 1.4 };
-const WALL = { back: 25, side: 25, front: 14 };
+// Each wall is planks of one height with a thin gap between, as a crate is nailed together.
+const PLANK = { h: 6.9, gap: 0.2 };
+const WALL = { back: 3, side: 3, front: 2 };
+// The pine texture spans 56 cm across and holds eight planks; v of the first seam and the
+// height of one plank, so each board can take a single plank without a seam through it.
+const WOOD = { span: 56, first: 0.0093, band: 0.1243 };
 // Empty space in front of the stack, where flipped records come to rest.
 const FREE = 13;
 const PITCH = 0.86;
@@ -107,7 +112,7 @@ function stage() {
   const m = new Mesh(
     new PlaneGeometry(150, 150),
     material({
-      color: 0x2a2724,
+      color: 0x232325,
       roughness: 0.95,
       alphaMap: new CanvasTexture(c),
       transparent: true,
@@ -158,17 +163,18 @@ export async function crate3d(canvas, { covers, wood }) {
   renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 700 ? 1.5 : 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = PCFShadowMap;
-  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMapping = NeutralToneMapping;
 
   const scene = new Scene();
 
   scene.environment = environment(renderer);
-  scene.environmentIntensity = 0.8;
+  scene.environmentIntensity = 0.5;
 
   const camera = new PerspectiveCamera(28, 1, 10, 500);
 
-  // Light: a soft key from above left, a cool fill, and the site's lime as a rim from behind.
-  const key = new DirectionalLight(0xfff4e6, 3.4);
+  // Light: a soft key from above left, a faint cool fill from the front right, and the site's
+  // lime as a rim from behind.
+  const key = new DirectionalLight(0xffeedd, 3);
 
   key.position.set(-45, 90, 55);
   key.castShadow = true;
@@ -185,9 +191,12 @@ export async function crate3d(canvas, { covers, wood }) {
   key.shadow.radius = 4;
   key.shadow.bias = -0.0004;
   key.shadow.normalBias = 0.03;
-  scene.add(key, new HemisphereLight(0xb8c0d0, 0x141416, 0.9));
+  const fill = new DirectionalLight(0xdfe6ff, 0.5);
 
-  const rim = new SpotLight(0xd6ff3a, 9000, 220, 0.5, 0.8, 2);
+  fill.position.set(60, 25, 70);
+  scene.add(key, fill, new HemisphereLight(0xb8c0d0, 0x141416, 0.45));
+
+  const rim = new SpotLight(0xd6ff3a, 4000, 220, 0.35, 0.8, 2);
 
   rim.position.set(55, 45, -70);
   rim.target.position.set(0, 18, 0);
@@ -195,38 +204,58 @@ export async function crate3d(canvas, { covers, wood }) {
 
   scene.add(stage());
 
-  // The crate: five boards of one pine texture, which spans 70 cm of wood at any size.
+  // The crate: one pine texture on every plank, with UVs from each face's real size so the
+  // grain has one scale everywhere, end grain included.
   const [woodMap, ...images] = await Promise.all([load(wood), ...covers.map(load)]);
 
-  // Mirrored, so the texture's edges meet themselves and no tiling seam shows.
   woodMap.wrapS = woodMap.wrapT = MirroredRepeatWrapping;
+  const pine = material({ map: woodMap, color: 0xe8cbab, roughness: 0.85 });
+  const rand = mulberry(7);
+  let row = 0;
+  const plank = (size, at) => {
+    const geo = new BoxGeometry(...size);
+    const { position: p, normal: n, uv } = geo.attributes;
+    // A different plank of the texture each time, kept clear of the seams on either side.
+    const v0 = WOOD.first + (row++ % 8) * WOOD.band + 0.006;
+    const shift = rand() * 0.6;
 
-  const board = (w, h, d, x, y, z) => {
-    const map = woodMap.clone();
+    for (let i = 0; i < p.count; i++) {
+      const c = [p.getX(i), p.getY(i), p.getZ(i)].map((v, k) => v + size[k] / 2);
+      const facing = [n.getX(i), n.getY(i), n.getZ(i)].findIndex((v) => Math.abs(v) > 0.5);
+      // The grain runs along the longer of the face's two sides.
+      const [along, across] = [0, 1, 2]
+        .filter((k) => k !== facing)
+        .sort((k, l) => size[l] - size[k]);
 
-    map.repeat.set(Math.max(w, d) / 70, h / 70);
-    const m = new Mesh(
-      new BoxGeometry(w, h, d),
-      material({ map, color: 0xd9a77a, roughness: 0.8 }),
-    );
+      uv.setXY(
+        i,
+        shift + c[along] / WOOD.span,
+        v0 + (c[across] / size[across]) * (WOOD.band - 0.012),
+      );
+    }
 
-    m.position.set(x, y, z);
+    const m = new Mesh(geo, pine);
+
+    m.position.set(...at);
     m.castShadow = m.receiveShadow = true;
     scene.add(m);
   };
-  const W = INNER.w + 2 * INNER.wall;
-  const D = INNER.d + 2 * INNER.wall;
+  const wall = (count, size, x, z) => {
+    for (let j = 0; j < count; j++) plank(size, [x, j * (PLANK.h + PLANK.gap) + PLANK.h / 2, z]);
+  };
+  const front = INNER.d / 2 + INNER.wall / 2;
+  const side = INNER.w / 2 + INNER.wall / 2;
 
-  board(W, INNER.floor, D, 0, INNER.floor / 2, 0);
-  board(W, WALL.front, INNER.wall, 0, WALL.front / 2, INNER.d / 2 + INNER.wall / 2);
-  board(W, WALL.back, INNER.wall, 0, WALL.back / 2, -INNER.d / 2 - INNER.wall / 2);
+  // The walls meet without overlapping, so no two faces share a plane and flicker.
+  plank([INNER.w, INNER.floor, INNER.d], [0, INNER.floor / 2, 0]);
+  wall(WALL.front, [INNER.w, PLANK.h, INNER.wall], 0, front);
+  wall(WALL.back, [INNER.w, PLANK.h, INNER.wall], 0, -front);
 
   for (const s of [-1, 1])
-    board(INNER.wall, WALL.side, D, s * (INNER.w / 2 + INNER.wall / 2), WALL.side / 2, 0);
+    wall(WALL.side, [INNER.wall, PLANK.h, INNER.d + 2 * INNER.wall], s * side, 0);
 
   // The records: the front ones wear covers, the rest are plain sleeves seen edge on.
   const sleeveGeo = new BoxGeometry(SLEEVE, SLEEVE, THICK);
-  const rand = mulberry(7);
   const sleeves = [];
   const z0 = INNER.d / 2 - FREE;
 
