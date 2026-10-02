@@ -126,6 +126,38 @@ function stage() {
   return m;
 }
 
+// A soft dark patch right under the crate, the shadow its own base throws on the floor.
+function contact() {
+  const c = document.createElement('canvas');
+
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(128, 128, 40, 128, 128, 128);
+
+  grad.addColorStop(0, '#fff');
+  grad.addColorStop(1, '#000');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 256, 256);
+
+  const m = new Mesh(
+    new PlaneGeometry(52, 60),
+    new MeshBasicMaterial({
+      color: 0x000000,
+      alphaMap: new CanvasTexture(c),
+      transparent: true,
+      opacity: 0.7,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    }),
+  );
+
+  m.rotation.x = -Math.PI / 2;
+  m.renderOrder = 1;
+
+  return m;
+}
+
 function averageColor(image) {
   const c = document.createElement('canvas');
 
@@ -168,33 +200,49 @@ export async function crate3d(canvas, { covers, wood }) {
   const scene = new Scene();
 
   scene.environment = environment(renderer);
-  scene.environmentIntensity = 0.5;
+  scene.environmentIntensity = 0.3;
 
   const camera = new PerspectiveCamera(28, 1, 10, 500);
+  // Phones get half the shadow detail; two 2048 px maps are a desktop budget.
+  const shadowSize = innerWidth < 700 ? 1024 : 2048;
 
-  // Light: a soft key from above left, a faint cool fill from the front right, and the site's
-  // lime as a rim from behind.
-  const key = new DirectionalLight(0xffeedd, 3);
+  // Light: a key low from the front left, so a record tipping toward you throws its shadow
+  // back across the one behind it; a shop light overhead that darkens the crate's insides;
+  // little fill, so both shadows read; and the site's lime as a rim from behind.
+  const key = new DirectionalLight(0xffeedd, 3.2);
 
-  key.position.set(-45, 90, 55);
+  key.position.set(-40, 75, 75);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  // Shadow bounds hug the crate, so the 2048 px map stays fine enough not to step.
+  key.shadow.mapSize.set(shadowSize, shadowSize);
+  // Shadow bounds hug the crate, so the map stays fine enough not to step.
   Object.assign(key.shadow.camera, {
     left: -38,
     right: 38,
     top: 38,
     bottom: -38,
-    near: 60,
-    far: 190,
+    near: 50,
+    far: 180,
   });
-  key.shadow.radius = 4;
+  key.shadow.radius = 3;
   key.shadow.bias = -0.0004;
   key.shadow.normalBias = 0.03;
-  const fill = new DirectionalLight(0xdfe6ff, 0.5);
+
+  const shop = new SpotLight(0xfff1e0, 16000, 0, 0.5, 0.9, 2);
+
+  shop.position.set(0, 110, 15);
+  shop.target.position.set(0, 12, -2);
+  shop.castShadow = true;
+  shop.shadow.mapSize.set(shadowSize, shadowSize);
+  shop.shadow.camera.near = 40;
+  shop.shadow.camera.far = 160;
+  shop.shadow.radius = 8;
+  shop.shadow.bias = -0.0004;
+  shop.shadow.normalBias = 0.03;
+
+  const fill = new DirectionalLight(0xdfe6ff, 0.3);
 
   fill.position.set(60, 25, 70);
-  scene.add(key, fill, new HemisphereLight(0xb8c0d0, 0x141416, 0.45));
+  scene.add(key, shop, shop.target, fill, new HemisphereLight(0xb8c0d0, 0x141416, 0.22));
 
   const rim = new SpotLight(0xd6ff3a, 4000, 220, 0.35, 0.8, 2);
 
@@ -202,7 +250,7 @@ export async function crate3d(canvas, { covers, wood }) {
   rim.target.position.set(0, 18, 0);
   scene.add(rim, rim.target);
 
-  scene.add(stage());
+  scene.add(stage(), contact());
 
   // The crate: one pine texture on every plank, with UVs from each face's real size so the
   // grain has one scale everywhere, end grain included.
