@@ -55,11 +55,13 @@ export function createMetadataQueries(db: Database) {
 
   const upsertAudioFeaturesStmt = db.prepare(`
     INSERT OR REPLACE INTO audio_features
-      (track_persistent_id, bpm, bpm_confidence, bpm_maturity, musical_key,
+      (track_persistent_id, bpm, bpm_confidence, bpm_maturity, bpm_window_low,
+       bpm_window_high, musical_key,
        camelot, key_confidence, key_maturity, danceability, sources,
        mb_recording_mbid, deezer_track_id, status, catalog_status,
        analysis_status, fetched_at)
-    VALUES (@trackPersistentId, @bpm, @bpmConfidence, @bpmMaturity, @musicalKey,
+    VALUES (@trackPersistentId, @bpm, @bpmConfidence, @bpmMaturity, @bpmWindowLow,
+            @bpmWindowHigh, @musicalKey,
             @camelot, @keyConfidence, @keyMaturity, @danceability, @sources,
             @mbRecordingMbid, @deezerTrackId, @status, @catalogStatus,
             @analysisStatus, @fetchedAt)
@@ -68,6 +70,7 @@ export function createMetadataQueries(db: Database) {
   const getAudioFeaturesStmt = db.prepare(`
     SELECT track_persistent_id AS trackPersistentId, bpm,
            bpm_confidence AS bpmConfidence, bpm_maturity AS bpmMaturity,
+           bpm_window_low AS bpmWindowLow, bpm_window_high AS bpmWindowHigh,
            musical_key AS musicalKey, camelot, key_confidence AS keyConfidence,
            key_maturity AS keyMaturity, danceability, sources,
            mb_recording_mbid AS mbRecordingMbid, deezer_track_id AS deezerTrackId,
@@ -189,8 +192,17 @@ export function createMetadataQueries(db: Database) {
     },
 
     upsertAudioFeatures(row: AudioFeaturesRow): void {
+      // Undo journals written before the window columns existed lack them;
+      // a metrognome tempo then gets the window migration 5 backfilled.
+      const legacyFolded =
+        row.bpmWindowLow === undefined &&
+        row.bpm != null &&
+        row.sources?.bpm?.startsWith('metrognome/') === true;
+
       upsertAudioFeaturesStmt.run({
         ...row,
+        bpmWindowLow: row.bpmWindowLow ?? (legacyFolded ? 90 : null),
+        bpmWindowHigh: row.bpmWindowHigh ?? (legacyFolded ? 180 : null),
         sources: row.sources != null ? JSON.stringify(row.sources) : null,
       });
     },

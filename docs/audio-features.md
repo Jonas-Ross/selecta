@@ -142,6 +142,23 @@ Japanese library's 久石譲 "Summer" lands on another artist's "Summer"), so th
 attempt is recorded as `no_match` and nothing is stored, however confident the
 tempo.
 
+## A folded tempo says so
+
+metrognome reports every tempo inside one octave, 90-180 BPM, because a track
+at 87 and one at 174 share a beat grid and it cannot tell them apart. That
+holds house, techno and drum & bass in one range, and doubles slow music: an
+85 BPM hip-hop track reads 170. Selecta keeps the reading and stores the window
+it came with (`bpm_window_low`/`_high`), and every track projection then carries
+`bpm_folded_into` and `bpm_half_time`, so the model weighs both rather than
+reading 170 as fact. Compact rows carry `bpm_half_time` in their last slot. The
+window travels with the tempo: gap-fill, supersede and restore move or clear
+them together, and a catalog or tag tempo, which is not folded, carries none.
+
+Migration 5 gave every stored metrognome tempo the 90-180 window, since every
+release has used it, so nothing needs re-measuring. `bpm_maturity` still reads
+`validated`: the estimator was checked on dance music inside that octave, which
+the tool descriptions spell out.
+
 ## Watching a long run
 
 A whole-library `analysis` backlog is thousands of tracks at ~1-3s each, which

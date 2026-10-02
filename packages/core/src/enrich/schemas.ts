@@ -62,7 +62,13 @@ export const mgAnalysis = z.object({
   query: z.object({ client_ref: z.string().min(1).optional() }),
   track: z.object({ uncertain: z.boolean() }).optional(),
   features: z.object({
-    tempo: z.object({ bpm: z.number().positive(), ...feature }).optional(),
+    tempo: z
+      .object({
+        bpm: z.number().positive(),
+        canonical_window_bpm: z.tuple([z.number().positive(), z.number().positive()]).optional(),
+        ...feature,
+      })
+      .optional(),
     key: z
       .object({ key: z.string().min(1), camelot: z.string().min(1).optional(), ...feature })
       .optional(),

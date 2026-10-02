@@ -75,6 +75,7 @@ function decodeCompactTrack(track: CompactApiTrack): ApiTrack {
     camelot: track[9] ?? undefined,
     danceability: track[10] ?? undefined,
     note: track[18] ?? undefined,
+    bpm_half_time: track[19] ?? undefined,
     signal: {
       play_count: track[11],
       skip_count: track[12],
@@ -101,6 +102,7 @@ function expectCompactTrackParity(full: ApiTrack, compact: CompactApiTrack): voi
     camelot: full.camelot,
     danceability: full.danceability,
     note: full.note,
+    bpm_half_time: full.bpm_half_time,
     signal: full.signal,
   });
 }
