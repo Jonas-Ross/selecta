@@ -11,7 +11,15 @@ export {
   type TargetedEnrichmentOutcome,
 } from './engine.js';
 export type { FetchLike } from './sources.js';
-export { analyzeTracks, toFeaturesRow, type ChildLike, type MetrognomeDeps } from './metrognome.js';
+export {
+  KEY_PROFILE_ENV,
+  STORE_COUNTRY_ENV,
+  analyzeTracks,
+  configuredArgs,
+  toFeaturesRow,
+  type ChildLike,
+  type MetrognomeDeps,
+} from './metrognome.js';
 export {
   METROGNOME_PATH_ENV,
   MIN_METROGNOME_VERSION,

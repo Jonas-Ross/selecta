@@ -17,8 +17,11 @@ import { PassThrough } from 'node:stream';
 import { SelectaCache } from '../src/cache/index.js';
 import { blankFeatures, mergeFeatures } from '../src/cache/audio_features.js';
 import {
+  KEY_PROFILE_ENV,
   METROGNOME_PATH_ENV,
+  STORE_COUNTRY_ENV,
   analyzeTracks,
+  configuredArgs,
   enrichPendingTracks,
   findMetrognome,
   resolveMetrognome,
@@ -56,7 +59,7 @@ function parsed(clientRef: string): Record<string, any> {
 
 /** A stand-in child process: collects stdin lines, then answers and exits. */
 function stubChild(
-  answer: (input: string[]) => { lines: string[]; code?: number; signal?: string },
+  answer: (input: string[]) => { lines: string[]; code?: number; signal?: string; log?: string },
 ): { child: ChildLike; input: () => string[] } {
   const stdin = new PassThrough();
   const stdout = new PassThrough();
@@ -74,9 +77,11 @@ function stubChild(
   });
 
   stdin.on('finish', () => {
-    const { lines, code = 0, signal } = answer(input);
+    const { lines, code = 0, signal, log } = answer(input);
 
     for (const out of lines) stdout.write(`${out}\n`);
+
+    if (log != null) stderr.write(`${log}\n`);
 
     stdout.end();
     stderr.end();
@@ -100,17 +105,24 @@ const echoStub = (child: ChildLike) => () => child;
 
 async function collect(
   queries: { clientRef: string; artist: string; title: string }[],
-  answer: (input: string[]) => { lines: string[]; code?: number; signal?: string },
-): Promise<{ rows: (AudioFeaturesRow | null)[]; input: string[] }> {
+  answer: (input: string[]) => { lines: string[]; code?: number; signal?: string; log?: string },
+  env: NodeJS.ProcessEnv = {},
+): Promise<{ rows: (AudioFeaturesRow | null)[]; input: string[]; args: string[] }> {
   const stub = stubChild(answer);
   const rows: (AudioFeaturesRow | null)[] = [];
+  let args: string[] = [];
 
   await analyzeTracks(queries, (analysis) => rows.push(toFeaturesRow(analysis, FETCHED_AT)), {
     ...installed,
-    spawnLike: echoStub(stub.child),
+    env,
+    spawnLike: (_command, spawnArgs) => {
+      args = spawnArgs;
+
+      return stub.child;
+    },
   });
 
-  return { rows, input: stub.input() };
+  return { rows, input: stub.input(), args };
 }
 
 describe('finding metrognome', () => {
@@ -258,6 +270,28 @@ describe('reading recorded metrognome output', () => {
     });
   });
 
+  it('stores nothing measured from an uncertain match, and records it as no match', async () => {
+    // A US-store search for a Japanese library's 久石譲 "Summer" lands on
+    // another artist's "Summer": confident tempo, wrong recording.
+    const fixture = parsed('T-MIDNIGHT');
+
+    fixture.track.uncertain = true;
+    fixture.track.match_score = 0.65;
+    const { rows } = await collect(
+      [{ clientRef: 'T-MIDNIGHT', artist: 'M83', title: 'Midnight City' }],
+      () => ({ lines: [JSON.stringify(fixture)] }),
+    );
+
+    expect(fixture.features.tempo.uncertain).toBe(false);
+    expect(rows[0]).toMatchObject({
+      bpm: null,
+      musicalKey: null,
+      sources: null,
+      status: 'no_match',
+      analysisStatus: 'no_match',
+    });
+  });
+
   it('records a store miss and an undecodable preview terminally', async () => {
     const { rows } = await collect(
       [
@@ -283,6 +317,50 @@ describe('reading recorded metrognome output', () => {
 
     orphan.query = {};
     expect(toFeaturesRow(orphan as never, FETCHED_AT)).toBeNull();
+  });
+});
+
+describe('configuration from the environment', () => {
+  const one = [{ clientRef: 'T-MIDNIGHT', artist: 'M83', title: 'Midnight City' }];
+
+  it('passes no flags unless configured, so any metrognome release works', async () => {
+    const { args } = await collect(one, () => ({ lines: [line('T-MIDNIGHT')] }));
+
+    expect(args).toEqual(['batch', '--concurrency', '4']);
+  });
+
+  it('passes the store country and key profile through, normalized', async () => {
+    const { args } = await collect(one, () => ({ lines: [line('T-MIDNIGHT')] }), {
+      [STORE_COUNTRY_ENV]: ' JP ',
+      [KEY_PROFILE_ENV]: 'Krumhansl',
+    });
+
+    expect(args.slice(3)).toEqual(['--country', 'jp', '--key-profile', 'krumhansl']);
+  });
+
+  it('refuses a malformed value before starting a run', () => {
+    expect(() => configuredArgs({ [STORE_COUNTRY_ENV]: 'Japan' })).toThrow(
+      /SELECTA_STORE_COUNTRY must be a two-letter country code/,
+    );
+    expect(() => configuredArgs({ [KEY_PROFILE_ENV]: 'pop' })).toThrow(
+      /SELECTA_KEY_PROFILE must be one of edm, krumhansl/,
+    );
+  });
+
+  it("carries metrognome's own reason when it exits without results", async () => {
+    await expect(
+      collect(
+        one,
+        () => ({
+          lines: [],
+          code: 2,
+          log: "error: unexpected argument '--country' found",
+        }),
+        { [STORE_COUNTRY_ENV]: 'jp' },
+      ),
+    ).rejects.toThrow(
+      /ended after 0\/1 results \(exit 2\): error: unexpected argument '--country'/,
+    );
   });
 });
 

@@ -19,6 +19,14 @@ import { mgAnalysis, type MgAnalysis } from './schemas.js';
 import { parsePayload } from '../types/validation.js';
 import { resolveMetrognome, unreachable, type BinaryDeps } from './metrognome_binary.js';
 
+// The iTunes store the library was bought in. metrognome searches the US store
+// without one, which misses regional releases and localized artist names.
+export const STORE_COUNTRY_ENV = 'SELECTA_STORE_COUNTRY';
+// metrognome's key profiles: `edm` (its default) or `krumhansl`, which is
+// fitted to classical and pop rather than dance music.
+export const KEY_PROFILE_ENV = 'SELECTA_KEY_PROFILE';
+const KEY_PROFILES = ['edm', 'krumhansl'];
+
 // The one schema_version this build understands. metrognome bumps it when a
 // field moves or changes meaning, so a mismatch is refused rather than read
 // optimistically — a misread feature is worse than a missing one.
@@ -80,7 +88,12 @@ export async function analyzeTracks(
 
   const { path: command } = await resolveMetrognome(deps);
   const trace = deps.trace ?? (() => {});
-  const args = ['batch', '--concurrency', String(deps.concurrency ?? DEFAULT_CONCURRENCY)];
+  const args = [
+    'batch',
+    '--concurrency',
+    String(deps.concurrency ?? DEFAULT_CONCURRENCY),
+    ...configuredArgs(deps.env ?? process.env),
+  ];
 
   let child: ChildLike;
 
@@ -92,6 +105,7 @@ export async function analyzeTracks(
 
   let received = 0;
   let failure: Error | null = null;
+  let lastLog: string | null = null;
 
   // Both signals are needed: the process can close while readline is still
   // draining buffered stdout, and a short result count then reads as a truncated
@@ -107,10 +121,14 @@ export async function analyzeTracks(
       if (failure != null) return reject(failure);
 
       if (received < queries.length) {
+        // The last stderr line is metrognome's own reason, such as a flag
+        // an older release does not know.
+        const reason = lastLog != null ? `: ${lastLog}` : '';
+
         return reject(
           new BridgeError(
             'enrichment_error',
-            `metrognome ended after ${received}/${queries.length} results (${exit.signal != null ? `signal ${exit.signal}` : `exit ${exit.code}`})`,
+            `metrognome ended after ${received}/${queries.length} results (${exit.signal != null ? `signal ${exit.signal}` : `exit ${exit.code}`})${reason}`,
           ),
         );
       }
@@ -143,7 +161,11 @@ export async function analyzeTracks(
 
   const logs = createInterface({ input: child.stderr });
 
-  logs.on('line', (line) => trace(`metrognome: ${line}`));
+  logs.on('line', (line) => {
+    if (line.trim() !== '') lastLog = line.trim();
+
+    trace(`metrognome: ${line}`);
+  });
 
   // stdin breaks when the process dies; `close` carries the real reason.
   child.stdin.on('error', () => {});
@@ -151,6 +173,40 @@ export async function analyzeTracks(
   // on the write alone would hang instead of reporting the failure.
   await Promise.race([writeQueries(child.stdin, queries), finished.catch(() => {})]);
   await finished;
+}
+
+/**
+ * Flags from the environment, refused up front when malformed: metrognome
+ * would reject them too, but only after the run had started.
+ */
+export function configuredArgs(env: NodeJS.ProcessEnv): string[] {
+  const args: string[] = [];
+  const country = env[STORE_COUNTRY_ENV]?.trim();
+  const profile = env[KEY_PROFILE_ENV]?.trim().toLowerCase();
+
+  if (country) {
+    if (!/^[a-z]{2}$/i.test(country)) {
+      throw new BridgeError(
+        'enrichment_error',
+        `${STORE_COUNTRY_ENV} must be a two-letter country code such as gb or jp, not "${country}".`,
+      );
+    }
+
+    args.push('--country', country.toLowerCase());
+  }
+
+  if (profile) {
+    if (!KEY_PROFILES.includes(profile)) {
+      throw new BridgeError(
+        'enrichment_error',
+        `${KEY_PROFILE_ENV} must be one of ${KEY_PROFILES.join(', ')}, not "${profile}".`,
+      );
+    }
+
+    args.push('--key-profile', profile);
+  }
+
+  return args;
 }
 
 function defaultSpawn(command: string, args: string[]): ChildLike {
@@ -199,7 +255,8 @@ async function writeQueries(stdin: Writable, queries: readonly AnalysisQuery[]):
  *
  * A feature metrognome flagged uncertain is dropped rather than stored: the
  * flag means "hint", and a hint sitting in a column read as a measurement is
- * exactly the wrong data this pipeline exists to avoid.
+ * exactly the wrong data this pipeline exists to avoid. So is everything
+ * measured from an uncertain match, which is likely another recording.
  */
 export function toFeaturesRow(analysis: MgAnalysis, fetchedAt: string): AudioFeaturesRow | null {
   const trackPersistentId = analysis.query.client_ref;
@@ -214,6 +271,10 @@ export function toFeaturesRow(analysis: MgAnalysis, fetchedAt: string): AudioFea
     if (status == null) return null;
 
     return { ...row, status, analysisStatus: status };
+  }
+
+  if (analysis.track?.uncertain === true) {
+    return { ...row, status: 'no_match', analysisStatus: 'no_match' };
   }
 
   const sources: NonNullable<AudioFeaturesRow['sources']> = {};
