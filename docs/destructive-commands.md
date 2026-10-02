@@ -93,5 +93,9 @@ remove it by hand.
   two-step: the model proposes, the user agrees, and the write goes through
   Music.app, which owns its own undo. A dry-run round trip inside the tool
   would add a turn to every edit and recover nothing extra.
+- **`setup`.** It shares the `--apply` flag, but writes Claude client config,
+  not cache rows. Its undo is a backup: the whole Claude Desktop config beside
+  the original, or the replaced Claude Code entry under `setup-backups/` next
+  to the database, each named in the report.
 - **Music.app writes generally.** A JSON journal cannot restore something
   Selecta does not own. The escape hatch covers cache rows only.
