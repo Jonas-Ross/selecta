@@ -17,9 +17,7 @@ import type { AudioFeaturesRow, FeatureStatus } from '../types/cache.js';
 import { blankFeatures } from '../cache/audio_features.js';
 import { mgAnalysis, type MgAnalysis } from './schemas.js';
 import { parsePayload } from '../types/validation.js';
-
-export const METROGNOME_PATH_ENV = 'SELECTA_METROGNOME_PATH';
-const DEFAULT_BINARY = 'metrognome';
+import { resolveMetrognome, unreachable, type BinaryDeps } from './metrognome_binary.js';
 
 // The one schema_version this build understands. metrognome bumps it when a
 // field moves or changes meaning, so a mismatch is refused rather than read
@@ -59,23 +57,17 @@ export type ChildLike = {
 
 export type SpawnLike = (command: string, args: string[]) => ChildLike;
 
-export type MetrognomeDeps = {
-  binaryPath?: string;
+export type MetrognomeDeps = BinaryDeps & {
   concurrency?: number;
   spawnLike?: SpawnLike;
   trace?: (line: string) => void;
 };
 
-/** Configured path, then the environment, then whatever is on PATH. */
-export function metrognomePath(deps: MetrognomeDeps = {}): string {
-  return deps.binaryPath ?? process.env[METROGNOME_PATH_ENV] ?? DEFAULT_BINARY;
-}
-
 /**
  * Run one batch through metrognome, calling back per result as it streams.
  *
- * Throws BridgeError('enrichment_error') when the binary is missing or the
- * run dies part-way; results already handed to `onResult` stand, so a caller
+ * Throws BridgeError('enrichment_error') when the binary is missing or too
+ * old, or the run dies part-way; results already handed to `onResult` stand, so a caller
  * keeps what landed before the failure. A non-zero exit on its own is normal
  * — metrognome exits 1 when any row failed, and those rows are results.
  */
@@ -86,7 +78,7 @@ export async function analyzeTracks(
 ): Promise<void> {
   if (queries.length === 0) return;
 
-  const command = metrognomePath(deps);
+  const { path: command } = await resolveMetrognome(deps);
   const trace = deps.trace ?? (() => {});
   const args = ['batch', '--concurrency', String(deps.concurrency ?? DEFAULT_CONCURRENCY)];
 
@@ -163,17 +155,6 @@ export async function analyzeTracks(
 
 function defaultSpawn(command: string, args: string[]): ChildLike {
   return spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
-}
-
-// The message carries the fix, not the hint: a failed run surfaces in the
-// summary's source_errors, which is the message alone.
-function unreachable(command: string, err: unknown): BridgeError {
-  const detail = err instanceof Error ? err.message : String(err);
-
-  return new BridgeError(
-    'enrichment_error',
-    `metrognome could not be run at "${command}": ${detail}. Install it (https://github.com/Jonas-Ross/metrognome) or point ${METROGNOME_PATH_ENV} at the binary.`,
-  );
 }
 
 function parseLine(line: string): MgAnalysis {
