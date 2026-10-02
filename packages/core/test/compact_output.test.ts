@@ -106,6 +106,8 @@ function discoveryFeatures(snapshot: LibrarySnapshot): AudioFeaturesRow[] {
         bpm: 112 + (index % 24),
         bpmConfidence: 0.91,
         bpmMaturity: 'validated',
+        bpmWindowLow: null,
+        bpmWindowHigh: null,
         musicalKey,
         camelot: null, // derived on save from musicalKey
         keyConfidence: musicalKey === null ? null : 0.58,

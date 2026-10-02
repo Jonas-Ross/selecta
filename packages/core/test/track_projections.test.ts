@@ -35,6 +35,8 @@ const bare: TrackRow = {
   danceability: null,
   bpmConfidence: null,
   bpmMaturity: null,
+  bpmWindowLow: null,
+  bpmWindowHigh: null,
   keyConfidence: null,
   keyMaturity: null,
   bpmSource: null,
@@ -58,6 +60,8 @@ const populated: TrackRow = {
   danceability: 0.736,
   bpmConfidence: 0.918_4,
   bpmMaturity: 'validated',
+  bpmWindowLow: null,
+  bpmWindowHigh: null,
   keyConfidence: 0.42,
   keyMaturity: 'provisional',
   bpmSource: 'metrognome/onset-autocorrelation-comb@2',
@@ -116,6 +120,8 @@ describe('serialized track contracts', () => {
       'album',
       'duration_seconds',
       'bpm',
+      'bpm_folded_into',
+      'bpm_half_time',
       'musical_key',
       'camelot',
       'danceability',
@@ -136,7 +142,7 @@ describe('serialized track contracts', () => {
     expect(JSON.stringify(toApiTrack(bare))).toBe(json);
     expect(JSON.stringify(buildTracklistInspection([bare]).tracks[0])).toBe(json);
     expect(JSON.stringify(projectApiTrack(bare, true))).toBe(
-      '["T-BARE",null,null,null,null,null,null,null,null,null,null,0,0,null,null,null,null,null,null]',
+      '["T-BARE",null,null,null,null,null,null,null,null,null,null,0,0,null,null,null,null,null,null,null]',
     );
   });
 
@@ -161,12 +167,16 @@ describe('serialized track contracts', () => {
       'signal.last_played',
       'signal.date_added',
       'note',
+      'bpm_half_time',
     ]);
     expect(JSON.stringify(toCompactApiTrack(toApiTrack(populated)))).toBe(
       '["T-FULL","Title","Artist","Album",2026,"RAW Genre",210.25,118.5,"F# minor","11A",0.74,12,1,4.5,true,true,"2026-09-01T00:00:00.000Z","2026-01-01T00:00:00.000Z",' +
         noteJson +
-        ']',
+        ',null]',
     );
+    expect(
+      toCompactApiTrack(toApiTrack({ ...populated, bpmWindowLow: 90, bpmWindowHigh: 180 })).at(-1),
+    ).toBe(59.2);
   });
 
   it('preserves available zero values and omits false signal flags', () => {
@@ -175,5 +185,18 @@ describe('serialized track contracts', () => {
     expect(JSON.stringify(buildTracklistInspection([row]).tracks[0])).toBe(
       '{"persistent_id":"T-BARE","duration_seconds":0,"bpm":0,"danceability":0,"signal":{"play_count":0,"skip_count":0,"rating":0}}',
     );
+  });
+
+  it('marks a folded tempo with its window and half-time reading', () => {
+    const folded: TrackRow = { ...bare, bpm: 170.04, bpmWindowLow: 90, bpmWindowHigh: 180 };
+
+    expect(toApiTrack(folded)).toMatchObject({
+      bpm: 170,
+      bpm_folded_into: [90, 180],
+      bpm_half_time: 85,
+    });
+    expect(toInspectedTrack(folded)).toMatchObject({ bpm_half_time: 85 });
+    // A tag or catalog tempo carries no window, so it claims no fold.
+    expect(toApiTrack({ ...bare, bpm: 85 })).not.toHaveProperty('bpm_half_time');
   });
 });

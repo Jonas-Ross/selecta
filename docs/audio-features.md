@@ -136,6 +136,29 @@ records the attempt. It also carries each estimate's own confidence (0-1) and
 is `validated` against published references, its key `provisional`, so a key
 from analysis is a hint however confident the number looks.
 
+The same goes for everything measured from a match metrognome flags
+`uncertain`: the preview is likely another recording (a US-store search for a
+Japanese library's 久石譲 "Summer" lands on another artist's "Summer"), so the
+attempt is recorded as `no_match` and nothing is stored, however confident the
+tempo.
+
+## A folded tempo says so
+
+metrognome reports every tempo inside one octave, 90-180 BPM, because a track
+at 87 and one at 174 share a beat grid and it cannot tell them apart. That
+holds house, techno and drum & bass in one range, and doubles slow music: an
+85 BPM hip-hop track reads 170. Selecta keeps the reading and stores the window
+it came with (`bpm_window_low`/`_high`), and every track projection then carries
+`bpm_folded_into` and `bpm_half_time`, so the model weighs both rather than
+reading 170 as fact. Compact rows carry `bpm_half_time` in their last slot. The
+window travels with the tempo: gap-fill, supersede and restore move or clear
+them together, and a catalog or tag tempo, which is not folded, carries none.
+
+Migration 5 gave every stored metrognome tempo the 90-180 window, since every
+release has used it, so nothing needs re-measuring. `bpm_maturity` still reads
+`validated`: the estimator was checked on dance music inside that octave, which
+the tool descriptions spell out.
+
 ## Watching a long run
 
 A whole-library `analysis` backlog is thousands of tracks at ~1-3s each, which
@@ -240,3 +263,24 @@ its version, without failing on it. When it is missing or too old the run
 returns every track skipped with the reason in `source_errors` and changes
 nothing — Selecta is in daily use and an absent optional binary is not an
 outage.
+
+Two optional variables reach metrognome as flags, and neither is passed when
+unset, so any release works without them:
+
+- `SELECTA_STORE_COUNTRY` (`--country`): the two-letter code of the store the
+  library was bought in. metrognome searches the US store without it, which
+  misses regional releases and stores that spell artists in their own script.
+  Needs a metrognome release that has `--country`. Tracks already recorded
+  `no_match` keep that record. Run both `reopen -s analysis -m bpm --apply`
+  and `reopen -s analysis -m musicalKey --apply` before the next `enrich`: each
+  reopens only rows missing that field, so a track whose BPM came from a catalog
+  needs the second to get another try at a key. Values an earlier run already
+  stored from the wrong store stay, since which of them were wrong matches was
+  never recorded; to re-measure them, `supersede -s analysis -p <provenance>...
+  --apply` with the provenances `supersede` lists, then `enrich`.
+- `SELECTA_KEY_PROFILE` (`--key-profile`): `edm` (metrognome's default, fitted
+  to dance music) or `krumhansl` (fitted to classical and pop). Its key source
+  label names the profile, so `supersede` can tell the two apart.
+
+A malformed value is refused before the run starts, with the reason in
+`source_errors`.

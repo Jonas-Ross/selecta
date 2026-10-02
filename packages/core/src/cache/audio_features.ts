@@ -23,6 +23,8 @@ export function blankFeatures(trackPersistentId: string, fetchedAt: string): Aud
     bpm: null,
     bpmConfidence: null,
     bpmMaturity: null,
+    bpmWindowLow: null,
+    bpmWindowHigh: null,
     musicalKey: null,
     camelot: null,
     keyConfidence: null,
@@ -74,6 +76,8 @@ export function mergeFeatures(
     merged.bpm = candidate.bpm;
     merged.bpmConfidence = candidate.bpmConfidence;
     merged.bpmMaturity = candidate.bpmMaturity;
+    merged.bpmWindowLow = candidate.bpmWindowLow;
+    merged.bpmWindowHigh = candidate.bpmWindowHigh;
     landed = true;
 
     if (candidate.sources?.bpm != null) sources.bpm = candidate.sources.bpm;
@@ -115,7 +119,7 @@ export type SourceField = (typeof SOURCE_FIELDS)[number];
 // Confidence, maturity and Camelot describe the value they came with, so they
 // go when it does.
 const CLEARED_WITH: Record<SourceField, readonly (keyof AudioFeaturesRow)[]> = {
-  bpm: ['bpm', 'bpmConfidence', 'bpmMaturity'],
+  bpm: ['bpm', 'bpmConfidence', 'bpmMaturity', 'bpmWindowLow', 'bpmWindowHigh'],
   musicalKey: ['musicalKey', 'camelot', 'keyConfidence', 'keyMaturity'],
   danceability: ['danceability'],
 };

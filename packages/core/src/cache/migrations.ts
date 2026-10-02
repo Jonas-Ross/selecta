@@ -92,6 +92,18 @@ export const MIGRATIONS: readonly Migration[] = [
       WHERE musical_key IS NOT NULL;
     `,
   },
+  // Every metrognome release has folded tempo into 90-180 (its DECISIONS.md 5),
+  // so its stored readings get that window without re-measuring.
+  {
+    version: 5,
+    sql: `
+      ALTER TABLE audio_features ADD COLUMN bpm_window_low REAL;
+      ALTER TABLE audio_features ADD COLUMN bpm_window_high REAL;
+      UPDATE audio_features SET bpm_window_low = 90, bpm_window_high = 180
+      WHERE bpm IS NOT NULL AND json_valid(sources)
+        AND json_extract(sources, '$.bpm') LIKE 'metrognome/%';
+    `,
+  },
 ];
 
 // What a current database reads as; diagnostics report the gap rather than
