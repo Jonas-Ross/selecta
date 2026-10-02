@@ -261,7 +261,7 @@ export async function crate3d(canvas, { covers, wood }) {
 
   for (let k = 0; k < COUNT; k++) {
     const cover = images[k];
-    const paper = new Color(PAPER[k % PAPER.length]).convertSRGBToLinear();
+    const paper = new Color(PAPER[k % PAPER.length]);
     const edge = cover
       ? averageColor(cover.image).multiplyScalar(0.8)
       : paper.clone().multiplyScalar(0.85);
