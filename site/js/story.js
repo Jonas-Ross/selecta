@@ -13,7 +13,13 @@ const COVERS = [
   'basement',
   'warm-static',
   'blue-hour',
+  'mirrorball',
   'low-tide',
+  'afterhours',
+  'tidal',
+  'sodium',
+  'papermoon',
+  'bloom',
 ].map((name) => `media/cover-${name}.avif`);
 // Scroll progress through the dig, kept so a crate that loads late starts in the right pose.
 const dig = { p: 0, crate: null };

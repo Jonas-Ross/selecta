@@ -17,10 +17,9 @@ import {
   PMREMGenerator,
   PerspectiveCamera,
   PlaneGeometry,
-  RepeatWrapping,
+  MirroredRepeatWrapping,
   SRGBColorSpace,
   Scene,
-  ShadowMaterial,
   SpotLight,
   TextureLoader,
   Vector3,
@@ -79,26 +78,45 @@ function environment(renderer) {
   return env;
 }
 
-// A soft pool of light on the floor, so the crate sits somewhere without a hard edge.
-function pool() {
+// Every surface dithers, so the slow falloffs of a dark scene don't band.
+const material = (opts) => new MeshStandardMaterial({ dithering: true, ...opts });
+
+// The floor is lit and takes the crate's shadow, and fades out at its edge so the scene has
+// no box around it.
+function stage() {
+  const size = 512;
   const c = document.createElement('canvas');
 
-  c.width = c.height = 256;
+  c.width = c.height = size;
   const g = c.getContext('2d');
-  const grad = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
 
-  grad.addColorStop(0, 'rgba(255, 244, 230, 0.12)');
-  grad.addColorStop(1, 'rgba(255, 244, 230, 0)');
+  grad.addColorStop(0, '#fff');
+  grad.addColorStop(0.5, '#999');
+  grad.addColorStop(1, '#000');
   g.fillStyle = grad;
-  g.fillRect(0, 0, 256, 256);
+  g.fillRect(0, 0, size, size);
+  // A little noise breaks up the 8-bit steps a slow fade would otherwise show.
+  const px = g.getImageData(0, 0, size, size);
+
+  for (let i = 0; i < px.data.length; i += 4)
+    px.data[i] = px.data[i + 1] = px.data[i + 2] = px.data[i + 1] + (Math.random() - 0.5) * 6;
+
+  g.putImageData(px, 0, 0);
 
   const m = new Mesh(
-    new PlaneGeometry(130, 130),
-    new MeshBasicMaterial({ map: new CanvasTexture(c), transparent: true, depthWrite: false }),
+    new PlaneGeometry(150, 150),
+    material({
+      color: 0x2a2724,
+      roughness: 0.95,
+      alphaMap: new CanvasTexture(c),
+      transparent: true,
+      depthWrite: false,
+    }),
   );
 
   m.rotation.x = -Math.PI / 2;
-  m.position.y = 0.02;
+  m.receiveShadow = true;
 
   return m;
 }
@@ -147,7 +165,7 @@ export async function crate3d(canvas, { covers, wood }) {
   scene.environment = environment(renderer);
   scene.environmentIntensity = 0.8;
 
-  const camera = new PerspectiveCamera(28, 1, 1, 800);
+  const camera = new PerspectiveCamera(28, 1, 10, 500);
 
   // Light: a soft key from above left, a cool fill, and the site's lime as a rim from behind.
   const key = new DirectionalLight(0xfff4e6, 3.4);
@@ -155,15 +173,16 @@ export async function crate3d(canvas, { covers, wood }) {
   key.position.set(-45, 90, 55);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
+  // Shadow bounds hug the crate, so the 2048 px map stays fine enough not to step.
   Object.assign(key.shadow.camera, {
-    left: -60,
-    right: 60,
-    top: 60,
-    bottom: -60,
-    near: 10,
-    far: 260,
+    left: -38,
+    right: 38,
+    top: 38,
+    bottom: -38,
+    near: 60,
+    far: 190,
   });
-  key.shadow.radius = 6;
+  key.shadow.radius = 4;
   key.shadow.bias = -0.0004;
   key.shadow.normalBias = 0.03;
   scene.add(key, new HemisphereLight(0xb8c0d0, 0x141416, 0.9));
@@ -174,24 +193,21 @@ export async function crate3d(canvas, { covers, wood }) {
   rim.target.position.set(0, 18, 0);
   scene.add(rim, rim.target);
 
-  const floor = new Mesh(new PlaneGeometry(400, 400), new ShadowMaterial({ opacity: 0.55 }));
+  scene.add(stage());
 
-  floor.rotation.x = -Math.PI / 2;
-  floor.receiveShadow = true;
-  scene.add(floor, pool());
-
-  // The crate: five boards of the same pine, each with the grain scaled to its size.
+  // The crate: five boards of one pine texture, which spans 70 cm of wood at any size.
   const [woodMap, ...images] = await Promise.all([load(wood), ...covers.map(load)]);
 
-  woodMap.wrapS = woodMap.wrapT = RepeatWrapping;
+  // Mirrored, so the texture's edges meet themselves and no tiling seam shows.
+  woodMap.wrapS = woodMap.wrapT = MirroredRepeatWrapping;
 
   const board = (w, h, d, x, y, z) => {
     const map = woodMap.clone();
 
-    map.repeat.set(Math.max(w, d) / 34, h / 34);
+    map.repeat.set(Math.max(w, d) / 70, h / 70);
     const m = new Mesh(
       new BoxGeometry(w, h, d),
-      new MeshStandardMaterial({ map, bumpMap: map, bumpScale: 0.6, roughness: 0.78 }),
+      material({ map, color: 0xd9a77a, roughness: 0.8 }),
     );
 
     m.position.set(x, y, z);
@@ -220,14 +236,14 @@ export async function crate3d(canvas, { covers, wood }) {
     const edge = cover
       ? averageColor(cover.image).multiplyScalar(0.8)
       : paper.clone().multiplyScalar(0.85);
-    const side = new MeshStandardMaterial({ color: edge, roughness: 0.75 });
+    const side = material({ color: edge, roughness: 0.75 });
     const face = cover
-      ? new MeshStandardMaterial({ map: cover, roughness: 0.55 })
-      : new MeshStandardMaterial({ color: paper, roughness: 0.7 });
+      ? material({ map: cover, roughness: 0.55 })
+      : material({ color: paper, roughness: 0.7 });
     // The back of a sleeve is its own art, darker, as if printed in fewer inks.
     const back = cover
-      ? new MeshStandardMaterial({ map: cover, color: 0x5a5a5a, roughness: 0.7 })
-      : new MeshStandardMaterial({ color: paper.clone().multiplyScalar(0.7), roughness: 0.7 });
+      ? material({ map: cover, color: 0x5a5a5a, roughness: 0.7 })
+      : material({ color: paper.clone().multiplyScalar(0.7), roughness: 0.7 });
     const mesh = new Mesh(sleeveGeo, [side, side, side, side, face, back]);
     const pivot = new Group();
 
