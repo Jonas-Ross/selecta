@@ -13,15 +13,20 @@ export {
 export type { FetchLike } from './sources.js';
 export {
   KEY_PROFILE_ENV,
-  METROGNOME_PATH_ENV,
   STORE_COUNTRY_ENV,
   analyzeTracks,
   configuredArgs,
-  metrognomePath,
   toFeaturesRow,
   type ChildLike,
   type MetrognomeDeps,
 } from './metrognome.js';
+export {
+  METROGNOME_PATH_ENV,
+  MIN_METROGNOME_VERSION,
+  findMetrognome,
+  resolveMetrognome,
+  type MetrognomeBinary,
+} from './metrognome_binary.js';
 
 import type { FeatureSource } from '../types/cache.js';
 import type { SourceField } from '../cache/audio_features.js';

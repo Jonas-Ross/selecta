@@ -233,8 +233,16 @@ settles that; a version bump alone is not evidence.
 
 ## Configuration
 
-The binary is found at `SELECTA_METROGNOME_PATH`, the CLI's
-`--metrognome-path`, or `metrognome` on `PATH`. When it is missing the run
+The binary is found at the CLI's `--metrognome-path`, then
+`SELECTA_METROGNOME_PATH`, then `metrognome` on `PATH`, then Homebrew's
+`/opt/homebrew/bin` and `/usr/local/bin`. The Homebrew directories are searched
+by name because an MCP client launched from the Dock hands Selecta launchd's
+`PATH`, which has neither. Before a run Selecta asks the binary for
+`--version` and refuses anything older than `MIN_METROGNOME_VERSION` (0.1.0,
+the first release writing `schema_version` 2); each result line is still
+checked against the schema version too, so a newer metrognome that changed
+the contract is refused per line. `doctor` reports which binary it found and
+its version, without failing on it. When it is missing or too old the run
 returns every track skipped with the reason in `source_errors` and changes
 nothing — Selecta is in daily use and an absent optional binary is not an
 outage.

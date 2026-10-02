@@ -23,7 +23,8 @@ import {
   analyzeTracks,
   configuredArgs,
   enrichPendingTracks,
-  metrognomePath,
+  findMetrognome,
+  resolveMetrognome,
   toFeaturesRow,
   type ChildLike,
 } from '../src/enrich/index.js';
@@ -98,6 +99,8 @@ function stubChild(
   };
 }
 
+const installed = { binaryPath: 'metrognome', readVersion: async () => 'metrognome 0.1.0\n' };
+
 const echoStub = (child: ChildLike) => () => child;
 
 async function collect(
@@ -110,6 +113,7 @@ async function collect(
   let args: string[] = [];
 
   await analyzeTracks(queries, (analysis) => rows.push(toFeaturesRow(analysis, FETCHED_AT)), {
+    ...installed,
     env,
     spawnLike: (_command, spawnArgs) => {
       args = spawnArgs;
@@ -121,11 +125,91 @@ async function collect(
   return { rows, input: stub.input(), args };
 }
 
-describe('metrognome binary path', () => {
-  it('prefers an explicit path, then the environment, then PATH', () => {
-    expect(metrognomePath({ binaryPath: '/opt/mg' })).toBe('/opt/mg');
+describe('finding metrognome', () => {
+  const brew = '/opt/homebrew/bin/metrognome';
+  const onDisk =
+    (...paths: string[]) =>
+    (path: string) =>
+      paths.includes(path);
+
+  it('lets an explicit path, then the environment, win over any search', () => {
+    const env = { [METROGNOME_PATH_ENV]: '/env/mg', PATH: '/usr/bin' };
+
     expect(METROGNOME_PATH_ENV).toBe('SELECTA_METROGNOME_PATH');
-    expect(metrognomePath()).toBe(process.env[METROGNOME_PATH_ENV] ?? 'metrognome');
+    expect(findMetrognome({ binaryPath: '/opt/mg', env, isExecutable: onDisk(brew) })).toBe(
+      '/opt/mg',
+    );
+    expect(findMetrognome({ env, isExecutable: onDisk(brew) })).toBe('/env/mg');
+  });
+
+  it('searches PATH before Homebrew, which an MCP client launch leaves off PATH', () => {
+    const isExecutable = onDisk('/home/me/bin/metrognome', brew, '/usr/local/bin/metrognome');
+
+    expect(findMetrognome({ env: { PATH: '/usr/bin:/home/me/bin' }, isExecutable })).toBe(
+      '/home/me/bin/metrognome',
+    );
+    expect(findMetrognome({ env: { PATH: '/usr/bin:/bin' }, isExecutable })).toBe(brew);
+    expect(findMetrognome({ env: {}, isExecutable: onDisk('/usr/local/bin/metrognome') })).toBe(
+      '/usr/local/bin/metrognome',
+    );
+    expect(findMetrognome({ env: { PATH: '/usr/bin' }, isExecutable: onDisk() })).toBeNull();
+  });
+
+  it('says how to install it when it is nowhere', async () => {
+    await expect(
+      resolveMetrognome({ env: { PATH: '/usr/bin' }, isExecutable: onDisk() }),
+    ).rejects.toThrow(/not found .*brew install jonas-ross\/tap\/metrognome/);
+  });
+
+  it('accepts the minimum version and newer, reporting where it ran', async () => {
+    for (const version of ['0.1.0', '0.1.7', '0.10.0', '1.0.0']) {
+      await expect(
+        resolveMetrognome({ binaryPath: brew, readVersion: async () => `metrognome ${version}\n` }),
+      ).resolves.toEqual({ path: brew, version });
+    }
+  });
+
+  it('refuses a version older than the contract it reads', async () => {
+    await expect(
+      resolveMetrognome({ binaryPath: brew, readVersion: async () => 'metrognome 0.0.9\n' }),
+    ).rejects.toThrow(/0\.0\.9 .* older than 0\.1\.0.*brew upgrade metrognome/);
+  });
+
+  it('refuses a binary that does not identify as metrognome', async () => {
+    await expect(
+      resolveMetrognome({ binaryPath: '/bin/true', readVersion: async () => '' }),
+    ).rejects.toThrow(/did not report a metrognome version/);
+  });
+
+  it('names the override when the binary cannot be run', async () => {
+    await expect(
+      resolveMetrognome({
+        binaryPath: '/nonexistent/metrognome',
+        readVersion: async () => {
+          throw new Error('spawn ENOENT');
+        },
+      }),
+    ).rejects.toThrow(/could not be run at "\/nonexistent\/metrognome".*SELECTA_METROGNOME_PATH/);
+  });
+
+  it('checks the version before starting a run', async () => {
+    let spawned = false;
+
+    await expect(
+      analyzeTracks(
+        [{ clientRef: 'T-MIDNIGHT', artist: 'M83', title: 'Midnight City' }],
+        () => {},
+        {
+          binaryPath: brew,
+          readVersion: async () => 'metrognome 0.0.1',
+          spawnLike: () => {
+            spawned = true;
+            throw new Error('unreachable');
+          },
+        },
+      ),
+    ).rejects.toThrow(/older than/);
+    expect(spawned).toBe(false);
   });
 });
 
@@ -331,6 +415,7 @@ describe('contract failures', () => {
         })),
         () => {},
         {
+          ...installed,
           spawnLike: () =>
             ({
               stdin,
@@ -350,6 +435,7 @@ describe('contract failures', () => {
         [{ clientRef: 'T-MIDNIGHT', artist: 'M83', title: 'Midnight City' }],
         () => {},
         {
+          ...installed,
           binaryPath: '/nonexistent/metrognome',
           spawnLike: () => {
             throw new Error('spawn ENOENT');
@@ -390,6 +476,7 @@ describe('driving a real subprocess', () => {
       (analysis) => rows.push(toFeaturesRow(analysis, FETCHED_AT)),
       {
         binaryPath: process.execPath,
+        readVersion: installed.readVersion,
         // The stub takes the script path where metrognome takes `batch`.
         spawnLike: (command, args) =>
           spawn(command, [script, ...args.slice(1)], { stdio: ['pipe', 'pipe', 'pipe'] }),
@@ -493,7 +580,7 @@ describe('the analysis enrichment pass', () => {
       }),
     }));
 
-    return { metrognome: { spawnLike: echoStub(stub.child) }, input: stub.input };
+    return { metrognome: { ...installed, spawnLike: echoStub(stub.child) }, input: stub.input };
   }
 
   it('analyzes tracks the catalogs already exhausted, and saves what it learns', async () => {
@@ -636,7 +723,7 @@ describe('the analysis enrichment pass', () => {
     const summary = await enrichPendingTracks(
       cache,
       { trackIds: ['T-MIDNIGHT', 'T-TEARDROP'], source: 'analysis' },
-      { metrognome: { spawnLike: echoStub(stub.child) } },
+      { metrognome: { ...installed, spawnLike: echoStub(stub.child) } },
     );
 
     expect(summary).toMatchObject({ processed: 1, enriched: 1, skipped: 1 });
