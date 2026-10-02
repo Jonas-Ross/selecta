@@ -167,7 +167,28 @@ describe('readStatus', () => {
   });
 });
 
+const noMetrognome = vi.fn().mockRejectedValue(new BridgeError('enrichment_error', 'not found'));
+
 describe('doctor diagnostics', () => {
+  it('reports metrognome without letting it fail the report', async () => {
+    const { dbPath } = seededDatabase();
+    const music = vi.fn().mockResolvedValue(undefined);
+
+    expect(await runDoctor(dbPath, music, noMetrognome)).toMatchObject({
+      ok: true,
+      metrognome: { status: 'unavailable', message: 'not found' },
+    });
+
+    const found = vi
+      .fn()
+      .mockResolvedValue({ path: '/opt/homebrew/bin/metrognome', version: '0.1.0' });
+
+    expect(await runDoctor(dbPath, music, found)).toMatchObject({
+      ok: true,
+      metrognome: { status: 'ok', path: '/opt/homebrew/bin/metrognome', version: '0.1.0' },
+    });
+  });
+
   it.each([
     ['music_app_not_running', false, null],
     ['automation_permission_denied', true, false],
@@ -176,7 +197,7 @@ describe('doctor diagnostics', () => {
     const { dbPath } = seededDatabase();
     const check = vi.fn().mockRejectedValue(new BridgeError(code, 'probe failed'));
 
-    const result = await runDoctor(dbPath, check);
+    const result = await runDoctor(dbPath, check, noMetrognome);
 
     expect(check).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
@@ -251,6 +272,7 @@ describe('diagnostic CLI commands', () => {
       musicCheck: vi
         .fn()
         .mockRejectedValue(new BridgeError('automation_permission_denied', 'denied')),
+      metrognomeCheck: noMetrognome,
       setExitCode: (code) => (exitCode = code),
       writeStdout: (text) => writes.push(text),
     }).parseAsync(['node', 'selecta', 'doctor']);

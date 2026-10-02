@@ -18,7 +18,11 @@ git clone https://github.com/Jonas-Ross/selecta.git
 cd selecta
 npm install
 npm run build
+node dist/index.js setup           # reports what is missing; changes nothing
+node dist/index.js setup --apply   # registers Selecta with Claude Desktop and Claude Code
 ```
+
+`setup` adds Selecta to whichever of Claude Desktop and Claude Code is installed, using absolute paths so the apps can launch it without your shell's `PATH`. It backs up the Desktop config before writing it, keeps every other server and any `env` you set on Selecta's entry, and does nothing on a rerun once everything is registered. It then checks for metrognome, Music.app automation access and the library cache, and prints the command that fixes each one that is missing. Claude Desktop doesn't see your shell's `PATH`, so setup pins the metrognome it checked into the entry unless it is in Homebrew's bin; point it at another one with `--metrognome-path`. Restart Claude Desktop afterwards. Limit it to one client with `--client desktop` or `--client code`.
 
 Then populate the cache. macOS will ask for Music.app automation permission the first time; allow it.
 
@@ -38,7 +42,7 @@ node dist/index.js enrich --source analysis  # then analyze the previews of what
 
 The default pass looks tracks up on MusicBrainz/AcousticBrainz and Deezer (free, no API keys) at roughly 1–3 seconds per track, so a large library takes a while — it's safe to interrupt and resume. AcousticBrainz has had no new data since early 2022, so recent releases mostly come back empty.
 
-`--source analysis` fills that gap by measuring the music itself: it runs [metrognome](https://github.com/Jonas-Ross/metrognome) over each track's 30-second store preview for tempo and key. Install that binary first (or point `SELECTA_METROGNOME_PATH` at it); without it the command reports every track skipped and changes nothing. The two passes keep separate records, so a track the lookup found nothing for is still worth analyzing, and neither overwrites what the other already found. An estimate the analyzer isn't sure about is discarded rather than stored — a missing BPM is better than a wrong one.
+`--source analysis` fills that gap by measuring the music itself: it runs [metrognome](https://github.com/Jonas-Ross/metrognome) over each track's 30-second store preview for tempo and key. Install that binary first with `brew install jonas-ross/tap/metrognome` (Selecta finds it on `PATH` or in Homebrew's bin, or point `SELECTA_METROGNOME_PATH` at it; `node dist/index.js doctor` shows which one it found); without it the command reports every track skipped and changes nothing. The two passes keep separate records, so a track the lookup found nothing for is still worth analyzing, and neither overwrites what the other already found. An estimate the analyzer isn't sure about is discarded rather than stored — a missing BPM is better than a wrong one.
 
 Whichever pass runs, dead ends are remembered so they aren't attempted twice, and refreshing the library never discards features already fetched.
 
@@ -53,7 +57,7 @@ Set `SELECTA_DEBUG=1` to mirror stderr logging to `~/Library/Logs/Selecta/select
 
 ## Register with an MCP client
 
-Selecta is agent-independent: use an MCP client that can launch a local server over stdio. Configure it to run `node` with `/ABSOLUTE/PATH/TO/selecta/dist/index.js` as its argument, with no subcommand. The server exposes the same tools regardless of which agent uses them. The Claude configurations below are examples.
+`node dist/index.js setup --apply` does this for Claude Desktop and Claude Code. To do it by hand, or for another client: Selecta is agent-independent: use an MCP client that can launch a local server over stdio. Configure it to run `node` with `/ABSOLUTE/PATH/TO/selecta/dist/index.js` as its argument, with no subcommand. The server exposes the same tools regardless of which agent uses them. The Claude configurations below are examples.
 
 For Claude Desktop, add this to `~/Library/Application Support/Claude/claude_desktop_config.json` (create the `mcpServers` key if it isn't there) and restart the app:
 
@@ -144,6 +148,17 @@ After updating Selecta, run `npm ci && npm run build` in the checkout your conne
 
 Selecta only writes where you point it: it creates playlists, overwrites its own preview slot, edits or deletes the user playlists you ask it to, and sets favorites and ratings on the tracks you name. Smart, subscription and folder playlists are never modified.
 
+## Desktop app (early)
+
+A desktop app is in progress on the same core. Press New playlist, describe what you want, and Claude builds a draft from your library while you watch. You can drag to reorder, send feedback, and save it to Music. It uses your own `claude` CLI login, so there's no API key. Claude can read your library and edit the draft, but only you can save.
+
+```bash
+npm run build
+npm run desktop
+```
+
+It needs the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) signed in. The UI is deliberately bare for now. [`docs/desktop-app.md`](docs/desktop-app.md) has the details.
+
 ## Development
 
 The application version is maintained in `packages/core/package.json`; MCP server metadata and the enrichment User-Agent read it through `packages/core/src/version.ts`. Bump `packages/mcp/package.json` and the root `package.json` with it, and keep `package-lock.json` in sync.
@@ -153,7 +168,8 @@ The application version is maintained in `packages/core/package.json`; MCP serve
 | `npm test` | Unit suite (fast, no Music.app) |
 | `npm run test:integration` | Bridge tests against your real Music.app. Needs a user playlist named `Selecta Test` with at least two tracks. |
 | `npm run smoke` | End-to-end scenario over real MCP stdio: refresh → search → context → preview → create, then cleans up after itself. |
-| `npm run build` | TypeScript and bundled widget → `dist/` |
+| `npm run build` | TypeScript and bundled widget → `dist/`, then the desktop app bundle |
+| `npm run desktop` | Build and launch the desktop app |
 | `npm run lint` | oxlint |
 | `npm run format:check` | oxfmt check (`npm run format` rewrites) |
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |
