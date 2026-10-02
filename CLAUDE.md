@@ -44,7 +44,7 @@ Shared storage and bridge types live in `packages/core/src/types/`; the cross-cu
 | `npm run preview` | Consolidated draft and explorer fixture gallery at `http://127.0.0.1:8767` |
 | `npm run dev` | Run the MCP server over stdio |
 | `node dist/index.js status` | Read-only cache integrity, schema version and pending migrations, freshness, counts, and enrichment diagnostics |
-| `node dist/index.js doctor` | `status` plus a read-only Music.app availability and Automation probe |
+| `node dist/index.js doctor` | `status` plus a read-only Music.app availability and Automation probe, and which metrognome binary analysis would run |
 | `node dist/index.js refresh` | Refresh the library cache from the CLI, no MCP client needed |
 | `node dist/index.js enrich [-n N] [--source catalog\|analysis]` | Backfill audio features from the CLI (default all pending on `catalog`, ~1-3s/track; live progress line on a terminal, plain throttled lines when redirected) |
 | `node dist/index.js supersede [--source S] [-p <algo>...] [--apply]` | List what produced each stored feature; with `-p`, report what clearing those values would change, and with `--apply` carry it out so a later `enrich` re-measures them |

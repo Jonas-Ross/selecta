@@ -11,14 +11,14 @@ export {
   type TargetedEnrichmentOutcome,
 } from './engine.js';
 export type { FetchLike } from './sources.js';
+export { analyzeTracks, toFeaturesRow, type ChildLike, type MetrognomeDeps } from './metrognome.js';
 export {
   METROGNOME_PATH_ENV,
-  analyzeTracks,
-  metrognomePath,
-  toFeaturesRow,
-  type ChildLike,
-  type MetrognomeDeps,
-} from './metrognome.js';
+  MIN_METROGNOME_VERSION,
+  findMetrognome,
+  resolveMetrognome,
+  type MetrognomeBinary,
+} from './metrognome_binary.js';
 
 import type { FeatureSource } from '../types/cache.js';
 import type { SourceField } from '../cache/audio_features.js';
