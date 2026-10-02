@@ -4,6 +4,7 @@ import { runJxa } from '../bridge/jxa.js';
 import { buildMusicAppDiagnosticScript } from '../bridge/scripts/diagnostics.js';
 import { BridgeError, defaultHints } from '../types/errors.js';
 import { readStatus, type StatusReport } from './status.js';
+import { resolveMetrognome, type MetrognomeBinary } from '../enrich/metrognome_binary.js';
 
 export type MusicAppStatus = {
   status: 'ok' | 'music_app_not_running' | 'automation_permission_denied' | 'jxa_error';
@@ -13,7 +14,15 @@ export type MusicAppStatus = {
   hint?: string;
 };
 
-export type DoctorReport = StatusReport & { music_app: MusicAppStatus };
+// Optional: only the analysis pass needs it, so it never fails the report.
+export type MetrognomeStatus =
+  | { status: 'ok'; path: string; version: string }
+  | { status: 'unavailable'; message: string };
+
+export type DoctorReport = StatusReport & {
+  music_app: MusicAppStatus;
+  metrognome: MetrognomeStatus;
+};
 
 export async function checkMusicApp(): Promise<void> {
   const result = await runJxa(buildMusicAppDiagnosticScript());
@@ -56,6 +65,7 @@ function failureStatus(err: unknown): MusicAppStatus {
 export async function runDoctor(
   dbPath: string,
   musicCheck: () => Promise<void> = checkMusicApp,
+  metrognomeCheck: () => Promise<MetrognomeBinary> = () => resolveMetrognome(),
   now = new Date(),
 ): Promise<DoctorReport> {
   const status = readStatus(dbPath, now);
@@ -68,5 +78,21 @@ export async function runDoctor(
     musicApp = failureStatus(err);
   }
 
-  return { ...status, ok: status.ok && musicApp.status === 'ok', music_app: musicApp };
+  let metrognome: MetrognomeStatus;
+
+  try {
+    metrognome = { status: 'ok', ...(await metrognomeCheck()) };
+  } catch (err) {
+    metrognome = {
+      status: 'unavailable',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  return {
+    ...status,
+    ok: status.ok && musicApp.status === 'ok',
+    music_app: musicApp,
+    metrognome,
+  };
 }

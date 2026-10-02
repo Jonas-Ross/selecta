@@ -16,8 +16,32 @@ export function draftDbPath(libraryDbPath: string = defaultDbPath()): string {
   return join(dirname(libraryDbPath), 'drafts.db');
 }
 
+export type DraftSummary = {
+  draft_id: string;
+  name: string;
+  revision: number;
+  track_count: number;
+  save?: Draft['save'];
+};
+
+// Set by front ends whose only Music.app write is Save: a preview-linked draft
+// is read-only there, checked in the same transaction as the write.
+export const LOCAL_DRAFTS_ENV = 'SELECTA_LOCAL_DRAFTS';
+
 export class DraftStore {
-  constructor(readonly path = draftDbPath()) {}
+  constructor(
+    readonly path = draftDbPath(),
+    private options: { localOnly?: boolean } = {},
+  ) {}
+
+  private refuseLinked(slot: PreviewState | undefined, id: string): void {
+    if (this.options.localOnly && slot?.owner === id && slot.status !== 'inactive')
+      throw new BridgeError(
+        'preview_conflict',
+        'This draft is linked to the Selecta Preview playlist in Music.',
+        'Detach the preview where you started it to edit the draft here.',
+      );
+  }
 
   private access<T>(write: boolean, run: (db: Database.Database) => T): T {
     let db: Database.Database | undefined;
@@ -87,6 +111,10 @@ export class DraftStore {
 
     if (!row) throw new BridgeError('draft_not_found', 'Draft not found.');
 
+    return this.parse(row.body);
+  }
+
+  private parse(body: string): Draft {
     // Retire the prototype pin field at the storage boundary. Reads preserve the
     // original file and revision; later explicit edits persist the current shape.
     const stored = Draft.extend({
@@ -94,7 +122,7 @@ export class DraftStore {
         .array(Entry.extend({ pinned: z.boolean().optional() }))
         .min(1)
         .max(500),
-    }).parse(JSON.parse(row.body));
+    }).parse(JSON.parse(body));
 
     return Draft.parse({
       ...stored,
@@ -104,6 +132,32 @@ export class DraftStore {
 
   get(id: string): Draft {
     return this.access(false, (db) => this.read(db, id));
+  }
+
+  /** Newest first. A store nobody has written to yet is simply empty. */
+  list(): DraftSummary[] {
+    if (!existsSync(this.path)) return [];
+
+    return this.access(false, (db) => {
+      if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'drafts'").get())
+        return [];
+
+      const rows = db.prepare('SELECT body FROM drafts ORDER BY rowid DESC').all() as {
+        body: string;
+      }[];
+
+      return rows.map(({ body }) => {
+        const draft = this.parse(body);
+
+        return {
+          draft_id: draft.draft_id,
+          name: draft.name,
+          revision: draft.revision,
+          track_count: draft.entries.length,
+          save: draft.save,
+        };
+      });
+    });
   }
 
   private readPreview(db: Database.Database): PreviewState | undefined {
@@ -167,6 +221,12 @@ export class DraftStore {
             throw new BridgeError('operation_busy', 'Permanent save is pending.');
 
           const previous = this.readPreview(db);
+
+          this.refuseLinked(previous, id);
+
+          if (this.options.localOnly && explicit)
+            throw new BridgeError('preview_conflict', 'Previews are off in this front end.');
+
           const owned = previous?.owner === id;
 
           if (!explicit && (!owned || previous.status !== 'out_of_date')) return;
@@ -343,9 +403,11 @@ export class DraftStore {
               `Draft ${id} is now revision ${previous.revision}. Use get_playlist_draft to recover it and reconcile your edits; do not replay the stale edit.`,
             );
 
-          const next = Draft.parse({ ...change(previous), draft_id: id, revision: revision + 1 });
-
           const slot = this.readPreview(db);
+
+          this.refuseLinked(slot, id);
+
+          const next = Draft.parse({ ...change(previous), draft_id: id, revision: revision + 1 });
 
           if (
             slot?.owner === id &&

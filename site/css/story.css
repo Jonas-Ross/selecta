@@ -99,6 +99,19 @@
   border: 0;
   overflow: visible;
 }
+/* Once the 3D crate has loaded it takes over, and the photo underneath is hidden. */
+.v-crate canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  --fx: 6%;
+  --fy: 6%;
+}
+/* display, not visibility: the photo's own dig animates visibility. */
+.v-crate.is-3d .crate {
+  display: none;
+}
 .crate {
   position: absolute;
   inset: 6% 0 auto;
