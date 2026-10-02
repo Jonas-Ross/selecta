@@ -20,7 +20,7 @@ import { bridge as defaultBridge } from '@selecta/core/bridge/index.js';
 import { SelectaCache, defaultDbPath } from '@selecta/core/cache/index.js';
 import { checkMusicApp, runDoctor } from '@selecta/core/diagnostics/doctor.js';
 import { readStatus, type SchemaVersions } from '@selecta/core/diagnostics/status.js';
-import { DraftStore, draftDbPath } from '@selecta/core/drafts/store.js';
+import { DraftStore, LOCAL_DRAFTS_ENV, draftDbPath } from '@selecta/core/drafts/store.js';
 import {
   FIELDS_BY_SOURCE,
   METROGNOME_PATH_ENV,
@@ -122,7 +122,8 @@ export function createCliProgram(options: CliOptions = {}): Command {
       const server = createServer({
         cache: lazyCache(dbPath),
         bridge,
-        drafts: () => new DraftStore(draftDbPath(dbPath)),
+        drafts: () =>
+          new DraftStore(draftDbPath(dbPath), { localOnly: process.env[LOCAL_DRAFTS_ENV] === '1' }),
       });
 
       await server.connect(new StdioServerTransport());

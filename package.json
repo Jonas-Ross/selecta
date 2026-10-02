@@ -16,7 +16,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm run build -w @selecta/core && npm run build -w selecta && node scripts/link-entry.mjs",
+    "build": "npm run build -w @selecta/core && npm run build -w selecta && node scripts/link-entry.mjs && npm run build -w @selecta/desktop",
     "test": "npm run build && vitest run --tags-filter='!integration'",
     "test:integration": "vitest run --tags-filter=integration",
     "smoke": "npm run build && node packages/mcp/scripts/smoke.mjs",
@@ -26,7 +26,8 @@
     "format:check": "oxfmt --check",
     "check": "npm test && npm run lint && npm run format:check",
     "preview": "npm run build && node packages/mcp/scripts/preview.mjs",
-    "typecheck:ui": "npm run typecheck:ui -w selecta"
+    "typecheck:ui": "npm run typecheck:ui -w selecta",
+    "desktop": "npm run build && npm start -w @selecta/desktop"
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.10.0",
