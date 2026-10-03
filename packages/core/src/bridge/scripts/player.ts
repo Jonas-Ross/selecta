@@ -189,8 +189,10 @@ export function buildPlayPreviewScript(input: {
         if (quiet || String(Music.playerState()) === 'paused') Music.play();
         landed = true;
       } finally {
-        // A start that went wrong is left paused, never playing the wrong record.
-        if (!landed && !pause()) return JSON.stringify({ leftPlaying: true });
+        // A start that went wrong is left paused, unless the user has moved Music elsewhere.
+        let ours = false;
+        try { ours = Music.currentPlaylist.persistentID() === pl.persistentID(); } catch (e) {}
+        if (!landed && ours && !pause()) return JSON.stringify({ leftPlaying: true });
       }
       return JSON.stringify({ playlistId: pl.persistentID(), route: route, player: readPlayer() });
     `,

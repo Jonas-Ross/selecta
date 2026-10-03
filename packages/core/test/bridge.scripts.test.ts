@@ -267,6 +267,8 @@ describe('player script contract', () => {
     expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(script.indexOf('Music.play(pl)'));
     // A start that went wrong is paused, and reported if Music won't pause.
     expect(script.indexOf('} finally {')).toBeLessThan(script.indexOf('leftPlaying'));
+    // Cleanup never pauses music the user moved on to.
+    expect(script).toContain('if (!landed && ours && !pause())');
     // A seek that never lands fails before anything resumes.
     expect(script.indexOf('seekMissed')).toBeLessThan(script.indexOf("=== 'paused') Music.play()"));
     expect(script).not.toMatch(NO_WRITES);
