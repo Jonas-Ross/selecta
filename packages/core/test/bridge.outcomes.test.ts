@@ -295,6 +295,7 @@ describe('player boundary', () => {
     [{ notEditable: true }, 'playlist_not_editable'],
     [{ orderDrifted: true }, 'preview_conflict'],
     [{ stepMissed: true }, 'preview_conflict'],
+    [{ shuffled: true }, 'validation_error'],
     [{ playlistId: 'P', player: { running: 'no' } }, 'jxa_error'],
   ])('maps a refused play %j', async (payload, errorCode) => {
     vi.mocked(runJxa).mockResolvedValue(payload);

@@ -6,6 +6,7 @@ import type { Draft, PreviewState } from '@selecta/core/drafts/contracts.js';
 import type { DraftStore } from '@selecta/core/drafts/store.js';
 import type { SelectaCache } from '@selecta/core/cache/index.js';
 import { withOperation } from '@selecta/core/operations/lock.js';
+import { BridgeError } from '@selecta/core/types/errors.js';
 import type { PlayerView } from '../shared/protocol.js';
 
 type Envelope = {
@@ -143,6 +144,10 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
         }),
       );
 
+      // The play resolved the slot by name and order, so its live ID is the slot's now.
+      if (slot && played.playlistId !== slot.playlist_id)
+        drafts().rekeyPreview(draftId, slot.generation, played.playlistId);
+
       return show(draftId, played.player);
     },
 
@@ -159,7 +164,11 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
     async detach(draftId: string, revision: number) {
       const on = await onThisDraft(draftId);
 
-      if (on) await bridge.controlPlayer({ action: 'pause', on });
+      // Music moving off the draft between the read and the pause leaves nothing to pause.
+      if (on)
+        await bridge.controlPlayer({ action: 'pause', on }).catch((e: unknown) => {
+          if (!(e instanceof BridgeError && e.errorCode === 'preview_conflict')) throw e;
+        });
 
       const response = await preview({ draft_id: draftId, revision, mode: 'detach' });
       const problem = failure(response);

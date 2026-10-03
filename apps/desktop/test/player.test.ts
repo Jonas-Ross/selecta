@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Draft } from '@selecta/core/drafts/contracts.js';
 import type { PlayerState } from '@selecta/core/types/bridge.js';
+import { BridgeError } from '@selecta/core/types/errors.js';
 import { PlaylistDraftTools } from '@selecta/core/tools/playlist_draft.js';
 import { makeToolDeps } from '../../../packages/core/test/helpers.js';
 import { createPlayer, inStep, playerView } from '../src/host/player.js';
@@ -116,6 +117,32 @@ it('detaches the preview so the draft is local again', async () => {
   });
   expect(deps.drafts!().preview()?.status).toBe('inactive');
   expect((await player.state(draft_id)).entry_id).toBeUndefined();
+});
+
+it('follows the slot when Music.app gives the preview a new ID', async () => {
+  const { draft_id, entries } = draft();
+
+  vi.mocked(deps.bridge.playPreview).mockImplementation(async ({ expectedTrackIds, index }) => ({
+    playlistId: 'P-REKEYED',
+    player: {
+      ...playing(index + 1, expectedTrackIds[index]),
+      playlist: { persistentId: 'P-REKEYED', name: 'Selecta Preview' },
+    },
+  }));
+
+  expect((await player.play(draft_id, 1, entries[1].entry_id)).entry_id).toBe(entries[1].entry_id);
+  expect(deps.drafts!().preview()?.playlist_id).toBe('P-REKEYED');
+});
+
+it('still detaches when Music moves off the draft before the pause lands', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValue(
+    new BridgeError('preview_conflict', 'Music.app has moved off that record.'),
+  );
+  await player.detach(draft_id, 1);
+  expect(deps.drafts!().preview()?.status).toBe('inactive');
 });
 
 it("won't pause, resume or seek music that isn't this draft", async () => {

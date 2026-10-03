@@ -246,10 +246,15 @@ describe('player script contract', () => {
     expect(script).not.toContain('Music.play(pl.tracks');
     // Stepping is muted, and the user's volume comes back however the script ends.
     expect(script.indexOf('Music.soundVolume = 0')).toBeLessThan(script.indexOf('Music.play(pl)'));
-    expect(script).toMatch(/finally \{\s*Music\.soundVolume = volume;/);
+    expect(script.indexOf('Music.soundVolume = volume;')).toBeGreaterThan(
+      script.indexOf('} finally {'),
+    );
     // Already in the preview at or before the entry, it steps on rather than restarting.
     expect(script).toContain('const restart = from < 1 || from > target;');
     expect(script.indexOf('if (restart)')).toBeLessThan(script.indexOf('Music.play(pl)'));
+    expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(script.indexOf('Music.play(pl)'));
+    // A start that went wrong is paused, and waited on, before the volume comes back.
+    expect(script).toMatch(/if \(!landed\) \{\s*Music\.pause\(\);\s*until\(/);
     expect(script).not.toMatch(NO_WRITES);
   });
 

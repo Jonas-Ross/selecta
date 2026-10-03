@@ -112,30 +112,35 @@ export function buildPlayPreviewScript(input: {
         return Music.currentPlaylist.persistentID() === pl.persistentID() &&
           Music.currentTrack.index();
       };
+      // Shuffle would carry on through the draft out of order.
+      if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
       const target = args.index + 1;
       let from = 0;
       try { if (String(Music.playerState()) !== 'stopped') from = at() || 0; } catch (e) {}
       // Already in the playlist at or before the entry: step on from there rather than restart.
       const restart = from < 1 || from > target;
       const volume = Music.soundVolume();
+      let landed = false;
       if (restart || from < target) Music.soundVolume = 0;
       try {
         if (restart) {
           Music.play(pl);
           from = 1;
         }
-        // Shuffle starts the playlist anywhere, so reading back each entry is the proof it's in order.
         for (let entry = from; entry <= target; entry++) {
           if (entry > from) Music.nextTrack();
-          if (!until(function () { return at() === entry; })) {
-            Music.pause();
-            return JSON.stringify({ stepMissed: true });
-          }
+          if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
         }
         Music.playerPosition = args.position === undefined ? 0 : args.position;
         until(function () { return Math.abs(Music.playerPosition() - (args.position || 0)) < 2; });
         if (String(Music.playerState()) === 'paused') Music.play();
+        landed = true;
       } finally {
+        // A start that went wrong stays silent until Music has actually stopped playing it.
+        if (!landed) {
+          Music.pause();
+          until(function () { return String(Music.playerState()) !== 'playing'; });
+        }
         Music.soundVolume = volume;
       }
       return JSON.stringify({ playlistId: pl.persistentID(), player: readPlayer() });

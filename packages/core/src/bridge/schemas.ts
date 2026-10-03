@@ -181,5 +181,6 @@ export const playPreview = z.union([
   z.strictObject({ ambiguousPreview: z.literal(true) }),
   z.strictObject({ orderDrifted: z.literal(true) }),
   z.strictObject({ stepMissed: z.literal(true) }),
+  z.strictObject({ shuffled: z.literal(true) }),
   z.strictObject({ playlistId: id, player }),
 ]);

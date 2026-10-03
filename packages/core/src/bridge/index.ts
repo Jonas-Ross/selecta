@@ -242,11 +242,18 @@ export const bridge: Bridge = {
         'The preview changed in Music.app. Nothing was played.',
       );
 
+    if ('shuffled' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Shuffle is on in Music.app.',
+        'Turn shuffle off in Music so it plays the draft in order. Nothing was played.',
+      );
+
     if ('stepMissed' in result)
       throw new BridgeError(
         'preview_conflict',
         'Music.app did not reach that record in Selecta Preview.',
-        'Turn shuffle off in Music, then play again.',
+        'Music was paused. Play again.',
       );
 
     return result;

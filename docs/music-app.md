@@ -101,7 +101,7 @@ Probed live 2026-10-03 against a 16-entry Selecta Preview (`src/bridge/scripts/p
 - **JXA has a global `delay`.** A script that declares its own `const delay` fails to compile.
 - **A track that plays to its end counts as a play.** Probes that let tracks finish move the user's play counts, so probe by seeking and pausing, not by listening through.
 
-The 2026-09-29 AutoMix spike put the blend's lead at about 45 s, but in use 45 s sometimes missed the blend, so Listen's "Hear the join" leads in 60 s. With shuffle on, `play(playlist)` starts anywhere, so the play is refused rather than stepped from the wrong place.
+The 2026-09-29 AutoMix spike put the blend's lead at about 45 s, but in use 45 s sometimes missed the blend, so Listen's "Hear the join" leads in 60 s. With shuffle on, Music would carry on through the draft out of order, so a play is refused while `shuffleEnabled()` is true. A start that fails partway is paused, and waited on, before the volume comes back.
 
 ## Linked draft preview guard
 
