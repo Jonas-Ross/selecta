@@ -1,0 +1,84 @@
+/* Selecta's design tokens, from the approved Dig prototype. Graphite and hairlines;
+   UV marks what you touch or select, acid only what is happening now. */
+:root {
+  color-scheme: dark;
+
+  /* Ground, darkest to lightest. */
+  --bg: #0a0c10;
+  --bg1: #0d1016;
+  --bg2: #12161e;
+  --bg3: #181d27;
+  --bg4: #202634;
+  --tip-bg: #151a24;
+
+  /* Hairlines, faintest to firmest; rim is the lit rail. */
+  --line: rgba(150, 170, 210, 0.075);
+  --line2: rgba(150, 170, 210, 0.14);
+  --line3: rgba(150, 170, 210, 0.26);
+  --grid: rgba(150, 170, 210, 0.028);
+  --rim: rgba(196, 210, 245, 0.62);
+  --rim-glow: rgba(150, 170, 255, 0.35);
+
+  /* Ink, strongest to faintest. */
+  --ink: #eceef3;
+  --ink2: #a6adbc;
+  --ink3: #6d7588;
+  --ink4: #464d5d;
+  --white: #fff;
+
+  --uv: #7b6cff;
+  --uv-hover: #8b7dff;
+  --uv-soft: rgba(123, 108, 255, 0.16);
+  --uv-line: rgba(123, 108, 255, 0.55);
+  --uv-text: #b4abff;
+  --uv-chip: #c9c2ff;
+  --acid: #d6ff3a;
+  --danger: #ff8a7a;
+  --shadow: rgba(0, 0, 0, 0.55);
+
+  --display: 'Hubot Sans', 'Mona Sans', system-ui, sans-serif;
+  --body: 'Mona Sans', system-ui, sans-serif;
+  --mono: 'DM Mono', ui-monospace, monospace;
+  --led: 'Bitcount', 'DM Mono', monospace;
+
+  --fs-micro: 9.5px;
+  --fs-label: 10.5px;
+  --fs-small: 11.5px;
+  --fs-ui: 12.5px;
+  --fs-body: 13px;
+  --fs-title: 15px;
+  --fs-head: 20px;
+  --fs-hero: 34px;
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 28px;
+  --s7: 40px;
+
+  --r-xs: 3px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 10px;
+
+  /* Chrome geometry; the inset title bar leaves the traffic lights 80px. */
+  --top: 48px;
+  --lights: 80px;
+  --claude-w: 352px;
+  --grid-step: 40px;
+
+  --ease: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-fast: 0.15s;
+  --t-mid: 0.22s;
+  --t-slow: 0.45s;
+}
+
+@media (max-width: 1280px) {
+  :root {
+    --claude-w: 320px;
+  }
+}
