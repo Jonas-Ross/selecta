@@ -182,5 +182,7 @@ export const playPreview = z.union([
   z.strictObject({ orderDrifted: z.literal(true) }),
   z.strictObject({ stepMissed: z.literal(true) }),
   z.strictObject({ shuffled: z.literal(true) }),
+  z.strictObject({ seekMissed: z.literal(true) }),
+  z.strictObject({ leftMuted: z.literal(true), volume: z.number() }),
   z.strictObject({ playlistId: id, player }),
 ]);

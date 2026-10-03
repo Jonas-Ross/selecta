@@ -252,9 +252,16 @@ describe('player script contract', () => {
     // Already in the preview at or before the entry, it steps on rather than restarting.
     expect(script).toContain('const restart = from < 1 || from > target;');
     expect(script.indexOf('if (restart)')).toBeLessThan(script.indexOf('Music.play(pl)'));
+    // Going back stops the playlist first, since Music.app won't restart the one it's playing.
+    expect(script.indexOf('Music.stop()')).toBeLessThan(script.indexOf('Music.play(pl)'));
     expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(script.indexOf('Music.play(pl)'));
     // A start that went wrong is paused, and waited on, before the volume comes back.
-    expect(script).toMatch(/if \(!landed\) \{\s*Music\.pause\(\);\s*until\(/);
+    // A failed start stays muted unless Music has provably stopped it.
+    expect(script.indexOf('JSON.stringify({ leftMuted: true')).toBeLessThan(
+      script.lastIndexOf('Music.soundVolume = volume;'),
+    );
+    // A seek that never lands fails before anything resumes.
+    expect(script.indexOf('seekMissed')).toBeLessThan(script.indexOf("=== 'paused') Music.play()"));
     expect(script).not.toMatch(NO_WRITES);
   });
 

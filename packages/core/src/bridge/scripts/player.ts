@@ -102,7 +102,7 @@ export function buildPlayPreviewScript(input: {
       // to carry on through, so start there and step to the entry, muted.
       // Each command lands a beat late, so every step waits until it reads back.
       function until(ok) {
-        for (let tries = 0; tries < 60; tries++) {
+        for (let tries = 0; tries < 100; tries++) {
           try { if (ok()) return true; } catch (e) {}
           delay(0.05);
         }
@@ -124,6 +124,11 @@ export function buildPlayPreviewScript(input: {
       if (restart || from < target) Music.soundVolume = 0;
       try {
         if (restart) {
+          // Music.app ignores play() on the playlist it is already playing, so stop it first.
+          if (from > target) {
+            Music.stop();
+            until(function () { return String(Music.playerState()) === 'stopped'; });
+          }
           Music.play(pl);
           from = 1;
         }
@@ -131,15 +136,23 @@ export function buildPlayPreviewScript(input: {
           if (entry > from) Music.nextTrack();
           if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
         }
-        Music.playerPosition = args.position === undefined ? 0 : args.position;
-        until(function () { return Math.abs(Music.playerPosition() - (args.position || 0)) < 2; });
+        // Clamped inside the track, since Music.app ignores a position past the end.
+        const goal = Math.min(args.position || 0, Math.max(0, Music.currentTrack.duration() - 1));
+        Music.playerPosition = goal;
+        if (!until(function () { return Math.abs(Music.playerPosition() - goal) < 2; })) {
+          return JSON.stringify({ seekMissed: true });
+        }
         if (String(Music.playerState()) === 'paused') Music.play();
         landed = true;
       } finally {
-        // A start that went wrong stays silent until Music has actually stopped playing it.
+        // A start that went wrong stays muted until Music has provably stopped playing it.
         if (!landed) {
-          Music.pause();
-          until(function () { return String(Music.playerState()) !== 'playing'; });
+          let stopped = false;
+          for (let attempt = 0; attempt < 3 && !stopped; attempt++) {
+            Music.pause();
+            stopped = until(function () { return String(Music.playerState()) !== 'playing'; });
+          }
+          if (!stopped) return JSON.stringify({ leftMuted: true, volume: volume });
         }
         Music.soundVolume = volume;
       }

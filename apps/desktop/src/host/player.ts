@@ -92,10 +92,20 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
 
   // The entry Music.app is on, read fresh, when it belongs to this draft; the bridge
   // re-checks it in the same call that acts, so a stale screen can't drive other music.
-  const onThisDraft = async (draftId: string) => {
+  // `owned` accepts any entry of the draft's own slot, in step or not, for stopping it.
+  const onThisDraft = async (draftId: string, owned = false) => {
     const player = await bridge.readPlayer();
 
-    if (!player.running || show(draftId, player).entry_id === undefined) return undefined;
+    if (!player.running) return undefined;
+
+    const { slot } = current(draftId);
+    const ours = owned
+      ? slot?.owner === draftId &&
+        slot.playlist_id !== undefined &&
+        player.playlist?.persistentId === slot.playlist_id
+      : show(draftId, player).entry_id !== undefined;
+
+    if (!ours) return undefined;
 
     const { playlist, track, index } = player;
 
@@ -162,7 +172,7 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
     // Releases the link so Claude can edit again; Music.app keeps the playlist as it is.
     // Pauses first only if Music is playing this draft, never something the user moved on to.
     async detach(draftId: string, revision: number) {
-      const on = await onThisDraft(draftId);
+      const on = await onThisDraft(draftId, true);
 
       // Music moving off the draft between the read and the pause leaves nothing to pause.
       if (on)

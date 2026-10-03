@@ -36,7 +36,7 @@ export function usePlayer(draftId: string, looking: boolean) {
         .call('player.state', { draft_id: draftId })
         .then(
           (next) => alive && at === epoch.current && accept(next),
-          (e: Error) => alive && setProblem(e.message),
+          (e: Error) => alive && at === epoch.current && setProblem(e.message),
         )
         .finally(() => {
           if (alive) timer = setTimeout(read, READ_EVERY_MS);

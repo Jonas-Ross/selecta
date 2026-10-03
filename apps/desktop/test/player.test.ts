@@ -134,6 +134,18 @@ it('follows the slot when Music.app gives the preview a new ID', async () => {
   expect(deps.drafts!().preview()?.playlist_id).toBe('P-REKEYED');
 });
 
+it('pauses its own preview on stop even when the order is out of step', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(playing(2, 'T-OTHER'));
+  await player.detach(draft_id, 1);
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 2, trackId: 'T-OTHER' },
+  });
+});
+
 it('still detaches when Music moves off the draft before the pause lands', async () => {
   const { draft_id, entries } = draft();
 
