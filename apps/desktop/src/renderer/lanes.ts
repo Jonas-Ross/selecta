@@ -25,6 +25,9 @@ const clamp = (value: number, lo: number, hi: number) => Math.min(hi, Math.max(l
 
 // Twelve rows per wheel ring; a ring the draft never touches shrinks to a labelled strip.
 const KEY_ROW = 5;
+// Under the crate the rail is short, so rows tighten before the records shrink further.
+const COMPACT_KEY_ROW = 3;
+const COMPACT_BELOW = 560;
 const EMPTY_BAND = 20;
 const BAND_GAP = 8;
 
@@ -43,13 +46,15 @@ export function keyRings(camelots: (string | undefined)[]): Rings {
  * mostly below so the rail sits high.
  */
 export function shelfLayout(height: number, rings: Rings): Shelf {
-  const tempoH = clamp(height * 0.17, 84, 150);
-  const bandB = rings.B ? 12 * KEY_ROW : EMPTY_BAND;
-  const bandA = rings.A ? 12 * KEY_ROW : EMPTY_BAND;
+  const compact = height < COMPACT_BELOW;
+  const row = compact ? COMPACT_KEY_ROW : KEY_ROW;
+  const tempoH = clamp(height * 0.17, compact ? 60 : 84, 150);
+  const bandB = rings.B ? 12 * row : EMPTY_BAND;
+  const bandA = rings.A ? 12 * row : EMPTY_BAND;
   const keyH = bandB + BAND_GAP + bandA;
   // Lane title, tick row, captions, joins with the key title, bottom margin.
   const fixed = 28 + 24 + 46 + 54 + 16;
-  const size = Math.round(clamp(height - fixed - tempoH - keyH - 40, 92, 212));
+  const size = Math.round(clamp(height - fixed - tempoH - keyH - 40, compact ? 64 : 92, 212));
   // Wide enough for a two-line join marker between neighbours.
   const gap = Math.round(clamp(size * 0.34, 48, 64));
   const spare = Math.max(0, height - fixed - tempoH - keyH - size);

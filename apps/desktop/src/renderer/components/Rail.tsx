@@ -2,7 +2,17 @@
 // below. Every record's slot is a spring, so a drag, a removal or Claude's
 // edit moves records the same way, and the lanes are redrawn from where the
 // records are on each frame rather than where they will end up.
-import { useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import {
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react';
+import type { Rect } from '../flight.js';
 import {
   bpmScale,
   formatClock,
@@ -19,7 +29,7 @@ import {
   type Box,
 } from '../lanes.js';
 import { useFrameLoop, useReducedMotion } from '../motion.js';
-import { dropSlot, slotUnder, withMoved } from '../reorder.js';
+import { dropSlot, landingIndex, slotUnder, withMoved } from '../reorder.js';
 import { GROW, LIFT, rest, settled, SLIDE, SQUASH, stepSpring, type Spring } from '../springs.js';
 import type { Row } from '../state.js';
 import { Term } from './Explain.js';
@@ -59,6 +69,21 @@ const DRAG_THRESHOLD = 5;
 // Within this many pixels of the rail's ends, a dragged record pans it.
 const EDGE = 64;
 
+/** A gap held open on the rail for a record arriving from the crate. */
+export type Opening = {
+  at: number;
+  // Set once the record is on its way: the entry for this track that isn't in `known` is it.
+  trackId?: string;
+  known?: Set<string>;
+};
+
+export type RailHandle = {
+  /** Where a record carried to (x, y) would be inserted, and how big it would stand. */
+  landing: (x: number, y: number, current?: number) => { at: number; size: number } | undefined;
+  /** The box a record standing in slot `at` occupies on screen, scrolled into view first. */
+  slotRect: (at: number) => Rect | undefined;
+};
+
 export type RailProps = {
   items: Row[];
   selected: Set<string>;
@@ -68,6 +93,8 @@ export type RailProps = {
   onMove: (entryId: string, to: number) => void;
   onRemove: (entryId: string) => void;
   empty?: ReactNode;
+  opening?: Opening;
+  handle?: Ref<RailHandle>;
 };
 
 export function Rail({
@@ -79,6 +106,8 @@ export function Rail({
   onMove,
   onRemove,
   empty,
+  opening,
+  handle,
 }: RailProps) {
   const reduced = useReducedMotion();
   const box = useRef<HTMLDivElement>(null);
@@ -99,6 +128,12 @@ export function Rail({
 
   const ids = items.map((row) => row.entry_id);
   const count = items.length;
+  const arrived =
+    opening?.trackId === undefined
+      ? undefined
+      : items.find((row) => row.track_id === opening.trackId && !opening.known?.has(row.entry_id));
+  // The gap closes the moment the record it was held for stands in it.
+  const hole = opening && !arrived ? Math.min(opening.at, count) : undefined;
   const rings = useMemo(() => keyRings(items.map((row) => row.camelot)), [items]);
   const scale = useMemo(() => bpmScale(items.map((row) => row.bpm)), [items]);
   const shelf = shelfLayout(dims.h, rings);
@@ -119,8 +154,9 @@ export function Rail({
     const d = drag.current;
     const order = d?.moved ? withMoved(ids, d.id, d.slot) : ids;
 
-    order.forEach((id, index) => {
+    order.forEach((id, k) => {
       const anim = anims.current.get(id);
+      const index = hole !== undefined && k >= hole ? k + 1 : k;
 
       if (!anim || anim.target === index) return;
 
@@ -147,9 +183,11 @@ export function Rail({
           pos: rest(index),
           lift: rest(0),
           squash: rest(0),
-          // A record Claude adds grows onto the rail; the draft's first records are just there.
-          grow: rest(mounted.current && !reduced ? 0 : 1),
+          // A record Claude adds grows onto the rail; the draft's first records are just there,
+          // and one thrown from the crate has already flown in, so it only lands.
+          grow: rest(mounted.current && !reduced && row !== arrived ? 0 : 1),
           leaving: false,
+          landIn: row === arrived && !reduced ? 0 : undefined,
         });
     });
 
@@ -173,7 +211,7 @@ export function Rail({
 
     if (keep && document.activeElement !== keep && document.activeElement === document.body)
       keep.focus({ preventScroll: true });
-  }, [items, reduced]);
+  }, [items, reduced, hole]);
 
   const kick = useFrameLoop((dt) => {
     let moving = false;
@@ -238,6 +276,34 @@ export function Rail({
 
     return moving;
   });
+
+  useImperativeHandle(handle, () => ({
+    landing(x, y, current) {
+      const area = box.current?.getBoundingClientRect();
+      const sc = scroller.current;
+
+      if (!area || !sc || y < area.top || y > area.bottom || x < area.left || x > area.right)
+        return;
+
+      const raw = (x - sc.getBoundingClientRect().left + sc.scrollLeft - PAD) / step;
+
+      return { at: landingIndex(raw, count, current), size: shelf.size };
+    },
+    slotRect(at) {
+      const area = box.current?.getBoundingClientRect();
+      const sc = scroller.current;
+
+      if (!area || !sc) return;
+
+      reveal(at, true);
+
+      return {
+        left: sc.getBoundingClientRect().left - sc.scrollLeft + slotX(at, step) + shelf.gap / 2,
+        top: area.top + shelf.rail - shelf.size,
+        width: shelf.size,
+      };
+    },
+  }));
 
   // Neighbours of a landing record get jostled outward.
   function nudge(id: string) {
@@ -374,7 +440,7 @@ export function Rail({
     if (scroller.current) edge(scroller.current);
   });
 
-  function reveal(index: number) {
+  function reveal(index: number, now = false) {
     const sc = scroller.current;
 
     if (!sc) return;
@@ -384,7 +450,7 @@ export function Rail({
     const left =
       x0 < sc.scrollLeft ? x0 : x1 > sc.scrollLeft + sc.clientWidth ? x1 - sc.clientWidth : -1;
 
-    if (left >= 0) sc.scrollTo({ left, behavior: reduced ? 'auto' : 'smooth' });
+    if (left >= 0) sc.scrollTo({ left, behavior: reduced || now ? 'auto' : 'smooth' });
   }
 
   function key(e: React.KeyboardEvent<HTMLElement>, id: string) {
@@ -440,7 +506,7 @@ export function Rail({
   const keys = path('key');
   const starts = startTimes(slots.map((slot) => slot.row.duration_seconds));
   const view = Math.max(0, dims.w - GUTTER);
-  const width = Math.max(view, PAD * 2 + count * step);
+  const width = Math.max(view, PAD * 2 + (count + (hole === undefined ? 0 : 1)) * step);
   const { bands } = shelf;
   // Labels and joins are drawn only near the visible stretch; a long draft has hundreds.
   const scrolled = scroller.current?.scrollLeft ?? 0;
@@ -630,6 +696,19 @@ export function Rail({
                   )
                 );
               })}
+
+              {hole !== undefined && (
+                <div
+                  className="drop-slot"
+                  style={{
+                    width: shelf.size,
+                    height: shelf.size,
+                    transform: `translate3d(${slotX(hole, step) + shelf.gap / 2}px, ${shelf.rail - shelf.size}px, 0)`,
+                  }}
+                >
+                  <span className="mono">drops here</span>
+                </div>
+              )}
 
               <div className="recs" role="list" aria-label="Draft order">
                 {[...ids, ...[...anims.current.keys()].filter((id) => !ids.includes(id))].map(

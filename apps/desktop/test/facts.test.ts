@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { keyFacts, sourceText, tempoFacts } from '../src/renderer/facts.js';
+import { keyFacts, sourceShort, sourceText, tempoFacts } from '../src/renderer/facts.js';
 
 it('says where a value came from in plain words', () => {
   expect(sourceText('metrognome/kick@3')).toBe('Measured on this Mac from a 30 s preview');
@@ -25,4 +25,12 @@ it('lists confidence, status and the half-time reading only when known', () => {
     { label: 'confidence', text: '0.60 of 1' },
     { label: 'status', text: 'Provisional: a first reading, still being checked' },
   ]);
+});
+
+it('says where a value came from in a few words beside it', () => {
+  expect(sourceShort('metrognome/kick@4')).toBe('Measured here');
+  expect(sourceShort('deezer')).toBe('Deezer');
+  expect(sourceShort('music_app')).toBe('Music.app tag');
+  expect(sourceShort(undefined)).toBe('Source not recorded');
+  expect(sourceShort('somewhere')).toBe('somewhere');
 });

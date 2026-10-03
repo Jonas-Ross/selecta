@@ -1,8 +1,11 @@
 // The draft screen: the rail, Claude's panel, and Save. Every edit goes
 // through one queue on the newest revision; the rail only shows the order a
 // queued edit will write until that edit settles.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal, flushSync } from 'react-dom';
 import { selecta } from '../api.js';
+import type { Rect } from '../flight.js';
+import { useReducedMotion } from '../motion.js';
 import { withMoved } from '../reorder.js';
 import {
   bpmSpan,
@@ -19,7 +22,9 @@ import {
   type Run,
 } from '../state.js';
 import { ClaudePanel } from './ClaudePanel.js';
-import { Rail } from './Rail.js';
+import { Crate, type CrateTrack } from './Crate.js';
+import { Flight, type FlightPlan } from './Flight.js';
+import { Rail, type Opening, type RailHandle } from './Rail.js';
 import { Rolling } from './Rolling.js';
 import { SaveConfirm, type SavePhase } from './SaveConfirm.js';
 import { TopBar } from './TopBar.js';
@@ -60,6 +65,11 @@ export function Draft({
   const edits = useRef<Promise<unknown>>(Promise.resolve());
   // Edits not yet settled, each resolving to whether it landed; a Save waits on these.
   const inflight = useRef(new Set<Promise<boolean>>());
+  const rail = useRef<RailHandle>(null);
+  const reduced = useReducedMotion();
+  const [opening, setOpening] = useState<Opening>();
+  const [flight, setFlight] = useState<FlightPlan & { at: number }>();
+  const [added, setAdded] = useState('');
 
   const load = useCallback(
     () =>
@@ -82,6 +92,9 @@ export function Draft({
   const linked = previewLinked(view ?? {});
   const locked = saved || linked || saving || leaving;
   const sum = totals(items);
+  const inDraft = useMemo(() => new Set(items.map((row) => row.track_id)), [items]);
+  // One record in the air at a time, so each lands in the gap held for it.
+  const canAdd = draft !== undefined && !locked && flight === undefined;
   const span = bpmSpan(items);
 
   // Live revisions keep arriving from Claude; don't overwrite a name being typed.
@@ -180,6 +193,55 @@ export function Draft({
       items.map((row) => row.entry_id).filter((id) => id !== entryId),
       setEntries((entries) => entries.filter((other) => other.entry_id !== entryId)),
     );
+  }
+
+  // A carried record holds a gap open wherever it would land.
+  function carry(x: number, y: number) {
+    const landing = rail.current?.landing(x, y, opening?.at);
+
+    if (landing?.at !== opening?.at) setOpening(landing && { at: landing.at });
+
+    return landing;
+  }
+
+  // The record flies to its slot first, and the edit goes in only once it has landed there.
+  function add(track: CrateTrack, from: Rect, at = items.length) {
+    if (!canAdd) return;
+
+    const known = new Set(items.map((row) => row.entry_id));
+
+    // The gap has to be on the rail before its box can be measured and scrolled to.
+    flushSync(() => setOpening({ at, trackId: track.persistent_id, known }));
+
+    const to = rail.current?.slotRect(at);
+
+    if (to)
+      setFlight({
+        key: Date.now(),
+        trackId: track.persistent_id,
+        title: track.title,
+        from,
+        to,
+        at,
+      });
+    else insert(track.persistent_id, at, track.title);
+  }
+
+  function insert(trackId: string, at: number, title?: string) {
+    edit((current) => {
+      const entries = current.entries.map(({ entry_id, track_id }) => ({ entry_id, track_id }));
+
+      entries.splice(Math.min(at, entries.length), 0, {
+        track_id: trackId,
+      } as (typeof entries)[number]);
+
+      return { entries };
+    }).then((landed) => {
+      setFlight(undefined);
+      setOpening(undefined);
+
+      if (landed) setAdded(`${title ?? 'Track'} added at ${at + 1}`);
+    });
   }
 
   function toggle(entryId: string) {
@@ -333,6 +395,16 @@ export function Draft({
       />
       <div className="draft-body">
         <section className="draft-main" aria-label="Draft">
+          <Crate
+            inDraft={inDraft}
+            canAdd={canAdd}
+            lockedReason={
+              lock ?? (draft ? 'One record at a time' : 'The draft is still being built')
+            }
+            onAdd={add}
+            onCarry={carry}
+            onCarryEnd={() => setOpening(undefined)}
+          />
           <div className="draft-head">
             <h2>The draft</h2>
             {draft && (
@@ -387,6 +459,8 @@ export function Draft({
             onClear={() => setSelected(new Set())}
             onMove={reorder}
             onRemove={remove}
+            opening={opening}
+            handle={rail}
             empty={
               <div className="rail-wait">
                 {working ? (
@@ -404,6 +478,18 @@ export function Draft({
             }
           />
         </section>
+        <p className="sr" aria-live="polite">
+          {added}
+        </p>
+        {flight &&
+          createPortal(
+            <Flight
+              plan={flight}
+              reduced={reduced}
+              onLanded={() => insert(flight.trackId, flight.at, flight.title)}
+            />,
+            document.body,
+          )}
         <ClaudePanel
           log={log}
           working={working}

@@ -1,6 +1,6 @@
 # Desktop app
 
-`apps/desktop` is the second front end on `@selecta/core`: brief, Claude builds a draft, you reorder and give feedback, you save. The look is the approved "Dig" direction (graphite ground, hairlines, UV for what you touch, acid kept for "now"), arriving in phases. Phase 1, this one, restyles every screen and draws the draft as a rail. Phase 2 reads artwork from Music.app; phase 3 adds playback. A record without artwork is a white-label sleeve, and there is no transport bar yet.
+`apps/desktop` is the second front end on `@selecta/core`: brief, Claude builds a draft, you reorder and give feedback, you save. The look is the approved "Dig" direction (graphite ground, hairlines, UV for what you touch, acid kept for "now"), arriving in phases. Phase 1 restyled every screen and drew the draft as a rail. Phase 2 adds the crate to dig through and album art from Music.app; phase 3 adds playback, so there is no transport bar yet.
 
 ## Processes
 
@@ -24,9 +24,14 @@ The method table in `src/host/api.ts` is the whole surface, typed in `src/shared
 | `lanes.ts` | Record size, the bands around the rail, tempo and key scales, step paths that break at a missing value, set-time ticks |
 | `joins.ts` | Each gap's tempo step and wheel relation in plain words, from core's `harmonicRelation` |
 | `facts.ts` | Where a tempo or key came from and how sure it was, in words |
-| `springs.ts`, `reorder.ts` | The spring step and settle test, and where a dragged record lands |
+| `springs.ts`, `reorder.ts` | The spring step and settle test, and where a dragged or carried record lands |
+| `crate.ts`, `flight.ts` | How each record in the crate stands and shades, flick and wheel flips, and the arc a record flies from the crate to the rail |
 
-Styles are split by concern, all built from the custom properties in `tokens.css`: `base.css` (reset, buttons, notices), `chrome.css` (top bar, save card), `home.css` (Home and Brief), `rail.css`, `panel.css` (Claude), `explain.css`. The fonts are the website's, copied into `src/renderer/fonts/` and served from the bundle, since the page's CSP allows only `'self'`. The window uses an inset title bar, so the top bar is the drag region and leaves the traffic lights 80px.
+Styles are split by concern, all built from the custom properties in `tokens.css`: `base.css` (reset, buttons, notices), `chrome.css` (top bar, save card), `home.css` (Home and Brief), `crate.css`, `rail.css`, `panel.css` (Claude), `explain.css`. The fonts are the website's, copied into `src/renderer/fonts/` and served from the bundle, since the page's CSP allows only `'self'`. The window uses an inset title bar, so the top bar is the drag region and leaves the traffic lights 80px.
+
+### The crate
+
+Above the rail is the crate: the cached library as records standing in a bin (`components/Crate.tsx`), filled by the host's `library.crate`. With no search it holds the 300 most recently added tracks; a search gives the 300 most relevant, copies of one song collapsed, the same search the MCP tool runs. Scroll, drag or the arrow keys flip records forward, and a flick carries on and settles on a whole record. Only the records near the front are drawn, so the crate stays the same depth however far in you are. The card beside it lists the front record's facts with their sources, as the rail's explainers do, and its buttons pull the record out to read or add it to the end of the draft. Dragging the front record carries it out of the crate; over the rail it shrinks to rail size and holds a gap open where it would land. Either way the record flies along an arc to its slot, and the edit goes in only once it has landed there, through the same queue and revision check as a reorder; one record is in the air at a time. Records already in the draft wear an "In draft" tag, and the crate refuses nothing: adding a track twice is allowed, as in Music.app. While the draft is locked, the crate can still be flipped and read.
 
 ### The rail
 

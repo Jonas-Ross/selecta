@@ -16,6 +16,18 @@ export function sourceText(source?: string): string {
   return source;
 }
 
+/** The same, short enough for one line beside the value. */
+export function sourceShort(source?: string): string {
+  if (source === undefined) return 'Source not recorded';
+
+  if (source.startsWith('metrognome')) return 'Measured here';
+
+  return (
+    { acousticbrainz: 'AcousticBrainz', deezer: 'Deezer', music_app: 'Music.app tag' }[source] ??
+    source
+  );
+}
+
 const MATURITY = {
   validated: 'Validated: the method was checked against real tracks',
   provisional: 'Provisional: a first reading, still being checked',

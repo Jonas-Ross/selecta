@@ -117,3 +117,11 @@ it('fades a label out as its room drops below what it needs', () => {
   expect(labelFade(110, 100, 20)).toBe(0.5);
   expect(labelFade(60, 100, 20)).toBe(0);
 });
+
+it('tightens the lanes under the crate before records drop below a readable size', () => {
+  const short = shelfLayout(420, { A: true, B: true });
+
+  expect(short.size).toBeGreaterThanOrEqual(64);
+  expect(short.key.top + short.key.height).toBeLessThanOrEqual(420);
+  expect(short.bands.A.height).toBeLessThan(shelfLayout(800, { A: true, B: true }).bands.A.height);
+});

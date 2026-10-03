@@ -232,6 +232,15 @@ const TERMS = {
       </>
     ),
   },
+  provisional: {
+    title: 'Provisional',
+    body: (
+      <p>
+        A first reading from a method still being checked against real tracks. Treat it as a hint,
+        however sure the number looks.
+      </p>
+    ),
+  },
   missing: {
     title: 'Not measured',
     body: (
