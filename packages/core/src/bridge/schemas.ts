@@ -159,6 +159,6 @@ export const artwork = z.record(
   z.union([
     z.string().regex(/^[0-9A-F]{16}\.(jpg|png)$/),
     z.null(),
-    z.strictObject({ error: z.number().int() }),
+    z.strictObject({ error: z.string().max(300) }),
   ]),
 );

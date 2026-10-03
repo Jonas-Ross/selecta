@@ -26,7 +26,8 @@ async function setup(
 
     for (const track of ids) {
       if (options.noArt?.includes(track)) written[track] = null;
-      else if (options.unreadable?.includes(track)) written[track] = { error: -1712 };
+      else if (options.unreadable?.includes(track))
+        written[track] = { error: 'Apple event error -1712' };
       else {
         written[track] = `${track}.png`;
         await writeFile(join(target, `${track}.png`), 'png');
@@ -151,7 +152,7 @@ it('answers a track whose own read failed with its error, beside the rest of its
   const cache = createArtworkCache(deps);
 
   expect(await cache.get([A, B])).toEqual({
-    [A]: { error: expect.stringContaining('(-1712)') },
+    [A]: { error: expect.stringContaining('-1712') },
     [B]: `${B}.jpg`,
   });
   await cache.get([A]);

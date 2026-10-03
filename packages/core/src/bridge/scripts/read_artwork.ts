@@ -55,7 +55,7 @@ export function buildReadArtworkScript(args: { trackIds: string[]; dir: string }
         let code = 0;
         try { code = ObjC.deepUnwrap(err).NSAppleScriptErrorNumber; } catch (e) {}
         if (fatal.indexOf(code) !== -1) throw new Error('Music.app artwork read failed (' + code + ')');
-        if (code !== ${NO_ARTWORK}) written[id] = { error: code };
+        if (code !== ${NO_ARTWORK}) written[id] = { error: 'Apple event error ' + code };
         continue;
       }
       const data = res.data;
@@ -65,7 +65,11 @@ export function buildReadArtworkScript(args: { trackIds: string[]; dir: string }
           : data.subdataWithRange($.NSMakeRange(0, 6)).base64EncodedStringWithOptions(0).js;
         ext = head.indexOf(${JSON.stringify(JPEG)}) === 0 ? 'jpg'
           : head === ${JSON.stringify(PNG)} ? 'png' : null;
-      } catch (e) {}
+      } catch (e) {
+        written[id] = { error: 'artwork bytes could not be inspected: ' + e.message };
+        continue;
+      }
+      // Bytes that are neither JPEG nor PNG: art Selecta can't use, read as none.
       if (ext === null) continue;
       const name = id + '.' + ext;
       // A full or unwritable directory fails the batch; it is not a track without art.

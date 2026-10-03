@@ -77,7 +77,7 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
     if (typeof original !== 'string')
       return fail(
         id,
-        new Error(`Music.app couldn't read this track's artwork (${original.error}).`),
+        new Error(`Music.app couldn't read this track's artwork: ${original.error}.`),
       );
 
     const thumb = `${id}.jpg`;
