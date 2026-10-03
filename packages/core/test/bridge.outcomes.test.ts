@@ -303,6 +303,13 @@ describe('player boundary', () => {
     ).rejects.toMatchObject({ errorCode: 'jxa_error' });
   });
 
+  it('refuses a control on an ambiguous preview', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ ambiguousPreview: true });
+    await expect(
+      bridge.controlPlayer({ action: 'pause', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'validation_error' });
+  });
+
   it.each([{ elsewhere: true }, { seekMissed: true }])(
     'refuses a control that did not land: %j',
     async (payload) => {

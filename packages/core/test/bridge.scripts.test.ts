@@ -231,9 +231,10 @@ describe('player script contract', () => {
     });
 
     expect(script).toContain(
-      'named.length !== 1 || named[0].persistentID() !== args.on.playlistId',
+      'if (named.length > 1) return JSON.stringify({ ambiguousPreview: true });',
     );
-    expect(script.indexOf('named.length !== 1')).toBeLessThan(script.indexOf('Music.pause()'));
+    expect(script).toContain('named[0].persistentID() !== args.on.playlistId');
+    expect(script.indexOf('named.length > 1')).toBeLessThan(script.indexOf('Music.pause()'));
     // A smart or special playlist sharing the name is never the slot.
     expect(script).toContain('!pl.smart()');
   });

@@ -181,6 +181,17 @@ it('pauses its own preview on stop after iCloud rotates its ID', async () => {
   });
 });
 
+it('stays linked when the rotated preview is ambiguous', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValue(
+    new BridgeError('validation_error', 'Selecta Preview is ambiguous.'),
+  );
+  await expect(player.detach(draft_id, 1)).rejects.toThrow(/ambiguous/);
+  expect(deps.drafts!().preview()?.status).toBe('current');
+});
+
 it('still detaches when Music moves off the draft before the pause lands', async () => {
   const { draft_id, entries } = draft();
 

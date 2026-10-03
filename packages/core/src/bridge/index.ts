@@ -202,6 +202,13 @@ export const bridge: Bridge = {
   async controlPlayer(input) {
     const result = await runJxa(buildControlPlayerScript(input), schemas.controlPlayer);
 
+    if ('ambiguousPreview' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Selecta Preview is ambiguous.',
+        'Multiple playlists have the reserved name. Ask the user which copy to keep. Nothing was changed.',
+      );
+
     if ('elsewhere' in result)
       throw new BridgeError(
         'preview_conflict',

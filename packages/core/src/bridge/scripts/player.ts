@@ -75,7 +75,8 @@ export function buildControlPlayerScript(input: PlayerControl): string {
               String(pl.specialKind()).toLowerCase() === 'none';
           });
         // A copy sharing the name makes the match ambiguous, so it is never acted on.
-        if (named.length !== 1 || named[0].persistentID() !== args.on.playlistId) {
+        if (named.length > 1) return JSON.stringify({ ambiguousPreview: true });
+        if (named.length === 0 || named[0].persistentID() !== args.on.playlistId) {
           return JSON.stringify({ elsewhere: true });
         }
       }

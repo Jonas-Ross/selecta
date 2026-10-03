@@ -180,6 +180,7 @@ export const controlPlayer = z.union([
   z.strictObject({ stillPlaying: z.literal(true) }),
   z.strictObject({ shuffled: z.literal(true) }),
   z.strictObject({ stillPaused: z.literal(true) }),
+  z.strictObject({ ambiguousPreview: z.literal(true) }),
   player,
 ]);
 export const playPreview = z.union([
