@@ -35,12 +35,14 @@ export function ValueLabel({
   }));
 
   return (
-    <span
+    <button
+      type="button"
       className={`value${hot ? ' hot' : ''}${provisional ? ' provisional' : ''}`}
       style={{ transform: `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)` }}
+      aria-label={tempo ? `${text} BPM, ${row.title ?? ''}` : `Key ${text}, ${row.title ?? ''}`}
       {...explain}
     >
       {text}
-    </span>
+    </button>
   );
 }

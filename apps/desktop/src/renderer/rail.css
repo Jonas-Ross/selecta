@@ -228,7 +228,8 @@
   white-space: nowrap;
   cursor: help;
 }
-.value:hover {
+.value:hover,
+.value:focus-visible {
   color: var(--ink);
   background: var(--bg3);
 }

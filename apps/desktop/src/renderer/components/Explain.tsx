@@ -190,7 +190,8 @@ const TERMS = {
     title: 'Key',
     body: (
       <p>
-        The set of notes a track is built on. Tracks in nearby keys blend without sounding sour.
+        The set of notes a track is built on. Keys next to each other on the wheel share most of
+        their notes.
       </p>
     ),
   },
