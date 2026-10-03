@@ -2,12 +2,14 @@
 // it can receive. The host validates arguments; these types only keep the two
 // ends honest at compile time.
 import type { DraftSummary } from '@selecta/core/drafts/store.js';
+import type { Crate } from '../host/library.js';
 
-export type { DraftSummary };
+export type { Crate, DraftSummary };
 
 export const BRIEF_LIMIT = 4000;
 
 export type Methods = {
+  'library.crate': (args: { query?: string }) => Crate;
   'drafts.list': () => DraftSummary[];
   'drafts.get': (args: { draft_id: string }) => unknown;
   'drafts.edit': (args: Record<string, unknown>) => unknown;

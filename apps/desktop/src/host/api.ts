@@ -7,6 +7,7 @@ import { PlaylistDraftTools, getDraftInputShape } from '@selecta/core/tools/play
 import type { DraftStore } from '@selecta/core/drafts/store.js';
 import { BRIEF_LIMIT, type Method } from '../shared/protocol.js';
 import type { AgentSessions } from './agent.js';
+import { crate } from './library.js';
 
 const DraftId = z.strictObject(getDraftInputShape);
 const Brief = z.strictObject({
@@ -36,6 +37,7 @@ export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: 
     'This draft is linked to the Selecta Preview playlist in Music. Detach the preview where you started it to edit the draft here.';
 
   const handlers: Record<Method, (args: unknown) => unknown> = {
+    'library.crate': (args) => crate(deps.cache(), args),
     'drafts.list': () => deps.drafts().list(),
     'drafts.get': (args) => drafts.get(args),
     'drafts.edit': (args) => drafts.edit(args),

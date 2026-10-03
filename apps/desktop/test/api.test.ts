@@ -91,3 +91,20 @@ it('keeps a draft linked to the Music preview read-only for the user and Claude'
   expect(agent.send).not.toHaveBeenCalled();
   expect(store.get(draftId).revision).toBe(1);
 });
+
+it('fills the crate newest first, or by relevance to a search, with provenance', async () => {
+  const all = (await call('library.crate', {})) as {
+    tracks: { persistent_id: string; title: string }[];
+    total: number;
+    order: string;
+  };
+
+  expect(all.order).toBe('recently_added');
+  expect(all.tracks.length).toBe(all.total);
+
+  const found = (await call('library.crate', { query: 'teardrop' })) as typeof all;
+
+  expect(found).toMatchObject({ order: 'relevance', tracks: [{ title: 'Teardrop' }] });
+  await expect(call('library.crate', { query: 'x'.repeat(201) })).rejects.toThrow();
+  await expect(call('library.crate', { sort: 'random' })).rejects.toThrow();
+});
