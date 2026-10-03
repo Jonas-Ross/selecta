@@ -188,7 +188,10 @@ export function buildPlayPreviewScript(input: {
             return false;
           });
           if (!started) return JSON.stringify({ stepMissed: true });
-        } else if (quiet && !pause()) return JSON.stringify({ stepMissed: true });
+        } else if (quiet && !(pause() && ours())) {
+          // Music moved to other music while pausing; stepping now would skip through that.
+          return JSON.stringify({ stepMissed: true });
+        }
         // previousTrack restarts a record that's playing past its start, so rewind it first.
         for (let entry = from - 1; entry >= target; entry--) {
           Music.playerPosition = 0;

@@ -37,7 +37,7 @@ import { Transport } from './Transport.js';
 // Back past this many seconds restarts the record, as a player's previous button does.
 const RESTART_AFTER = 4;
 // Preview states that mean Music.app may not hold what the draft says.
-const OUT_OF_STEP = new Set(['pending', 'conflict', 'error', 'uncertain']);
+const OUT_OF_STEP = new Set(['pending', 'out_of_date', 'conflict', 'error', 'uncertain']);
 
 export function Draft({
   draftId,

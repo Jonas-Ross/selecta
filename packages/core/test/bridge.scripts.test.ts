@@ -263,7 +263,8 @@ describe('player script contract', () => {
       script.indexOf('if (!quiet) return true;'),
     );
     expect(script).not.toContain('soundVolume');
-    expect(script.indexOf('if (quiet && !pause())')).toBeLessThan(
+    // A pause that finds Music elsewhere aborts rather than stepping through other music.
+    expect(script.indexOf('if (quiet && !(pause() && ours()))')).toBeLessThan(
       script.indexOf('Music.nextTrack()'),
     );
     // Steps within the queue only when the caller vouches for it; otherwise it starts over.

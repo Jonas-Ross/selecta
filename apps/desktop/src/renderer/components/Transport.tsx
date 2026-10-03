@@ -126,7 +126,7 @@ export function Transport({
           max={Math.max(1, Math.round(length ?? 1))}
           step={1}
           value={Math.round(shown)}
-          disabled={!onSeek || length === undefined}
+          disabled={disabled || !onSeek || length === undefined}
           aria-label="Position in track"
           aria-valuetext={`${formatClock(shown)} of ${length === undefined ? 'unknown' : formatClock(length)}`}
           onChange={(e) => setScrubbing(Number(e.target.value))}

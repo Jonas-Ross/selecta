@@ -165,6 +165,21 @@ it('pauses its own preview on stop even when the order is out of step', async ()
   });
 });
 
+it('pauses its own preview on stop after iCloud rotates its ID', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, A),
+    playlist: { persistentId: 'P-ROTATED', name: 'Selecta Preview' },
+  });
+  await player.detach(draft_id, 1);
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-ROTATED', index: 1, trackId: A },
+  });
+});
+
 it('still detaches when Music moves off the draft before the pause lands', async () => {
   const { draft_id, entries } = draft();
 

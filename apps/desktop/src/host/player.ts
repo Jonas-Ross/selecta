@@ -6,6 +6,7 @@ import type { Draft, PreviewState } from '@selecta/core/drafts/contracts.js';
 import type { DraftStore } from '@selecta/core/drafts/store.js';
 import type { SelectaCache } from '@selecta/core/cache/index.js';
 import { withOperation } from '@selecta/core/operations/lock.js';
+import { PREVIEW_PLAYLIST_NAME } from '@selecta/core/operations/playlist.js';
 import { BridgeError } from '@selecta/core/types/errors.js';
 import type { PlayerView } from '../shared/protocol.js';
 
@@ -103,7 +104,8 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
 
   // The entry Music.app is on, read fresh, when it belongs to this draft; the bridge
   // re-checks it in the same call that acts, so a stale screen can't drive other music.
-  // `owned` accepts any entry of the draft's own slot, in step or not, for stopping it.
+  // `owned` accepts any entry of the draft's own slot, in step or not, for stopping it,
+  // matched by name too since iCloud can rotate the slot's ID after the last play rekeyed it.
   const onThisDraft = async (draftId: string, owned = false) => {
     const player = await read();
 
@@ -112,8 +114,9 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
     const { slot } = current(draftId);
     const ours = owned
       ? slot?.owner === draftId &&
-        slot.playlist_id !== undefined &&
-        player.playlist?.persistentId === slot.playlist_id
+        player.playlist !== undefined &&
+        (player.playlist.persistentId === slot.playlist_id ||
+          player.playlist.name === PREVIEW_PLAYLIST_NAME)
       : show(draftId, player).entry_id !== undefined;
 
     if (!ours) return undefined;
