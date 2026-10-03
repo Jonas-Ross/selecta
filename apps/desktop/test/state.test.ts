@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import {
+  bpmSpan,
   feedbackMessage,
   formatDuration,
   logAgentEvent,
@@ -13,6 +14,7 @@ import {
   saveLabel,
   saveOutcome,
   totalDuration,
+  totals,
   type Run,
 } from '../src/renderer/state.js';
 
@@ -187,4 +189,16 @@ it('catches up from the host record without undoing what already arrived', () =>
     { kind: 'you', text: 'my brief' },
     { kind: 'error', text: 'Refused.' },
   ]);
+});
+
+it('counts known minutes and the measured tempo span', () => {
+  const items = [
+    { ...entry('a'), duration_seconds: 300, bpm: 121.6 },
+    { ...entry('b'), bpm: 118.2 },
+    entry('c'),
+  ];
+
+  expect(totals(items)).toEqual({ tracks: 3, minutes: 5, partial: true });
+  expect(bpmSpan(items)).toEqual([118, 122]);
+  expect(bpmSpan([entry('a')])).toBeUndefined();
 });

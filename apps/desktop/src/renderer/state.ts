@@ -2,12 +2,23 @@
 import type { Draft } from '@selecta/core/drafts/contracts.js';
 import type { AgentEvent, RunSnapshot } from '../shared/protocol.js';
 
+type Maturity = 'validated' | 'provisional';
+
+/** An inspection track: features carry where they came from and how sure that was. */
 export type Track = {
   title?: string;
   artist?: string;
   duration_seconds?: number;
   bpm?: number;
+  bpm_confidence?: number;
+  bpm_maturity?: Maturity;
+  bpm_source?: string;
+  bpm_half_time?: number;
+  musical_key?: string;
   camelot?: string;
+  key_confidence?: number;
+  key_maturity?: Maturity;
+  key_source?: string;
 };
 export type DraftView = {
   draft?: Draft;
@@ -52,11 +63,28 @@ export function formatDuration(seconds?: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
-export function totalDuration(items: Row[]): string {
+/** Known minutes, and whether some lengths are missing so the real total is longer. */
+export function totals(items: Row[]) {
   const known = items.flatMap((row) => row.duration_seconds ?? []);
-  const minutes = Math.round(known.reduce((sum, value) => sum + value, 0) / 60);
 
-  return `${items.length} tracks · ${minutes} min${known.length < items.length ? '+' : ''}`;
+  return {
+    tracks: items.length,
+    minutes: Math.round(known.reduce((sum, value) => sum + value, 0) / 60),
+    partial: known.length < items.length,
+  };
+}
+
+export function totalDuration(items: Row[]): string {
+  const { tracks, minutes, partial } = totals(items);
+
+  return `${tracks} tracks · ${minutes} min${partial ? '+' : ''}`;
+}
+
+/** Slowest and fastest measured tempo, whole BPM; undefined when none is measured. */
+export function bpmSpan(items: Row[]): [number, number] | undefined {
+  const known = items.flatMap((row) => (row.bpm === undefined ? [] : Math.round(row.bpm)));
+
+  return known.length ? [Math.min(...known), Math.max(...known)] : undefined;
 }
 
 /** Selection travels as text: it names the subject of the feedback, nothing more. */
