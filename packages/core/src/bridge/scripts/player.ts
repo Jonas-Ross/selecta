@@ -68,7 +68,16 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       if (args.action === 'pause' && state === 'playing') Music.pause();
       // play() with nothing paused would start whatever Music.app last had queued.
       if (args.action === 'resume' && state === 'paused') Music.play();
-      if (args.action === 'seek' && state !== 'stopped') Music.playerPosition = args.position;
+      if (args.action === 'seek' && state !== 'stopped') {
+        // Clamped like a play's seek, and read back since a seek can silently not land.
+        const goal = Math.min(args.position, Math.max(0, Music.currentTrack.duration() - 1));
+        Music.playerPosition = goal;
+        let tries = 0;
+        while (Math.abs(Music.playerPosition() - goal) >= 2) {
+          if (++tries > 100) return JSON.stringify({ seekMissed: true });
+          delay(0.05);
+        }
+      }
       // A read straight after pause() still says playing; the change lands a beat later.
       delay(0.3);
       return JSON.stringify(readPlayer());
@@ -81,6 +90,7 @@ export function buildPlayPreviewScript(input: {
   expectedTrackIds: string[];
   index: number;
   position?: number;
+  restart?: boolean;
 }): string {
   if (
     !Number.isInteger(input.index) ||
@@ -117,13 +127,14 @@ export function buildPlayPreviewScript(input: {
       const target = args.index + 1;
       let from = 0;
       try { if (String(Music.playerState()) !== 'stopped') from = at() || 0; } catch (e) {}
-      // In the playlist already, step from there; Music.app ignores play() on the playlist
-      // it is playing, and stepping back works where stop-then-play was seen to fail.
-      const restart = from < 1;
+      // Stepping within a queue the caller knows it started skips a restart; a lone track
+      // reads the same from here, so anything else starts the playlist over.
+      const restart = args.restart === true || from < 1;
       const route = restart ? 'started' : from > target ? 'back from ' + from : from < target ? 'on from ' + from : 'seek';
       const volume = Music.soundVolume();
       let landed = false;
-      if (from !== target) Music.soundVolume = 0;
+      // Muted even for a seek in place, since a failed one is cleaned up by pausing.
+      Music.soundVolume = 0;
       try {
         if (restart) {
           Music.play(pl);

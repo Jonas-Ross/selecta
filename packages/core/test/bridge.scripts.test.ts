@@ -225,9 +225,14 @@ describe('player script contract', () => {
     expect(buildControlPlayerScript({ action: 'resume', on })).toContain(
       "if (args.action === 'resume' && state === 'paused') Music.play();",
     );
-    expect(buildControlPlayerScript({ action: 'seek', position: 60, on })).toContain(
-      "if (args.action === 'seek' && state !== 'stopped') Music.playerPosition = args.position;",
+    const seek = buildControlPlayerScript({ action: 'seek', position: 60, on });
+
+    expect(seek).toContain("if (args.action === 'seek' && state !== 'stopped') {");
+    // Clamped inside the track and read back, as a play's seek is.
+    expect(seek).toContain(
+      'Math.min(args.position, Math.max(0, Music.currentTrack.duration() - 1))',
     );
+    expect(seek.indexOf('Music.playerPosition = goal')).toBeLessThan(seek.indexOf('seekMissed'));
     expect(buildControlPlayerScript({ action: 'pause', on })).not.toMatch(NO_WRITES);
     expect(() => buildControlPlayerScript({ action: 'seek', position: -1, on })).toThrow(
       expect.objectContaining({ errorCode: 'validation_error' }),
@@ -249,12 +254,14 @@ describe('player script contract', () => {
     expect(script.indexOf('Music.soundVolume = volume;')).toBeGreaterThan(
       script.indexOf('} finally {'),
     );
-    // Already in the preview at or before the entry, it steps on rather than restarting.
+    // Steps within the queue only when the caller vouches for it; otherwise it starts over.
     expect(script.indexOf('if (restart)')).toBeLessThan(script.indexOf('Music.play(pl)'));
-    // Going back steps with previousTrack; Music.app won't restart the playlist it's playing.
+    // Going back within a trusted queue steps with previousTrack.
     expect(script).toContain('Music.previousTrack()');
     expect(script).not.toContain('Music.stop()');
-    expect(script).toContain('const restart = from < 1;');
+    expect(script).toContain('const restart = args.restart === true || from < 1;');
+    // Muted for every route, a seek in place included, since a failed one is paused.
+    expect(script).toMatch(/\n\s*Music\.soundVolume = 0;/);
     expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(script.indexOf('Music.play(pl)'));
     // A start that went wrong is paused, and waited on, before the volume comes back.
     // A failed start stays muted unless Music has provably stopped it.

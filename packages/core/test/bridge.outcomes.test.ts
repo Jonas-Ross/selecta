@@ -282,12 +282,15 @@ describe('player boundary', () => {
     },
   );
 
-  it('refuses a control once Music.app has moved off the entry', async () => {
-    vi.mocked(runJxa).mockResolvedValue({ elsewhere: true });
-    await expect(
-      bridge.controlPlayer({ action: 'pause', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
-    ).rejects.toMatchObject({ errorCode: 'preview_conflict' });
-  });
+  it.each([{ elsewhere: true }, { seekMissed: true }])(
+    'refuses a control that did not land: %j',
+    async (payload) => {
+      vi.mocked(runJxa).mockResolvedValue(payload);
+      await expect(
+        bridge.controlPlayer({ action: 'pause', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+      ).rejects.toMatchObject({ errorCode: 'preview_conflict' });
+    },
+  );
 
   it.each([
     [{ playlistNotFound: true }, 'playlist_not_found'],

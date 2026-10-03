@@ -78,6 +78,17 @@ function failure(response: Envelope): Error | undefined {
 }
 
 export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
+  // The preview this process last started as a queue. Music.app reads the same playing one
+  // track alone, which carries on to nothing, so anything else is started over.
+  let queued: string | undefined;
+  const watch = (player: PlayerState) => {
+    if (!player.running || player.state === 'stopped' || player.playlist?.persistentId !== queued)
+      queued = undefined;
+
+    return player;
+  };
+  const read = async () => watch(await bridge.readPlayer());
+
   const current = (draftId: string) => {
     const store = drafts();
 
@@ -94,7 +105,7 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
   // re-checks it in the same call that acts, so a stale screen can't drive other music.
   // `owned` accepts any entry of the draft's own slot, in step or not, for stopping it.
   const onThisDraft = async (draftId: string, owned = false) => {
-    const player = await bridge.readPlayer();
+    const player = await read();
 
     if (!player.running) return undefined;
 
@@ -119,7 +130,7 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
   };
 
   return {
-    state: async (draftId: string) => show(draftId, await bridge.readPlayer()),
+    state: async (draftId: string) => show(draftId, await read()),
 
     async play(draftId: string, revision: number, entryId: string, position?: number) {
       let { draft, slot } = current(draftId);
@@ -133,6 +144,9 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
 
       // Loading the draft into the preview is the write the user chose Listen for.
       if (!inStep(draft, slot)) {
+        // A queue Music.app took from the old contents is not this draft's.
+        queued = undefined;
+
         const started = await preview({ draft_id: draftId, revision, mode: 'start' });
         const problem = failure(started);
 
@@ -146,13 +160,19 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
           );
       }
 
+      // A failed read only means the queue can't be vouched for; the play itself still runs.
+      await read().catch(() => (queued = undefined));
+
       const played = await withOperation(cache(), 'music', () =>
         bridge.playPreview({
           expectedTrackIds: draft.entries.map((entry) => entry.track_id),
           index,
           ...(position !== undefined && { position }),
+          ...(queued === undefined && { restart: true }),
         }),
       );
+
+      queued = played.playlistId;
 
       // The play resolved the slot by name and order, so its live ID is the slot's now.
       if (slot && played.playlistId !== slot.playlist_id)
@@ -166,7 +186,7 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
 
       if (!on) throw new Error("Music isn't playing this draft, so nothing was changed.");
 
-      return show(draftId, await bridge.controlPlayer({ ...input, on }));
+      return show(draftId, watch(await bridge.controlPlayer({ ...input, on })));
     },
 
     // Releases the link so Claude can edit again; Music.app keeps the playlist as it is.

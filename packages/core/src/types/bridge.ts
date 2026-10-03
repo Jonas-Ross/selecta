@@ -238,5 +238,7 @@ export interface Bridge {
     expectedTrackIds: string[];
     index: number;
     position?: number;
+    // Start the playlist over rather than step within whatever queue Music.app has.
+    restart?: boolean;
   }): Promise<{ playlistId: string; route?: string; player: PlayerState }>;
 }

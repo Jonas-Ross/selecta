@@ -209,6 +209,13 @@ export const bridge: Bridge = {
         'Nothing was changed. Read the player again before controlling it.',
       );
 
+    if ('seekMissed' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'Music.app did not move to that position.',
+        'Read the player again before seeking.',
+      );
+
     return result;
   },
   async playPreview(input) {

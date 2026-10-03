@@ -407,10 +407,13 @@ export function Draft({
     else cue(now - 1);
   }
 
+  // Waits like a play, so a stop never names a revision an edit is about to replace.
   function stopListening() {
-    const revision = latest.current?.revision;
+    edits.current = edits.current.then(() => {
+      const revision = latest.current?.revision;
 
-    if (revision !== undefined) player.detach(revision);
+      if (revision !== undefined) return player.detach(revision);
+    });
   }
 
   const status =
@@ -639,7 +642,8 @@ export function Draft({
             onNext={() => cue(now + 1)}
             onSeek={current ? player.seek : undefined}
             onOpen={tab === 'listen' ? undefined : () => setTab('listen')}
-            onStop={linked && !player.busy && !saving ? stopListening : undefined}
+            onStop={linked ? stopListening : undefined}
+            stopDisabled={player.busy || saving}
           />
         </section>
         <p className="sr" aria-live="polite">

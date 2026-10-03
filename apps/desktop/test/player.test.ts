@@ -64,6 +64,7 @@ it('loads the draft into the preview once, then plays the chosen entry from it',
   expect(deps.bridge.playPreview).toHaveBeenLastCalledWith({
     expectedTrackIds: [A, B, A],
     index: 2,
+    restart: true,
   });
 
   await player.play(draft_id, 1, entries[1].entry_id, 255);
@@ -73,6 +74,24 @@ it('loads the draft into the preview once, then plays the chosen entry from it',
     index: 1,
     position: 255,
   });
+});
+
+it('starts the playlist over unless it started the queue Music.app is still on', async () => {
+  const { draft_id, entries } = draft();
+  const restarts = () =>
+    vi.mocked(deps.bridge.playPreview).mock.calls.map(([input]) => input.restart === true);
+
+  // Music.app already on the entry, as a lone track would leave it, still gets a restart.
+  await player.play(draft_id, 1, entries[2].entry_id);
+  await player.play(draft_id, 1, entries[2].entry_id, 200);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce({ running: true, state: 'stopped' });
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce({
+    ...playing(1, A),
+    playlist: { persistentId: 'P-OTHER', name: 'Mine' },
+  });
+  await player.play(draft_id, 1, entries[0].entry_id);
+  expect(restarts()).toEqual([true, false, true, true]);
 });
 
 it('plays nothing when the preview could not be loaded in order', async () => {
