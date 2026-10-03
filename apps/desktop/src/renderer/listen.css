@@ -1,0 +1,470 @@
+/* Listen: the record playing, large, in the crate's band; the sleeve back beside it; the player bar. */
+.deck {
+  position: relative;
+  flex: none;
+  /* Gives way before the rail does: the draft head, rail and transport below need about 460px. */
+  height: clamp(300px, min(44%, 100% - 460px), 430px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  container-type: size;
+}
+.deck-empty {
+  display: grid;
+  place-items: center;
+  grid-template-columns: 1fr;
+  color: var(--ink3);
+  font-size: var(--fs-body);
+}
+.deck-hero {
+  /* Sized by the band both ways, so a short window shrinks the record instead of cropping it. */
+  --size: min(300px, (100cqw - 300px) * 0.48, 100cqh - 48px);
+  display: flex;
+  align-items: center;
+  gap: var(--s6);
+  min-width: 0;
+  padding: var(--s5) var(--s6);
+}
+.deck-record {
+  position: relative;
+  flex: none;
+  width: var(--size);
+  aspect-ratio: 1;
+  animation: rise var(--t-slow) var(--ease-out);
+}
+.deck-sleeve {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+/* The disc slides half out of its sleeve once Music.app is on this record, and turns while it plays. */
+.deck-disc {
+  position: absolute;
+  inset: 3%;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      transparent 0 17%,
+      rgba(255, 255, 255, 0.05) 17.4% 17.8%,
+      transparent 18.2%
+    ),
+    repeating-radial-gradient(circle, #0b0d12 0 1.1px, #14171f 1.6px 2.4px), #0b0d12;
+  box-shadow:
+    0 20px 40px -18px rgba(0, 0, 0, 0.9),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transform: translateX(0);
+  transition: transform 0.9s var(--ease-out);
+}
+.deck-disc::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 30deg,
+    transparent 0 10%,
+    rgba(200, 215, 255, 0.08) 14%,
+    transparent 22% 58%,
+    rgba(200, 215, 255, 0.06) 62%,
+    transparent 70%
+  );
+}
+.deck-label {
+  position: absolute;
+  inset: 33%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--bg) 0 6%, var(--acid) 6.5% 100%);
+  opacity: 0.92;
+  animation: spin 1.8s linear infinite;
+  animation-play-state: paused;
+}
+.deck-label::before {
+  content: '';
+  position: absolute;
+  left: 48%;
+  top: 8%;
+  width: 4%;
+  height: 22%;
+  border-radius: 2px;
+  background: var(--bg);
+}
+.deck-hero.out .deck-disc {
+  transform: translateX(46%);
+}
+.deck-hero.spinning .deck-label {
+  animation-play-state: running;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.deck-title {
+  min-width: 0;
+  margin-left: calc(var(--size) * 0.42);
+}
+.deck-kicker {
+  font-size: var(--fs-tiny);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.deck-hero.spinning .deck-kicker {
+  color: var(--acid);
+}
+.deck-title h2 {
+  margin: 10px 0 6px;
+  font: 800 var(--fs-hero)/1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.deck-title p {
+  font-size: var(--fs-base);
+  color: var(--ink2);
+}
+.deck-title .deck-status {
+  margin-top: var(--s3);
+  font-size: var(--fs-meta);
+  color: var(--ink3);
+}
+
+/* A narrow window stacks the title under a smaller record rather than squeezing it to a column. */
+@container (max-width: 800px) {
+  .deck-hero {
+    --size: min(130px, 100cqh - 200px);
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--s4);
+  }
+  .deck-title {
+    margin-left: 0;
+  }
+  .deck-title h2 {
+    margin: 6px 0 4px;
+    font-size: var(--fs-head);
+    -webkit-line-clamp: 2;
+  }
+}
+
+/* The sleeve back: facts, the join into the next record, the key wheel. */
+.sleeve-back {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s4) var(--s5) var(--s5);
+  border-left: 1px solid var(--line2);
+  background: var(--bg1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line3) transparent;
+}
+.sleeve-back .facts {
+  margin-top: 0;
+}
+.ls-lab {
+  display: block;
+  margin: var(--s4) 0 var(--s2);
+  font: 400 var(--fs-tiny) var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.next {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: var(--s3);
+  align-items: center;
+}
+.next .sleeve {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+.next .sleeve-title {
+  display: none;
+}
+.next b {
+  display: block;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.next span {
+  display: block;
+  font-size: var(--fs-small);
+  color: var(--ink3);
+}
+.joinbox {
+  margin: var(--s3) 0 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line2);
+  border-bottom: 1px solid var(--line2);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  font-size: var(--fs-ui);
+}
+.joinbox dt {
+  font: 400 var(--fs-label) var(--mono);
+  color: var(--ink3);
+  padding-top: 2px;
+}
+.joinbox dd .mono {
+  color: var(--ink2);
+  font-size: var(--fs-meta);
+}
+.joinbox .prov {
+  margin-left: 6px;
+}
+.hj {
+  margin-top: var(--s3);
+}
+.hj .btn {
+  width: 100%;
+  height: 34px;
+  justify-content: center;
+}
+.hj p,
+.sleeve-back .last {
+  margin-top: 7px;
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+  color: var(--ink3);
+}
+.wheel svg {
+  display: block;
+  width: 100%;
+  max-width: 200px;
+  margin: 0 auto;
+  overflow: visible;
+}
+.wheel .cell {
+  fill: transparent;
+  stroke: var(--line2);
+}
+.wheel .cell.on {
+  fill: rgba(150, 170, 210, 0.05);
+}
+.wheel .wl {
+  font: 400 9px var(--mono);
+  fill: var(--ink4);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.wheel .wl.on {
+  fill: var(--ink2);
+}
+.wheel .route {
+  fill: none;
+  stroke: var(--ink3);
+  stroke-width: 1.25;
+  stroke-linejoin: round;
+  stroke-dasharray: 3 3;
+}
+.wheel .route.past {
+  stroke: var(--ink);
+  stroke-dasharray: none;
+}
+.wheel .nowp {
+  fill: var(--acid);
+}
+.wheel .nextp {
+  fill: none;
+  stroke: var(--uv);
+  stroke-width: 1.5;
+}
+.wheel-now {
+  margin-top: var(--s2);
+  text-align: center;
+  font-size: var(--fs-ui);
+}
+.wheel-now .mono {
+  margin: 0 6px 0 10px;
+  font-size: var(--fs-tiny);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+
+/* Dig and Listen, as tabs in the draft's head. */
+.modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line2);
+  border-radius: var(--r-md);
+  align-self: center;
+}
+.mode {
+  height: 22px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  font: 600 var(--fs-label) var(--body);
+  letter-spacing: 0.04em;
+  color: var(--ink3);
+  transition:
+    color var(--t-fast),
+    background var(--t-fast);
+}
+.mode:hover {
+  color: var(--ink);
+}
+.mode.on {
+  background: var(--bg3);
+  color: var(--ink);
+}
+
+/* The record Music.app is playing wears an acid line under it. */
+.rec.now .rec-body::after {
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: -7px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--acid);
+  box-shadow: 0 0 10px rgba(214, 255, 58, 0.5);
+}
+
+/* The player bar. */
+.transport {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 230px) minmax(160px, 1fr) auto;
+  align-items: center;
+  gap: var(--s5);
+  height: 56px;
+  padding: 0 var(--s5);
+  border-top: 1px solid var(--line2);
+  background: var(--bg);
+}
+.tp-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ib {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--ink2);
+  transition:
+    color var(--t-fast),
+    background var(--t-fast);
+}
+.ib svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+.ib:hover:not([disabled]) {
+  color: var(--ink);
+  background: var(--bg3);
+}
+.ib.play {
+  width: 36px;
+  height: 36px;
+  background: var(--ink);
+  color: var(--bg);
+}
+.ib.play:hover:not([disabled]) {
+  background: var(--white);
+  color: var(--bg);
+}
+.ib.play.on {
+  background: var(--acid);
+}
+.ib[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+.tp-now {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  text-align: left;
+  border-radius: var(--r-sm);
+}
+.tp-now .sleeve {
+  position: relative;
+  width: 36px;
+  height: 36px;
+}
+.tp-now .sleeve-title {
+  display: none;
+}
+.tp-now > span {
+  min-width: 0;
+}
+.tp-now b {
+  display: block;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-now span span {
+  display: block;
+  font: 400 var(--fs-meta) var(--mono);
+  color: var(--ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-scrub {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--s3);
+  align-items: center;
+  min-width: 0;
+}
+.tp-scrub .mono {
+  min-width: 34px;
+  font-size: var(--fs-meta);
+  color: var(--ink2);
+}
+.tp-scrub .mono:last-child {
+  text-align: right;
+  color: var(--ink3);
+}
+.scrub {
+  width: 100%;
+  accent-color: var(--acid);
+}
+.tp-set {
+  text-align: right;
+  line-height: 1.4;
+  white-space: nowrap;
+  font-size: var(--fs-meta);
+  color: var(--ink3);
+}
+.tp-set b {
+  display: block;
+  font: 400 var(--fs-title) var(--led);
+  color: var(--ink);
+}
+.notice.bar .btn {
+  margin-left: var(--s3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .deck-disc {
+    transition: none;
+  }
+  .deck-label {
+    animation: none;
+  }
+}

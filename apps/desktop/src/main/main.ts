@@ -95,9 +95,9 @@ app.whenReady().then(() => {
     width: 1440,
     height: 900,
     // Below this the rail and the Claude panel no longer both fit across, and
-    // the crate, a notice and a rail with both key rings no longer fit down.
+    // the crate, a rail with both key rings and the transport no longer fit down.
     minWidth: 1024,
-    minHeight: 780,
+    minHeight: 820,
     title: 'Selecta',
     // The renderer draws its own top bar; the lights sit in its first 80px.
     titleBarStyle: 'hiddenInset',
