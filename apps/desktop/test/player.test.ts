@@ -176,6 +176,17 @@ it('still detaches when Music moves off the draft before the pause lands', async
   expect(deps.drafts!().preview()?.status).toBe('inactive');
 });
 
+it('stays linked when Music.app will not pause', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValue(
+    new BridgeError('jxa_error', 'Music.app would not pause.'),
+  );
+  await expect(player.detach(draft_id, 1)).rejects.toThrow(/would not pause/);
+  expect(deps.drafts!().preview()?.status).toBe('current');
+});
+
 it("won't pause, resume or seek music that isn't this draft", async () => {
   const { draft_id, entries } = draft();
 

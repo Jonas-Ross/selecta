@@ -65,7 +65,18 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       } catch (e) {
         return JSON.stringify({ elsewhere: true });
       }
-      if (args.action === 'pause' && state === 'playing') Music.pause();
+      // A pause can be ignored, so it is retried until it reads back; callers rely on it.
+      if (args.action === 'pause' && state === 'playing') {
+        let paused = false;
+        for (let attempt = 0; attempt < 3 && !paused; attempt++) {
+          Music.pause();
+          for (let tries = 0; tries < 20 && !paused; tries++) {
+            delay(0.05);
+            paused = String(Music.playerState()) !== 'playing';
+          }
+        }
+        if (!paused) return JSON.stringify({ stillPlaying: true });
+      }
       // play() with nothing paused would start whatever Music.app last had queued.
       if (args.action === 'resume' && state === 'paused') Music.play();
       if (args.action === 'seek' && state !== 'stopped') {

@@ -282,6 +282,13 @@ describe('player boundary', () => {
     },
   );
 
+  it('reports a pause Music.app ignored, so a stop never detaches over playback', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ stillPlaying: true });
+    await expect(
+      bridge.controlPlayer({ action: 'pause', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'jxa_error' });
+  });
+
   it.each([{ elsewhere: true }, { seekMissed: true }])(
     'refuses a control that did not land: %j',
     async (payload) => {

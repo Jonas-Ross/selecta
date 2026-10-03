@@ -216,6 +216,13 @@ export const bridge: Bridge = {
         'Read the player again before seeking.',
       );
 
+    if ('stillPlaying' in result)
+      throw new BridgeError(
+        'jxa_error',
+        'Music.app would not pause.',
+        'Pause Music, then try again.',
+      );
+
     return result;
   },
   async playPreview(input) {
