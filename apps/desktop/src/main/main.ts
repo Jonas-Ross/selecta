@@ -94,9 +94,10 @@ app.whenReady().then(() => {
   window = new BrowserWindow({
     width: 1440,
     height: 900,
-    // Below this the rail and the Claude panel no longer both fit.
+    // Below this the rail and the Claude panel no longer both fit across, and
+    // the crate, a notice and a rail with both key rings no longer fit down.
     minWidth: 1024,
-    minHeight: 640,
+    minHeight: 780,
     title: 'Selecta',
     // The renderer draws its own top bar; the lights sit in its first 80px.
     titleBarStyle: 'hiddenInset',
