@@ -124,7 +124,7 @@ function KickFigure() {
           />
         ))}
       </svg>
-      <figcaption>120 BPM: two kicks a second, four seconds shown</figcaption>
+      <figcaption>120 BPM: two beats a second, four seconds shown</figcaption>
     </figure>
   );
 }
@@ -186,7 +186,7 @@ const TERMS = {
     body: (
       <>
         <KickFigure />
-        <p>Beats per minute: how fast the kick drum hits.</p>
+        <p>Beats per minute: the steady pulse you would tap along to.</p>
         <p>Neighbouring tracks a few BPM apart sit close in pace.</p>
       </>
     ),

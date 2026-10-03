@@ -6,7 +6,7 @@ import type { Track } from './state.js';
 export const RELATION_WORDS: Record<HarmonicRelation, string> = {
   same: 'Same key',
   adjacent: 'Next door on the key wheel',
-  relative: 'Same notes, other mood',
+  relative: 'Same notes, other ring',
   energy_boost: 'Two steps up the wheel',
   distant: 'Far apart on the key wheel',
   unknown: 'Key unknown',
