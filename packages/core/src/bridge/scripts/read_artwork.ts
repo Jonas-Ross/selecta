@@ -55,15 +55,19 @@ export function buildReadArtworkScript(args: { trackIds: string[]; dir: string }
         continue;
       }
       const data = res.data;
+      let ext = null;
       try {
-        if (data.length < 6) continue;
-        const head = data.subdataWithRange($.NSMakeRange(0, 6)).base64EncodedStringWithOptions(0).js;
-        const ext = head.indexOf(${JSON.stringify(JPEG)}) === 0 ? 'jpg'
+        const head = data.length < 6 ? ''
+          : data.subdataWithRange($.NSMakeRange(0, 6)).base64EncodedStringWithOptions(0).js;
+        ext = head.indexOf(${JSON.stringify(JPEG)}) === 0 ? 'jpg'
           : head === ${JSON.stringify(PNG)} ? 'png' : null;
-        if (ext === null) continue;
-        const name = id + '.' + ext;
-        if (data.writeToFileAtomically(args.dir + '/' + name, true)) written[id] = name;
       } catch (e) {}
+      if (ext === null) continue;
+      const name = id + '.' + ext;
+      // A full or unwritable directory fails the batch; it is not a track without art.
+      if (!data.writeToFileAtomically(args.dir + '/' + name, true))
+        throw new Error('Cannot write artwork into ' + args.dir);
+      written[id] = name;
     }
     return JSON.stringify(written);
   `,
