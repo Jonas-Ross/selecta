@@ -5,7 +5,6 @@ import type { Bridge, PlayerState } from '@selecta/core/types/bridge.js';
 import type { Draft, PreviewState } from '@selecta/core/drafts/contracts.js';
 import type { DraftStore } from '@selecta/core/drafts/store.js';
 import type { SelectaCache } from '@selecta/core/cache/index.js';
-import { PREVIEW_PLAYLIST_NAME } from '@selecta/core/operations/playlist.js';
 import { withOperation } from '@selecta/core/operations/lock.js';
 import type { PlayerView } from '../shared/protocol.js';
 
@@ -51,8 +50,10 @@ export function playerView(player: PlayerState, draft: Draft, slot?: PreviewStat
       position: player.position,
     }),
   };
+  // By ID, not name: a copy of the preview playlist is not the slot this draft is in step with.
   const entry =
-    player.playlist?.name === PREVIEW_PLAYLIST_NAME &&
+    slot?.playlist_id !== undefined &&
+    player.playlist?.persistentId === slot.playlist_id &&
     player.index !== undefined &&
     inStep(draft, slot)
       ? draft.entries[player.index - 1]
@@ -131,7 +132,11 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
     ) => show(draftId, await bridge.controlPlayer(input)),
 
     // Releases the link so Claude can edit again; Music.app keeps the playlist as it is.
+    // Pauses first only if Music is playing this draft, never something the user moved on to.
     async detach(draftId: string, revision: number) {
+      if (show(draftId, await bridge.readPlayer()).entry_id !== undefined)
+        await bridge.controlPlayer({ action: 'pause' });
+
       const response = await preview({ draft_id: draftId, revision, mode: 'detach' });
       const problem = failure(response);
 

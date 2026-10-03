@@ -82,12 +82,11 @@ export function usePlayer(draftId: string, looking: boolean) {
     pause: () => act(selecta.call('player.pause', { draft_id: draftId })),
     resume: () => act(selecta.call('player.resume', { draft_id: draftId })),
     seek: (position: number) => act(selecta.call('player.seek', { draft_id: draftId, position })),
-    // Stops Music.app first, so nothing keeps playing a playlist the draft no longer follows.
+    // The host pauses Music first if it's on this draft, then releases the preview.
     detach: (revision: number) =>
       act(
         selecta
-          .call('player.pause', { draft_id: draftId })
-          .then(() => selecta.call('player.detach', { draft_id: draftId, revision }))
+          .call('player.detach', { draft_id: draftId, revision })
           .then(() => selecta.call('player.state', { draft_id: draftId })),
       ),
   };

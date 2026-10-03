@@ -107,8 +107,22 @@ it('detaches the preview so the draft is local again', async () => {
 
   await player.play(draft_id, 1, entries[0].entry_id);
   await player.detach(draft_id, 1);
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({ action: 'pause' });
   expect(deps.drafts!().preview()?.status).toBe('inactive');
   expect((await player.state(draft_id)).entry_id).toBeUndefined();
+});
+
+it('leaves Music playing when it has moved off the draft before detaching', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, 'T-OTHER'),
+    playlist: { persistentId: 'P-GYM', name: 'Gym' },
+  });
+  await player.detach(draft_id, 1);
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+  expect(deps.drafts!().preview()?.status).toBe('inactive');
 });
 
 it('claims an entry only when Music.app is provably in step with this draft', () => {
@@ -118,6 +132,7 @@ it('claims an entry only when Music.app is provably in step with this draft', ()
     version: 1,
     owner: d.draft_id,
     status: 'current' as const,
+    playlist_id: 'P-SLOT',
     baseline: [A, B, A],
   };
 
@@ -131,6 +146,14 @@ it('claims an entry only when Music.app is provably in step with this draft', ()
   // The track at that place must be the one playing.
   expect(playerView(playing(2, A), d, slot).entry_id).toBeUndefined();
   expect(playerView({ ...playing(2, B), playlist: undefined }, d, slot).entry_id).toBeUndefined();
+  // A copy of the preview playlist shares its name, not its ID.
+  expect(
+    playerView({ ...playing(2, B), playlist: { ...PREVIEW, persistentId: 'P-COPY' } }, d, slot)
+      .entry_id,
+  ).toBeUndefined();
+  expect(
+    playerView(playing(2, B), d, { ...slot, playlist_id: undefined }).entry_id,
+  ).toBeUndefined();
   expect(
     playerView({ ...playing(2, B), playlist: { persistentId: 'X', name: 'Gym' } }, d, slot)
       .entry_id,
