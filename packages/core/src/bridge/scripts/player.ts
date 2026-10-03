@@ -56,6 +56,8 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       // play() with nothing paused would start whatever Music.app last had queued.
       if (args.action === 'resume' && state === 'paused') Music.play();
       if (args.action === 'seek' && state !== 'stopped') Music.playerPosition = args.position;
+      // A read straight after pause() still says playing; the change lands a beat later.
+      delay(0.3);
       return JSON.stringify(readPlayer());
     `,
   );
