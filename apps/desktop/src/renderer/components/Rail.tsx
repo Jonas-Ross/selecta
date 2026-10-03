@@ -90,6 +90,8 @@ export function Rail({
   const focused = useRef<string>(undefined);
   const mounted = useRef(false);
   const wasMoving = useRef(false);
+  // New targets need a draw even when reduced motion snaps every spring to rest at once.
+  const retargeted = useRef(false);
   const [landed, setLanded] = useState<{ id: string; at: number }>();
   const [said, setSaid] = useState('');
   const [edges, setEdges] = useState({ left: false, right: false });
@@ -160,6 +162,7 @@ export function Rail({
     if (drag.current && !present.has(drag.current.id)) drag.current = undefined;
 
     retarget();
+    retargeted.current = true;
 
     if (items.length) mounted.current = true;
 
@@ -228,9 +231,10 @@ export function Rail({
     }
 
     // One more draw after the last move puts everything exactly on target.
-    if (moving || wasMoving.current) render();
+    if (moving || wasMoving.current || retargeted.current) render();
 
     wasMoving.current = moving;
+    retargeted.current = false;
 
     return moving;
   });
