@@ -25,21 +25,29 @@ const clamp = (value: number, lo: number, hi: number) => Math.min(hi, Math.max(l
 
 /**
  * Records shrink to fit the whole set in view, down to a size that still
- * reads; past that the rail scrolls. Lanes take what height is left, capped
- * so a tall window doesn't stretch a few BPM into a cliff.
+ * reads; past that the rail scrolls.
  */
-export function shelfLayout(width: number, height: number, count: number): Shelf {
+export function fitSize(width: number, height: number, count: number): number {
   const room = Math.max(0, width - GUTTER - PAD * 2);
   const fit = room / Math.max(1, count) - 40;
-  const size = Math.round(clamp(Math.min(fit, height * 0.19), 92, 150));
+
+  // A tall window keeps records large even when that means scrolling.
+  return Math.round(clamp(Math.max(Math.min(fit, height * 0.19), height * 0.14), 92, 150));
+}
+
+/**
+ * The bands around records of `size`. Lanes take what height is left, capped
+ * so a tall window doesn't stretch a few BPM into a cliff.
+ */
+export function shelfLayout(height: number, size: number): Shelf {
   // Wide enough for a two-line join marker between neighbours.
-  const gap = Math.round(clamp(size * 0.42, 40, 60));
+  const gap = clamp(size * 0.42, 40, 60);
   const fixed = 28 + 24 + size + 46 + 54 + 16;
   const spare = Math.max(0, height - fixed);
-  const tempoH = Math.round(clamp(spare * 0.42, 64, 150));
-  const keyH = Math.round(clamp(spare * 0.5, 96, 196));
-  // Whatever the caps leave goes above the block, a little more than below.
-  const top = Math.round(Math.max(0, (spare - tempoH - keyH) * 0.42)) + 28;
+  const tempoH = clamp(spare * 0.42, 64, 150);
+  const keyH = clamp(spare * 0.5, 96, 190);
+  // Whatever the caps leave is split above and below, a little less above.
+  const top = Math.max(0, (spare - tempoH - keyH) * 0.3) + 28;
   const rail = top + tempoH + 24 + size;
 
   return {

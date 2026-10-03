@@ -1,0 +1,117 @@
+/* The explainer card, placed by Explain.tsx under (or over) what it explains. */
+.tip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 100;
+  width: 292px;
+  padding: 14px var(--s4) 15px;
+  background: var(--tip-bg);
+  border: 1px solid var(--line3);
+  border-radius: 9px;
+  box-shadow: 0 20px 50px var(--shadow);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.16s var(--ease-out);
+}
+.tip.on {
+  opacity: 1;
+}
+.tip-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+.tip-head b {
+  font: 700 12px/1.2 var(--display);
+  font-stretch: 125%;
+  letter-spacing: 0.01em;
+}
+.tip-head .mono {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ink3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tip p {
+  font-size: var(--fs-ui);
+  line-height: 1.5;
+  color: var(--ink2);
+}
+.tip p + p {
+  margin-top: 6px;
+}
+.tip .tip-note {
+  margin-top: var(--s2);
+  font-size: var(--fs-small);
+  color: var(--ink3);
+}
+.tip dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px var(--s3);
+  margin: var(--s1) 0 0;
+  font-size: 12px;
+}
+.tip .tip-row {
+  display: contents;
+}
+.tip dt {
+  padding-top: 1px;
+  font: 400 var(--fs-label) var(--mono);
+  color: var(--ink3);
+}
+.tip dd {
+  margin: 0;
+  color: var(--ink);
+}
+.tip-fig {
+  margin: 2px 0 10px;
+}
+.tip-fig svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.tip-fig figcaption {
+  margin-top: var(--s1);
+  font: 400 10px var(--mono);
+  color: var(--ink3);
+}
+.fig-base {
+  stroke: var(--ink4);
+}
+.fig-kick {
+  fill: var(--ink2);
+}
+.fig-kick.strong {
+  fill: var(--ink);
+}
+.fig-ring {
+  fill: none;
+  stroke: var(--line2);
+}
+.fig-num {
+  font: 400 8.5px var(--mono);
+  text-anchor: middle;
+  fill: var(--ink4);
+}
+.fig-num.on {
+  fill: var(--ink);
+}
+.fig-num.uv {
+  fill: var(--uv-text);
+}
+.fig-note {
+  font: 400 9.5px var(--body);
+  fill: var(--ink3);
+}
+.fig-note.end {
+  text-anchor: end;
+}
+.fig-note.on {
+  fill: var(--ink2);
+}

@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import {
   bpmScale,
+  fitSize,
   formatClock,
   keyBands,
   keyY,
@@ -83,14 +84,18 @@ it('starts each record after the known lengths before it', () => {
 });
 
 it('shrinks records to fit the set, then scrolls, and stacks the bands in order', () => {
-  const few = shelfLayout(1088, 780, 4);
-  const many = shelfLayout(1088, 780, 40);
+  const few = fitSize(1088, 780, 4);
+  const many = fitSize(1088, 780, 40);
 
-  expect(few.size).toBeGreaterThan(many.size);
-  expect(many.size).toBe(92);
-  expect(few.size).toBeLessThanOrEqual(150);
+  expect(few).toBeGreaterThan(many);
+  // A tall rail keeps records readable and scrolls instead; a short one shrinks to the floor.
+  expect(many).toBe(Math.round(780 * 0.14));
+  expect(fitSize(1088, 400, 40)).toBe(92);
+  expect(few).toBeLessThanOrEqual(150);
 
-  for (const shelf of [few, many]) {
+  for (const size of [few, many]) {
+    const shelf = shelfLayout(780, size);
+
     expect(shelf.step).toBe(shelf.size + shelf.gap);
     expect(shelf.tempo.top + shelf.tempo.height).toBeLessThan(shelf.rail - shelf.size);
     expect(shelf.caption).toBeGreaterThan(shelf.rail);
