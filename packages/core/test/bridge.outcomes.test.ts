@@ -258,6 +258,51 @@ describe('track ID list boundary', () => {
   );
 });
 
+describe('player boundary', () => {
+  const now = {
+    running: true,
+    state: 'playing',
+    track: { persistentId: 'A', duration: 300 },
+    position: 12.5,
+    index: 3,
+    playlist: { persistentId: 'P', name: 'Selecta Preview' },
+  };
+
+  it('passes a validated player read through, closed Music.app included', async () => {
+    vi.mocked(runJxa).mockResolvedValueOnce(now).mockResolvedValueOnce({ running: false });
+    await expect(bridge.readPlayer()).resolves.toEqual(now);
+    await expect(bridge.readPlayer()).resolves.toEqual({ running: false });
+  });
+
+  it.each([{ running: true }, { running: true, state: 'playing', index: 0 }, { running: 'no' }])(
+    'rejects a malformed player read %j',
+    async (payload) => {
+      vi.mocked(runJxa).mockResolvedValue(payload);
+      await expect(bridge.readPlayer()).rejects.toMatchObject({ errorCode: 'jxa_error' });
+    },
+  );
+
+  it.each([
+    [{ playlistNotFound: true }, 'playlist_not_found'],
+    [{ ambiguousPreview: true }, 'validation_error'],
+    [{ notEditable: true }, 'playlist_not_editable'],
+    [{ orderDrifted: true }, 'preview_conflict'],
+    [{ playlistId: 'P', player: { running: 'no' } }, 'jxa_error'],
+  ])('maps a refused play %j', async (payload, errorCode) => {
+    vi.mocked(runJxa).mockResolvedValue(payload);
+    await expect(
+      bridge.playPreview({ expectedTrackIds: ['A', 'B'], index: 0 }),
+    ).rejects.toMatchObject({ errorCode });
+  });
+
+  it('returns what Music.app is playing after a play', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ playlistId: 'P', player: now });
+    await expect(
+      bridge.playPreview({ expectedTrackIds: ['B', 'B', 'A'], index: 2 }),
+    ).resolves.toEqual({ playlistId: 'P', player: now });
+  });
+});
+
 describe('guarded preview navigation', () => {
   const invoke = () => bridge.openPreview({ expectedTrackIds: ['A', 'B', 'A'] });
 

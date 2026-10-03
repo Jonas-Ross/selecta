@@ -57,6 +57,11 @@ import {
 } from './scripts/edit_playlist.js';
 import { buildSetLovedScript, buildSetRatingScript } from './scripts/track_signal.js';
 import { buildReadArtworkScript } from './scripts/read_artwork.js';
+import {
+  buildControlPlayerScript,
+  buildPlayPreviewScript,
+  buildReadPlayerScript,
+} from './scripts/player.js';
 import { BridgeError, preWriteError } from '../types/errors.js';
 import {
   type ArtworkReadResult,
@@ -190,6 +195,45 @@ export const bridge: Bridge = {
       await runJxa(buildSetRatingScript(input), schemas.ratingResult),
       input.trackIds,
     );
+  },
+  async readPlayer() {
+    return runJxa(buildReadPlayerScript(), schemas.player);
+  },
+  async controlPlayer(input) {
+    return runJxa(buildControlPlayerScript(input), schemas.player);
+  },
+  async playPreview(input) {
+    const result = await runJxa(buildPlayPreviewScript(input), schemas.playPreview);
+
+    if ('playlistNotFound' in result)
+      throw new BridgeError(
+        'playlist_not_found',
+        'Selecta Preview does not exist.',
+        'Load the draft into Selecta Preview before playing it.',
+      );
+
+    if ('ambiguousPreview' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Selecta Preview is ambiguous.',
+        'Multiple playlists have the reserved name. Ask the user which copy to keep. Nothing was played.',
+      );
+
+    if ('notEditable' in result)
+      throw new BridgeError(
+        'playlist_not_editable',
+        'Selecta Preview is not a plain user playlist.',
+        'The reserved name belongs to an unsupported playlist. Nothing was played.',
+      );
+
+    if ('orderDrifted' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'Selecta Preview differs from this draft.',
+        'The preview changed in Music.app. Nothing was played.',
+      );
+
+    return result;
   },
   async readArtwork(trackIds, dir): Promise<ArtworkReadResult> {
     const unique = [...new Set(trackIds)];

@@ -1,15 +1,21 @@
 // Every call the renderer can make, over the same core the MCP tools use.
-// Drafts are the only thing the app writes locally; Save is the one Music.app
-// write, and it goes through the same revision-checked operation as the tool.
+// Drafts are the only thing the app writes locally. Music.app gets two kinds of
+// write, both through the operations the MCP tools use: Save, and the Selecta
+// Preview playlist that Listen plays from, kept in step with a linked draft.
 import { z } from 'zod';
 import type { ToolDeps } from '@selecta/core/tools/deps.js';
-import { PlaylistDraftTools, getDraftInputShape } from '@selecta/core/tools/playlist_draft.js';
+import {
+  PlaylistDraftTools,
+  getDraftInputShape,
+  revisionInputShape,
+} from '@selecta/core/tools/playlist_draft.js';
 import type { DraftStore } from '@selecta/core/drafts/store.js';
 import { BRIEF_LIMIT, type Method } from '../shared/protocol.js';
 import { ARTWORK_GET_LIMIT } from '../shared/artwork.js';
 import type { AgentSessions } from './agent.js';
 import type { ArtworkCache } from './artwork.js';
 import { crate } from './library.js';
+import { createPlayer } from './player.js';
 
 const DraftId = z.strictObject(getDraftInputShape);
 const Brief = z.strictObject({
@@ -23,6 +29,13 @@ const Message = z.strictObject({
   // What the user typed, for the log; the message adds the selected tracks.
   text: z.string().max(60_000).optional(),
 });
+const Revision = z.strictObject({ ...revisionInputShape });
+const Play = z.strictObject({
+  ...revisionInputShape,
+  entry_id: z.string().uuid(),
+  position: z.number().nonnegative().optional(),
+});
+const Seek = z.strictObject({ ...getDraftInputShape, position: z.number().nonnegative() });
 const Artwork = z.strictObject({
   track_ids: z.array(z.string().max(64)).max(ARTWORK_GET_LIMIT),
 });
@@ -33,6 +46,12 @@ export function createApi(
   artwork: ArtworkCache,
 ) {
   const drafts = new PlaylistDraftTools(deps);
+  const player = createPlayer({
+    bridge: deps.bridge,
+    cache: deps.cache,
+    drafts: deps.drafts,
+    preview: (args) => drafts.preview(args),
+  });
 
   // The store refuses linked drafts atomically; this only fails a run before
   // it starts rather than partway through.
@@ -43,7 +62,7 @@ export function createApi(
   }
 
   const LINKED =
-    'This draft is linked to the Selecta Preview playlist in Music. Detach the preview where you started it to edit the draft here.';
+    "Claude can't edit this draft while it plays through the Selecta Preview playlist in Music. Stop listening to send it feedback.";
 
   const handlers: Record<Method, (args: unknown) => unknown> = {
     'library.crate': (args) => crate(deps.cache(), args),
@@ -66,6 +85,24 @@ export function createApi(
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),
     'agent.history': () => agent.history(),
+    'player.state': (args) => player.state(DraftId.parse(args).draft_id),
+    'player.play': (args) => {
+      const { draft_id, revision, entry_id, position } = Play.parse(args);
+
+      return player.play(draft_id, revision, entry_id, position);
+    },
+    'player.pause': (args) => player.control(DraftId.parse(args).draft_id, { action: 'pause' }),
+    'player.resume': (args) => player.control(DraftId.parse(args).draft_id, { action: 'resume' }),
+    'player.seek': (args) => {
+      const { draft_id, position } = Seek.parse(args);
+
+      return player.control(draft_id, { action: 'seek', position });
+    },
+    'player.detach': (args) => {
+      const { draft_id, revision } = Revision.parse(args);
+
+      return player.detach(draft_id, revision);
+    },
   };
 
   return async (method: string, args: unknown): Promise<unknown> => {

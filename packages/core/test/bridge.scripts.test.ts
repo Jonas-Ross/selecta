@@ -194,3 +194,57 @@ describe('artwork read script contract', () => {
     );
   });
 });
+
+describe('player script contract', () => {
+  const NO_WRITES = /Music\.(make|delete|duplicate|move|add)\(|\.rating =|\.favorited =/;
+
+  it('reads the player without launching Music.app or changing anything', async () => {
+    const { buildReadPlayerScript } = await import('../src/bridge/scripts/player.js');
+    const script = buildReadPlayerScript();
+
+    expect(script.indexOf('Music.running()')).toBeLessThan(script.indexOf('Music.playerState()'));
+    expect(script).not.toMatch(/Music\.(play|pause|playpause|activate)\(|playerPosition =/);
+    expect(script).not.toMatch(NO_WRITES);
+  });
+
+  it('resumes only what is paused and seeks only what is loaded', async () => {
+    const { buildControlPlayerScript } = await import('../src/bridge/scripts/player.js');
+
+    expect(buildControlPlayerScript({ action: 'resume' })).toContain(
+      "if (args.action === 'resume' && state === 'paused') Music.play();",
+    );
+    expect(buildControlPlayerScript({ action: 'seek', position: 60 })).toContain(
+      "if (args.action === 'seek' && state !== 'stopped') Music.playerPosition = args.position;",
+    );
+    expect(buildControlPlayerScript({ action: 'pause' })).not.toMatch(NO_WRITES);
+    expect(() => buildControlPlayerScript({ action: 'seek', position: -1 })).toThrow(
+      expect.objectContaining({ errorCode: 'validation_error' }),
+    );
+  });
+
+  it('plays from the preview only after its identity and full order check out', async () => {
+    const { buildPlayPreviewScript } = await import('../src/bridge/scripts/player.js');
+    const script = buildPlayPreviewScript({ expectedTrackIds: ['A', 'B', 'A'], index: 2 });
+
+    for (const guard of ['playlistNotFound', 'notEditable', 'ambiguousPreview', 'orderDrifted'])
+      expect(script.indexOf(guard)).toBeLessThan(
+        script.indexOf('Music.play(pl.tracks[args.index])'),
+      );
+
+    expect(script).toContain('JSON.stringify(ids) !== JSON.stringify(args.expectedTrackIds)');
+    expect(script).not.toMatch(NO_WRITES);
+  });
+
+  it.each([
+    { expectedTrackIds: ['A'], index: 1 },
+    { expectedTrackIds: ['A'], index: -1 },
+    { expectedTrackIds: ['A'], index: 0.5 },
+    { expectedTrackIds: ['A'], index: 0, position: Number.NaN },
+  ])('refuses %j before any script runs', async (input) => {
+    const { buildPlayPreviewScript } = await import('../src/bridge/scripts/player.js');
+
+    expect(() => buildPlayPreviewScript(input)).toThrow(
+      expect.objectContaining({ errorCode: 'validation_error' }),
+    );
+  });
+});

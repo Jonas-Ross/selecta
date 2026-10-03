@@ -162,3 +162,22 @@ export const artwork = z.record(
     z.strictObject({ error: z.string().max(300) }),
   ]),
 );
+
+export const player = z.union([
+  z.strictObject({ running: z.literal(false) }),
+  z.object({
+    running: z.literal(true),
+    state: z.string().max(40),
+    track: z.object({ persistentId: id, duration: z.number().nonnegative() }).optional(),
+    position: z.number().nonnegative().optional(),
+    index: count.positive().optional(),
+    playlist: z.object({ persistentId: id, name: z.string() }).optional(),
+  }),
+]);
+export const playPreview = z.union([
+  z.strictObject({ playlistNotFound: z.literal(true) }),
+  z.strictObject({ notEditable: z.literal(true) }),
+  z.strictObject({ ambiguousPreview: z.literal(true) }),
+  z.strictObject({ orderDrifted: z.literal(true) }),
+  z.strictObject({ playlistId: id, player }),
+]);
