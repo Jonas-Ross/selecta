@@ -223,6 +223,13 @@ export const bridge: Bridge = {
         'Turn shuffle off in Music so it plays the draft in order. Nothing was resumed.',
       );
 
+    if ('stillPaused' in result)
+      throw new BridgeError(
+        'jxa_error',
+        'Music.app did not start playing.',
+        'An open Music Settings window can swallow play commands. Close it, then play again.',
+      );
+
     if ('stillPlaying' in result)
       throw new BridgeError(
         'jxa_error',
@@ -268,6 +275,13 @@ export const bridge: Bridge = {
         'validation_error',
         'Shuffle is on in Music.app.',
         'Turn shuffle off in Music so it plays the draft in order. Nothing was played.',
+      );
+
+    if ('stillPaused' in result)
+      throw new BridgeError(
+        'jxa_error',
+        'Music.app did not start playing.',
+        'An open Music Settings window can swallow play commands. Close it, then play again.',
       );
 
     if ('leftPlaying' in result)

@@ -229,9 +229,10 @@ describe('player script contract', () => {
     expect(
       buildControlPlayerScript({ action: 'resume', on }).indexOf('Music.shuffleEnabled()'),
     ).toBeLessThan(buildControlPlayerScript({ action: 'resume', on }).indexOf('Music.play()'));
-    expect(buildControlPlayerScript({ action: 'resume', on })).toContain(
-      "if (args.action === 'resume' && state === 'paused') Music.play();",
-    );
+    const resume = buildControlPlayerScript({ action: 'resume', on });
+
+    expect(resume).toContain("if (args.action === 'resume' && state === 'paused') {");
+    expect(resume.indexOf('Music.play()')).toBeLessThan(resume.indexOf('stillPaused'));
     const seek = buildControlPlayerScript({ action: 'seek', position: 60, on });
 
     expect(seek).toContain("if (args.action === 'seek' && state !== 'stopped') {");
@@ -281,8 +282,11 @@ describe('player script contract', () => {
     );
     // A restarted play that seeks is paused first, so the record's start isn't heard.
     expect(script).toContain('(restart || from !== target) && (args.position || 0) > 0');
+    // The order and target are re-read right before resuming, and the resume must read back.
+    expect(script.lastIndexOf('orderDrifted')).toBeLessThan(script.lastIndexOf('Music.play();'));
+    expect(script.lastIndexOf('Music.play();')).toBeLessThan(script.indexOf('stillPaused'));
     // A seek that never lands fails before anything resumes.
-    expect(script.indexOf('seekMissed')).toBeLessThan(script.indexOf("=== 'paused') Music.play()"));
+    expect(script.indexOf('seekMissed')).toBeLessThan(script.lastIndexOf('Music.play();'));
     expect(script).not.toMatch(NO_WRITES);
   });
 

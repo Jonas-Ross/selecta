@@ -83,7 +83,16 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       // Shuffle turned on while paused would carry on through the draft out of order.
       if (args.action === 'resume' && Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
       // play() with nothing paused would start whatever Music.app last had queued.
-      if (args.action === 'resume' && state === 'paused') Music.play();
+      if (args.action === 'resume' && state === 'paused') {
+        Music.play();
+        // A play can be swallowed (an open Settings window does it), so it must read back.
+        let playing = false;
+        for (let tries = 0; tries < 60 && !playing; tries++) {
+          delay(0.05);
+          playing = String(Music.playerState()) === 'playing';
+        }
+        if (!playing) return JSON.stringify({ stillPaused: true });
+      }
       if (args.action === 'seek' && state !== 'stopped') {
         // Clamped like a play's seek, and read back since a seek can silently not land.
         const goal = Math.min(args.position, Math.max(0, Music.currentTrack.duration() - 1));
@@ -196,7 +205,18 @@ export function buildPlayPreviewScript(input: {
         if (!until(function () { return Math.abs(Music.playerPosition() - goal) < 2; })) {
           return JSON.stringify({ seekMissed: true });
         }
-        if (quiet || String(Music.playerState()) === 'paused') Music.play();
+        // The order is checked again here, since an edit or iCloud sync can land mid-step.
+        const now = pl.tracks.length > 0 ? pl.tracks.persistentID() : [];
+        if (JSON.stringify(now) !== JSON.stringify(args.expectedTrackIds) ||
+          Music.currentTrack.persistentID() !== args.expectedTrackIds[args.index]) {
+          return JSON.stringify({ orderDrifted: true });
+        }
+        if (quiet || String(Music.playerState()) === 'paused') {
+          Music.play();
+          if (!until(function () { return String(Music.playerState()) === 'playing'; })) {
+            return JSON.stringify({ stillPaused: true });
+          }
+        }
         landed = true;
       } finally {
         // A start that went wrong is left paused, unless the user has moved Music elsewhere.

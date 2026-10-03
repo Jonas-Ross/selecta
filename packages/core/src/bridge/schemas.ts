@@ -179,6 +179,7 @@ export const controlPlayer = z.union([
   z.strictObject({ seekMissed: z.literal(true) }),
   z.strictObject({ stillPlaying: z.literal(true) }),
   z.strictObject({ shuffled: z.literal(true) }),
+  z.strictObject({ stillPaused: z.literal(true) }),
   player,
 ]);
 export const playPreview = z.union([
@@ -190,6 +191,7 @@ export const playPreview = z.union([
   z.strictObject({ shuffled: z.literal(true) }),
   z.strictObject({ seekMissed: z.literal(true) }),
   z.strictObject({ leftPlaying: z.literal(true) }),
+  z.strictObject({ stillPaused: z.literal(true) }),
   // How the play reached the entry, for the app's action log.
   z.strictObject({ playlistId: id, route: z.string().optional(), player }),
 ]);

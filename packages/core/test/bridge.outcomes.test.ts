@@ -282,6 +282,13 @@ describe('player boundary', () => {
     },
   );
 
+  it('reports a resume Music.app swallowed', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ stillPaused: true });
+    await expect(
+      bridge.controlPlayer({ action: 'resume', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'jxa_error' });
+  });
+
   it('refuses to resume once shuffle is on', async () => {
     vi.mocked(runJxa).mockResolvedValue({ shuffled: true });
     await expect(
@@ -315,6 +322,7 @@ describe('player boundary', () => {
     [{ shuffled: true }, 'validation_error'],
     [{ seekMissed: true }, 'preview_conflict'],
     [{ leftPlaying: true }, 'jxa_error'],
+    [{ stillPaused: true }, 'jxa_error'],
     [{ playlistId: 'P', player: { running: 'no' } }, 'jxa_error'],
   ])('maps a refused play %j', async (payload, errorCode) => {
     vi.mocked(runJxa).mockResolvedValue(payload);
