@@ -233,6 +233,13 @@ export const bridge: Bridge = {
         'The preview changed in Music.app. Nothing was played.',
       );
 
+    if ('stepMissed' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'Music.app did not reach that record in Selecta Preview.',
+        'Turn shuffle off in Music, then play again.',
+      );
+
     return result;
   },
   async readArtwork(trackIds, dir): Promise<ArtworkReadResult> {

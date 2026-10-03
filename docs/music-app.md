@@ -93,13 +93,15 @@ If lock cleanup fails after reveal, the tool retains `opened`, target ID and cou
 
 Probed live 2026-10-03 against a 16-entry Selecta Preview (`src/bridge/scripts/player.ts` holds the scripts):
 
-- **`Music.play(playlist.tracks[i])` plays in the playlist's context.** `currentPlaylist.name()` then reads the playlist and `currentTrack.index()` the 1-based entry, which tells repeated tracks apart where a persistent ID can't.
+- **Playing one track stops after it.** `Music.play(playlist.tracks[i])` reports the playlist as `currentPlaylist` and `currentTrack.index()` as the 1-based entry, yet Music goes to stopped when that track ends, with or without `once`. Only `Music.play(playlist)` gives Music a queue it carries on through (entry 3 handed over to entry 4 on its own, AutoMix on). So Listen plays the playlist and steps with `nextTrack()` to the entry, with Music's volume at 0 until it is there.
+- **Commands land a beat late.** Straight after `play(playlist)`, `pause()` or `nextTrack()`, a read still shows the old state, and a `pause()` fired at once may not take. Each step waits until the index reads back before the next.
+- **`currentTrack.index()` tells repeated tracks apart** where a persistent ID can't.
 - **Stopped means no current track.** `currentTrack` and `currentPlaylist` throw "Can't get object" and `playerPosition()` is null. Reading `running()` first keeps a closed Music closed.
 - **`playerPosition` is settable** and reads back within a second. `pause()` and a bare `play()` (resume) work, but a read straight after `pause()` can still say playing, so the control script waits 0.3 s before it reads back.
 - **JXA has a global `delay`.** A script that declares its own `const delay` fails to compile.
 - **A track that plays to its end counts as a play.** Probes that let tracks finish move the user's play counts, so probe by seeking and pausing, not by listening through.
 
-Unverified: that Music continues and AutoMixes into the next entry after a scripted `play` as it does after a click. The 2026-09-29 AutoMix spike put the blend's lead at about 45 s, which Listen's "Hear the join" uses.
+The 2026-09-29 AutoMix spike put the blend's lead at about 45 s, which Listen's "Hear the join" uses. With shuffle on, `play(playlist)` starts anywhere, so the play is refused rather than stepped from the wrong place.
 
 ## Linked draft preview guard
 

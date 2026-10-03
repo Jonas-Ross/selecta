@@ -85,9 +85,37 @@ export function buildPlayPreviewScript(input: {
   return wrapJxaScript(
     { ...input, name: PREVIEW_PLAYLIST_NAME },
     `${READ_PLAYER}${PREVIEW_SLOT}
-      // Played from the playlist, so Music.app carries on through it and AutoMix has a next track.
-      Music.play(pl.tracks[args.index]);
-      if (args.position !== undefined) Music.playerPosition = args.position;
+      // Playing one track stops Music.app after it; playing the playlist gives it a queue
+      // to carry on through, so start there and step to the entry, muted.
+      // Each command lands a beat late, so every step waits until it reads back.
+      function until(ok) {
+        for (let tries = 0; tries < 60; tries++) {
+          try { if (ok()) return true; } catch (e) {}
+          delay(0.05);
+        }
+        return false;
+      }
+      const at = function () {
+        return Music.currentPlaylist.persistentID() === pl.persistentID() &&
+          Music.currentTrack.index();
+      };
+      const volume = Music.soundVolume();
+      Music.soundVolume = 0;
+      try {
+        Music.play(pl);
+        // Shuffle starts the playlist anywhere, so the first entry is the proof it's in order.
+        for (let step = 0; step <= args.index; step++) {
+          if (step > 0) Music.nextTrack();
+          if (!until(function () { return at() === step + 1; })) {
+            Music.pause();
+            return JSON.stringify({ stepMissed: true });
+          }
+        }
+        Music.playerPosition = args.position === undefined ? 0 : args.position;
+        until(function () { return Math.abs(Music.playerPosition() - (args.position || 0)) < 2; });
+      } finally {
+        Music.soundVolume = volume;
+      }
       return JSON.stringify({ playlistId: pl.persistentID(), player: readPlayer() });
     `,
   );

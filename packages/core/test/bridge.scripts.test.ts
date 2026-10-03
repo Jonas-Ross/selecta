@@ -227,11 +227,14 @@ describe('player script contract', () => {
     const script = buildPlayPreviewScript({ expectedTrackIds: ['A', 'B', 'A'], index: 2 });
 
     for (const guard of ['playlistNotFound', 'notEditable', 'ambiguousPreview', 'orderDrifted'])
-      expect(script.indexOf(guard)).toBeLessThan(
-        script.indexOf('Music.play(pl.tracks[args.index])'),
-      );
+      expect(script.indexOf(guard)).toBeLessThan(script.indexOf('Music.play(pl)'));
 
     expect(script).toContain('JSON.stringify(ids) !== JSON.stringify(args.expectedTrackIds)');
+    // One track played alone stops Music.app after it, so the playlist is what starts.
+    expect(script).not.toContain('Music.play(pl.tracks');
+    // Stepping is muted, and the user's volume comes back however the script ends.
+    expect(script.indexOf('Music.soundVolume = 0')).toBeLessThan(script.indexOf('Music.play(pl)'));
+    expect(script).toMatch(/finally \{\s*Music\.soundVolume = volume;/);
     expect(script).not.toMatch(NO_WRITES);
   });
 
