@@ -1,5 +1,5 @@
 // The Listen screen's view of Music.app. It reads the player about once a
-// second while Listen is open or this draft is playing, and stops reading
+// second while Listen is open, the draft is linked or it is playing, and stops reading
 // after a failure until the user acts, so a denied permission isn't hit every second.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayerView } from '../shared/protocol.js';
@@ -7,7 +7,7 @@ import { selecta } from './api.js';
 
 const READ_EVERY_MS = 1000;
 
-/** `looking` is the Listen screen being open; a draft playing keeps the bar live anywhere. */
+/** `looking` is Listen open or the draft linked; a draft playing keeps the bar live anywhere. */
 export function usePlayer(draftId: string, looking: boolean) {
   const [view, setView] = useState<PlayerView>();
   const [readAt, setReadAt] = useState(0);

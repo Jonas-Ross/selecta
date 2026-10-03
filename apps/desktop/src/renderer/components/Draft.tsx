@@ -83,7 +83,6 @@ export function Draft({
   const [added, setAdded] = useState('');
   const [tab, setTab] = useState<'dig' | 'listen'>('dig');
   const [cued, setCued] = useState<string>();
-  const player = usePlayer(draftId, tab === 'listen');
   const [clock, setClockNow] = useState(() => performance.now());
 
   const load = useCallback(
@@ -107,6 +106,8 @@ export function Draft({
   const items = pendingOrder(rows(view ?? {}), pending);
   const saved = draft?.save !== undefined;
   const linked = previewLinked(view ?? {});
+  // Linked, Music may be playing this draft whatever the tab, after a remount or mid-sync too.
+  const player = usePlayer(draftId, tab === 'listen' || linked);
   const locked = saved || saving || leaving;
   const sum = totals(items);
   const inDraft = useMemo(() => new Set(items.map((row) => row.track_id)), [items]);
