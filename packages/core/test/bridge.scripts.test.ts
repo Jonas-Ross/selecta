@@ -250,6 +250,10 @@ describe('player script contract', () => {
     // One track played alone stops Music.app after it, so the playlist is what starts.
     expect(script).not.toContain('Music.play(pl.tracks');
     // The volume is the user's; quiet steps pause instead.
+    // A restarted queue is paused as soon as it plays, before anything waits on it.
+    expect(script.indexOf('Music.play(pl)')).toBeLessThan(
+      script.indexOf('if (!quiet) return true;'),
+    );
     expect(script).not.toContain('soundVolume');
     expect(script.indexOf('if (quiet && !pause())')).toBeLessThan(
       script.indexOf('Music.nextTrack()'),

@@ -152,15 +152,24 @@ export function buildPlayPreviewScript(input: {
       const route = restart ? 'started' : from > target ? 'back from ' + from : from < target ? 'on from ' + from : 'seek';
       let landed = false;
       try {
-        if (restart) {
-          Music.play(pl);
-          from = 1;
-          if (!until(function () { return at() === 1; })) return JSON.stringify({ stepMissed: true });
-        }
+        if (restart) from = 1;
         // Paused only when records passed on the way, or a record's start before the seek,
         // would be heard; one step with nothing to seek is a plain Next. Volume is the user's.
         const quiet = Math.abs(target - from) > 1 || (from !== target && (args.position || 0) > 0);
-        if (quiet && !pause()) return JSON.stringify({ stepMissed: true });
+        if (restart) {
+          Music.play(pl);
+          // Paused the moment it is heard playing, so only a beat of the first record leaks.
+          let heard = false;
+          const started = until(function () {
+            if (at() !== 1) return false;
+            if (String(Music.playerState()) !== 'playing') return heard;
+            heard = true;
+            if (!quiet) return true;
+            Music.pause();
+            return false;
+          });
+          if (!started) return JSON.stringify({ stepMissed: true });
+        } else if (quiet && !pause()) return JSON.stringify({ stepMissed: true });
         // previousTrack restarts a record that's playing past its start, so rewind it first.
         for (let entry = from - 1; entry >= target; entry--) {
           Music.playerPosition = 0;
