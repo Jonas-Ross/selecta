@@ -214,9 +214,13 @@ describe('player script contract', () => {
     const script = buildControlPlayerScript({ action: 'pause', on });
 
     expect(script.indexOf('elsewhere')).toBeLessThan(script.indexOf('Music.pause()'));
-    expect(script).toContain('Music.currentPlaylist.persistentID() !== args.on.playlistId');
-    expect(script).toContain('t.index() !== args.on.index');
-    expect(script).toContain('t.persistentID() !== args.on.trackId');
+    expect(script).toContain('Music.currentPlaylist.persistentID() === args.on.playlistId');
+    expect(script).toContain('t.index() === args.on.index');
+    expect(script).toContain('t.persistentID() === args.on.trackId');
+    // Every pause retry re-checks the entry first.
+    expect(script).toContain(
+      'if (attempt > 0 && !here()) return JSON.stringify({ elsewhere: true });',
+    );
   });
 
   it('resumes only what is paused and seeks only what is loaded', async () => {
@@ -269,6 +273,8 @@ describe('player script contract', () => {
     expect(script.indexOf('} finally {')).toBeLessThan(script.indexOf('leftPlaying'));
     // Cleanup never pauses music the user moved on to.
     expect(script).toContain('if (!landed && ours && !pause())');
+    // A restarted play that seeks is paused first, so the record's start isn't heard.
+    expect(script).toContain('(restart || from !== target) && (args.position || 0) > 0');
     // A seek that never lands fails before anything resumes.
     expect(script.indexOf('seekMissed')).toBeLessThan(script.indexOf("=== 'paused') Music.play()"));
     expect(script).not.toMatch(NO_WRITES);

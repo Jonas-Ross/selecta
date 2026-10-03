@@ -56,19 +56,22 @@ export function buildControlPlayerScript(input: PlayerControl): string {
     `${READ_PLAYER}
       if (!Music.running()) return JSON.stringify({ running: false });
       const state = String(Music.playerState());
-      try {
-        const t = Music.currentTrack;
-        if (Music.currentPlaylist.persistentID() !== args.on.playlistId ||
-          t.index() !== args.on.index || t.persistentID() !== args.on.trackId) {
-          return JSON.stringify({ elsewhere: true });
+      const here = function () {
+        try {
+          const t = Music.currentTrack;
+          return Music.currentPlaylist.persistentID() === args.on.playlistId &&
+            t.index() === args.on.index && t.persistentID() === args.on.trackId;
+        } catch (e) {
+          return false;
         }
-      } catch (e) {
-        return JSON.stringify({ elsewhere: true });
-      }
+      };
+      if (!here()) return JSON.stringify({ elsewhere: true });
       // A pause can be ignored, so it is retried until it reads back; callers rely on it.
+      // Each retry re-checks the entry, so it never pauses music the user moved on to.
       if (args.action === 'pause' && state === 'playing') {
         let paused = false;
         for (let attempt = 0; attempt < 3 && !paused; attempt++) {
+          if (attempt > 0 && !here()) return JSON.stringify({ elsewhere: true });
           Music.pause();
           for (let tries = 0; tries < 20 && !paused; tries++) {
             delay(0.05);
@@ -153,9 +156,9 @@ export function buildPlayPreviewScript(input: {
       let landed = false;
       try {
         if (restart) from = 1;
-        // Paused only when records passed on the way, or a record's start before the seek,
+        // Paused only when records passed on the way, or a fresh record's start before the seek,
         // would be heard; one step with nothing to seek is a plain Next. Volume is the user's.
-        const quiet = Math.abs(target - from) > 1 || (from !== target && (args.position || 0) > 0);
+        const quiet = Math.abs(target - from) > 1 || ((restart || from !== target) && (args.position || 0) > 0);
         if (restart) {
           Music.play(pl);
           // Paused the moment it is heard playing, so only a beat of the first record leaks.
