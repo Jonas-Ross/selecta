@@ -116,3 +116,19 @@ it('asks once more for art that would not show, then reports it', async () => {
   expect(store.url(id(1))).toBeUndefined();
   expect(failed).toHaveBeenCalledOnce();
 });
+
+it('tells a listener that arrives later about a failure still standing', async () => {
+  const get = vi.fn().mockRejectedValue(new Error('Music.app is not running'));
+  const store = createArtworkStore(get);
+
+  store.subscribe(id(1), () => {});
+  await tick();
+
+  const late = vi.fn();
+
+  store.onFailure(late);
+  expect(late).toHaveBeenCalledExactlyOnceWith('Music.app is not running');
+  store.retry();
+  store.onFailure(late);
+  expect(late).toHaveBeenCalledOnce();
+});

@@ -14,7 +14,8 @@ export function createArtworkStore(get: Get) {
   const listeners = new Map<string, Set<() => void>>();
   const failures = new Set<(message: string) => void>();
   const asked = new Set<string>();
-  const failed = new Set<string>();
+  // Why each failed lookup failed, kept so a notice opened later still hears it.
+  const failed = new Map<string, string>();
   const reloaded = new Set<string>();
   let batch: string[] = [];
 
@@ -24,13 +25,10 @@ export function createArtworkStore(get: Get) {
     for (const listener of listeners.get(id) ?? []) listener();
   }
 
-  function fail(id: string, message: string): string[] {
-    failed.add(id);
-
-    return [message];
+  function fail(id: string, message: string) {
+    failed.set(id, message);
+    failures.forEach((listener) => listener(message));
   }
-
-  const report = (message: string) => failures.forEach((listener) => listener(message));
 
   function flush() {
     const ids = batch;
@@ -41,23 +39,14 @@ export function createArtworkStore(get: Get) {
       const chunk = ids.slice(start, start + ARTWORK_GET_LIMIT);
 
       get({ track_ids: chunk }).then(
-        (files) => {
-          const errors = chunk.flatMap((id) => {
+        (files) =>
+          chunk.forEach((id) => {
             const file = files[id] ?? null;
 
-            if (typeof file === 'object' && file !== null) return fail(id, file.error);
-
-            settle(id, file);
-
-            return [];
-          });
-
-          if (errors.length > 0) report(errors[0]!);
-        },
-        (error: Error) => {
-          chunk.forEach((id) => fail(id, error.message));
-          report(error.message);
-        },
+            if (typeof file === 'object' && file !== null) fail(id, file.error);
+            else settle(id, file);
+          }),
+        (error: Error) => chunk.forEach((id) => fail(id, error.message)),
       );
     }
   }
@@ -93,8 +82,7 @@ export function createArtworkStore(get: Get) {
       answers.delete(id);
 
       if (reloaded.has(id)) {
-        failed.add(id);
-        report(`The album art file for ${id} can't be shown.`);
+        fail(id, `the album art file for ${id} can't be shown`);
       } else {
         reloaded.add(id);
         asked.delete(id);
@@ -105,15 +93,20 @@ export function createArtworkStore(get: Get) {
     },
     /** Asks again for every failed lookup still on screen; the rest ask when they next appear. */
     retry() {
-      for (const id of failed) {
+      for (const id of failed.keys()) {
         failed.delete(id);
         asked.delete(id);
 
         if (listeners.has(id)) request(id);
       }
     },
+    /** Hears every failure from now on, and at once the latest still standing. */
     onFailure(listener: (message: string) => void): () => void {
       failures.add(listener);
+
+      const standing = [...failed.values()].at(-1);
+
+      if (standing !== undefined) listener(standing);
 
       return () => failures.delete(listener);
     },
