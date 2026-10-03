@@ -207,17 +207,29 @@ describe('player script contract', () => {
     expect(script).not.toMatch(NO_WRITES);
   });
 
+  const on = { playlistId: 'P-SLOT', index: 2, trackId: 'T' };
+
+  it('acts only while Music.app is still on the entry the caller saw', async () => {
+    const { buildControlPlayerScript } = await import('../src/bridge/scripts/player.js');
+    const script = buildControlPlayerScript({ action: 'pause', on });
+
+    expect(script.indexOf('elsewhere')).toBeLessThan(script.indexOf('Music.pause()'));
+    expect(script).toContain('Music.currentPlaylist.persistentID() !== args.on.playlistId');
+    expect(script).toContain('t.index() !== args.on.index');
+    expect(script).toContain('t.persistentID() !== args.on.trackId');
+  });
+
   it('resumes only what is paused and seeks only what is loaded', async () => {
     const { buildControlPlayerScript } = await import('../src/bridge/scripts/player.js');
 
-    expect(buildControlPlayerScript({ action: 'resume' })).toContain(
+    expect(buildControlPlayerScript({ action: 'resume', on })).toContain(
       "if (args.action === 'resume' && state === 'paused') Music.play();",
     );
-    expect(buildControlPlayerScript({ action: 'seek', position: 60 })).toContain(
+    expect(buildControlPlayerScript({ action: 'seek', position: 60, on })).toContain(
       "if (args.action === 'seek' && state !== 'stopped') Music.playerPosition = args.position;",
     );
-    expect(buildControlPlayerScript({ action: 'pause' })).not.toMatch(NO_WRITES);
-    expect(() => buildControlPlayerScript({ action: 'seek', position: -1 })).toThrow(
+    expect(buildControlPlayerScript({ action: 'pause', on })).not.toMatch(NO_WRITES);
+    expect(() => buildControlPlayerScript({ action: 'seek', position: -1, on })).toThrow(
       expect.objectContaining({ errorCode: 'validation_error' }),
     );
   });

@@ -99,7 +99,10 @@ it('names the playing entry by its place in the preview, so repeats stay apart',
     state: 'paused',
     entry_id: entries[2].entry_id,
   });
-  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({ action: 'pause' });
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 3, trackId: A },
+  });
 });
 
 it('detaches the preview so the draft is local again', async () => {
@@ -107,9 +110,24 @@ it('detaches the preview so the draft is local again', async () => {
 
   await player.play(draft_id, 1, entries[0].entry_id);
   await player.detach(draft_id, 1);
-  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({ action: 'pause' });
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 3, trackId: A },
+  });
   expect(deps.drafts!().preview()?.status).toBe('inactive');
   expect((await player.state(draft_id)).entry_id).toBeUndefined();
+});
+
+it("won't pause, resume or seek music that isn't this draft", async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, 'T-OTHER'),
+    playlist: { persistentId: 'P-GYM', name: 'Gym' },
+  });
+  await expect(player.control(draft_id, { action: 'resume' })).rejects.toThrow(/isn't playing/);
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
 });
 
 it('leaves Music playing when it has moved off the draft before detaching', async () => {

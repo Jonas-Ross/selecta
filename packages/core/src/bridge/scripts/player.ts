@@ -35,10 +35,14 @@ export function buildReadPlayerScript(): string {
   );
 }
 
-export type PlayerControl =
+// The entry the caller saw playing; the control acts only while Music.app is still on it.
+export type PlayerEntry = { playlistId: string; index: number; trackId: string };
+
+export type PlayerControl = (
   | { action: 'pause' }
   | { action: 'resume' }
-  | { action: 'seek'; position: number };
+  | { action: 'seek'; position: number }
+) & { on: PlayerEntry };
 
 export function buildControlPlayerScript(input: PlayerControl): string {
   if (input.action === 'seek' && !(Number.isFinite(input.position) && input.position >= 0))
@@ -52,6 +56,15 @@ export function buildControlPlayerScript(input: PlayerControl): string {
     `${READ_PLAYER}
       if (!Music.running()) return JSON.stringify({ running: false });
       const state = String(Music.playerState());
+      try {
+        const t = Music.currentTrack;
+        if (Music.currentPlaylist.persistentID() !== args.on.playlistId ||
+          t.index() !== args.on.index || t.persistentID() !== args.on.trackId) {
+          return JSON.stringify({ elsewhere: true });
+        }
+      } catch (e) {
+        return JSON.stringify({ elsewhere: true });
+      }
       if (args.action === 'pause' && state === 'playing') Music.pause();
       // play() with nothing paused would start whatever Music.app last had queued.
       if (args.action === 'resume' && state === 'paused') Music.play();

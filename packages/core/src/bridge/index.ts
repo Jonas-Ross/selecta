@@ -200,7 +200,16 @@ export const bridge: Bridge = {
     return runJxa(buildReadPlayerScript(), schemas.player);
   },
   async controlPlayer(input) {
-    return runJxa(buildControlPlayerScript(input), schemas.player);
+    const result = await runJxa(buildControlPlayerScript(input), schemas.controlPlayer);
+
+    if ('elsewhere' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'Music.app has moved off that record.',
+        'Nothing was changed. Read the player again before controlling it.',
+      );
+
+    return result;
   },
   async playPreview(input) {
     const result = await runJxa(buildPlayPreviewScript(input), schemas.playPreview);

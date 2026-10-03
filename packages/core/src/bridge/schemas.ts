@@ -174,6 +174,7 @@ export const player = z.union([
     playlist: z.object({ persistentId: id, name: z.string() }).optional(),
   }),
 ]);
+export const controlPlayer = z.union([z.strictObject({ elsewhere: z.literal(true) }), player]);
 export const playPreview = z.union([
   z.strictObject({ playlistNotFound: z.literal(true) }),
   z.strictObject({ notEditable: z.literal(true) }),

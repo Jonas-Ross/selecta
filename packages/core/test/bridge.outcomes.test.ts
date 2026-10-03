@@ -282,6 +282,13 @@ describe('player boundary', () => {
     },
   );
 
+  it('refuses a control once Music.app has moved off the entry', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ elsewhere: true });
+    await expect(
+      bridge.controlPlayer({ action: 'pause', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'preview_conflict' });
+  });
+
   it.each([
     [{ playlistNotFound: true }, 'playlist_not_found'],
     [{ ambiguousPreview: true }, 'validation_error'],
@@ -306,6 +313,13 @@ describe('player boundary', () => {
 
 describe('guarded preview navigation', () => {
   const invoke = () => bridge.openPreview({ expectedTrackIds: ['A', 'B', 'A'] });
+
+  it('refuses a control once Music.app has moved off the entry', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ elsewhere: true });
+    await expect(
+      bridge.controlPlayer({ action: 'pause', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'preview_conflict' });
+  });
 
   it.each([
     [{ playlistNotFound: true }, 'playlist_not_found'],

@@ -15,6 +15,8 @@ type Envelope = {
   preview_result?: { error?: string; hint?: string };
 };
 
+type Control = { action: 'pause' } | { action: 'resume' } | { action: 'seek'; position: number };
+
 export type PlayerDeps = {
   bridge: Bridge;
   cache: () => SelectaCache;
@@ -87,6 +89,24 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
     return playerView(player, draft, slot);
   };
 
+  // The entry Music.app is on, read fresh, when it belongs to this draft; the bridge
+  // re-checks it in the same call that acts, so a stale screen can't drive other music.
+  const onThisDraft = async (draftId: string) => {
+    const player = await bridge.readPlayer();
+
+    if (!player.running || show(draftId, player).entry_id === undefined) return undefined;
+
+    const { playlist, track, index } = player;
+
+    if (!playlist || !track || index === undefined) return undefined;
+
+    return {
+      playlistId: playlist.persistentId,
+      index,
+      trackId: track.persistentId,
+    };
+  };
+
   return {
     state: async (draftId: string) => show(draftId, await bridge.readPlayer()),
 
@@ -126,16 +146,20 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
       return show(draftId, played.player);
     },
 
-    control: async (
-      draftId: string,
-      input: { action: 'pause' } | { action: 'resume' } | { action: 'seek'; position: number },
-    ) => show(draftId, await bridge.controlPlayer(input)),
+    async control(draftId: string, input: Control) {
+      const on = await onThisDraft(draftId);
+
+      if (!on) throw new Error("Music isn't playing this draft, so nothing was changed.");
+
+      return show(draftId, await bridge.controlPlayer({ ...input, on }));
+    },
 
     // Releases the link so Claude can edit again; Music.app keeps the playlist as it is.
     // Pauses first only if Music is playing this draft, never something the user moved on to.
     async detach(draftId: string, revision: number) {
-      if (show(draftId, await bridge.readPlayer()).entry_id !== undefined)
-        await bridge.controlPlayer({ action: 'pause' });
+      const on = await onThisDraft(draftId);
+
+      if (on) await bridge.controlPlayer({ action: 'pause', on });
 
       const response = await preview({ draft_id: draftId, revision, mode: 'detach' });
       const problem = failure(response);

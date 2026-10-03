@@ -225,8 +225,11 @@ export interface Bridge {
 
   // Pause, resume what is paused, or seek what is loaded; never launches Music.app
   // and never starts playback from nothing.
+  // Acts only while Music.app is still on `on`, checked in the same call.
   controlPlayer(
-    input: { action: 'pause' } | { action: 'resume' } | { action: 'seek'; position: number },
+    input: ({ action: 'pause' } | { action: 'resume' } | { action: 'seek'; position: number }) & {
+      on: { playlistId: string; index: number; trackId: string };
+    },
   ): Promise<PlayerState>;
 
   // Play one entry (0-based) of the reserved preview, only while its full live
