@@ -89,6 +89,20 @@ Dictionary evidence: `/System/Applications/Music.app/Contents/Resources/com.appl
 
 If lock cleanup fails after reveal, the tool retains `opened`, target ID and count alongside the error and lock recovery guidance. A failed navigation plus failed cleanup preserves the original navigation error. Inspect the returned outcome rather than repeating blindly.
 
+## Playback
+
+Probed live 2026-10-03 against a 16-entry Selecta Preview (`src/bridge/scripts/player.ts` holds the scripts):
+
+- **Playing one track stops after it.** `Music.play(playlist.tracks[i])` reports the playlist as `currentPlaylist` and `currentTrack.index()` as the 1-based entry, yet Music goes to stopped when that track ends, with or without `once`. Only `Music.play(playlist)` gives Music a queue it carries on through (entry 3 handed over to entry 4 on its own, AutoMix on). So Listen plays the playlist and steps with `nextTrack()` to the entry. There's no command to jump within the queue, so a step past other records, or into a record about to be seeked, happens paused so nothing on the way is heard; a single step with no seek is a plain Next. The volume is never touched: an earlier build muted while stepping, and a mute and restore sent milliseconds apart lost the restore, leaving Music at 0. A lone track reads exactly like a queued one (same `currentPlaylist`, same index), and the Up Next list isn't scriptable, so only a queue the app started itself in this run is trusted: within it a join on the record playing is a seek and other entries are stepped to, back with `previousTrack()` from position 0 (past the start it would restart the record instead). Anything else, including Music stopped or off the preview since, starts the playlist over. `play(playlist)` restarts at entry 1 whether Music was stopped or paused in it; earlier reads that it did nothing, or that stop-then-play left Music stopped, were taken with Music's Settings window open, which swallows play commands. Stepping either way worked paused or playing.
+- **Commands land a beat late.** Straight after `play(playlist)`, `pause()` or `nextTrack()`, a read still shows the old state, and a `pause()` fired at once may not take. Each step waits until the index reads back before the next.
+- **`currentTrack.index()` tells repeated tracks apart** where a persistent ID can't.
+- **Stopped means no current track.** `currentTrack` and `currentPlaylist` throw "Can't get object" and `playerPosition()` is null. Reading `running()` first keeps a closed Music closed.
+- **`playerPosition` is settable** and reads back within a second. `pause()` and a bare `play()` (resume) work, but a read straight after `pause()` can still say playing, so the control script waits 0.3 s before it reads back.
+- **JXA has a global `delay`.** A script that declares its own `const delay` fails to compile.
+- **A track that plays to its end counts as a play.** Probes that let tracks finish move the user's play counts, so probe by seeking and pausing, not by listening through.
+
+The 2026-09-29 AutoMix spike put the blend's lead at about 45 s, but in use 45 s sometimes missed the blend, so Listen's "Hear the join" leads in 60 s. With shuffle on, Music would carry on through the draft out of order, so a play is refused while `shuffleEnabled()` is true. A start that fails partway is paused, with read-back, and reported if Music won't pause.
+
 ## Linked draft preview guard
 
 `preview_playlist_draft` links an explicitly started draft audition to the shared reserved slot. Requested ordered-track edits then synchronize it without separate refresh approval. The replacement JXA validates expected live IDs (including duplicates and order) before any clear/create in the same call. A missing slot or drift returns `preview_conflict` without mutation. The check cannot make Music.app/iCloud transactional; changes during population remain possible and destination readback must match before the preview is marked current. Name, selection and feedback-only draft changes never replace the slot.

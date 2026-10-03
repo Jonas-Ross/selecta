@@ -1,6 +1,6 @@
 # Desktop app
 
-`apps/desktop` is the second front end on `@selecta/core`: brief, Claude builds a draft, you reorder and give feedback, you save. The look is the approved "Dig" direction (graphite ground, hairlines, UV for what you touch, acid kept for "now"), arriving in phases. Phase 1 restyled every screen and drew the draft as a rail. Phase 2 adds the crate to dig through and album art from Music.app; phase 3 adds playback, so there is no transport bar yet.
+`apps/desktop` is the second front end on `@selecta/core`: brief, Claude builds a draft, you reorder and give feedback, you save. The look is the approved "Dig" direction (graphite ground, hairlines, UV for what you touch, acid kept for "now"), arriving in phases. Phase 1 restyled every screen and drew the draft as a rail. Phase 2 added the crate to dig through and album art from Music.app; phase 3 adds Listen, which plays the draft through Music.app.
 
 ## Processes
 
@@ -14,6 +14,8 @@ The host runs outside Electron so `better-sqlite3` keeps the one native build th
 
 The method table in `src/host/api.ts` is the whole surface, typed in `src/shared/protocol.ts`. Add a method when a screen needs one, never speculatively.
 
+The host keeps a local action log at `~/Library/Logs/Selecta/desktop.log` (`src/host/actions.ts`), one JSON line per call with its arguments, duration and outcome, plus each Claude run event, so a session can be debugged after the fact. It is on without `SELECTA_DEBUG`, since it is how a playback report gets debugged, so what you and Claude write is reduced to its length. Polled reads are left out unless they fail, and the player's state only when it changes. It rolls over to `desktop.log.1` past 5 MB and stays on the Mac.
+
 ## The renderer
 
 `src/renderer/app.tsx` only switches screens and keeps each draft's run record. Screens and their parts live in `src/renderer/components/`, one per file; anything with logic worth testing is a pure module beside them, tested in `test/` without a DOM:
@@ -26,8 +28,9 @@ The method table in `src/host/api.ts` is the whole surface, typed in `src/shared
 | `facts.ts` | Where a tempo or key came from and how sure it was, in words |
 | `springs.ts`, `reorder.ts` | The spring step and settle test, and where a dragged or carried record lands |
 | `crate.ts`, `flight.ts` | How each record in the crate stands and shades, flick and wheel flips, and the arc a record flies from the crate to the rail |
+| `listen.ts` | Which record is playing, the live position between reads, set time, where a join starts, and the key wheel's geometry |
 
-Styles are split by concern, all built from the custom properties in `tokens.css`: `base.css` (reset, buttons, notices), `chrome.css` (top bar, save card), `home.css` (Home and Brief), `crate.css`, `rail.css`, `panel.css` (Claude), `explain.css`. The fonts are the website's, copied into `src/renderer/fonts/` and served from the bundle, since the page's CSP allows only `'self'`. The window uses an inset title bar, so the top bar is the drag region and leaves the traffic lights 80px.
+Styles are split by concern, all built from the custom properties in `tokens.css`: `base.css` (reset, buttons, notices), `chrome.css` (top bar, save card), `home.css` (Home and Brief), `crate.css`, `listen.css`, `rail.css`, `panel.css` (Claude), `explain.css`. The fonts are the website's, copied into `src/renderer/fonts/` and served from the bundle, since the page's CSP allows only `'self'`. The window uses an inset title bar, so the top bar is the drag region and leaves the traffic lights 80px.
 
 ### The crate
 
@@ -39,7 +42,13 @@ Records stand on the rail in draft order at equal spacing and scroll sideways pa
 
 Each record's slot is a spring (`components/Rail.tsx`). A drag lifts the record and the others slide to open a slot; Claude's edits and removals move records the same way, matched by entry ID; and the lanes and joins are redrawn every frame from where the records are, so the set's shape shows before a drop. A lifted record's caption fades out, and a join squeezed narrower than its words drops them and keeps only the glyph and tempo step. Only the joins and labels in view are drawn, which keeps an 80-track draft at frame rate. Drag is pointer events, not HTML5 drag and drop, and the keyboard does the same: arrows move focus, Alt+arrows move the record, Delete removes it, Enter or Space selects it. Reordering and removal wait while a save or another edit holds the draft, and the last record cannot be removed. With reduced motion, records snap and fade in place instead of travelling. A drop or removal shows its new order at once, but the write still goes through the edit queue and its revision check: if the edit fails, the stored order comes back and the notice says why.
 
-Selecting records only names the subject of the next message to Claude, as chips above the feedback box. Save asks first in a card that says what will be written, after any queued edits have landed. While a draft is saved, linked to the preview, or saving, the rail locks and the head says why.
+Selecting records only names the subject of the next message to Claude, as chips above the feedback box. Save asks first in a card that says what will be written, after any queued edits have landed. While a draft is saved or saving, the rail locks and the head says why.
+
+### Listen
+
+The draft head switches the band above the rail between Dig (the crate) and Listen. Listen shows the record playing large, its facts on the sleeve back, the join into the next record and a Camelot wheel tracing the set's route; the transport bar under the rail is there in both. Music.app does the playing, so Selecta never touches audio: Play fills the Selecta Preview playlist with the draft through core's `preview_playlist_draft` start, which links the draft, then plays that playlist and steps to the chosen entry (`src/host/player.ts`), since Music stops after a track played on its own. Playing the playlist keeps Music's own continuation and AutoMix between records. "Hear the join" starts the outgoing record 60 s before its end, which leaves AutoMix room to blend. A play steps or seeks within the queue only when the host started it in this run and Music hasn't stopped or left the preview since; otherwise it starts the playlist over, because a track played on its own looks the same from a script and carries on to nothing.
+
+While linked, your edits on the rail or from the crate keep the playlist in step through core's guarded sync, so the next record Music plays is the one you see. Claude can't edit a linked draft (below), so feedback waits until you stop listening, which pauses Music and detaches the draft. The renderer reads Music's player about once a second while Listen is open or this draft is playing, and draws the position between reads. A record is marked as playing only when Music is on Selecta Preview, the playlist is in step with this draft's order, and the entry at Music's index holds the same track, so a repeated track is told apart by its place. A read that fails stops the polling until you act, with the reason shown.
 
 ## The agent
 
@@ -52,7 +61,7 @@ Each turn is one `claude -p --output-format stream-json` run on the user's own C
 
 Claude never saves. Save is the app's button, calling the same revision-checked operation as `save_playlist_draft`. A recorded save attempt, good or uncertain, blocks another from the app, as it does over MCP.
 
-A draft linked to the Selecta Preview playlist (started with `preview_playlist_draft` over MCP) is read-only in the app, for you and for Claude. Core mirrors every ordered edit of a linked draft into that Music.app playlist, and the app's only Music write is Save. Detach the preview where it was started to edit the draft here. The refusal is the draft store's local-only mode, checked inside the write transaction, so a preview linked mid-run can't slip an agent edit through to Music; the agent's MCP server gets the mode through `SELECTA_LOCAL_DRAFTS=1`.
+Claude can't edit a draft linked to the Selecta Preview playlist, whether Listen or `preview_playlist_draft` over MCP linked it, and the app refuses to start a run on one. Core mirrors every ordered edit of a linked draft into that Music.app playlist, and Claude's only route to Music stays closed. The refusal is the draft store's local-only mode, checked inside the write transaction, so a preview linked mid-run can't slip an agent edit through to Music; the agent's MCP server gets the mode through `SELECTA_LOCAL_DRAFTS=1`. The host's own store is not local-only, so your edits sync the preview. The app's Music writes are Save, and filling and playing Selecta Preview from Listen.
 
 The app mints the draft ID and passes it in the brief, so the screen can open before the draft exists. Later turns `--resume` the session the first turn reported, and always tell Claude to re-read the draft, since the user may have reordered it. Sessions are held in memory: after a restart, feedback starts a fresh session on the same draft. Leaving a draft doesn't stop Claude: the host keeps each draft's numbered run record and the app replays it after a reload or a missed event, so a run that finishes or fails while you're elsewhere is there when you reopen it, and a build that failed before creating its draft stays on Home to retry. `SELECTA_CLAUDE_PATH` overrides the `claude` binary.
 

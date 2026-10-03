@@ -247,6 +247,35 @@ const TERMS = {
       </p>
     ),
   },
+  automix: {
+    title: 'AutoMix',
+    body: (
+      <>
+        <p>
+          Music.app's own blend from one track into the next. Selecta asks Music to play, and Music
+          does the mixing.
+        </p>
+        <p>
+          It needs the outgoing track's last minute or so, so a join starts a minute before the end.
+        </p>
+      </>
+    ),
+  },
+  preview: {
+    title: 'Selecta Preview',
+    body: (
+      <>
+        <p>
+          A playlist in Music.app that Listen fills with this draft, so Music plays it in order and
+          blends each join.
+        </p>
+        <p>
+          While it plays, your edits update it too. Claude waits until you stop listening, and the
+          draft is saved as its own playlist only when you press Save.
+        </p>
+      </>
+    ),
+  },
   time: {
     title: 'Set time',
     body: (

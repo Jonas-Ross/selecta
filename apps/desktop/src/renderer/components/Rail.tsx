@@ -89,6 +89,10 @@ export type RailProps = {
   selected: Set<string>;
   locked: boolean;
   onToggle: (entryId: string) => void;
+  // What Enter or a click does to a record, for its label.
+  pickVerb?: string;
+  // The entry Music.app is playing from this draft, marked on the rail.
+  now?: string;
   onClear: () => void;
   onMove: (entryId: string, to: number) => void;
   onRemove: (entryId: string) => void;
@@ -102,6 +106,8 @@ export function Rail({
   selected,
   locked,
   onToggle,
+  pickVerb = 'selects',
+  now,
   onClear,
   onMove,
   onRemove,
@@ -731,6 +737,7 @@ export function Rail({
                       row.bpm === undefined ? 'tempo not measured' : `${Math.round(row.bpm)} BPM`,
                       row.camelot ?? 'key not measured',
                       ...(isSelected ? ['selected for feedback'] : []),
+                      ...(id === now ? ['now playing'] : []),
                     ].join(', ');
 
                     return (
@@ -740,10 +747,11 @@ export function Rail({
                           if (node) recs.current.set(id, node);
                           else recs.current.delete(id);
                         }}
-                        className={`rec${isSelected ? ' sel' : ''}${isHeld ? ' held' : ''}${leaving ? ' leaving' : ''}`}
+                        className={`rec${isSelected ? ' sel' : ''}${id === now ? ' now' : ''}${isHeld ? ' held' : ''}${leaving ? ' leaving' : ''}`}
                         role="listitem"
                         tabIndex={leaving ? -1 : 0}
-                        aria-label={`${label}. Enter selects${locked ? '' : ', Alt and arrow keys move it, Delete removes it'}.`}
+                        aria-current={id === now ? 'true' : undefined}
+                        aria-label={`${label}. Enter ${pickVerb}${locked ? '' : ', Alt and arrow keys move it, Delete removes it'}.`}
                         style={{
                           width: shelf.size,
                           height: shelf.size,
