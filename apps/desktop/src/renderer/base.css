@@ -10,7 +10,7 @@ body {
 body {
   background: var(--bg);
   color: var(--ink);
-  font: 400 14px/1.45 var(--body);
+  font: 400 var(--fs-base)/1.45 var(--body);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   user-select: none;

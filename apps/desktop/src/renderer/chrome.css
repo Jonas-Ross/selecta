@@ -50,7 +50,7 @@ button.brand:hover .wordmark {
   fill: var(--uv);
 }
 .wordmark {
-  font: 800 14px/1 var(--display);
+  font: 800 var(--fs-base)/1 var(--display);
   font-stretch: 125%;
   letter-spacing: -0.01em;
   transition: color var(--t-fast);
@@ -59,7 +59,7 @@ button.brand:hover .wordmark {
   color: var(--ink4);
 }
 .crumb-title {
-  font: 600 14px/1 var(--body);
+  font: 600 var(--fs-base)/1 var(--body);
 }
 .crumb-name {
   field-sizing: content;
@@ -70,7 +70,7 @@ button.brand:hover .wordmark {
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: none;
-  font: 600 14px/1 var(--body);
+  font: 600 var(--fs-base)/1 var(--body);
   outline: none;
   transition:
     border-color var(--t-mid),
@@ -87,7 +87,7 @@ button.brand:hover .wordmark {
   color: var(--ink);
 }
 .rev {
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--ink3);
 }
 .topbar-right {

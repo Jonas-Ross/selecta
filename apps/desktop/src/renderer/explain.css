@@ -24,13 +24,13 @@
   margin-bottom: 7px;
 }
 .tip-head b {
-  font: 700 12px/1.2 var(--display);
+  font: 700 var(--fs-heading)/1.2 var(--display);
   font-stretch: 125%;
   letter-spacing: 0.01em;
 }
 .tip-head .mono {
   margin-left: auto;
-  font-size: 10px;
+  font-size: var(--fs-tiny);
   color: var(--ink3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -54,7 +54,7 @@
   grid-template-columns: auto 1fr;
   gap: 3px var(--s3);
   margin: var(--s1) 0 0;
-  font-size: 12px;
+  font-size: var(--fs-heading);
 }
 .tip .tip-row {
   display: contents;
@@ -78,7 +78,7 @@
 }
 .tip-fig figcaption {
   margin-top: var(--s1);
-  font: 400 10px var(--mono);
+  font: 400 var(--fs-tiny) var(--mono);
   color: var(--ink3);
 }
 .fig-base {
@@ -95,7 +95,7 @@
   stroke: var(--line2);
 }
 .fig-num {
-  font: 400 8.5px var(--mono);
+  font: 400 var(--fs-fig) var(--mono);
   text-anchor: middle;
   fill: var(--ink4);
 }
@@ -106,7 +106,7 @@
   fill: var(--uv-text);
 }
 .fig-note {
-  font: 400 9.5px var(--body);
+  font: 400 var(--fs-micro) var(--body);
   fill: var(--ink3);
 }
 .fig-note.end {

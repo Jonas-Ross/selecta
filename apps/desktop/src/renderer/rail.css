@@ -27,7 +27,7 @@
   min-width: 0;
 }
 .draft-head h2 {
-  font: 700 12px/1 var(--display);
+  font: 700 var(--fs-heading)/1 var(--display);
   font-stretch: 125%;
   letter-spacing: 0.02em;
 }
@@ -98,9 +98,10 @@
   position: absolute;
   white-space: nowrap;
 }
+/* The tempo and key titles run on past the gutter, over the lane's empty top edge. */
 .lane-title {
   left: var(--s5);
-  font: 400 10px var(--mono);
+  font: 400 var(--fs-tiny) var(--mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink3);
@@ -108,15 +109,14 @@
 .lane-title .unit {
   color: var(--ink4);
 }
-/* The tempo and key titles run on past the gutter, over the lane's empty top edge. */
 .axis {
   right: var(--s2);
-  font: 400 10px var(--mono);
+  font: 400 var(--fs-tiny) var(--mono);
   color: var(--ink3);
 }
 .band {
   right: 10px;
-  font: 400 10px var(--mono);
+  font: 400 var(--fs-tiny) var(--mono);
   color: var(--ink3);
 }
 
@@ -223,7 +223,7 @@
 .value {
   padding: 1px 2px;
   border-radius: var(--r-xs);
-  font: 400 10px var(--mono);
+  font: 400 var(--fs-tiny) var(--mono);
   color: var(--ink2);
   white-space: nowrap;
   cursor: help;
@@ -242,7 +242,7 @@
 }
 .missing {
   translate: -50% 0;
-  font: 400 10px var(--mono);
+  font: 400 var(--fs-tiny) var(--mono);
   color: var(--ink3);
   white-space: nowrap;
 }
@@ -360,9 +360,7 @@
   overflow: hidden;
   border-radius: var(--r-xs);
   background: linear-gradient(160deg, var(--bg3), var(--bg1) 70%);
-  box-shadow:
-    0 30px 50px -24px rgba(0, 0, 0, 0.95),
-    0 6px 14px -6px rgba(0, 0, 0, 0.8);
+  box-shadow: var(--sleeve-shadow);
   transition:
     transform var(--t-mid) var(--ease-out),
     box-shadow var(--t-mid);
@@ -373,10 +371,10 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(rgba(200, 215, 255, 0.08), transparent 22%);
+  background: linear-gradient(var(--sleeve-light), transparent 22%);
   box-shadow:
-    inset 0 1px 0 rgba(220, 230, 255, 0.3),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    inset 0 1px 0 var(--sleeve-rim),
+    inset 0 0 0 1px var(--sleeve-edge);
   pointer-events: none;
   transition: box-shadow var(--t-fast);
 }
@@ -385,14 +383,12 @@
 }
 .rec:hover .sleeve::after {
   box-shadow:
-    inset 0 1px 0 rgba(220, 230, 255, 0.5),
+    inset 0 1px 0 var(--sleeve-rim-hot),
     inset 0 0 0 1px var(--line3);
 }
 .rec.held .sleeve {
   transform: none;
-  box-shadow:
-    0 40px 60px -20px rgba(0, 0, 0, 0.95),
-    0 14px 30px -8px rgba(0, 0, 0, 0.7);
+  box-shadow: var(--sleeve-shadow-held);
 }
 .rec.sel .sleeve::after {
   box-shadow: inset 0 0 0 2px var(--uv);
@@ -417,7 +413,7 @@
 }
 .sleeve-ring .label {
   stroke: var(--line3);
-  fill: rgba(150, 170, 210, 0.025);
+  fill: var(--label-fill);
 }
 .sleeve-ring .hole {
   fill: var(--ink4);
@@ -452,7 +448,7 @@
   width: 22px;
   height: 22px;
   border-radius: var(--r-sm);
-  background: rgba(10, 12, 16, 0.88);
+  background: var(--overlay);
   color: var(--ink2);
   box-shadow: inset 0 0 0 1px var(--line3);
   opacity: 0;

@@ -114,7 +114,7 @@ export function ClaudePanel({
             <span>About these tracks:</span>
             {selected.map((row) => (
               <span key={row.entry_id} className="s">
-                {row.title ?? row.track_id}
+                <span>{row.title ?? row.track_id}</span>
                 <button
                   type="button"
                   aria-label={`Stop talking about ${row.title ?? 'this track'}`}
