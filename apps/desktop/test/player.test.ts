@@ -196,10 +196,27 @@ it('still detaches when Music moves off the draft before the pause lands', async
   const { draft_id, entries } = draft();
 
   await player.play(draft_id, 1, entries[0].entry_id);
-  vi.mocked(deps.bridge.controlPlayer).mockRejectedValue(
+  vi.mocked(deps.bridge.controlPlayer).mockImplementationOnce(async () => {
+    vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+      ...playing(1, 'T-OTHER'),
+      playlist: { persistentId: 'P-GYM', name: 'Gym' },
+    });
+    throw new BridgeError('preview_conflict', 'Music.app has moved off that record.');
+  });
+  await player.detach(draft_id, 1);
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledTimes(1);
+  expect(deps.drafts!().preview()?.status).toBe('inactive');
+});
+
+it('pauses again when the preview moves on to its next record mid-stop', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValueOnce(
     new BridgeError('preview_conflict', 'Music.app has moved off that record.'),
   );
   await player.detach(draft_id, 1);
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledTimes(2);
   expect(deps.drafts!().preview()?.status).toBe('inactive');
 });
 

@@ -222,9 +222,9 @@ export function buildPlayPreviewScript(input: {
         if (!until(function () { return Math.abs(Music.playerPosition() - goal) < 2; })) {
           return JSON.stringify({ seekMissed: true });
         }
-        // The order is checked again here, since an edit or iCloud sync can land mid-step.
+        // Playlist and order are checked again here, since the user, an edit or iCloud can move them mid-step.
         const now = pl.tracks.length > 0 ? pl.tracks.persistentID() : [];
-        if (JSON.stringify(now) !== JSON.stringify(args.expectedTrackIds) ||
+        if (!ours() || JSON.stringify(now) !== JSON.stringify(args.expectedTrackIds) ||
           Music.currentTrack.persistentID() !== args.expectedTrackIds[args.index]) {
           return JSON.stringify({ orderDrifted: true });
         }

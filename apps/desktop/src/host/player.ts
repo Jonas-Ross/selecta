@@ -201,23 +201,32 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
     // Releases the link so Claude can edit again; Music.app keeps the playlist as it is.
     // Pauses first only if Music is playing this draft, never something the user moved on to.
     async detach(draftId: string, revision: number) {
-      // Music moving off the draft between the read and the pause leaves nothing to pause.
       await withOperation(cache(), 'music', async () => {
-        const on = await onThisDraft(draftId, true);
+        // A conflict means Music moved between the read and the pause; the preview may only
+        // have advanced to its next record, so it reads again rather than assume it's gone.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const on = await onThisDraft(draftId, true);
 
-        if (!on) return;
+          if (!on) return;
 
-        const after = await bridge.controlPlayer({ action: 'pause', on }).catch((e: unknown) => {
-          if (!(e instanceof BridgeError && e.errorCode === 'preview_conflict')) throw e;
-        });
+          const after = await bridge.controlPlayer({ action: 'pause', on }).catch((e: unknown) => {
+            if (!(e instanceof BridgeError && e.errorCode === 'preview_conflict')) throw e;
+          });
 
-        // Resumed in Music during the pause's settle: still ours and audible, so stay linked.
-        if (
-          after?.running &&
-          after.state === 'playing' &&
-          after.playlist?.persistentId === on.playlistId
-        )
-          throw new Error('Music is still playing the preview, so it stayed linked. Try again.');
+          if (!after) continue;
+
+          // Resumed in Music during the pause's settle: still ours and audible, so stay linked.
+          if (
+            after.running &&
+            after.state === 'playing' &&
+            after.playlist?.persistentId === on.playlistId
+          )
+            throw new Error('Music is still playing the preview, so it stayed linked. Try again.');
+
+          return;
+        }
+
+        throw new Error('Music kept moving within the preview, so it stayed linked. Try again.');
       });
 
       const response = await preview({ draft_id: draftId, revision, mode: 'detach' });
