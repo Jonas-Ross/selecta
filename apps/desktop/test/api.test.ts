@@ -15,7 +15,10 @@ const agent = {
   cancel: vi.fn(),
   history: vi.fn(() => ({})),
 };
-const call = createApi(deps, agent as unknown as AgentSessions);
+const artwork = {
+  get: vi.fn(async (ids: string[]) => Object.fromEntries(ids.map((id) => [id, null]))),
+};
+const call = createApi(deps, agent as unknown as AgentSessions, artwork);
 
 afterEach(() => vi.clearAllMocks());
 
@@ -107,4 +110,15 @@ it('fills the crate newest first, or by relevance to a search, with provenance',
   expect(found).toMatchObject({ order: 'relevance', tracks: [{ title: 'Teardrop' }] });
   await expect(call('library.crate', { query: 'x'.repeat(201) })).rejects.toThrow();
   await expect(call('library.crate', { sort: 'random' })).rejects.toThrow();
+});
+
+it('hands artwork lookups to the cache only within the request limit', async () => {
+  const id = '0123456789ABCDEF';
+
+  expect(await call('artwork.get', { track_ids: [id] })).toEqual({ [id]: null });
+  expect(artwork.get).toHaveBeenCalledWith([id]);
+  await expect(call('artwork.get', { track_ids: Array(201).fill(id) })).rejects.toThrow();
+  await expect(call('artwork.get', { track_ids: [id], size: 'large' })).rejects.toThrow();
+  await expect(call('artwork.get', { track_ids: 'all' })).rejects.toThrow();
+  expect(artwork.get).toHaveBeenCalledOnce();
 });

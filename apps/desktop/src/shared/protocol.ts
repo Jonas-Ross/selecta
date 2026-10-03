@@ -10,6 +10,8 @@ export const BRIEF_LIMIT = 4000;
 
 export type Methods = {
   'library.crate': (args: { query?: string }) => Crate;
+  // A cached thumbnail's file name per track, or null when it has no artwork.
+  'artwork.get': (args: { track_ids: string[] }) => Record<string, string | null>;
   'drafts.list': () => DraftSummary[];
   'drafts.get': (args: { draft_id: string }) => unknown;
   'drafts.edit': (args: Record<string, unknown>) => unknown;

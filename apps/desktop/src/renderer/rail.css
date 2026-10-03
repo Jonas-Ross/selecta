@@ -366,6 +366,20 @@
     transform var(--t-mid) var(--ease-out),
     box-shadow var(--t-mid);
 }
+/* Album art over the white label, faded in only once it has decoded. */
+.sleeve-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-mid) var(--ease-out);
+}
+.sleeve-art.shown {
+  opacity: 1;
+}
 /* Rim light along the top edge, as on the rail. */
 .sleeve::after {
   content: '';

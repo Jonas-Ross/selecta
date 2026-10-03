@@ -1,7 +1,9 @@
-// A white-label sleeve until artwork arrives: the title typeset on a dark
-// square with a thin label ring. The ring's size, grooves and index mark come
-// from the track ID, so a record looks the same every time and never like art.
-import { memo } from 'react';
+// A white-label sleeve: the title typeset on a dark square with a thin label
+// ring. The ring's size, grooves and index mark come from the track ID, so a
+// record looks the same every time and never like art. Album art covers it once
+// loaded, and the label stays underneath for tracks with none.
+import { memo, useState } from 'react';
+import { useArtwork } from '../artwork.js';
 
 /** FNV-1a: small, stable, and enough to vary three details. */
 function hash(text: string): number {
@@ -19,6 +21,8 @@ export const Sleeve = memo(function Sleeve({
   trackId: string;
   title?: string;
 }) {
+  const art = useArtwork(trackId);
+  const [loaded, setLoaded] = useState<string>();
   const h = hash(trackId);
   const ring = 15 + (h % 7);
   const grooves = 2 + ((h >>> 4) % 3);
@@ -42,6 +46,15 @@ export const Sleeve = memo(function Sleeve({
         />
       </svg>
       <span className="sleeve-title">{title ?? 'Untitled'}</span>
+      {art && (
+        <img
+          className={loaded === art ? 'sleeve-art shown' : 'sleeve-art'}
+          src={art}
+          alt=""
+          draggable={false}
+          onLoad={() => setLoaded(art)}
+        />
+      )}
     </div>
   );
 });

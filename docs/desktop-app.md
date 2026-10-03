@@ -1,6 +1,6 @@
 # Desktop app
 
-`apps/desktop` is the second front end on `@selecta/core`: brief, Claude builds a draft, you reorder and give feedback, you save. The look is the approved "Dig" direction (graphite ground, hairlines, UV for what you touch, acid kept for "now"), arriving in phases. Phase 1, this one, restyles every screen and draws the draft as a rail. Phase 2 reads artwork from Music.app; phase 3 adds playback. Until then a record is a white-label sleeve and there is no transport bar.
+`apps/desktop` is the second front end on `@selecta/core`: brief, Claude builds a draft, you reorder and give feedback, you save. The look is the approved "Dig" direction (graphite ground, hairlines, UV for what you touch, acid kept for "now"), arriving in phases. Phase 1, this one, restyles every screen and draws the draft as a rail. Phase 2 reads artwork from Music.app; phase 3 adds playback. A record without artwork is a white-label sleeve, and there is no transport bar yet.
 
 ## Processes
 
@@ -54,6 +54,10 @@ The app mints the draft ID and passes it in the brief, so the screen can open be
 ## Live updates
 
 Claude's edits land in `drafts.db` through the MCP server process, not the host. The host holds one read-only connection and polls `PRAGMA data_version`, which moves when any other connection commits, then emits `drafts.changed`. The renderer re-reads the draft on that event. Concurrent edits from the user and Claude both go through revision checks: the loser gets `draft_revision_conflict` and re-reads; nothing retries automatically.
+
+## Artwork
+
+A sleeve shows the track's first artwork from Music.app, read through the bridge's `readArtwork`: AppleScript's `raw data of artwork 1`, run through `NSAppleScript` from JXA (`docs/music-app.md`, Artwork). It is a read; nothing in Music.app changes, and it never launches Music.app. The host (`src/host/artwork.ts`) asks one batch of up to 40 tracks at a time, shrinks each original to a 600px JPEG with `sips` in `~/Library/Caches/Selecta/artwork/<ID>.jpg`, and deletes the original. A cached thumbnail answers without Music.app; a track with no artwork is remembered until the app restarts, and a failed read is not remembered, so a later request asks again. Main serves the folder to the renderer as `selecta-art://thumb/<ID>.jpg`, refusing any other name, and the page's CSP allows only that scheme besides `'self'` for images. The sleeve keeps its white label underneath and fades the art in once it has loaded. Deleting the folder is safe; it refills as records are shown.
 
 ## Running it
 

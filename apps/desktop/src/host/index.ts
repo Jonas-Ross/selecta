@@ -2,14 +2,16 @@
 // Electron, so better-sqlite3 keeps the one native build that the MCP server and
 // tests already use. It speaks JSON lines on stdio with Electron main.
 import { createInterface } from 'node:readline';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { SelectaCache, defaultDbPath } from '@selecta/core/cache/index.js';
 import { bridge } from '@selecta/core/bridge/index.js';
 import { DraftStore, draftDbPath } from '@selecta/core/drafts/store.js';
+import { artworkDir } from '../shared/artwork.js';
 import type { HostEvent } from '../shared/protocol.js';
 import { AgentSessions } from './agent.js';
 import { createApi } from './api.js';
+import { createArtworkCache, sipsThumbnail } from './artwork.js';
 import { watchDrafts } from './watch.js';
 
 const send = (message: object) => process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -32,6 +34,12 @@ const call = createApi(
     drafts: () => new DraftStore(draftDbPath(dbPath), { localOnly: true }),
   },
   agent,
+  createArtworkCache({
+    dir: artworkDir(homedir()),
+    read: (trackIds, dir) => bridge.readArtwork(trackIds, dir),
+    resize: sipsThumbnail,
+    log: (message) => console.error(message),
+  }),
 );
 const stopWatching = watchDrafts(
   draftDbPath(dbPath),
