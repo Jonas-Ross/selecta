@@ -67,9 +67,17 @@ ipcMain.handle('selecta:call', (_event, method: string, args: unknown) => {
 
 app.whenReady().then(() => {
   window = new BrowserWindow({
-    width: 1100,
-    height: 760,
+    width: 1440,
+    height: 900,
+    // Below this the rail and the Claude panel no longer both fit.
+    minWidth: 1024,
+    minHeight: 640,
     title: 'Selecta',
+    // The renderer draws its own top bar; the lights sit in its first 80px.
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 18, y: 17 },
+    // tokens.css --bg, so the window never flashes white before the page paints.
+    backgroundColor: '#0a0c10',
     webPreferences: {
       preload: here('./preload.cjs'),
       contextIsolation: true,
