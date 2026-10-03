@@ -82,3 +82,37 @@ it('reports a failed lookup and asks again only when told to', async () => {
   expect(get).toHaveBeenLastCalledWith({ track_ids: [id(1)] });
   expect(store.url(id(1))).toContain(id(1));
 });
+
+it('reports a track that failed without holding back the rest of its call', async () => {
+  const get = vi
+    .fn()
+    .mockResolvedValue({ [id(1)]: { error: 'timed out' }, [id(2)]: `${id(2)}.jpg` });
+  const store = createArtworkStore(get);
+  const failed = vi.fn();
+
+  store.onFailure(failed);
+  store.subscribe(id(1), () => {});
+  store.subscribe(id(2), () => {});
+  await tick();
+  expect(failed).toHaveBeenCalledExactlyOnceWith('timed out');
+  expect(store.url(id(1))).toBeUndefined();
+  expect(store.url(id(2))).toContain(id(2));
+});
+
+it('asks once more for art that would not show, then reports it', async () => {
+  const get = vi.fn().mockResolvedValue({ [id(1)]: `${id(1)}.jpg` });
+  const store = createArtworkStore(get);
+  const failed = vi.fn();
+
+  store.onFailure(failed);
+  store.subscribe(id(1), () => {});
+  await tick();
+  store.broken(id(1));
+  store.broken(id(1));
+  await tick();
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(store.url(id(1))).toContain(id(1));
+  store.broken(id(1));
+  expect(store.url(id(1))).toBeUndefined();
+  expect(failed).toHaveBeenCalledOnce();
+});

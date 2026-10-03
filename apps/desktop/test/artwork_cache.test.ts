@@ -1,4 +1,4 @@
-import { copyFile, mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
@@ -102,21 +102,21 @@ it('remembers no art for the session only', async () => {
   expect(read).toHaveBeenCalledTimes(2);
 });
 
-it('fails a failed batch for its own IDs only, and asks again later', async () => {
+it('answers a failed batch with its error for its own IDs only, and asks again later', async () => {
   const { read, deps } = await setup({ fail: (ids) => ids.includes(A) });
   const log = vi.fn();
   const cache = createArtworkCache({ ...deps, log });
-  const first = expect(cache.get([A])).rejects.toThrow('osascript failed');
+  const first = cache.get([A]);
 
   // Queued while the first batch is in flight, so it rides the next one.
   await vi.waitFor(() => expect(read).toHaveBeenCalled());
   const second = cache.get([B]);
 
-  await first;
+  expect(await first).toEqual({ [A]: { error: 'osascript failed' } });
   expect(await second).toEqual({ [B]: `${B}.jpg` });
   expect(log).toHaveBeenCalledWith(expect.stringContaining('osascript failed'));
 
-  await cache.get([A]).catch(() => {});
+  await cache.get([A]);
   expect(read.mock.calls.map(([batch]) => batch)).toEqual([[A], [B], [A]]);
 });
 
@@ -129,7 +129,7 @@ it('fails and drops an original whose thumbnail fails, without remembering it', 
     await writeFile(target, 'partial');
     throw new Error('sips failed');
   });
-  await expect(cache.get([A])).rejects.toThrow('sips failed');
+  expect(await cache.get([A])).toEqual({ [A]: { error: 'sips failed' } });
   expect(await readdir(dir)).not.toContain(`${A}.jpg`);
   expect(await readdir(join(dir, 'incoming'))).toEqual([]);
   expect(await cache.get([A])).toEqual({ [A]: `${A}.jpg` });
@@ -146,13 +146,25 @@ it('answers anything but a persistent ID with null and never passes it on', asyn
   expect(read).not.toHaveBeenCalled();
 });
 
-it('fails a track whose own read failed, without remembering it or failing the rest', async () => {
+it('answers a track whose own read failed with its error, beside the rest of its call', async () => {
   const { read, deps } = await setup({ unreadable: [A] });
   const cache = createArtworkCache(deps);
-  const [a, b] = [cache.get([A]), cache.get([B])];
 
-  await expect(a).rejects.toThrow('(-1712)');
-  expect(await b).toEqual({ [B]: `${B}.jpg` });
-  await cache.get([A]).catch(() => {});
+  expect(await cache.get([A, B])).toEqual({
+    [A]: { error: expect.stringContaining('(-1712)') },
+    [B]: `${B}.jpg`,
+  });
+  await cache.get([A]);
   expect(read).toHaveBeenCalledTimes(2);
+});
+
+it('reads a thumbnail again once it has gone from disk', async () => {
+  const { dir, read, deps } = await setup();
+  const cache = createArtworkCache(deps);
+
+  expect(await cache.get([A])).toEqual({ [A]: `${A}.jpg` });
+  await rm(join(dir, `${A}.jpg`));
+  expect(await cache.get([A])).toEqual({ [A]: `${A}.jpg` });
+  expect(read).toHaveBeenCalledTimes(2);
+  expect(await readdir(dir)).toContain(`${A}.jpg`);
 });

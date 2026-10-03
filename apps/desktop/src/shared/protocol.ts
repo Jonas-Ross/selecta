@@ -8,10 +8,12 @@ export type { Crate, DraftSummary };
 
 export const BRIEF_LIMIT = 4000;
 
+/** A cached thumbnail's file name, null when the track has no artwork, or why it couldn't be read. */
+export type ArtworkAnswer = string | null | { error: string };
+
 export type Methods = {
   'library.crate': (args: { query?: string }) => Crate;
-  // A cached thumbnail's file name per track, or null when it has no artwork.
-  'artwork.get': (args: { track_ids: string[] }) => Record<string, string | null>;
+  'artwork.get': (args: { track_ids: string[] }) => Record<string, ArtworkAnswer>;
   'drafts.list': () => DraftSummary[];
   'drafts.get': (args: { draft_id: string }) => unknown;
   'drafts.edit': (args: Record<string, unknown>) => unknown;

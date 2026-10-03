@@ -2,7 +2,7 @@
 // the user's cache folder. Music.app is asked one batch at a time, never twice
 // for the same track in a session.
 import { execFile } from 'node:child_process';
-import { mkdir, readdir, rename, rm } from 'node:fs/promises';
+import { access, mkdir, readdir, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import {
@@ -11,6 +11,7 @@ import {
   type ArtworkReadResult,
 } from '@selecta/core/types/bridge.js';
 import { ARTWORK_FILE } from '../shared/artwork.js';
+import type { ArtworkAnswer } from '../shared/protocol.js';
 
 export type ArtworkDeps = {
   dir: string;
@@ -20,7 +21,8 @@ export type ArtworkDeps = {
 };
 
 export type ArtworkCache = {
-  get(trackIds: string[]): Promise<Record<string, string | null>>;
+  /** Never rejects: a track whose read failed answers with the reason, the rest still land. */
+  get(trackIds: string[]): Promise<Record<string, ArtworkAnswer>>;
 };
 
 const run = promisify(execFile);
@@ -131,21 +133,36 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
     }
   }
 
-  function lookup(id: string, cached: Set<string>): Promise<string | null> {
-    const known = answers.get(id);
-
-    if (known) return known;
-
-    if (cached.has(`${id}.jpg`)) return Promise.resolve(`${id}.jpg`);
-
+  function ask(id: string): Promise<string | null> {
     const answer = new Promise<string | null>((resolve, reject) =>
       settle.set(id, { resolve, reject }),
     );
 
     answers.set(id, answer);
     queue.push(id);
+    void pump();
 
     return answer;
+  }
+
+  async function lookup(id: string, cached: Set<string>): Promise<string | null> {
+    const file = await (answers.get(id) ??
+      (cached.has(`${id}.jpg`) ? Promise.resolve(`${id}.jpg`) : ask(id)));
+
+    if (
+      file === null ||
+      (await access(join(dir, file)).then(
+        () => true,
+        () => false,
+      ))
+    )
+      return file;
+
+    // The thumbnail was deleted or evicted since; read it from Music.app again.
+    answers.delete(id);
+    cached.delete(file);
+
+    return ask(id);
   }
 
   return {
@@ -160,15 +177,25 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
         );
 
       const cached = await onDisk;
-      const pending = trackIds.map((id) =>
-        TRACK_PERSISTENT_ID.test(id) ? lookup(id, cached) : Promise.resolve(null),
+      const answered = await Promise.allSettled(
+        trackIds.map((id) => (TRACK_PERSISTENT_ID.test(id) ? lookup(id, cached) : null)),
       );
 
-      if (queue.length > 0) void pump();
+      return Object.fromEntries(
+        trackIds.map((id, i) => {
+          const result = answered[i]!;
 
-      const files = await Promise.all(pending);
-
-      return Object.fromEntries(trackIds.map((id, i) => [id, files[i]!]));
+          return [
+            id,
+            result.status === 'fulfilled'
+              ? result.value
+              : {
+                  error:
+                    result.reason instanceof Error ? result.reason.message : String(result.reason),
+                },
+          ];
+        }),
+      );
     },
   };
 }

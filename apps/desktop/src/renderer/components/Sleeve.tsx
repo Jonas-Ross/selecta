@@ -3,7 +3,7 @@
 // record looks the same every time and never like art. Album art covers it once
 // loaded, and the label stays underneath for tracks with none.
 import { memo, useState } from 'react';
-import { useArtwork } from '../artwork.js';
+import { artworkBroken, useArtwork } from '../artwork.js';
 
 /** FNV-1a: small, stable, and enough to vary three details. */
 function hash(text: string): number {
@@ -53,6 +53,7 @@ export const Sleeve = memo(function Sleeve({
           alt=""
           draggable={false}
           onLoad={() => setLoaded(art)}
+          onError={() => artworkBroken(trackId)}
         />
       )}
     </div>

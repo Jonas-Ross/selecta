@@ -15,6 +15,7 @@ export function createArtworkStore(get: Get) {
   const failures = new Set<(message: string) => void>();
   const asked = new Set<string>();
   const failed = new Set<string>();
+  const reloaded = new Set<string>();
   let batch: string[] = [];
 
   function settle(id: string, file: string | null) {
@@ -22,6 +23,14 @@ export function createArtworkStore(get: Get) {
 
     for (const listener of listeners.get(id) ?? []) listener();
   }
+
+  function fail(id: string, message: string): string[] {
+    failed.add(id);
+
+    return [message];
+  }
+
+  const report = (message: string) => failures.forEach((listener) => listener(message));
 
   function flush() {
     const ids = batch;
@@ -32,10 +41,22 @@ export function createArtworkStore(get: Get) {
       const chunk = ids.slice(start, start + ARTWORK_GET_LIMIT);
 
       get({ track_ids: chunk }).then(
-        (files) => chunk.forEach((id) => settle(id, files[id] ?? null)),
+        (files) => {
+          const errors = chunk.flatMap((id) => {
+            const file = files[id] ?? null;
+
+            if (typeof file === 'object' && file !== null) return fail(id, file.error);
+
+            settle(id, file);
+
+            return [];
+          });
+
+          if (errors.length > 0) report(errors[0]!);
+        },
         (error: Error) => {
-          chunk.forEach((id) => failed.add(id));
-          failures.forEach((listener) => listener(error.message));
+          chunk.forEach((id) => fail(id, error.message));
+          report(error.message);
         },
       );
     }
@@ -63,6 +84,24 @@ export function createArtworkStore(get: Get) {
 
         if (set.size === 0) listeners.delete(id);
       };
+    },
+    /** The art at the URL given couldn't be shown: ask once more, then call it a failure. */
+    broken(id: string) {
+      // Every copy of a sleeve reports the same broken image; the first one acts.
+      if (!answers.get(id)) return;
+
+      answers.delete(id);
+
+      if (reloaded.has(id)) {
+        failed.add(id);
+        report(`The album art file for ${id} can't be shown.`);
+      } else {
+        reloaded.add(id);
+        asked.delete(id);
+        request(id);
+      }
+
+      for (const listener of listeners.get(id) ?? []) listener();
     },
     /** Asks again for every failed lookup still on screen; the rest ask when they next appear. */
     retry() {
@@ -100,3 +139,5 @@ export function useArtwork(trackId: string): string | undefined {
 export const onArtworkFailure = (listener: (message: string) => void) => store.onFailure(listener);
 
 export const retryArtwork = () => store.retry();
+
+export const artworkBroken = (trackId: string) => store.broken(trackId);
