@@ -101,6 +101,8 @@ export function Draft({
   const inDraft = useMemo(() => new Set(items.map((row) => row.track_id)), [items]);
   // One record in the air at a time, so each lands in the gap held for it.
   const canAdd = draft !== undefined && !locked && flight === undefined;
+  // A record in the air is an edit not yet queued, so Save and Home wait for it to land.
+  const airborne = flight !== undefined;
   const span = bpmSpan(items);
 
   // Live revisions keep arriving from Claude; don't overwrite a name being typed.
@@ -280,6 +282,8 @@ export function Draft({
   // Leaving locks the controls and waits for queued edits, and stays put if
   // one didn't land so its notice is seen.
   function back() {
+    if (airborne) return;
+
     setLeaving(true);
     Promise.all(inflight.current).then((landed) =>
       landed.every(Boolean) ? onBack() : setLeaving(false),
@@ -289,6 +293,8 @@ export function Draft({
   // Save is a barrier in the edit queue: controls lock on the click, and it
   // runs only if every edit still pending at the click landed.
   function save() {
+    if (airborne) return;
+
     setSaving(true);
 
     const ahead = [...inflight.current];
@@ -353,7 +359,7 @@ export function Draft({
     <div className="screen-draft">
       <TopBar
         onHome={back}
-        homeDisabled={saving || leaving}
+        homeDisabled={saving || leaving || airborne}
         crumb={
           draft ? (
             <>
@@ -388,7 +394,7 @@ export function Draft({
           <SaveConfirm
             phase={phase}
             label={saving && phase !== 'confirm' ? 'Saving…' : saveLabel(draft?.save)}
-            disabled={!draft || locked || working}
+            disabled={!draft || locked || working || airborne}
             done={saved}
             name={draft?.name ?? ''}
             tracks={sum.tracks}
