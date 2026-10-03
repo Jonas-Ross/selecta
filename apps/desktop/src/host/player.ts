@@ -158,7 +158,7 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
       if (slot && played.playlistId !== slot.playlist_id)
         drafts().rekeyPreview(draftId, slot.generation, played.playlistId);
 
-      return show(draftId, played.player);
+      return { ...show(draftId, played.player), ...(played.route && { route: played.route }) };
     },
 
     async control(draftId: string, input: Control) {

@@ -23,6 +23,8 @@ export type PlayerView = {
   position?: number;
   duration?: number;
   entry_id?: string;
+  // How a play reached the entry (started, on from N, back from N, seek), for the action log.
+  route?: string;
 };
 
 export type Methods = {

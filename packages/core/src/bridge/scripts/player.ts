@@ -117,21 +117,25 @@ export function buildPlayPreviewScript(input: {
       const target = args.index + 1;
       let from = 0;
       try { if (String(Music.playerState()) !== 'stopped') from = at() || 0; } catch (e) {}
-      // Already in the playlist at or before the entry: step on from there rather than restart.
-      const restart = from < 1 || from > target;
+      // In the playlist already, step from there; Music.app ignores play() on the playlist
+      // it is playing, and stepping back works where stop-then-play was seen to fail.
+      const restart = from < 1;
+      const route = restart ? 'started' : from > target ? 'back from ' + from : from < target ? 'on from ' + from : 'seek';
       const volume = Music.soundVolume();
       let landed = false;
-      if (restart || from < target) Music.soundVolume = 0;
+      if (from !== target) Music.soundVolume = 0;
       try {
         if (restart) {
-          // Music.app ignores play() on the playlist it is already playing, so stop it first.
-          if (from > target) {
-            Music.stop();
-            until(function () { return String(Music.playerState()) === 'stopped'; });
-          }
           Music.play(pl);
           from = 1;
         }
+        // previousTrack restarts a record that's playing past its start, so rewind it first.
+        for (let entry = from - 1; entry >= target; entry--) {
+          Music.playerPosition = 0;
+          Music.previousTrack();
+          if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
+        }
+        if (from > target) from = target;
         for (let entry = from; entry <= target; entry++) {
           if (entry > from) Music.nextTrack();
           if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
@@ -156,7 +160,7 @@ export function buildPlayPreviewScript(input: {
         }
         Music.soundVolume = volume;
       }
-      return JSON.stringify({ playlistId: pl.persistentID(), player: readPlayer() });
+      return JSON.stringify({ playlistId: pl.persistentID(), route: route, player: readPlayer() });
     `,
   );
 }

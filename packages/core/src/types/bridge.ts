@@ -238,5 +238,5 @@ export interface Bridge {
     expectedTrackIds: string[];
     index: number;
     position?: number;
-  }): Promise<{ playlistId: string; player: PlayerState }>;
+  }): Promise<{ playlistId: string; route?: string; player: PlayerState }>;
 }

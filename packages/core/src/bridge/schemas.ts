@@ -184,5 +184,6 @@ export const playPreview = z.union([
   z.strictObject({ shuffled: z.literal(true) }),
   z.strictObject({ seekMissed: z.literal(true) }),
   z.strictObject({ leftMuted: z.literal(true), volume: z.number() }),
-  z.strictObject({ playlistId: id, player }),
+  // How the play reached the entry, for the app's action log.
+  z.strictObject({ playlistId: id, route: z.string().optional(), player }),
 ]);

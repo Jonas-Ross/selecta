@@ -250,10 +250,11 @@ describe('player script contract', () => {
       script.indexOf('} finally {'),
     );
     // Already in the preview at or before the entry, it steps on rather than restarting.
-    expect(script).toContain('const restart = from < 1 || from > target;');
     expect(script.indexOf('if (restart)')).toBeLessThan(script.indexOf('Music.play(pl)'));
-    // Going back stops the playlist first, since Music.app won't restart the one it's playing.
-    expect(script.indexOf('Music.stop()')).toBeLessThan(script.indexOf('Music.play(pl)'));
+    // Going back steps with previousTrack; Music.app won't restart the playlist it's playing.
+    expect(script).toContain('Music.previousTrack()');
+    expect(script).not.toContain('Music.stop()');
+    expect(script).toContain('const restart = from < 1;');
     expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(script.indexOf('Music.play(pl)'));
     // A start that went wrong is paused, and waited on, before the volume comes back.
     // A failed start stays muted unless Music has provably stopped it.
