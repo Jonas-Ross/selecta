@@ -1,7 +1,6 @@
 // The try-it deck: measures the built-in loop or a dropped file in this tab, then plays
 // the measured stretch with a metronome locked to its kicks.
 import { current, latency, play, playBuffer, stop, toBuffer, toggle } from './audio.js';
-import { beatOrigin } from './beat.js';
 import { $, $$, el } from './dom.js';
 import { SR, analyze, decodeFile, headline } from './engine.js';
 import { motion } from './motion.js';
@@ -38,15 +37,7 @@ async function load(samples, title, pending) {
     // Playback is the measured window alone: the metronome only knows that stretch's tempo.
     track.buffer = toBuffer(samples.subarray(head.start, head.end));
 
-    if (tempo)
-      track.origin = beatOrigin(
-        samples,
-        SR,
-        head.start,
-        head.end,
-        60 / tempo.bpm,
-        head.start / SR + tempo.beat_offset_secs,
-      );
+    if (tempo) track.origin = head.start / SR + tempo.beat_offset_secs;
 
     spin.speed(IDLE_RATE, 1);
     render(track, ms);
