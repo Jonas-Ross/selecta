@@ -1,0 +1,181 @@
+/* The top bar: a window drag region with the mark, the crumb and Save. */
+.topbar {
+  flex: none;
+  height: var(--top);
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: 0 var(--s4) 0 var(--lights);
+  border-bottom: 1px solid var(--line2);
+  background: var(--bg);
+  position: relative;
+  z-index: 40;
+  -webkit-app-region: drag;
+}
+.topbar button,
+.topbar input {
+  -webkit-app-region: no-drag;
+}
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: var(--r-sm);
+}
+button.brand:hover .wordmark {
+  color: var(--white);
+}
+.mark {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  overflow: visible;
+}
+.mark .groove {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+/* The mark's kicks are what you touch here, so UV rather than the site's acid. */
+.mark .kick {
+  fill: var(--uv);
+}
+.wordmark {
+  font: 800 14px/1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.01em;
+  transition: color var(--t-fast);
+}
+.sep {
+  color: var(--ink4);
+}
+.crumb-title {
+  font: 600 14px/1 var(--body);
+}
+.crumb-name {
+  field-sizing: content;
+  min-width: 4ch;
+  max-width: 420px;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: none;
+  font: 600 14px/1 var(--body);
+  outline: none;
+  transition:
+    border-color var(--t-mid),
+    background var(--t-mid);
+}
+.crumb-name:hover:not(:disabled) {
+  border-color: var(--line2);
+}
+.crumb-name:focus {
+  border-color: var(--uv-line);
+  background: var(--bg2);
+}
+.crumb-name:disabled {
+  color: var(--ink);
+}
+.rev {
+  font-size: 11px;
+  color: var(--ink3);
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+/* Save's confirm card hangs from the button, which stays lit while it asks. */
+.savewrap .btn[aria-expanded='true'] {
+  opacity: 1;
+}
+.savewrap {
+  position: relative;
+}
+.pop {
+  position: absolute;
+  right: 0;
+  top: 42px;
+  width: 320px;
+  padding: 18px;
+  background: var(--bg2);
+  border: 1px solid var(--line3);
+  border-radius: var(--r-xl);
+  box-shadow: 0 24px 60px var(--shadow);
+  z-index: 60;
+  transform-origin: top right;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  visibility: hidden;
+  transition:
+    opacity var(--t-mid) var(--ease-out),
+    transform var(--t-mid) var(--ease-out),
+    visibility 0s var(--t-mid);
+  -webkit-app-region: no-drag;
+}
+.pop.open {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.pop h3 {
+  font: 700 var(--fs-title) / 1.2 var(--display);
+  font-stretch: 125%;
+  margin-bottom: var(--s2);
+}
+.pop p {
+  font-size: var(--fs-body);
+  color: var(--ink2);
+  white-space: normal;
+}
+.pop .row {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+.pop .progress {
+  height: 1px;
+  margin-top: 14px;
+  background: var(--line2);
+  overflow: hidden;
+}
+.pop .progress i {
+  display: block;
+  height: 100%;
+  background: var(--uv);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+/* Music.app gives no progress, so the line only says something is under way. */
+.pop.saving .progress i {
+  animation: sweep 1.4s var(--ease) infinite;
+}
+@keyframes sweep {
+  0% {
+    transform: scaleX(0);
+  }
+  60% {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  61% {
+    transform-origin: right;
+  }
+  100% {
+    transform: scaleX(0);
+    transform-origin: right;
+  }
+}
