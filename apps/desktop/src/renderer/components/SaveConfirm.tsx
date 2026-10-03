@@ -29,7 +29,27 @@ export function SaveConfirm({
 }) {
   const card = useRef<HTMLDivElement>(null);
   const go = useRef<HTMLButtonElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const was = useRef(phase);
   const open = phase !== 'closed';
+
+  const restore = useRef(false);
+
+  // Closing hands focus back to Save, unless the user has already moved it
+  // elsewhere; Save stays disabled until the cancelled save step unwinds.
+  useEffect(() => {
+    const lost =
+      document.activeElement === document.body || card.current?.contains(document.activeElement);
+
+    if (was.current !== 'closed' && phase === 'closed' && lost) restore.current = true;
+
+    was.current = phase;
+
+    if (restore.current && !disabled) {
+      restore.current = false;
+      trigger.current?.focus();
+    }
+  }, [phase, disabled]);
 
   useEffect(() => {
     if (phase !== 'confirm') return;
@@ -52,6 +72,7 @@ export function SaveConfirm({
     <div className="savewrap">
       <button
         type="button"
+        ref={trigger}
         className={done ? 'btn line saved' : 'btn primary'}
         disabled={disabled}
         aria-haspopup="dialog"
