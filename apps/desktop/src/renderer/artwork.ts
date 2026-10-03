@@ -87,5 +87,4 @@ export function useArtwork(trackId: string): string | undefined {
 }
 
 /** Calls `listener` with the reason whenever an artwork lookup fails. */
-export const onArtworkFailure = (listener: (message: string) => void) =>
-  store.onFailure(listener);
+export const onArtworkFailure = (listener: (message: string) => void) => store.onFailure(listener);

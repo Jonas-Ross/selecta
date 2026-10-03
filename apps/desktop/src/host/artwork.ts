@@ -49,7 +49,10 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
   // Settled or in-flight answers for this session. No-art stays here, so it
   // is asked again only after a relaunch; a failed read is dropped.
   const answers = new Map<string, Promise<string | null>>();
-  const settle = new Map<string, { resolve: (file: string | null) => void; reject: (error: unknown) => void }>();
+  const settle = new Map<
+    string,
+    { resolve: (file: string | null) => void; reject: (error: unknown) => void }
+  >();
   const queue: string[] = [];
   let onDisk: Promise<Set<string>> | undefined;
   let pumping = false;
