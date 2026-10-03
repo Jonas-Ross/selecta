@@ -249,10 +249,10 @@ describe('player script contract', () => {
     expect(script).toContain('JSON.stringify(ids) !== JSON.stringify(args.expectedTrackIds)');
     // One track played alone stops Music.app after it, so the playlist is what starts.
     expect(script).not.toContain('Music.play(pl.tracks');
-    // Stepping is muted, and the user's volume comes back however the script ends.
-    expect(script.indexOf('Music.soundVolume = 0')).toBeLessThan(script.indexOf('Music.play(pl)'));
-    expect(script.indexOf('Music.soundVolume = volume;')).toBeGreaterThan(
-      script.indexOf('} finally {'),
+    // The volume is the user's; quiet steps pause instead.
+    expect(script).not.toContain('soundVolume');
+    expect(script.indexOf('if (quiet && !pause())')).toBeLessThan(
+      script.indexOf('Music.nextTrack()'),
     );
     // Steps within the queue only when the caller vouches for it; otherwise it starts over.
     expect(script.indexOf('if (restart)')).toBeLessThan(script.indexOf('Music.play(pl)'));
@@ -260,14 +260,9 @@ describe('player script contract', () => {
     expect(script).toContain('Music.previousTrack()');
     expect(script).not.toContain('Music.stop()');
     expect(script).toContain('const restart = args.restart === true || from < 1;');
-    // Muted for every route, a seek in place included, since a failed one is paused.
-    expect(script).toMatch(/\n\s*Music\.soundVolume = 0;/);
     expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(script.indexOf('Music.play(pl)'));
-    // A start that went wrong is paused, and waited on, before the volume comes back.
-    // A failed start stays muted unless Music has provably stopped it.
-    expect(script.indexOf('JSON.stringify({ leftMuted: true')).toBeLessThan(
-      script.lastIndexOf('Music.soundVolume = volume;'),
-    );
+    // A start that went wrong is paused, and reported if Music won't pause.
+    expect(script.indexOf('} finally {')).toBeLessThan(script.indexOf('leftPlaying'));
     // A seek that never lands fails before anything resumes.
     expect(script.indexOf('seekMissed')).toBeLessThan(script.indexOf("=== 'paused') Music.play()"));
     expect(script).not.toMatch(NO_WRITES);

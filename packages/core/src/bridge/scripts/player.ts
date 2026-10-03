@@ -109,7 +109,7 @@ export function buildPlayPreviewScript(input: {
     { ...input, name: PREVIEW_PLAYLIST_NAME },
     `${READ_PLAYER}${PREVIEW_SLOT}
       // Playing one track stops Music.app after it; playing the playlist gives it a queue
-      // to carry on through, so start there and step to the entry, muted.
+      // to carry on through, so start there and step to the entry while paused.
       // Each command lands a beat late, so every step waits until it reads back.
       function until(ok) {
         for (let tries = 0; tries < 100; tries++) {
@@ -122,6 +122,14 @@ export function buildPlayPreviewScript(input: {
         return Music.currentPlaylist.persistentID() === pl.persistentID() &&
           Music.currentTrack.index();
       };
+      // A pause fired straight after a play may not take, so each is retried until it reads back.
+      const pause = function () {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          Music.pause();
+          if (until(function () { return String(Music.playerState()) !== 'playing'; })) return true;
+        }
+        return false;
+      };
       // Shuffle would carry on through the draft out of order.
       if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
       const target = args.index + 1;
@@ -131,24 +139,25 @@ export function buildPlayPreviewScript(input: {
       // reads the same from here, so anything else starts the playlist over.
       const restart = args.restart === true || from < 1;
       const route = restart ? 'started' : from > target ? 'back from ' + from : from < target ? 'on from ' + from : 'seek';
-      const volume = Music.soundVolume();
       let landed = false;
-      // Muted even for a seek in place, since a failed one is cleaned up by pausing.
-      Music.soundVolume = 0;
       try {
         if (restart) {
           Music.play(pl);
           from = 1;
+          if (!until(function () { return at() === 1; })) return JSON.stringify({ stepMissed: true });
         }
+        // Paused only when records passed on the way, or a record's start before the seek,
+        // would be heard; one step with nothing to seek is a plain Next. Volume is the user's.
+        const quiet = Math.abs(target - from) > 1 || (from !== target && (args.position || 0) > 0);
+        if (quiet && !pause()) return JSON.stringify({ stepMissed: true });
         // previousTrack restarts a record that's playing past its start, so rewind it first.
         for (let entry = from - 1; entry >= target; entry--) {
           Music.playerPosition = 0;
           Music.previousTrack();
           if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
         }
-        if (from > target) from = target;
-        for (let entry = from; entry <= target; entry++) {
-          if (entry > from) Music.nextTrack();
+        for (let entry = from + 1; entry <= target; entry++) {
+          Music.nextTrack();
           if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
         }
         // Clamped inside the track, since Music.app ignores a position past the end.
@@ -157,19 +166,11 @@ export function buildPlayPreviewScript(input: {
         if (!until(function () { return Math.abs(Music.playerPosition() - goal) < 2; })) {
           return JSON.stringify({ seekMissed: true });
         }
-        if (String(Music.playerState()) === 'paused') Music.play();
+        if (quiet || String(Music.playerState()) === 'paused') Music.play();
         landed = true;
       } finally {
-        // A start that went wrong stays muted until Music has provably stopped playing it.
-        if (!landed) {
-          let stopped = false;
-          for (let attempt = 0; attempt < 3 && !stopped; attempt++) {
-            Music.pause();
-            stopped = until(function () { return String(Music.playerState()) !== 'playing'; });
-          }
-          if (!stopped) return JSON.stringify({ leftMuted: true, volume: volume });
-        }
-        Music.soundVolume = volume;
+        // A start that went wrong is left paused, never playing the wrong record.
+        if (!landed && !pause()) return JSON.stringify({ leftPlaying: true });
       }
       return JSON.stringify({ playlistId: pl.persistentID(), route: route, player: readPlayer() });
     `,

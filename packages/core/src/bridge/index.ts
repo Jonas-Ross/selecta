@@ -256,11 +256,11 @@ export const bridge: Bridge = {
         'Turn shuffle off in Music so it plays the draft in order. Nothing was played.',
       );
 
-    if ('leftMuted' in result)
+    if ('leftPlaying' in result)
       throw new BridgeError(
         'jxa_error',
-        'Music.app would not stop a failed start, so it was left muted.',
-        `Pause Music, then set its volume back to ${result.volume}.`,
+        'Music.app would not pause after a failed start.',
+        'Pause Music, then play again.',
       );
 
     if ('seekMissed' in result)
