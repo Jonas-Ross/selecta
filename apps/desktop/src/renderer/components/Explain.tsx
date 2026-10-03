@@ -58,6 +58,11 @@ export function ExplainProvider({ children }: { children: ReactNode }) {
 
     node.style.transform = `translate(${Math.round(x)}px, ${Math.round(Math.max(8, y))}px)`;
     node.classList.add('on');
+
+    // Screen readers announce the card as the anchor's description while it is open.
+    shown.anchor.setAttribute('aria-describedby', 'explain-tip');
+
+    return () => shown.anchor.removeAttribute('aria-describedby');
   }, [shown]);
 
   return (
