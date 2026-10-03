@@ -217,9 +217,9 @@ describe('player script contract', () => {
     expect(script).toContain('Music.currentPlaylist.persistentID() === args.on.playlistId');
     expect(script).toContain('t.index() === args.on.index');
     expect(script).toContain('t.persistentID() === args.on.trackId');
-    // Every pause retry re-checks the entry first.
+    // Every pause attempt re-checks the entry first.
     expect(script).toContain(
-      'if (attempt > 0 && !here()) return JSON.stringify({ elsewhere: true });',
+      'if (!here()) return JSON.stringify({ elsewhere: true });\n          Music.pause();',
     );
   });
 
@@ -234,6 +234,8 @@ describe('player script contract', () => {
       'named.length !== 1 || named[0].persistentID() !== args.on.playlistId',
     );
     expect(script.indexOf('named.length !== 1')).toBeLessThan(script.indexOf('Music.pause()'));
+    // A smart or special playlist sharing the name is never the slot.
+    expect(script).toContain('!pl.smart()');
   });
 
   it('resumes only what is paused and seeks only what is loaded', async () => {

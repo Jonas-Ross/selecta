@@ -205,10 +205,19 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
       await withOperation(cache(), 'music', async () => {
         const on = await onThisDraft(draftId, true);
 
-        if (on)
-          await bridge.controlPlayer({ action: 'pause', on }).catch((e: unknown) => {
-            if (!(e instanceof BridgeError && e.errorCode === 'preview_conflict')) throw e;
-          });
+        if (!on) return;
+
+        const after = await bridge.controlPlayer({ action: 'pause', on }).catch((e: unknown) => {
+          if (!(e instanceof BridgeError && e.errorCode === 'preview_conflict')) throw e;
+        });
+
+        // Resumed in Music during the pause's settle: still ours and audible, so stay linked.
+        if (
+          after?.running &&
+          after.state === 'playing' &&
+          after.playlist?.persistentId === on.playlistId
+        )
+          throw new Error('Music is still playing the preview, so it stayed linked. Try again.');
       });
 
       const response = await preview({ draft_id: draftId, revision, mode: 'detach' });

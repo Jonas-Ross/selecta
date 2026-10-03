@@ -70,18 +70,21 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       if (!here()) return JSON.stringify({ elsewhere: true });
       if (args.on.slot !== undefined) {
         const named = Music.playlists.whose({ name: args.on.slot })()
-          .filter(function (pl) { return pl.name() === args.on.slot && String(pl.class()) === 'userPlaylist'; });
+          .filter(function (pl) {
+            return pl.name() === args.on.slot && String(pl.class()) === 'userPlaylist' && !pl.smart() &&
+              String(pl.specialKind()).toLowerCase() === 'none';
+          });
         // A copy sharing the name makes the match ambiguous, so it is never acted on.
         if (named.length !== 1 || named[0].persistentID() !== args.on.playlistId) {
           return JSON.stringify({ elsewhere: true });
         }
       }
       // A pause can be ignored, so it is retried until it reads back; callers rely on it.
-      // Each retry re-checks the entry, so it never pauses music the user moved on to.
+      // Each attempt re-checks the entry, so it never pauses music the user moved on to.
       if (args.action === 'pause' && state === 'playing') {
         let paused = false;
         for (let attempt = 0; attempt < 3 && !paused; attempt++) {
-          if (attempt > 0 && !here()) return JSON.stringify({ elsewhere: true });
+          if (!here()) return JSON.stringify({ elsewhere: true });
           Music.pause();
           for (let tries = 0; tries < 20 && !paused; tries++) {
             delay(0.05);

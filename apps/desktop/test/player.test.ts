@@ -213,6 +213,15 @@ it('refuses transport controls while a preview sync holds the music lock', async
   expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
 });
 
+it('stays linked when Music reads as playing the preview after the pause', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockResolvedValue(playing(3, A));
+  await expect(player.detach(draft_id, 1)).rejects.toThrow(/still playing/);
+  expect(deps.drafts!().preview()?.status).toBe('current');
+});
+
 it("won't pause, resume or seek music that isn't this draft", async () => {
   const { draft_id, entries } = draft();
 
