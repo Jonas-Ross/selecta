@@ -51,16 +51,17 @@ it('notifies subscribers when their answer lands, and keeps no art as an answer'
   expect(get).toHaveBeenCalledOnce();
 });
 
-it('settles a failed lookup as no art rather than asking again', async () => {
-  const get = vi.fn().mockRejectedValue(new Error('host stopped'));
+it('reports a failed lookup instead of settling it as no art, and asks again on the next mount', async () => {
+  const get = vi.fn().mockRejectedValue(new Error('Music.app is not running'));
   const store = createArtworkStore(get);
-  const heard = vi.fn();
+  const failed = vi.fn();
 
-  store.subscribe(id(1), heard);
+  store.onFailure(failed);
+  store.subscribe(id(1), () => {});
   await tick();
-  expect(heard).toHaveBeenCalledOnce();
+  expect(failed).toHaveBeenCalledWith('Music.app is not running');
   expect(store.url(id(1))).toBeUndefined();
   store.subscribe(id(1), () => {});
   await tick();
-  expect(get).toHaveBeenCalledOnce();
+  expect(get).toHaveBeenCalledTimes(2);
 });

@@ -49,16 +49,23 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
   // Settled or in-flight answers for this session. No-art stays here, so it
   // is asked again only after a relaunch; a failed read is dropped.
   const answers = new Map<string, Promise<string | null>>();
-  const settle = new Map<string, (file: string | null) => void>();
+  const settle = new Map<string, { resolve: (file: string | null) => void; reject: (error: unknown) => void }>();
   const queue: string[] = [];
   let onDisk: Promise<Set<string>> | undefined;
   let pumping = false;
 
   function finish(id: string, file: string | null, remember: boolean) {
-    settle.get(id)?.(file);
+    settle.get(id)?.resolve(file);
     settle.delete(id);
 
     if (!remember) answers.delete(id);
+  }
+
+  // Music.app failing is not the same as a track with no art, so the caller hears it.
+  function fail(id: string, error: unknown) {
+    settle.get(id)?.reject(error);
+    settle.delete(id);
+    answers.delete(id);
   }
 
   async function thumbnail(id: string, original: string | null): Promise<void> {
@@ -89,7 +96,7 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
     } catch (error) {
       log?.(`selecta: cannot read artwork from Music.app: ${String(error)}`);
 
-      for (const id of batch) finish(id, null, false);
+      for (const id of batch) fail(id, error);
 
       return;
     }
@@ -118,7 +125,9 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
 
     if (cached.has(`${id}.jpg`)) return Promise.resolve(`${id}.jpg`);
 
-    const answer = new Promise<string | null>((resolve) => settle.set(id, resolve));
+    const answer = new Promise<string | null>((resolve, reject) =>
+      settle.set(id, { resolve, reject }),
+    );
 
     answers.set(id, answer);
     queue.push(id);

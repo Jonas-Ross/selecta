@@ -95,21 +95,21 @@ it('remembers no art for the session only', async () => {
   expect(read).toHaveBeenCalledTimes(2);
 });
 
-it('answers a failed batch with null for its own IDs only, and asks again later', async () => {
+it('fails a failed batch for its own IDs only, and asks again later', async () => {
   const { read, deps } = await setup({ fail: (ids) => ids.includes(A) });
   const log = vi.fn();
   const cache = createArtworkCache({ ...deps, log });
-  const first = cache.get([A]);
+  const first = expect(cache.get([A])).rejects.toThrow('osascript failed');
 
   // Queued while the first batch is in flight, so it rides the next one.
   await vi.waitFor(() => expect(read).toHaveBeenCalled());
   const second = cache.get([B]);
 
-  expect(await first).toEqual({ [A]: null });
+  await first;
   expect(await second).toEqual({ [B]: `${B}.jpg` });
   expect(log).toHaveBeenCalledWith(expect.stringContaining('osascript failed'));
 
-  await cache.get([A]);
+  await cache.get([A]).catch(() => {});
   expect(read.mock.calls.map(([batch]) => batch)).toEqual([[A], [B], [A]]);
 });
 

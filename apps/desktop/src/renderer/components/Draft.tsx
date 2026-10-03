@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { selecta } from '../api.js';
+import { onArtworkFailure } from '../artwork.js';
 import type { Rect } from '../flight.js';
 import { useReducedMotion } from '../motion.js';
 import { withMoved } from '../reorder.js';
@@ -85,6 +86,11 @@ export function Draft({
 
     return selecta.on((event) => event.event === 'drafts.changed' && load());
   }, [load]);
+
+  useEffect(
+    () => onArtworkFailure((message) => setNotice(`Album art unavailable: ${message}`)),
+    [],
+  );
 
   const draft = view?.draft;
   const items = pendingOrder(rows(view ?? {}), pending);
