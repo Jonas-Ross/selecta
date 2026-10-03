@@ -47,7 +47,11 @@ it('reads uncached art once, as a thumbnail, and clears the original', async () 
 
   expect(await cache.get([A])).toEqual({ [A]: `${A}.jpg` });
   expect(read).toHaveBeenCalledExactlyOnceWith([A], join(dir, 'incoming'));
-  expect(resize).toHaveBeenCalledWith(join(dir, 'incoming', `${A}.png`), join(dir, `${A}.jpg`));
+  expect(resize).toHaveBeenCalledWith(
+    join(dir, 'incoming', `${A}.png`),
+    join(dir, 'incoming', `${A}.thumb.jpg`),
+  );
+  expect(await readdir(dir)).toContain(`${A}.jpg`);
   expect(await readdir(join(dir, 'incoming'))).toEqual([]);
   expect(await cache.get([A, A])).toEqual({ [A]: `${A}.jpg` });
   expect(read).toHaveBeenCalledOnce();
@@ -120,8 +124,13 @@ it('fails and drops an original whose thumbnail fails, without remembering it', 
   const { dir, read, resize, deps } = await setup();
   const cache = createArtworkCache({ ...deps, log: () => {} });
 
-  resize.mockRejectedValueOnce(new Error('sips failed'));
+  // A sips that writes part of its output before failing.
+  resize.mockImplementationOnce(async (_source, target) => {
+    await writeFile(target, 'partial');
+    throw new Error('sips failed');
+  });
   await expect(cache.get([A])).rejects.toThrow('sips failed');
+  expect(await readdir(dir)).not.toContain(`${A}.jpg`);
   expect(await readdir(join(dir, 'incoming'))).toEqual([]);
   expect(await cache.get([A])).toEqual({ [A]: `${A}.jpg` });
   expect(read).toHaveBeenCalledTimes(2);

@@ -2,7 +2,7 @@
 // the user's cache folder. Music.app is asked one batch at a time, never twice
 // for the same track in a session.
 import { execFile } from 'node:child_process';
-import { mkdir, readdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import {
@@ -80,14 +80,19 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
 
     const thumb = `${id}.jpg`;
     const source = join(incoming, original);
+    // Converted beside the original and moved in whole, so a failed sips never
+    // leaves a partial file under a name the next launch trusts.
+    const draft = join(incoming, `${id}.thumb.jpg`);
 
-    const failed = await resize(source, join(dir, thumb)).then(
-      () => undefined,
-      (error: unknown) => ({ error }),
-    );
+    const failed = await resize(source, draft)
+      .then(() => rename(draft, join(dir, thumb)))
+      .then(
+        () => undefined,
+        (error: unknown) => ({ error }),
+      );
 
-    // The original goes before anyone hears back, so no caller sees it linger.
-    await rm(source, { force: true }).catch(() => {});
+    // The leftovers go before anyone hears back, so no caller sees them linger.
+    await Promise.all([source, draft].map((file) => rm(file, { force: true }).catch(() => {})));
 
     if (!failed) return finish(id, thumb);
 
