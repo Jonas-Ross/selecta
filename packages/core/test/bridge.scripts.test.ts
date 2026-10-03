@@ -247,6 +247,9 @@ describe('player script contract', () => {
     // Stepping is muted, and the user's volume comes back however the script ends.
     expect(script.indexOf('Music.soundVolume = 0')).toBeLessThan(script.indexOf('Music.play(pl)'));
     expect(script).toMatch(/finally \{\s*Music\.soundVolume = volume;/);
+    // Already in the preview at or before the entry, it steps on rather than restarting.
+    expect(script).toContain('const restart = from < 1 || from > target;');
+    expect(script.indexOf('if (restart)')).toBeLessThan(script.indexOf('Music.play(pl)'));
     expect(script).not.toMatch(NO_WRITES);
   });
 
