@@ -69,8 +69,14 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
     answers.delete(id);
   }
 
-  async function thumbnail(id: string, original: string | null): Promise<void> {
+  async function thumbnail(id: string, original: ArtworkReadResult[string]): Promise<void> {
     if (original === null) return finish(id, null);
+
+    if (typeof original !== 'string')
+      return fail(
+        id,
+        new Error(`Music.app couldn't read this track's artwork (${original.error}).`),
+      );
 
     const thumb = `${id}.jpg`;
     const source = join(incoming, original);

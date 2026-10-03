@@ -8,7 +8,9 @@ const id = (n: number) => n.toString(16).toUpperCase().padStart(16, '0');
 const [A, B, C] = [id(0xa), id(0xb), id(0xc)];
 
 /** A Music.app stand-in: writes a PNG original for every ID except those without art. */
-async function setup(options: { noArt?: string[]; fail?: (ids: string[]) => boolean } = {}) {
+async function setup(
+  options: { noArt?: string[]; unreadable?: string[]; fail?: (ids: string[]) => boolean } = {},
+) {
   const dir = await mkdtemp(join(tmpdir(), 'selecta-art-'));
   let inFlight = 0;
   let maxInFlight = 0;
@@ -20,13 +22,14 @@ async function setup(options: { noArt?: string[]; fail?: (ids: string[]) => bool
 
     if (options.fail?.(ids)) throw new Error('osascript failed');
 
-    const written: Record<string, string | null> = {};
+    const written: Awaited<ReturnType<ArtworkDeps['read']>> = {};
 
     for (const track of ids) {
       if (options.noArt?.includes(track)) written[track] = null;
+      else if (options.unreadable?.includes(track)) written[track] = { error: -1712 };
       else {
         written[track] = `${track}.png`;
-        await writeFile(join(target, written[track]), 'png');
+        await writeFile(join(target, `${track}.png`), 'png');
       }
     }
 
@@ -132,4 +135,15 @@ it('answers anything but a persistent ID with null and never passes it on', asyn
     Object.fromEntries(odd.map((track) => [track, null])),
   );
   expect(read).not.toHaveBeenCalled();
+});
+
+it('fails a track whose own read failed, without remembering it or failing the rest', async () => {
+  const { read, deps } = await setup({ unreadable: [A] });
+  const cache = createArtworkCache(deps);
+  const [a, b] = [cache.get([A]), cache.get([B])];
+
+  await expect(a).rejects.toThrow('(-1712)');
+  expect(await b).toEqual({ [B]: `${B}.jpg` });
+  await cache.get([A]).catch(() => {});
+  expect(read).toHaveBeenCalledTimes(2);
 });

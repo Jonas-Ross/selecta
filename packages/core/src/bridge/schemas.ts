@@ -156,8 +156,9 @@ export const diagnostic = z.object({
 });
 export const artwork = z.record(
   z.string().regex(TRACK_PERSISTENT_ID),
-  z
-    .string()
-    .regex(/^[0-9A-F]{16}\.(jpg|png)$/)
-    .nullable(),
+  z.union([
+    z.string().regex(/^[0-9A-F]{16}\.(jpg|png)$/),
+    z.null(),
+    z.strictObject({ error: z.number().int() }),
+  ]),
 );

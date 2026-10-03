@@ -106,8 +106,9 @@ export const ARTWORK_BATCH_LIMIT = 40;
 export const TRACK_PERSISTENT_ID = /^[0-9A-F]{16}$/;
 
 // Per requested track ID: the file name written into the caller's directory
-// (`<ID>.jpg` or `<ID>.png`), or null when the track has no readable artwork.
-export type ArtworkReadResult = Record<string, string | null>;
+// (`<ID>.jpg` or `<ID>.png`), null when the track has no readable artwork, or
+// the Apple event error code when the read failed for another reason.
+export type ArtworkReadResult = Record<string, string | null | { error: number }>;
 
 export interface Bridge {
   // Explicit UI navigation only; full live order must match, including repeats.

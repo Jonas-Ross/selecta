@@ -212,7 +212,11 @@ function parseArtworkResult(
   if (
     keys.length !== requestedIds.length ||
     requestedIds.some((id) => !Object.hasOwn(result, id)) ||
-    requestedIds.some((id) => result[id] !== null && !result[id]!.startsWith(`${id}.`))
+    requestedIds.some((id) => {
+      const file = result[id];
+
+      return typeof file === 'string' && !file.startsWith(`${id}.`);
+    })
   )
     throw new BridgeError('jxa_error', 'Artwork readback differs from the requested track IDs.');
 

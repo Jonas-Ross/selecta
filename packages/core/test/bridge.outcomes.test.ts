@@ -286,10 +286,10 @@ describe('artwork read boundary', () => {
   const B = 'FEDCBA9876543210';
 
   it('reads each unique ID once and reports what was written', async () => {
-    vi.mocked(runJxa).mockResolvedValue({ [A]: `${A}.png`, [B]: null });
+    vi.mocked(runJxa).mockResolvedValue({ [A]: `${A}.png`, [B]: { error: -1712 } });
     await expect(bridge.readArtwork([A, B, A], '/art')).resolves.toEqual({
       [A]: `${A}.png`,
-      [B]: null,
+      [B]: { error: -1712 },
     });
     expect(vi.mocked(runJxa).mock.calls[0]![0]).toContain(
       JSON.stringify({ trackIds: [A, B], dir: '/art' }),
@@ -315,6 +315,7 @@ describe('artwork read boundary', () => {
     { [A]: `${A}.gif`, [B]: null },
     { [A]: '../escape.jpg', [B]: null },
     { [A]: true, [B]: null },
+    { [A]: { error: 'timeout' }, [B]: null },
   ])('rejects a readback that differs from the request: %j', async (payload) => {
     vi.mocked(runJxa).mockResolvedValue(payload);
     await expect(bridge.readArtwork([A, B], '/art')).rejects.toMatchObject({

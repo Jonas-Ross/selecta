@@ -76,8 +76,8 @@ Favorite/rating responses count only confirmed readbacks as `updated`; `mismatch
 - **Plain JXA can't read artwork bytes.** `artworks[0].rawData()` returns a hex string, and `.data()` and `.format()` are unusable.
 - **What works:** from JXA, `ObjC.import('Foundation')`, run `tell application "Music" to get raw data of artwork 1 of (first track … whose persistent ID is "<ID>")` with `$.NSAppleScript.alloc.initWithSource(src).executeAndReturnError(err)`, and write the result's `.data` with `writeToFileAtomically(path, true)`. The descriptor type is `'tdta'`; the bytes match plain AppleScript's `raw data` exactly. A nil result (`isNil()`) is a failure; read the code with `ObjC.deepUnwrap(err).NSAppleScriptErrorNumber`.
 - Fast: 50 tracks in one `osascript` call took 0.58s, one cold track 0.16s. Every image on a 3.7k-track library was JPEG, mostly 600×600, up to 1000×1000 (~850 KB).
-- **No artwork reads as -1728** ("Can't get object"). Some tracks report one artwork yet the read throws -1728, with -50 on its properties.
-- **A first read can fail transiently.** About 2% of tracks failed on a first full-library pass, and about half of those read fine moments later. The desktop app remembers a miss only until it restarts and never retries within a session.
+- **No artwork reads as -1728** ("Can't get object"). Some tracks report one artwork yet the read throws -1728, with -50 on its properties. Selecta reads only -1728 as no artwork; any other per-track code is reported as a failed read.
+- **A first read can fail transiently.** About 2% of tracks failed on a first full-library pass, and about half of those read fine moments later. The desktop app remembers a miss only until it restarts; a failed read is shown with a try-again action and never retried on its own.
 
 ## Opening the preview from a draft
 

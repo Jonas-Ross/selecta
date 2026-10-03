@@ -161,6 +161,8 @@ describe('artwork read script contract', () => {
     expect(script).toContain("args.dir + '/' + name");
     expect(script.indexOf('Music.running()')).toBeLessThan(script.indexOf('$.NSAppleScript'));
     expect(script).toContain('raw data of artwork 1');
+    // Only -1728 reads as no art; other per-track codes come back as failures.
+    expect(script).toContain('if (code !== -1728) written[id] = { error: code };');
     // A failed write fails the batch rather than reading as no art.
     expect(script).toContain("throw new Error('Cannot write artwork into '");
     expect(script).not.toMatch(

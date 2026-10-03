@@ -16,6 +16,9 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]).toString('base64')
 // permission, or Music.app not running. Rethrown so runJxa maps them.
 const FATAL = [-1743, -600, -609];
 
+// "Can't get object": the track has no artwork. Any other code is a failed read.
+const NO_ARTWORK = -1728;
+
 export function buildReadArtworkScript(args: { trackIds: string[]; dir: string }): string {
   if (args.trackIds.length > ARTWORK_BATCH_LIMIT)
     throw new BridgeError(
@@ -52,6 +55,7 @@ export function buildReadArtworkScript(args: { trackIds: string[]; dir: string }
         let code = 0;
         try { code = ObjC.deepUnwrap(err).NSAppleScriptErrorNumber; } catch (e) {}
         if (fatal.indexOf(code) !== -1) throw new Error('Music.app artwork read failed (' + code + ')');
+        if (code !== ${NO_ARTWORK}) written[id] = { error: code };
         continue;
       }
       const data = res.data;
