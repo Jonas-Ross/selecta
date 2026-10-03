@@ -80,6 +80,8 @@ export function buildControlPlayerScript(input: PlayerControl): string {
         }
         if (!paused) return JSON.stringify({ stillPlaying: true });
       }
+      // Shuffle turned on while paused would carry on through the draft out of order.
+      if (args.action === 'resume' && Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
       // play() with nothing paused would start whatever Music.app last had queued.
       if (args.action === 'resume' && state === 'paused') Music.play();
       if (args.action === 'seek' && state !== 'stopped') {

@@ -178,6 +178,7 @@ export const controlPlayer = z.union([
   z.strictObject({ elsewhere: z.literal(true) }),
   z.strictObject({ seekMissed: z.literal(true) }),
   z.strictObject({ stillPlaying: z.literal(true) }),
+  z.strictObject({ shuffled: z.literal(true) }),
   player,
 ]);
 export const playPreview = z.union([

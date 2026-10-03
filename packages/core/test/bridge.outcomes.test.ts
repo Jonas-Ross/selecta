@@ -282,6 +282,13 @@ describe('player boundary', () => {
     },
   );
 
+  it('refuses to resume once shuffle is on', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ shuffled: true });
+    await expect(
+      bridge.controlPlayer({ action: 'resume', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'validation_error' });
+  });
+
   it('reports a pause Music.app ignored, so a stop never detaches over playback', async () => {
     vi.mocked(runJxa).mockResolvedValue({ stillPlaying: true });
     await expect(

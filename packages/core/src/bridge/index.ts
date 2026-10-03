@@ -216,6 +216,13 @@ export const bridge: Bridge = {
         'Read the player again before seeking.',
       );
 
+    if ('shuffled' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Shuffle is on in Music.app.',
+        'Turn shuffle off in Music so it plays the draft in order. Nothing was resumed.',
+      );
+
     if ('stillPlaying' in result)
       throw new BridgeError(
         'jxa_error',

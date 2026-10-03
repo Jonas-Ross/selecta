@@ -226,6 +226,9 @@ describe('player script contract', () => {
   it('resumes only what is paused and seeks only what is loaded', async () => {
     const { buildControlPlayerScript } = await import('../src/bridge/scripts/player.js');
 
+    expect(
+      buildControlPlayerScript({ action: 'resume', on }).indexOf('Music.shuffleEnabled()'),
+    ).toBeLessThan(buildControlPlayerScript({ action: 'resume', on }).indexOf('Music.play()'));
     expect(buildControlPlayerScript({ action: 'resume', on })).toContain(
       "if (args.action === 'resume' && state === 'paused') Music.play();",
     );
