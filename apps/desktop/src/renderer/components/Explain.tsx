@@ -256,7 +256,7 @@ const TERMS = {
           does the mixing.
         </p>
         <p>
-          It needs the outgoing track's last minute or so, so a join starts 45 s before the end.
+          It needs the outgoing track's last minute or so, so a join starts a minute before the end.
         </p>
       </>
     ),

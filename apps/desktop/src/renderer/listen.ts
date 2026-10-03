@@ -6,7 +6,7 @@ import type { PlayerView } from '../shared/protocol.js';
 import type { Row } from './state.js';
 
 // AutoMix needs about this much of the outgoing track left to blend into the next.
-export const JOIN_LEAD = 45;
+export const JOIN_LEAD = 60;
 
 /** Where "Hear the join" starts the outgoing track. */
 export function joinStart(duration?: number): number {
