@@ -36,7 +36,9 @@ export function buildReadPlayerScript(): string {
 }
 
 // The entry the caller saw playing; the control acts only while Music.app is still on it.
-export type PlayerEntry = { playlistId: string; index: number; trackId: string };
+// `slot` names a reserved playlist the entry's playlist must be the only one of, for a
+// caller that recognised the preview by name after its ID rotated.
+export type PlayerEntry = { playlistId: string; index: number; trackId: string; slot?: string };
 
 export type PlayerControl = (
   | { action: 'pause' }
@@ -66,6 +68,14 @@ export function buildControlPlayerScript(input: PlayerControl): string {
         }
       };
       if (!here()) return JSON.stringify({ elsewhere: true });
+      if (args.on.slot !== undefined) {
+        const named = Music.playlists.whose({ name: args.on.slot })()
+          .filter(function (pl) { return pl.name() === args.on.slot && String(pl.class()) === 'userPlaylist'; });
+        // A copy sharing the name makes the match ambiguous, so it is never acted on.
+        if (named.length !== 1 || named[0].persistentID() !== args.on.playlistId) {
+          return JSON.stringify({ elsewhere: true });
+        }
+      }
       // A pause can be ignored, so it is retried until it reads back; callers rely on it.
       // Each retry re-checks the entry, so it never pauses music the user moved on to.
       if (args.action === 'pause' && state === 'playing') {

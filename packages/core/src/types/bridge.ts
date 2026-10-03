@@ -228,7 +228,7 @@ export interface Bridge {
   // Acts only while Music.app is still on `on`, checked in the same call.
   controlPlayer(
     input: ({ action: 'pause' } | { action: 'resume' } | { action: 'seek'; position: number }) & {
-      on: { playlistId: string; index: number; trackId: string };
+      on: { playlistId: string; index: number; trackId: string; slot?: string };
     },
   ): Promise<PlayerState>;
 

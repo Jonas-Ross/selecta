@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Draft } from '@selecta/core/drafts/contracts.js';
 import type { PlayerState } from '@selecta/core/types/bridge.js';
+import { withOperation } from '@selecta/core/operations/lock.js';
 import { BridgeError } from '@selecta/core/types/errors.js';
 import { PlaylistDraftTools } from '@selecta/core/tools/playlist_draft.js';
 import { makeToolDeps } from '../../../packages/core/test/helpers.js';
@@ -176,7 +177,7 @@ it('pauses its own preview on stop after iCloud rotates its ID', async () => {
   await player.detach(draft_id, 1);
   expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
     action: 'pause',
-    on: { playlistId: 'P-ROTATED', index: 1, trackId: A },
+    on: { playlistId: 'P-ROTATED', index: 1, trackId: A, slot: 'Selecta Preview' },
   });
 });
 
@@ -200,6 +201,16 @@ it('stays linked when Music.app will not pause', async () => {
   );
   await expect(player.detach(draft_id, 1)).rejects.toThrow(/would not pause/);
   expect(deps.drafts!().preview()?.status).toBe('current');
+});
+
+it('refuses transport controls while a preview sync holds the music lock', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  await withOperation(deps.cache(), 'music', async () => {
+    await expect(player.control(draft_id, { action: 'pause' })).rejects.toThrow(/Another music/);
+  });
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
 });
 
 it("won't pause, resume or seek music that isn't this draft", async () => {

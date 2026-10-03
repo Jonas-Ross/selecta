@@ -104,31 +104,35 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
 
   // The entry Music.app is on, read fresh, when it belongs to this draft; the bridge
   // re-checks it in the same call that acts, so a stale screen can't drive other music.
-  // `owned` accepts any entry of the draft's own slot, in step or not, for stopping it,
-  // matched by name too since iCloud can rotate the slot's ID after the last play rekeyed it.
+  // `owned` accepts any entry of the draft's own slot, in step or not, for stopping it.
+  // iCloud can rotate the slot's ID after the last play rekeyed it, so a name match is
+  // passed on for the bridge to confirm it is the only playlist of that name.
   const onThisDraft = async (draftId: string, owned = false) => {
     const player = await read();
 
     if (!player.running) return undefined;
 
-    const { slot } = current(draftId);
-    const ours = owned
-      ? slot?.owner === draftId &&
-        player.playlist !== undefined &&
-        (player.playlist.persistentId === slot.playlist_id ||
-          player.playlist.name === PREVIEW_PLAYLIST_NAME)
-      : show(draftId, player).entry_id !== undefined;
-
-    if (!ours) return undefined;
-
     const { playlist, track, index } = player;
 
     if (!playlist || !track || index === undefined) return undefined;
+
+    const { slot } = current(draftId);
+    const rotated =
+      owned &&
+      slot?.owner === draftId &&
+      playlist.persistentId !== slot.playlist_id &&
+      playlist.name === PREVIEW_PLAYLIST_NAME;
+    const ours = owned
+      ? slot?.owner === draftId && (playlist.persistentId === slot.playlist_id || rotated)
+      : show(draftId, player).entry_id !== undefined;
+
+    if (!ours) return undefined;
 
     return {
       playlistId: playlist.persistentId,
       index,
       trackId: track.persistentId,
+      ...(rotated && { slot: PREVIEW_PLAYLIST_NAME }),
     };
   };
 
@@ -184,24 +188,28 @@ export function createPlayer({ bridge, cache, drafts, preview }: PlayerDeps) {
       return { ...show(draftId, played.player), ...(played.route && { route: played.route }) };
     },
 
-    async control(draftId: string, input: Control) {
-      const on = await onThisDraft(draftId);
+    // Under the music lock, so a control can't interleave with a preview sync's rewrite.
+    control: (draftId: string, input: Control) =>
+      withOperation(cache(), 'music', async () => {
+        const on = await onThisDraft(draftId);
 
-      if (!on) throw new Error("Music isn't playing this draft, so nothing was changed.");
+        if (!on) throw new Error("Music isn't playing this draft, so nothing was changed.");
 
-      return show(draftId, watch(await bridge.controlPlayer({ ...input, on })));
-    },
+        return show(draftId, watch(await bridge.controlPlayer({ ...input, on })));
+      }),
 
     // Releases the link so Claude can edit again; Music.app keeps the playlist as it is.
     // Pauses first only if Music is playing this draft, never something the user moved on to.
     async detach(draftId: string, revision: number) {
-      const on = await onThisDraft(draftId, true);
-
       // Music moving off the draft between the read and the pause leaves nothing to pause.
-      if (on)
-        await bridge.controlPlayer({ action: 'pause', on }).catch((e: unknown) => {
-          if (!(e instanceof BridgeError && e.errorCode === 'preview_conflict')) throw e;
-        });
+      await withOperation(cache(), 'music', async () => {
+        const on = await onThisDraft(draftId, true);
+
+        if (on)
+          await bridge.controlPlayer({ action: 'pause', on }).catch((e: unknown) => {
+            if (!(e instanceof BridgeError && e.errorCode === 'preview_conflict')) throw e;
+          });
+      });
 
       const response = await preview({ draft_id: draftId, revision, mode: 'detach' });
       const problem = failure(response);

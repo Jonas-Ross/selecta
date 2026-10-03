@@ -223,6 +223,19 @@ describe('player script contract', () => {
     );
   });
 
+  it('acts on a preview matched by name only while it is the one playlist of that name', async () => {
+    const { buildControlPlayerScript } = await import('../src/bridge/scripts/player.js');
+    const script = buildControlPlayerScript({
+      action: 'pause',
+      on: { ...on, slot: 'Selecta Preview' },
+    });
+
+    expect(script).toContain(
+      'named.length !== 1 || named[0].persistentID() !== args.on.playlistId',
+    );
+    expect(script.indexOf('named.length !== 1')).toBeLessThan(script.indexOf('Music.pause()'));
+  });
+
   it('resumes only what is paused and seeks only what is loaded', async () => {
     const { buildControlPlayerScript } = await import('../src/bridge/scripts/player.js');
 
