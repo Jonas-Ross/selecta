@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { join, joins, RELATION_WORDS, tempoStep } from '../src/renderer/joins.js';
+import { join, RELATION_WORDS, tempoStep } from '../src/renderer/joins.js';
 
 it('words the tempo step in whole BPM', () => {
   expect(tempoStep(120, 122.4)).toBe('+2 BPM');
@@ -24,12 +24,4 @@ it('flags a join resting on a provisional key, but not an unknown one', () => {
   );
   expect(join({ camelot: '8A', key_maturity: 'provisional' }, {}).provisional).toBe(false);
   expect(join({ camelot: '8A' }, { camelot: '9A' }).provisional).toBe(false);
-});
-
-it('gives one join per gap', () => {
-  expect(joins([{ bpm: 120 }, { bpm: 122 }, { bpm: 122 }]).map((j) => j.tempo)).toEqual([
-    '+2 BPM',
-    'Same tempo',
-  ]);
-  expect(joins([{}])).toEqual([]);
 });

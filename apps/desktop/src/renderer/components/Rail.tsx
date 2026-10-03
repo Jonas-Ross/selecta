@@ -2,21 +2,21 @@
 // below. Every record's slot is a spring, so a drag, a removal or Claude's
 // edit moves records the same way, and the lanes are redrawn from where the
 // records are on each frame rather than where they will end up.
-import { useLayoutEffect, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import {
   bpmScale,
-  fitSize,
   formatClock,
   GUTTER,
-  keyBands,
+  keyRings,
   keyY,
+  labelFade,
   PAD,
   shelfLayout,
   slotX,
   startTimes,
   stepPath,
   tempoY,
-  type Segment,
+  type Box,
 } from '../lanes.js';
 import { useFrameLoop, useReducedMotion } from '../motion.js';
 import { dropSlot, slotUnder, withMoved } from '../reorder.js';
@@ -85,7 +85,6 @@ export function Rail({
   const scroller = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const anims = useRef(new Map<string, Anim>());
-  const size = useRef<Spring>(undefined);
   const drag = useRef<Drag>(undefined);
   const recs = useRef(new Map<string, HTMLElement>());
   const focused = useRef<string>(undefined);
@@ -98,10 +97,10 @@ export function Rail({
 
   const ids = items.map((row) => row.entry_id);
   const count = items.length;
-  const goal = dims.w ? fitSize(dims.w, dims.h, count) : 110;
-
-  // Sized from the first measurement, so opening a draft doesn't animate a resize.
-  if (dims.w) size.current ??= rest(goal);
+  const rings = useMemo(() => keyRings(items.map((row) => row.camelot)), [items]);
+  const scale = useMemo(() => bpmScale(items.map((row) => row.bpm)), [items]);
+  const shelf = shelfLayout(dims.h, rings);
+  const step = shelf.step;
 
   useLayoutEffect(() => {
     const node = box.current!;
@@ -203,8 +202,6 @@ export function Rail({
       return next;
     };
 
-    if (size.current) size.current = spring(size.current, goal, SLIDE);
-
     for (const [id, anim] of anims.current) {
       const held = d?.moved && d.id === id;
 
@@ -251,9 +248,6 @@ export function Rail({
       if (anim) anim.pos.v += dir * 1.6;
     }
   }
-
-  const shelf = shelfLayout(dims.h, size.current?.x ?? goal);
-  const step = shelf.step;
 
   function follow(d: Drag) {
     const sc = scroller.current!;
@@ -338,7 +332,8 @@ export function Rail({
     }
 
     const anim = anims.current.get(d.id)!;
-    const to = cancelled ? ids.indexOf(d.id) : dropSlot(d.pos, d.vel, count);
+    // The draft can lock mid-drag (a preview linked elsewhere); then the record goes back.
+    const to = cancelled || locked ? ids.indexOf(d.id) : dropSlot(d.pos, d.vel, count);
 
     anim.pos = { x: d.pos, v: Math.max(-14, Math.min(14, d.vel)) };
     land(d.id);
@@ -422,38 +417,35 @@ export function Rail({
     .filter(([, anim]) => !anim.leaving)
     .sort(([, a], [, b]) => a.pos.x - b.pos.x);
   const held = drag.current?.moved ? drag.current.id : undefined;
-  const scale = bpmScale(items.map((row) => row.bpm));
-  const tempoSegments: Segment[] = [];
-  const keySegments: Segment[] = [];
-
-  for (const [id, { row, pos }] of standing) {
+  const slots = standing.map(([id, { row, pos }]) => {
     const x0 = slotX(pos.x, step);
-    const hot = id === held;
 
-    tempoSegments.push({
+    return {
+      id,
+      row,
       x0,
-      x1: x0 + step,
-      y: row.bpm === undefined ? undefined : tempoY(row.bpm, scale, shelf.tempo),
-      hot,
-    });
-    keySegments.push({ x0, x1: x0 + step, y: keyY(row.camelot, shelf.key), hot });
-  }
-
-  const tempo = stepPath(tempoSegments);
-  const keys = stepPath(keySegments);
-  const starts = startTimes(standing.map(([, { row }]) => row.duration_seconds));
+      tempo: row.bpm === undefined ? undefined : tempoY(row.bpm, scale, shelf.tempo),
+      key: keyY(row.camelot, shelf.bands),
+    };
+  });
+  const path = (y: 'tempo' | 'key') =>
+    stepPath(
+      slots.map((slot) => ({ x0: slot.x0, x1: slot.x0 + step, y: slot[y], hot: slot.id === held })),
+    );
+  const tempo = path('tempo');
+  const keys = path('key');
+  const starts = startTimes(slots.map((slot) => slot.row.duration_seconds));
   const view = Math.max(0, dims.w - GUTTER);
   const width = Math.max(view, PAD * 2 + count * step);
-  const bands = keyBands(shelf.key);
-  const lanes = [shelf.tempo, bands.B, bands.A];
+  const { bands } = shelf;
+  // Labels and joins are drawn only near the visible stretch; a long draft has hundreds.
+  const scrolled = scroller.current?.scrollLeft ?? 0;
+  const near = (x: number) => x > scrolled - step * 2 && x < scrolled + view + step;
 
   let grid = '';
 
-  for (const value of scale.grid) {
-    const y = tempoY(value, scale, shelf.tempo);
-
-    grid += `M0 ${y.toFixed(1)}H${width}`;
-  }
+  for (const value of scale.grid)
+    grid += `M0 ${tempoY(value, scale, shelf.tempo).toFixed(1)}H${width}`;
 
   for (const band of [bands.B, bands.A])
     if (band.height > 36)
@@ -462,11 +454,18 @@ export function Rail({
 
   let seams = '';
 
-  for (const [, { pos }] of standing.slice(1)) {
-    const x = slotX(pos.x, step).toFixed(1);
+  for (const { x0 } of slots.slice(1))
+    seams += `M${x0.toFixed(1)} ${shelf.tempo.top}v${shelf.tempo.height}M${x0.toFixed(1)} ${shelf.key.top}v${shelf.key.height}`;
 
-    seams += `M${x} ${shelf.tempo.top}v${shelf.tempo.height}M${x} ${shelf.key.top}v${shelf.key.height}`;
-  }
+  const missing = (x0: number, lane: Box) =>
+    step > 84 && (
+      <span
+        className="missing"
+        style={{ transform: `translate(${x0 + step / 2}px, ${lane.top + lane.height / 2 - 7}px)` }}
+      >
+        <Term name="missing">not measured</Term>
+      </span>
+    );
 
   return (
     <div className={`rail-area${locked ? ' locked' : ''}`} ref={box}>
@@ -505,7 +504,10 @@ export function Rail({
           <div
             className={`rail-scroll${edges.left ? ' more-left' : ''}${edges.right ? ' more-right' : ''}`}
             ref={scroller}
-            onScroll={(e) => edge(e.currentTarget)}
+            onScroll={(e) => {
+              edge(e.currentTarget);
+              render();
+            }}
             onWheel={(e) => {
               if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY;
             }}
@@ -524,7 +526,7 @@ export function Rail({
                   </pattern>
                 </defs>
                 <path className="lane-grid" d={grid || 'M0 0'} />
-                {lanes.map((lane, i) => (
+                {[shelf.tempo, bands.B, bands.A].map((lane, i) => (
                   <rect
                     key={i}
                     className="lane-box"
@@ -536,9 +538,9 @@ export function Rail({
                 ))}
                 <path className="lane-seams" d={seams || 'M0 0'} />
                 {[
-                  { box: shelf.tempo, gaps: tempo.gaps },
-                  { box: shelf.key, gaps: keys.gaps },
-                ].flatMap(({ box: lane, gaps }, i) =>
+                  { lane: shelf.tempo, gaps: tempo.gaps },
+                  { lane: shelf.key, gaps: keys.gaps },
+                ].flatMap(({ lane, gaps }, i) =>
                   gaps.map((gap, k) => (
                     <rect
                       key={`${i}-${k}`}
@@ -550,186 +552,174 @@ export function Rail({
                     />
                   )),
                 )}
-                <path className="step" d={tempo.d || 'M0 0'} />
-                <path className="step" d={keys.d || 'M0 0'} />
+                <path className="step" d={tempo.d + keys.d || 'M0 0'} />
                 <path className="step-hot" d={tempo.hot + keys.hot || 'M0 0'} />
                 <path className="step-caps" d={tempo.caps + keys.caps || 'M0 0'} />
               </svg>
 
-              {standing.map(([id, { row, pos }], k) => {
-                const x0 = slotX(pos.x, step);
-                const wide = step > 84;
-                const tempoAt = tempoSegments[k].y;
-                const keyAt = keySegments[k].y;
+              {slots.map(
+                (slot, k) =>
+                  near(slot.x0) && (
+                    <div key={slot.id} className="slot-labels">
+                      <span
+                        className="tick"
+                        style={{ transform: `translate(${slot.x0 + 4}px, ${shelf.tick}px)` }}
+                      >
+                        {formatClock(starts[k].seconds)}
+                        {starts[k].partial ? '+' : ''}
+                      </span>
+                      {slot.tempo === undefined ? (
+                        missing(slot.x0, shelf.tempo)
+                      ) : (
+                        <ValueLabel
+                          kind="tempo"
+                          row={slot.row}
+                          x={slot.x0 + 6}
+                          y={slot.tempo - 16}
+                          hot={slot.id === held}
+                        />
+                      )}
+                      {slot.key === undefined ? (
+                        missing(slot.x0, shelf.key)
+                      ) : (
+                        <ValueLabel
+                          kind="key"
+                          row={slot.row}
+                          x={slot.x0 + 6}
+                          y={slot.key - 16}
+                          hot={slot.id === held}
+                        />
+                      )}
+                    </div>
+                  ),
+              )}
 
-                return (
-                  <div key={id} className="slot-labels">
-                    <span
-                      className="tick"
-                      style={{ transform: `translate(${x0 + 4}px, ${shelf.tick}px)` }}
-                    >
-                      {formatClock(starts[k].seconds)}
-                      {starts[k].partial ? '+' : ''}
-                    </span>
-                    {tempoAt !== undefined ? (
-                      <ValueLabel
-                        kind="tempo"
-                        row={row}
-                        x={x0 + 6}
-                        y={tempoAt - 16}
-                        hot={id === held}
-                      />
-                    ) : (
-                      wide && (
-                        <span
-                          className="missing"
-                          style={{
-                            transform: `translate(${x0 + step / 2}px, ${shelf.tempo.top + shelf.tempo.height / 2 - 7}px)`,
-                          }}
-                        >
-                          <Term name="missing">not measured</Term>
-                        </span>
-                      )
-                    )}
-                    {keyAt !== undefined ? (
-                      <ValueLabel
-                        kind="key"
-                        row={row}
-                        x={x0 + 6}
-                        y={keyAt - 16}
-                        hot={id === held}
-                      />
-                    ) : (
-                      wide && (
-                        <span
-                          className="missing"
-                          style={{
-                            transform: `translate(${x0 + step / 2}px, ${shelf.key.top + shelf.key.height / 2 - 7}px)`,
-                          }}
-                        >
-                          <Term name="missing">not measured</Term>
-                        </span>
-                      )
-                    )}
-                  </div>
+              {slots.slice(1).map((slot, k) => {
+                const prev = slots[k];
+                // A join's room is the narrower slot beside it; squeezed joins drop their words first.
+                const room = Math.min(
+                  slot.x0 - prev.x0,
+                  (slots[k + 2]?.x0 ?? slot.x0 + step) - slot.x0,
                 );
-              })}
-
-              {standing.slice(1).map(([id, { row, pos }], k) => {
-                const [prevId, prev] = standing[k];
 
                 return (
-                  <JoinMarker
-                    key={`${prevId}|${id}`}
-                    from={prev.row}
-                    to={row}
-                    position={k + 1}
-                    x={slotX(pos.x, step)}
-                    rail={shelf.rail}
-                    y={shelf.join}
-                    width={step - 8}
-                    hot={held === id || held === prevId}
-                    flashAt={
-                      landed && (landed.id === id || landed.id === prevId) ? landed.at : undefined
-                    }
-                  />
+                  near(slot.x0) && (
+                    <JoinMarker
+                      key={`${prev.id}|${slot.id}`}
+                      from={prev.row}
+                      to={slot.row}
+                      position={k + 1}
+                      x={slot.x0}
+                      rail={shelf.rail}
+                      y={shelf.join}
+                      width={step - 8}
+                      hot={held === slot.id || held === prev.id}
+                      words={labelFade(room, step * 0.85, step * 0.1)}
+                      tempo={labelFade(room, 72, 20)}
+                      flashAt={
+                        landed && (landed.id === slot.id || landed.id === prev.id)
+                          ? landed.at
+                          : undefined
+                      }
+                    />
+                  )
                 );
               })}
 
               <div className="recs" role="list" aria-label="Draft order">
-                {[
-                  ...items.map((row) => row.entry_id),
-                  ...[...anims.current.keys()].filter((id) => !ids.includes(id)),
-                ].map((id) => {
-                  const anim = anims.current.get(id);
+                {[...ids, ...[...anims.current.keys()].filter((id) => !ids.includes(id))].map(
+                  (id) => {
+                    const anim = anims.current.get(id);
 
-                  if (!anim) return null;
+                    if (!anim) return null;
 
-                  const { row, pos, lift, squash, grow, leaving } = anim;
-                  const index = ids.indexOf(id);
-                  const isHeld = id === held;
-                  const x = slotX(pos.x, step) + shelf.gap / 2;
-                  // Tops lag the push: the record in hand leans further than ones it shoves along.
-                  const lean = isHeld ? 2.4 : 1.4;
-                  const tilt = reduced ? 0 : Math.max(-8, Math.min(8, -pos.v * lean));
-                  const sq = squash.x;
-                  const isSelected = selected.has(id);
-                  const label = [
-                    `${index + 1} of ${count}: ${row.title ?? row.track_id} by ${row.artist ?? 'unknown'}`,
-                    row.bpm === undefined ? 'tempo not measured' : `${Math.round(row.bpm)} BPM`,
-                    row.camelot ?? 'key not measured',
-                    ...(isSelected ? ['selected for feedback'] : []),
-                  ].join(', ');
+                    const { row, pos, lift, squash, grow, leaving } = anim;
+                    const index = ids.indexOf(id);
+                    const isHeld = id === held;
+                    const x = slotX(pos.x, step) + shelf.gap / 2;
+                    // Tops lag the push: the record in hand leans further than ones it shoves along.
+                    const lean = isHeld ? 2.4 : 1.4;
+                    const tilt = reduced ? 0 : Math.max(-8, Math.min(8, -pos.v * lean));
+                    const sq = squash.x;
+                    const isSelected = selected.has(id);
+                    const label = [
+                      `${index + 1} of ${count}: ${row.title ?? row.track_id} by ${row.artist ?? 'unknown'}`,
+                      row.bpm === undefined ? 'tempo not measured' : `${Math.round(row.bpm)} BPM`,
+                      row.camelot ?? 'key not measured',
+                      ...(isSelected ? ['selected for feedback'] : []),
+                    ].join(', ');
 
-                  return (
-                    <div
-                      key={id}
-                      ref={(node) => {
-                        if (node) recs.current.set(id, node);
-                        else recs.current.delete(id);
-                      }}
-                      className={`rec${isSelected ? ' sel' : ''}${isHeld ? ' held' : ''}${leaving ? ' leaving' : ''}`}
-                      role="listitem"
-                      tabIndex={leaving ? -1 : 0}
-                      aria-label={`${label}. Enter selects${locked ? '' : ', Alt and arrow keys move it, Delete removes it'}.`}
-                      style={{
-                        width: shelf.size,
-                        height: shelf.size,
-                        transform: `translate3d(${x.toFixed(1)}px, ${(shelf.rail - shelf.size + (isHeld ? drag.current!.dy : 0)).toFixed(1)}px, 0)`,
-                        zIndex: isHeld || lift.x > 0.02 ? 5 : undefined,
-                      }}
-                      onPointerDown={(e) => !leaving && press(e, id)}
-                      onPointerMove={moveTo}
-                      onPointerUp={(e) => release(e, false)}
-                      onPointerCancel={(e) => release(e, true)}
-                      onKeyDown={(e) => key(e, id)}
-                      onFocus={() => {
-                        focused.current = id;
-                        reveal(index);
-                      }}
-                      onBlur={() => (focused.current = undefined)}
-                    >
+                    return (
                       <div
-                        className="rec-body"
-                        style={{
-                          transform: `translateY(${(-14 * lift.x).toFixed(2)}px) rotate(${tilt.toFixed(2)}deg) scale(${((1 + 0.06 * lift.x) * grow.x).toFixed(4)}) scale(${(1 + 0.03 * sq).toFixed(4)}, ${(1 - 0.07 * sq).toFixed(4)})`,
-                          opacity: Math.min(1, grow.x * 1.4),
+                        key={id}
+                        ref={(node) => {
+                          if (node) recs.current.set(id, node);
+                          else recs.current.delete(id);
                         }}
+                        className={`rec${isSelected ? ' sel' : ''}${isHeld ? ' held' : ''}${leaving ? ' leaving' : ''}`}
+                        role="listitem"
+                        tabIndex={leaving ? -1 : 0}
+                        aria-label={`${label}. Enter selects${locked ? '' : ', Alt and arrow keys move it, Delete removes it'}.`}
+                        style={{
+                          width: shelf.size,
+                          height: shelf.size,
+                          transform: `translate3d(${x.toFixed(1)}px, ${(shelf.rail - shelf.size + (isHeld ? drag.current!.dy : 0)).toFixed(1)}px, 0)`,
+                          zIndex: isHeld || lift.x > 0.02 ? 5 : undefined,
+                        }}
+                        onPointerDown={(e) => !leaving && press(e, id)}
+                        onPointerMove={moveTo}
+                        onPointerUp={(e) => release(e, false)}
+                        onPointerCancel={(e) => release(e, true)}
+                        onKeyDown={(e) => key(e, id)}
+                        onFocus={() => {
+                          focused.current = id;
+                          reveal(index);
+                        }}
+                        onBlur={() => (focused.current = undefined)}
                       >
-                        <Sleeve trackId={row.track_id} title={row.title} />
-                      </div>
-                      {!locked && !leaving && (
-                        <button
-                          type="button"
-                          className="rec-x"
-                          tabIndex={-1}
-                          disabled={count === 1}
-                          aria-label={`Remove ${row.title ?? 'track'}`}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRemove(id);
+                        <div
+                          className="rec-body"
+                          style={{
+                            transform: `translateY(${(reduced ? 0 : -14 * lift.x).toFixed(2)}px) rotate(${tilt.toFixed(2)}deg) scale(${((1 + 0.06 * lift.x) * grow.x).toFixed(4)}) scale(${(1 + 0.03 * sq).toFixed(4)}, ${(1 - 0.07 * sq).toFixed(4)})`,
+                            opacity: Math.min(1, grow.x * 1.4),
                           }}
                         >
-                          <svg viewBox="0 0 10 10" aria-hidden="true">
-                            <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
-                          </svg>
-                        </button>
-                      )}
-                      <div
-                        className="cap"
-                        style={{
-                          width: shelf.size + shelf.gap - 10,
-                          top: shelf.size + 10,
-                          opacity: isHeld ? 0.3 : Math.min(1, grow.x),
-                        }}
-                      >
-                        <span className="cap-title">{row.title ?? row.track_id}</span>
-                        <span className="cap-artist">{row.artist ?? 'Unknown artist'}</span>
+                          <Sleeve trackId={row.track_id} title={row.title} />
+                        </div>
+                        {!locked && !leaving && (
+                          <button
+                            type="button"
+                            className="rec-x"
+                            tabIndex={-1}
+                            disabled={count === 1}
+                            aria-label={`Remove ${row.title ?? 'track'}`}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemove(id);
+                            }}
+                          >
+                            <svg viewBox="0 0 10 10" aria-hidden="true">
+                              <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
+                            </svg>
+                          </button>
+                        )}
+                        {/* Lifted records leave their caption behind; it returns as they land. */}
+                        <div
+                          className="cap"
+                          style={{
+                            width: shelf.size + shelf.gap - 10,
+                            top: shelf.size + 10,
+                            opacity: Math.min(1, grow.x) * (1 - lift.x),
+                          }}
+                        >
+                          <span className="cap-title">{row.title ?? row.track_id}</span>
+                          <span className="cap-artist">{row.artist ?? 'Unknown artist'}</span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  },
+                )}
               </div>
             </div>
           </div>

@@ -37,6 +37,23 @@ export function rows(view: DraftView): Row[] {
   return (view.draft?.entries ?? []).map((entry, index) => ({ ...tracks[index], ...entry }));
 }
 
+/**
+ * The order the user just made, ahead of the stored one until its edit
+ * settles. Entries the store has since dropped vanish, and ones it has since
+ * added (Claude, mid-drag) keep their stored place after the pending ones.
+ */
+export function pendingOrder(items: Row[], pending?: string[]): Row[] {
+  if (!pending) return items;
+
+  const byId = new Map(items.map((row) => [row.entry_id, row]));
+  const placed = new Set(pending);
+
+  return [
+    ...pending.flatMap((id) => byId.get(id) ?? []),
+    ...items.filter((row) => !placed.has(row.entry_id)),
+  ];
+}
+
 /** Core mirrors ordered edits of a linked draft into Music.app's preview playlist. */
 export function previewLinked(view: DraftView): boolean {
   return (
@@ -55,14 +72,6 @@ export function move<T>(items: T[], from: number, to: number): T[] {
   return next;
 }
 
-export function formatDuration(seconds?: number): string {
-  if (seconds === undefined) return '';
-
-  const whole = Math.round(seconds);
-
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
-}
-
 /** Known minutes, and whether some lengths are missing so the real total is longer. */
 export function totals(items: Row[]) {
   const known = items.flatMap((row) => row.duration_seconds ?? []);
@@ -72,12 +81,6 @@ export function totals(items: Row[]) {
     minutes: Math.round(known.reduce((sum, value) => sum + value, 0) / 60),
     partial: known.length < items.length,
   };
-}
-
-export function totalDuration(items: Row[]): string {
-  const { tracks, minutes, partial } = totals(items);
-
-  return `${tracks} tracks · ${minutes} min${partial ? '+' : ''}`;
 }
 
 /** Slowest and fastest measured tempo, whole BPM; undefined when none is measured. */

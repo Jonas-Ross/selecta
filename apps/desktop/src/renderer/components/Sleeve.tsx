@@ -4,7 +4,7 @@
 import { memo } from 'react';
 
 /** FNV-1a: small, stable, and enough to vary three details. */
-export function hash(text: string): number {
+function hash(text: string): number {
   let h = 0x811c9dc5;
 
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);

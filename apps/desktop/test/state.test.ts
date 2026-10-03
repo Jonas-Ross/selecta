@@ -2,10 +2,10 @@ import { expect, it } from 'vitest';
 import {
   bpmSpan,
   feedbackMessage,
-  formatDuration,
   logAgentEvent,
   move,
   orphanRuns,
+  pendingOrder,
   previewLinked,
   recoverRuns,
   rejectRun,
@@ -13,7 +13,6 @@ import {
   runEvent,
   saveLabel,
   saveOutcome,
-  totalDuration,
   totals,
   type Run,
 } from '../src/renderer/state.js';
@@ -39,20 +38,6 @@ it('moves an item without mutating the original', () => {
   expect(move(items, 3, 0)).toEqual(['d', 'a', 'b', 'c']);
   expect(move(items, 0, 2)).toEqual(['b', 'c', 'a', 'd']);
   expect(items).toEqual(['a', 'b', 'c', 'd']);
-});
-
-it('formats durations and marks totals with unknown lengths', () => {
-  expect(formatDuration(305.4)).toBe('5:05');
-  expect(formatDuration()).toBe('');
-  expect(
-    totalDuration([
-      { ...entry('a'), duration_seconds: 300 },
-      { ...entry('b'), duration_seconds: 330 },
-    ]),
-  ).toBe('2 tracks · 11 min');
-  expect(totalDuration([{ ...entry('a'), duration_seconds: 300 }, entry('b')])).toBe(
-    '2 tracks · 5 min+',
-  );
 });
 
 it('names selected tracks as the subject of feedback', () => {
@@ -191,7 +176,7 @@ it('catches up from the host record without undoing what already arrived', () =>
   ]);
 });
 
-it('counts known minutes and the measured tempo span', () => {
+it('counts known minutes, marking unknown lengths, and the measured tempo span', () => {
   const items = [
     { ...entry('a'), duration_seconds: 300, bpm: 121.6 },
     { ...entry('b'), bpm: 118.2 },
@@ -201,4 +186,17 @@ it('counts known minutes and the measured tempo span', () => {
   expect(totals(items)).toEqual({ tracks: 3, minutes: 5, partial: true });
   expect(bpmSpan(items)).toEqual([118, 122]);
   expect(bpmSpan([entry('a')])).toBeUndefined();
+});
+
+it('shows a pending order over the stored one, keeping what the store changed meanwhile', () => {
+  const stored = [entry('a'), entry('b'), entry('c')];
+
+  expect(pendingOrder(stored)).toBe(stored);
+  expect(pendingOrder(stored, ['c', 'a', 'b']).map((row) => row.entry_id)).toEqual(['c', 'a', 'b']);
+  // Claude removed b and added d while the user's move was still queued.
+  expect(
+    pendingOrder([entry('a'), entry('c'), entry('d')], ['c', 'a', 'b']).map((row) => row.entry_id),
+  ).toEqual(['c', 'a', 'd']);
+  // A removal pending on the last-but-one entry never leaves an empty rail from stale ids.
+  expect(pendingOrder([entry('a')], []).map((row) => row.entry_id)).toEqual(['a']);
 });

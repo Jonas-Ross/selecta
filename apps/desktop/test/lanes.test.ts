@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest';
 import {
   bpmScale,
-  fitSize,
   formatClock,
-  keyBands,
+  keyRings,
   keyY,
+  labelFade,
   shelfLayout,
   startTimes,
   stepPath,
@@ -36,16 +36,27 @@ it('puts faster tempos higher, inside the lane', () => {
   expect(tempoY(1, scale, box)).toBeLessThanOrEqual(box.top + box.height);
 });
 
-it('draws B above A, 12 at the top of each band, and nothing for a missing key', () => {
-  const box = { top: 0, height: 208 };
-  const { A, B } = keyBands(box);
+it('draws B above A, 12 at the top of each ring, and nothing for a missing key', () => {
+  const { bands } = shelfLayout(800, { A: true, B: true });
 
-  expect(B.top).toBeLessThan(A.top);
-  expect(keyY('8B', box)!).toBeLessThan(B.top + B.height);
-  expect(keyY('8A', box)!).toBeGreaterThan(A.top);
-  expect(keyY('12A', box)!).toBeLessThan(keyY('1A', box)!);
-  expect(keyY(undefined, box)).toBeUndefined();
-  expect(keyY('C minor', box)).toBeUndefined();
+  expect(bands.B.top).toBeLessThan(bands.A.top);
+  expect(keyY('8B', bands)!).toBeLessThan(bands.B.top + bands.B.height);
+  expect(keyY('8A', bands)!).toBeGreaterThan(bands.A.top);
+  expect(keyY('12A', bands)!).toBeLessThan(keyY('1A', bands)!);
+  expect(keyY(undefined, bands)).toBeUndefined();
+  expect(keyY('C minor', bands)).toBeUndefined();
+});
+
+it('shrinks a ring the draft never uses and gives the height to the records', () => {
+  expect(keyRings(['8A', undefined, '9A'])).toEqual({ A: true, B: false });
+  expect(keyRings(['10B', 'nope'])).toEqual({ A: false, B: true });
+
+  const both = shelfLayout(560, { A: true, B: true });
+  const minorOnly = shelfLayout(560, { A: true, B: false });
+
+  expect(minorOnly.bands.B.height).toBeLessThan(both.bands.B.height);
+  expect(minorOnly.bands.A.height).toBe(both.bands.A.height);
+  expect(minorOnly.size).toBeGreaterThan(both.size);
 });
 
 it('breaks the step line at a missing value instead of bridging it', () => {
@@ -83,24 +94,26 @@ it('starts each record after the known lengths before it', () => {
   expect(formatClock(3725)).toBe('1:02:05');
 });
 
-it('shrinks records to fit the set, then scrolls, and stacks the bands in order', () => {
-  const few = fitSize(1088, 780, 4);
-  const many = fitSize(1088, 780, 40);
+it('stacks the bands in order inside the rail area, records large but bounded', () => {
+  for (const height of [520, 812, 1400]) {
+    const shelf = shelfLayout(height, { A: true, B: true });
 
-  expect(few).toBeGreaterThan(many);
-  // A tall rail keeps records readable and scrolls instead; a short one shrinks to the floor.
-  expect(many).toBe(Math.round(780 * 0.14));
-  expect(fitSize(1088, 400, 40)).toBe(92);
-  expect(few).toBeLessThanOrEqual(150);
-
-  for (const size of [few, many]) {
-    const shelf = shelfLayout(780, size);
-
+    expect(shelf.size).toBeGreaterThanOrEqual(92);
+    expect(shelf.size).toBeLessThanOrEqual(212);
     expect(shelf.step).toBe(shelf.size + shelf.gap);
     expect(shelf.tempo.top + shelf.tempo.height).toBeLessThan(shelf.rail - shelf.size);
-    expect(shelf.caption).toBeGreaterThan(shelf.rail);
-    expect(shelf.join).toBeGreaterThan(shelf.caption);
+    expect(shelf.join).toBeGreaterThan(shelf.rail);
     expect(shelf.key.top).toBeGreaterThan(shelf.join);
-    expect(shelf.key.top + shelf.key.height).toBeLessThanOrEqual(780);
+    expect(shelf.bands.A.top + shelf.bands.A.height).toBe(shelf.key.top + shelf.key.height);
+
+    if (height >= 812) expect(shelf.key.top + shelf.key.height).toBeLessThanOrEqual(height);
   }
+
+  expect(shelfLayout(812, { A: true, B: true }).size).toBe(212);
+});
+
+it('fades a label out as its room drops below what it needs', () => {
+  expect(labelFade(200, 100, 20)).toBe(1);
+  expect(labelFade(110, 100, 20)).toBe(0.5);
+  expect(labelFade(60, 100, 20)).toBe(0);
 });

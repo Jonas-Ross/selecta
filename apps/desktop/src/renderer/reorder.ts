@@ -16,9 +16,3 @@ export function withMoved(ids: string[], id: string, to: number): string[] {
 
   return rest;
 }
-
-/**
- * The entry a move to `to` names as its target: `move` in the edit queue puts
- * the dragged entry where that one stands now.
- */
-export const targetAt = (ids: string[], to: number) => ids[to];

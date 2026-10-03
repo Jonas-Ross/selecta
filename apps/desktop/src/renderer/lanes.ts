@@ -16,39 +16,46 @@ export type Shelf = {
   tempo: Box;
   tick: number; // y of the set-time labels
   rail: number; // y of the rail the records stand on
-  caption: number;
   join: number;
   key: Box;
+  bands: { B: Box; A: Box };
 };
 
 const clamp = (value: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, value));
 
-/**
- * Records shrink to fit the whole set in view, down to a size that still
- * reads; past that the rail scrolls.
- */
-export function fitSize(width: number, height: number, count: number): number {
-  const room = Math.max(0, width - GUTTER - PAD * 2);
-  const fit = room / Math.max(1, count) - 40;
+// Twelve rows per wheel ring; a ring the draft never touches shrinks to a labelled strip.
+const KEY_ROW = 5;
+const EMPTY_BAND = 20;
+const BAND_GAP = 8;
 
-  // A tall window keeps records large even when that means scrolling.
-  return Math.round(clamp(Math.max(Math.min(fit, height * 0.19), height * 0.14), 92, 150));
+export type Rings = { A: boolean; B: boolean };
+
+/** Which wheel rings, minor (A) and major (B), the draft's keys sit on. */
+export function keyRings(camelots: (string | undefined)[]): Rings {
+  const modes = new Set(camelots.map((camelot) => parseCamelot(camelot)?.mode));
+
+  return { A: modes.has('A'), B: modes.has('B') };
 }
 
 /**
- * The bands around records of `size`. Lanes take what height is left, capped
- * so a tall window doesn't stretch a few BPM into a cliff.
+ * Lanes are sized by what they hold and records take the rest of the height,
+ * up to a size past which too few fit across. What still remains is air,
+ * mostly below so the rail sits high.
  */
-export function shelfLayout(height: number, size: number): Shelf {
+export function shelfLayout(height: number, rings: Rings): Shelf {
+  const tempoH = clamp(height * 0.17, 84, 150);
+  const bandB = rings.B ? 12 * KEY_ROW : EMPTY_BAND;
+  const bandA = rings.A ? 12 * KEY_ROW : EMPTY_BAND;
+  const keyH = bandB + BAND_GAP + bandA;
+  // Lane title, tick row, captions, joins with the key title, bottom margin.
+  const fixed = 28 + 24 + 46 + 54 + 16;
+  const size = Math.round(clamp(height - fixed - tempoH - keyH - 40, 92, 212));
   // Wide enough for a two-line join marker between neighbours.
-  const gap = clamp(size * 0.42, 40, 60);
-  const fixed = 28 + 24 + size + 46 + 54 + 16;
-  const spare = Math.max(0, height - fixed);
-  const tempoH = clamp(spare * 0.42, 64, 150);
-  const keyH = clamp(spare * 0.5, 96, 190);
-  // Whatever the caps leave is split above and below, a little less above.
-  const top = Math.max(0, (spare - tempoH - keyH) * 0.3) + 28;
+  const gap = Math.round(clamp(size * 0.34, 48, 64));
+  const spare = Math.max(0, height - fixed - tempoH - keyH - size);
+  const top = 28 + spare * 0.3;
   const rail = top + tempoH + 24 + size;
+  const keyTop = rail + 46 + 54;
 
   return {
     size,
@@ -57,11 +64,18 @@ export function shelfLayout(height: number, size: number): Shelf {
     tempo: { top, height: tempoH },
     tick: top + tempoH + 5,
     rail,
-    caption: rail + 10,
     join: rail + 46,
-    key: { top: rail + 46 + 54, height: keyH },
+    key: { top: keyTop, height: keyH },
+    bands: {
+      B: { top: keyTop, height: bandB },
+      A: { top: keyTop + bandB + BAND_GAP, height: bandA },
+    },
   };
 }
+
+/** How visible a label is when `room` pixels are free: gone below `need`, whole `span` later. */
+export const labelFade = (room: number, need: number, span: number) =>
+  clamp((room - need) / span, 0, 1);
 
 /** Left edge of slot `pos` (fractional while animating). */
 export const slotX = (pos: number, step: number) => PAD + pos * step;
@@ -105,20 +119,13 @@ export function tempoY(bpm: number, scale: BpmScale, box: Box): number {
   return box.top + 4 + (box.height - 8) * (1 - share);
 }
 
-/** B (major) above A (minor), each split into twelve rows with 12 at the top. */
-export function keyBands(box: Box): { B: Box; A: Box } {
-  const band = (box.height - 8) / 2;
-
-  return { B: { top: box.top, height: band }, A: { top: box.top + band + 8, height: band } };
-}
-
-/** The row for a Camelot position, or undefined when there is none to draw. */
-export function keyY(camelot: string | undefined, box: Box): number | undefined {
+/** The row for a Camelot position, 12 at the top of its ring, or undefined when there is none. */
+export function keyY(camelot: string | undefined, bands: Shelf['bands']): number | undefined {
   const position = parseCamelot(camelot);
 
   if (!position) return;
 
-  const band = keyBands(box)[position.mode];
+  const band = bands[position.mode];
 
   return band.top + (12 - position.number + 0.5) * (band.height / 12);
 }

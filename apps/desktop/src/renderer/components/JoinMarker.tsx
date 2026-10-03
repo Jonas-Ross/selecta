@@ -53,6 +53,8 @@ export function JoinMarker({
   rail,
   width,
   hot,
+  words,
+  tempo,
   flashAt,
 }: {
   from: Row;
@@ -63,6 +65,8 @@ export function JoinMarker({
   rail: number;
   width: number;
   hot: boolean;
+  words: number; // opacity of the relation words, which go first when the gap is squeezed
+  tempo: number; // opacity of the glyph and tempo step
   flashAt?: number;
 }) {
   const facts = join(from, to);
@@ -119,11 +123,13 @@ export function JoinMarker({
         {...explain}
       >
         <span className="join-flash" ref={flash} />
-        <span className="join-tempo">
+        <span className="join-tempo" style={{ opacity: tempo }}>
           <Glyph from={facts.from} to={facts.to} />
           {facts.tempo}
         </span>
-        <span className="join-words">{facts.words}</span>
+        <span className="join-words" style={{ opacity: words }}>
+          {facts.words}
+        </span>
       </button>
     </>
   );

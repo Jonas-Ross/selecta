@@ -13,7 +13,7 @@ export const RELATION_WORDS: Record<HarmonicRelation, string> = {
 };
 
 /** Tempos as the lanes print them: whole BPM. */
-export const roundBpm = (bpm: number) => Math.round(bpm);
+const roundBpm = (bpm: number) => Math.round(bpm);
 
 export function tempoStep(from?: number, to?: number): string {
   if (from === undefined || to === undefined) return 'Tempo not measured';
@@ -49,7 +49,3 @@ export function join(a: Track, b: Track): Join {
       (a.key_maturity === 'provisional' || b.key_maturity === 'provisional'),
   };
 }
-
-/** One join per gap, in order. */
-export const joins = (tracks: Track[]): Join[] =>
-  tracks.slice(1).map((track, index) => join(tracks[index], track));

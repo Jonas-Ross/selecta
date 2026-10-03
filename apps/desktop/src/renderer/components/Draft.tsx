@@ -3,11 +3,12 @@
 // queued edit will write until that edit settles.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { selecta } from '../api.js';
-import { targetAt, withMoved } from '../reorder.js';
+import { withMoved } from '../reorder.js';
 import {
   bpmSpan,
   feedbackMessage,
   move,
+  pendingOrder,
   previewLinked,
   rows,
   saveLabel,
@@ -22,17 +23,6 @@ import { Rail } from './Rail.js';
 import { Rolling } from './Rolling.js';
 import { SaveConfirm, type SavePhase } from './SaveConfirm.js';
 import { TopBar } from './TopBar.js';
-
-/** The order the user just made, in front of the stored one until its edit settles. */
-function shown(items: Row[], pending?: string[]): Row[] {
-  if (!pending) return items;
-
-  const byId = new Map(items.map((row) => [row.entry_id, row]));
-  const first = pending.flatMap((id) => byId.get(id) ?? []);
-  const placed = new Set(pending);
-
-  return [...first, ...items.filter((row) => !placed.has(row.entry_id))];
-}
 
 export function Draft({
   draftId,
@@ -87,7 +77,7 @@ export function Draft({
   }, [load]);
 
   const draft = view?.draft;
-  const items = shown(rows(view ?? {}), pending);
+  const items = pendingOrder(rows(view ?? {}), pending);
   const saved = draft?.save !== undefined;
   const linked = previewLinked(view ?? {});
   const locked = saved || linked || saving || leaving;
@@ -173,13 +163,19 @@ export function Draft({
     landing.finally(() => pendingToken.current === token && setPending(undefined));
   }
 
+  // The entry standing at `to` now is where `move` puts the dragged one.
   function reorder(entryId: string, to: number) {
+    if (locked) return;
+
     const ids = items.map((row) => row.entry_id);
 
-    hold(withMoved(ids, entryId, to), moveEntry(entryId, targetAt(ids, to)));
+    hold(withMoved(ids, entryId, to), moveEntry(entryId, ids[to]));
   }
 
   function remove(entryId: string) {
+    // A draft keeps at least one entry; the store would refuse an empty one anyway.
+    if (locked || items.length < 2) return;
+
     hold(
       items.map((row) => row.entry_id).filter((id) => id !== entryId),
       setEntries((entries) => entries.filter((other) => other.entry_id !== entryId)),
