@@ -117,6 +117,9 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
   const [pulledId, setPulledId] = useState<string>();
   const carrying = useRef<Carry>(undefined);
   const [returning, setReturning] = useState<FlightPlan>();
+  const flying = useRef(returning);
+
+  flying.current = returning;
   const [, render] = useReducer((n: number) => n + 1, 0);
 
   const tracks = data?.tracks ?? [];
@@ -457,6 +460,10 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
     }
 
     const home = faceRect(id);
+    const before = flying.current && motions.current.get(flying.current.trackId);
+
+    // A newer return replaces the one in the air, whose sleeve then goes straight home.
+    if (before) before.carried = false;
 
     if (home && !reduced)
       setReturning({ key: Date.now(), trackId: id, title: c.track.title, from: box, to: home });
