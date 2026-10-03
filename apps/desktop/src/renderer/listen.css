@@ -446,6 +446,9 @@
   accent-color: var(--acid);
 }
 .tp-set {
+  /* Fits '24/24' and '1:05:00+ of 1:05:00+', so the clock ticking over never moves the bar. */
+  min-width: 20ch;
+  font-variant-numeric: tabular-nums;
   text-align: right;
   line-height: 1.4;
   white-space: nowrap;

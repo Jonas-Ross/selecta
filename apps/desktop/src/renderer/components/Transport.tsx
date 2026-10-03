@@ -23,6 +23,7 @@ export function Transport({
   onSeek,
   onOpen,
   onStop,
+  stopDisabled = false,
 }: {
   row?: Row;
   index: number;
@@ -41,6 +42,7 @@ export function Transport({
   onOpen?: () => void;
   // Set while the draft is linked to the preview: pauses and releases it so Claude can edit again.
   onStop?: () => void;
+  stopDisabled?: boolean;
 }) {
   const length = duration ?? row?.duration_seconds;
   // Held while dragging, so Music.app gets one seek on release rather than one per pixel.
@@ -77,19 +79,19 @@ export function Transport({
             {playing ? <path d="M3 2h3v10H3zM8 2h3v10H8z" /> : <path d="M3.5 1.8v10.4L12.3 7z" />}
           </svg>
         </button>
-        {onStop && (
-          <button
-            type="button"
-            className="ib"
-            aria-label="Stop listening and release Selecta Preview"
-            title="Stop listening"
-            onClick={onStop}
-          >
-            <svg viewBox="0 0 14 14" aria-hidden="true">
-              <path d="M3 3h8v8H3z" />
-            </svg>
-          </button>
-        )}
+        {/* Always drawn, so the bar never shifts as busy or linked state comes and goes. */}
+        <button
+          type="button"
+          className="ib"
+          aria-label="Stop listening and release Selecta Preview"
+          title="Stop listening"
+          disabled={!onStop || stopDisabled}
+          onClick={onStop}
+        >
+          <svg viewBox="0 0 14 14" aria-hidden="true">
+            <path d="M3 3h8v8H3z" />
+          </svg>
+        </button>
         <button
           type="button"
           className="ib"
