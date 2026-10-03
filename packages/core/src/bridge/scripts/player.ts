@@ -137,8 +137,13 @@ export function buildPlayPreviewScript(input: {
           Music.currentTrack.index();
       };
       // A pause fired straight after a play may not take, so each is retried until it reads back.
+      // Music moved off the preview counts as paused: nothing of ours is left to stop.
+      const ours = function () {
+        try { return Music.currentPlaylist.persistentID() === pl.persistentID(); } catch (e) { return false; }
+      };
       const pause = function () {
         for (let attempt = 0; attempt < 3; attempt++) {
+          if (!ours()) return true;
           Music.pause();
           if (until(function () { return String(Music.playerState()) !== 'playing'; })) return true;
         }
@@ -193,9 +198,7 @@ export function buildPlayPreviewScript(input: {
         landed = true;
       } finally {
         // A start that went wrong is left paused, unless the user has moved Music elsewhere.
-        let ours = false;
-        try { ours = Music.currentPlaylist.persistentID() === pl.persistentID(); } catch (e) {}
-        if (!landed && ours && !pause()) return JSON.stringify({ leftPlaying: true });
+        if (!landed && !pause()) return JSON.stringify({ leftPlaying: true });
       }
       return JSON.stringify({ playlistId: pl.persistentID(), route: route, player: readPlayer() });
     `,
