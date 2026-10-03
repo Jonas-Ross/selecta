@@ -89,6 +89,18 @@ Dictionary evidence: `/System/Applications/Music.app/Contents/Resources/com.appl
 
 If lock cleanup fails after reveal, the tool retains `opened`, target ID and count alongside the error and lock recovery guidance. A failed navigation plus failed cleanup preserves the original navigation error. Inspect the returned outcome rather than repeating blindly.
 
+## Playback
+
+Probed live 2026-10-03 against a 16-entry Selecta Preview (`src/bridge/scripts/player.ts` holds the scripts):
+
+- **`Music.play(playlist.tracks[i])` plays in the playlist's context.** `currentPlaylist.name()` then reads the playlist and `currentTrack.index()` the 1-based entry, which tells repeated tracks apart where a persistent ID can't.
+- **Stopped means no current track.** `currentTrack` and `currentPlaylist` throw "Can't get object" and `playerPosition()` is null. Reading `running()` first keeps a closed Music closed.
+- **`playerPosition` is settable** and reads back within a second. `pause()` and a bare `play()` (resume) work, but a read straight after `pause()` can still say playing, so the control script waits 0.3 s before it reads back.
+- **JXA has a global `delay`.** A script that declares its own `const delay` fails to compile.
+- **A track that plays to its end counts as a play.** Probes that let tracks finish move the user's play counts, so probe by seeking and pausing, not by listening through.
+
+Unverified: that Music continues and AutoMixes into the next entry after a scripted `play` as it does after a click. The 2026-09-29 AutoMix spike put the blend's lead at about 45 s, which Listen's "Hear the join" uses.
+
 ## Linked draft preview guard
 
 `preview_playlist_draft` links an explicitly started draft audition to the shared reserved slot. Requested ordered-track edits then synchronize it without separate refresh approval. The replacement JXA validates expected live IDs (including duplicates and order) before any clear/create in the same call. A missing slot or drift returns `preview_conflict` without mutation. The check cannot make Music.app/iCloud transactional; changes during population remain possible and destination readback must match before the preview is marked current. Name, selection and feedback-only draft changes never replace the slot.
