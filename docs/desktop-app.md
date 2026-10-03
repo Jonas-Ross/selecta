@@ -14,7 +14,7 @@ The host runs outside Electron so `better-sqlite3` keeps the one native build th
 
 The method table in `src/host/api.ts` is the whole surface, typed in `src/shared/protocol.ts`. Add a method when a screen needs one, never speculatively.
 
-The host keeps a local action log at `~/Library/Logs/Selecta/desktop.log` (`src/host/actions.ts`), one JSON line per call with its arguments, duration and outcome, plus each Claude run event, so a session can be debugged after the fact. Polled reads are left out unless they fail, and the player's state only when it changes. It rolls over to `desktop.log.1` past 5 MB and stays on the Mac.
+The host keeps a local action log at `~/Library/Logs/Selecta/desktop.log` (`src/host/actions.ts`), one JSON line per call with its arguments, duration and outcome, plus each Claude run event, so a session can be debugged after the fact. It is on without `SELECTA_DEBUG`, since it is how a playback report gets debugged, so what you and Claude write is reduced to its length. Polled reads are left out unless they fail, and the player's state only when it changes. It rolls over to `desktop.log.1` past 5 MB and stays on the Mac.
 
 ## The renderer
 

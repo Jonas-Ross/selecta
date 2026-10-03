@@ -16,6 +16,10 @@ const QUIET = new Set([
 ]);
 // One previous file is kept, so a long session costs at most twice this.
 const MAX_BYTES = 5 * 1024 * 1024;
+// What you and Claude say stays out of the file; only its length is kept.
+const WORDS = new Set(['brief', 'message', 'text', 'content', 'thinking']);
+const redact = (key: string, value: unknown) =>
+  WORDS.has(key) && typeof value === 'string' ? `<${value.length} chars>` : value;
 
 export function actionLogPath(home = homedir()): string {
   return join(home, 'Library', 'Logs', 'Selecta', 'desktop.log');
@@ -41,7 +45,7 @@ export function createActionLog({
         // No file yet.
       }
 
-      appendFileSync(path, `${JSON.stringify({ at: now().toISOString(), ...entry })}\n`);
+      appendFileSync(path, `${JSON.stringify({ at: now().toISOString(), ...entry }, redact)}\n`);
     } catch (error) {
       // Logging never breaks the app; say so once and stop trying.
       broken = true;

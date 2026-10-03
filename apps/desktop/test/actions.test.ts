@@ -80,3 +80,15 @@ it('keeps one previous file once the log grows past its limit', async () => {
   expect(readFileSync(`${path}.1`, 'utf8')).toBe('x'.repeat(20));
   expect(lines()).toEqual([expect.objectContaining({ event: 'agent', kind: 'done' })]);
 });
+
+it('keeps what you and Claude said out of the file, only its length', async () => {
+  const { log, lines } = setup();
+
+  await log.record('agent.send', { draft_id: 'D', message: 'more acid' }, async () => undefined);
+  log.note('agent', { draft_id: 'D', kind: 'text', text: 'Moved two records.' });
+
+  expect(lines()).toEqual([
+    expect.objectContaining({ args: { draft_id: 'D', message: '<9 chars>' } }),
+    expect.objectContaining({ event: 'agent', kind: 'text', text: '<18 chars>' }),
+  ]);
+});
