@@ -119,6 +119,15 @@ it('treats a draft as linked only while it owns an active preview', () => {
   expect(previewLinked({})).toBe(false);
 });
 
+it('marks only the request that started a draft as its brief', () => {
+  expect(logAgentEvent([], { kind: 'asked', text: 'deep house', brief: true })).toEqual([
+    { kind: 'you', text: 'deep house', brief: true },
+  ]);
+  expect(logAgentEvent([], { kind: 'asked', text: 'less vocal' })).toEqual([
+    { kind: 'you', text: 'less vocal' },
+  ]);
+});
+
 it('builds a run from numbered host events and resyncs on a gap', () => {
   let a = runEvent(undefined, { kind: 'asked', text: 'deep house\nLength: 12' }, 0)!;
 

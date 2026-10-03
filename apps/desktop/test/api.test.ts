@@ -88,7 +88,7 @@ it('keeps a draft linked to the Music preview read-only for the user and Claude'
   });
   await call('agent.start', { draft_id: draftId, brief: 'go' });
   await call('agent.send', { draft_id: draftId, message: 'go', text: 'typed' });
-  expect(agent.refuse).toHaveBeenCalledWith(draftId, 'go', expect.stringMatching(linked));
+  expect(agent.refuse).toHaveBeenCalledWith(draftId, 'go', expect.stringMatching(linked), true);
   expect(agent.refuse).toHaveBeenCalledWith(draftId, 'typed', expect.stringMatching(linked));
   expect(agent.start).not.toHaveBeenCalled();
   expect(agent.send).not.toHaveBeenCalled();

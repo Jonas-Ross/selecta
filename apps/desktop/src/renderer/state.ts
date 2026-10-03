@@ -28,7 +28,8 @@ export type DraftView = {
   hint?: string;
 };
 export type Row = Draft['entries'][number] & Track;
-export type LogItem = { kind: 'you' | 'claude' | 'tool' | 'error'; text: string };
+// `brief` marks the request that started a draft, as opposed to feedback on one.
+export type LogItem = { kind: 'you' | 'claude' | 'tool' | 'error'; text: string; brief?: true };
 
 /** Inspection tracks line up one to one with entries, repeats included. */
 export function rows(view: DraftView): Row[] {
@@ -107,7 +108,7 @@ export function feedbackMessage(text: string, selected: Row[]): string {
 export function logAgentEvent(log: LogItem[], event: AgentEvent): LogItem[] {
   switch (event.kind) {
     case 'asked':
-      return [...log, { kind: 'you', text: event.text }];
+      return [...log, { kind: 'you', text: event.text, ...(event.brief && { brief: true }) }];
     case 'text':
       return [...log, { kind: 'claude', text: event.text }];
     case 'tool':

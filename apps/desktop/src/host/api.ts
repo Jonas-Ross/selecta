@@ -55,7 +55,7 @@ export function createApi(
     'agent.start': (args) => {
       const { draft_id, brief } = Brief.parse(args);
 
-      if (linked(draft_id)) agent.refuse(draft_id, brief, LINKED);
+      if (linked(draft_id)) agent.refuse(draft_id, brief, LINKED, true);
       else agent.start(draft_id, brief);
     },
     'agent.send': (args) => {

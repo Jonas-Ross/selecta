@@ -41,8 +41,9 @@ export function ClaudePanel({
 }) {
   const [text, setText] = useState('');
   const end = useRef<HTMLDivElement>(null);
-  // The brief opens the run; it sits above the log rather than repeating in it.
-  const briefAt = log.findIndex((item) => item.kind === 'you');
+  // The brief sits above the log rather than repeating in it. Feedback on a
+  // draft from before a restart opens the log too, but isn't a brief.
+  const briefAt = log.findIndex((item) => item.brief);
   const brief = briefAt >= 0 ? log[briefAt].text : undefined;
   const rest = group(log.filter((_, index) => index !== briefAt));
 

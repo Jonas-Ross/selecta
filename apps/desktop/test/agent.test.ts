@@ -98,7 +98,7 @@ it('resumes the session the first turn reported', async () => {
   expect(flag(runs[1].args, '--resume')).toBe('S-1');
   expect(flag(runs[1].args, '-p')).toContain('get_playlist_draft');
   expect(events).toEqual([
-    { kind: 'asked', text: 'warmup' },
+    { kind: 'asked', text: 'warmup', brief: true },
     { kind: 'text', text: 'Built it.' },
     { kind: 'done', session_id: 'S-1' },
     { kind: 'asked', text: 'typed' },
@@ -115,17 +115,20 @@ it('refuses a second run on a draft that is still working', () => {
 
   expect(() => agent.send(DRAFT, 'two')).toThrow('Claude is already working on this draft.');
   expect(runs).toHaveLength(1);
-  expect(events).toEqual([{ kind: 'asked', text: 'one' }]);
+  expect(events).toEqual([{ kind: 'asked', text: 'one', brief: true }]);
 });
 
 it('records a refused request like any other outcome', () => {
   const { spawn } = fakeClaude();
   const { agent, events } = sessions(spawn);
 
-  agent.refuse(DRAFT, 'go', 'Linked.');
+  agent.refuse(DRAFT, 'go', 'Linked.', true);
+  agent.refuse(DRAFT, 'more', 'Linked.');
 
   expect(events).toEqual([
-    { kind: 'asked', text: 'go' },
+    { kind: 'asked', text: 'go', brief: true },
+    { kind: 'error', message: 'Linked.' },
+    { kind: 'asked', text: 'more' },
     { kind: 'error', message: 'Linked.' },
   ]);
   expect(agent.history()[DRAFT].working).toBe(false);

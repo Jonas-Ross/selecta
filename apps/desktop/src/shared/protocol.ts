@@ -25,7 +25,7 @@ export type Methods = {
 export type Method = keyof Methods;
 
 export type AgentEvent =
-  | { kind: 'asked'; text: string }
+  | { kind: 'asked'; text: string; brief?: true }
   | { kind: 'text'; text: string }
   | { kind: 'tool'; name: string }
   | { kind: 'denied'; name: string }
