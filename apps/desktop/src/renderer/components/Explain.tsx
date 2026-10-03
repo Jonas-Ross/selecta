@@ -205,20 +205,18 @@ const TERMS = {
     body: (
       <>
         <WheelFigure />
-        <p>Keys drawn as a clock, 1 to 12. A is minor (darker), B is major (brighter).</p>
+        <p>Keys drawn as a clock, 1 to 12. A is a minor key, B is a major key.</p>
         <p>Next-door numbers share most of their notes, so key closeness becomes arithmetic.</p>
       </>
     ),
   },
   major: {
     title: 'B: major keys',
-    body: (
-      <p>Major keys tend to sound brighter. On the wheel they are the outer ring, 1B to 12B.</p>
-    ),
+    body: <p>On the wheel, major keys are the outer ring, 1B to 12B.</p>,
   },
   minor: {
     title: 'A: minor keys',
-    body: <p>Minor keys tend to sound darker. On the wheel they are the inner ring, 1A to 12A.</p>,
+    body: <p>On the wheel, minor keys are the inner ring, 1A to 12A.</p>,
   },
   join: {
     title: 'The joins',
