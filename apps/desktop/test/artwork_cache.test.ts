@@ -113,12 +113,12 @@ it('fails a failed batch for its own IDs only, and asks again later', async () =
   expect(read.mock.calls.map(([batch]) => batch)).toEqual([[A], [B], [A]]);
 });
 
-it('drops an original whose thumbnail fails, without remembering it', async () => {
+it('fails and drops an original whose thumbnail fails, without remembering it', async () => {
   const { dir, read, resize, deps } = await setup();
   const cache = createArtworkCache({ ...deps, log: () => {} });
 
   resize.mockRejectedValueOnce(new Error('sips failed'));
-  expect(await cache.get([A])).toEqual({ [A]: null });
+  await expect(cache.get([A])).rejects.toThrow('sips failed');
   expect(await readdir(join(dir, 'incoming'))).toEqual([]);
   expect(await cache.get([A])).toEqual({ [A]: `${A}.jpg` });
   expect(read).toHaveBeenCalledTimes(2);

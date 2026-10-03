@@ -51,17 +51,34 @@ it('notifies subscribers when their answer lands, and keeps no art as an answer'
   expect(get).toHaveBeenCalledOnce();
 });
 
-it('reports a failed lookup instead of settling it as no art, and asks again on the next mount', async () => {
-  const get = vi.fn().mockRejectedValue(new Error('Music.app is not running'));
+it('reports a failed lookup and asks again only when told to', async () => {
+  const get = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('Music.app is not running'))
+    .mockResolvedValue({ [id(1)]: `${id(1)}.jpg`, [id(2)]: null });
   const store = createArtworkStore(get);
   const failed = vi.fn();
 
   store.onFailure(failed);
-  store.subscribe(id(1), () => {});
+  const leave = store.subscribe(id(1), () => {});
+
+  store.subscribe(id(2), () => {});
   await tick();
   expect(failed).toHaveBeenCalledWith('Music.app is not running');
   expect(store.url(id(1))).toBeUndefined();
+
+  // Remounting doesn't ask again; a retry asks only for what is still on screen.
+  leave();
+  store.subscribe(id(2), () => {});
+  await tick();
+  expect(get).toHaveBeenCalledOnce();
+  store.retry();
+  await tick();
+  expect(get).toHaveBeenLastCalledWith({ track_ids: [id(2)] });
+  expect(store.url(id(2))).toBeUndefined();
+
   store.subscribe(id(1), () => {});
   await tick();
-  expect(get).toHaveBeenCalledTimes(2);
+  expect(get).toHaveBeenLastCalledWith({ track_ids: [id(1)] });
+  expect(store.url(id(1))).toContain(id(1));
 });

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { selecta } from '../api.js';
-import { onArtworkFailure } from '../artwork.js';
+import { onArtworkFailure, retryArtwork } from '../artwork.js';
 import type { Rect } from '../flight.js';
 import { useReducedMotion } from '../motion.js';
 import { withMoved } from '../reorder.js';
@@ -50,6 +50,7 @@ export function Draft({
   const working = (run?.working ?? false) || asking;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string>();
+  const [artProblem, setArtProblem] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<SavePhase>('closed');
   const [leaving, setLeaving] = useState(false);
@@ -87,10 +88,7 @@ export function Draft({
     return selecta.on((event) => event.event === 'drafts.changed' && load());
   }, [load]);
 
-  useEffect(
-    () => onArtworkFailure((message) => setNotice(`Album art unavailable: ${message}`)),
-    [],
-  );
+  useEffect(() => onArtworkFailure(setArtProblem), []);
 
   const draft = view?.draft;
   const items = pendingOrder(rows(view ?? {}), pending);
@@ -461,6 +459,19 @@ export function Draft({
             >
               {notice}
               <span className="mono">dismiss</span>
+            </button>
+          )}
+          {artProblem && (
+            <button
+              type="button"
+              className="notice bar dismiss"
+              onClick={() => {
+                setArtProblem(undefined);
+                retryArtwork();
+              }}
+            >
+              Album art unavailable: {artProblem}
+              <span className="mono">try again</span>
             </button>
           )}
           <Rail

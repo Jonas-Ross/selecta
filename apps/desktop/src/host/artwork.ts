@@ -47,7 +47,7 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
   // half-converted file under a thumbnail's name.
   const incoming = join(dir, 'incoming');
   // Settled or in-flight answers for this session. No-art stays here, so it
-  // is asked again only after a relaunch; a failed read is dropped.
+  // is asked again only after a relaunch; a failure is dropped and rejected.
   const answers = new Map<string, Promise<string | null>>();
   const settle = new Map<
     string,
@@ -57,14 +57,12 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
   let onDisk: Promise<Set<string>> | undefined;
   let pumping = false;
 
-  function finish(id: string, file: string | null, remember: boolean) {
+  function finish(id: string, file: string | null) {
     settle.get(id)?.resolve(file);
     settle.delete(id);
-
-    if (!remember) answers.delete(id);
   }
 
-  // Music.app failing is not the same as a track with no art, so the caller hears it.
+  // A failed read or resize is not the same as a track with no art, so the caller hears it.
   function fail(id: string, error: unknown) {
     settle.get(id)?.reject(error);
     settle.delete(id);
@@ -72,22 +70,23 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
   }
 
   async function thumbnail(id: string, original: string | null): Promise<void> {
-    if (original === null) return finish(id, null, true);
+    if (original === null) return finish(id, null);
 
     const thumb = `${id}.jpg`;
     const source = join(incoming, original);
 
-    let made = false;
+    const failed = await resize(source, join(dir, thumb)).then(
+      () => undefined,
+      (error: unknown) => ({ error }),
+    );
 
-    try {
-      await resize(source, join(dir, thumb));
-      made = true;
-    } catch (error) {
-      log?.(`selecta: cannot make an artwork thumbnail for ${id}: ${String(error)}`);
-    }
-
+    // The original goes before anyone hears back, so no caller sees it linger.
     await rm(source, { force: true }).catch(() => {});
-    finish(id, made ? thumb : null, made);
+
+    if (!failed) return finish(id, thumb);
+
+    log?.(`selecta: cannot make an artwork thumbnail for ${id}: ${String(failed.error)}`);
+    fail(id, failed.error);
   }
 
   async function readBatch(batch: string[]): Promise<void> {

@@ -1,6 +1,6 @@
 // Album art URLs for the records on screen. Sleeves that mount together ask in
-// one call, and every answer, no art included, holds for the session; a failed
-// lookup is reported and asked again when the sleeve next mounts.
+// one call, and every answer, no art included, holds for the session. A failed
+// lookup is reported and stays failed until the user asks to try again.
 import { useCallback, useSyncExternalStore } from 'react';
 import { ARTWORK_GET_LIMIT, artworkUrl } from '../shared/artwork.js';
 import type { Methods } from '../shared/protocol.js';
@@ -14,6 +14,7 @@ export function createArtworkStore(get: Get) {
   const listeners = new Map<string, Set<() => void>>();
   const failures = new Set<(message: string) => void>();
   const asked = new Set<string>();
+  const failed = new Set<string>();
   let batch: string[] = [];
 
   function settle(id: string, file: string | null) {
@@ -33,7 +34,7 @@ export function createArtworkStore(get: Get) {
       get({ track_ids: chunk }).then(
         (files) => chunk.forEach((id) => settle(id, files[id] ?? null)),
         (error: Error) => {
-          chunk.forEach((id) => asked.delete(id));
+          chunk.forEach((id) => failed.add(id));
           failures.forEach((listener) => listener(error.message));
         },
       );
@@ -63,6 +64,15 @@ export function createArtworkStore(get: Get) {
         if (set.size === 0) listeners.delete(id);
       };
     },
+    /** Asks again for every failed lookup still on screen; the rest ask when they next appear. */
+    retry() {
+      for (const id of failed) {
+        failed.delete(id);
+        asked.delete(id);
+
+        if (listeners.has(id)) request(id);
+      }
+    },
     onFailure(listener: (message: string) => void): () => void {
       failures.add(listener);
 
@@ -88,3 +98,5 @@ export function useArtwork(trackId: string): string | undefined {
 
 /** Calls `listener` with the reason whenever an artwork lookup fails. */
 export const onArtworkFailure = (listener: (message: string) => void) => store.onFailure(listener);
+
+export const retryArtwork = () => store.retry();
