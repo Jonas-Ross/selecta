@@ -483,7 +483,8 @@ export function Rail({
               <span
                 key={value}
                 className="axis"
-                style={{ top: tempoY(value, scale, shelf.tempo) - 6 }}
+                // The lowest number rides up off the Time title rather than sitting on it.
+                style={{ top: Math.min(tempoY(value, scale, shelf.tempo) - 6, shelf.tick - 14) }}
               >
                 {value}
               </span>
