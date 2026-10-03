@@ -1,0 +1,228 @@
+/* Claude's panel: brief, log, and the feedback box. */
+.claude {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg1);
+  border-left: 1px solid var(--line2);
+}
+.claude-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px var(--s4) 10px;
+}
+.claude-head h2 {
+  font: 700 var(--fs-heading)/1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: 0.02em;
+}
+.claude-head .state {
+  font: 400 var(--fs-label) var(--mono);
+  color: var(--ink3);
+}
+.claude-head .state.working {
+  color: var(--uv-text);
+}
+.brief-card {
+  margin: 0 var(--s4) var(--s3);
+  padding: 10px var(--s3) 10px 14px;
+  border-left: 2px solid var(--line3);
+  font-size: var(--fs-body);
+  color: var(--ink2);
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+  user-select: text;
+}
+.brief-card b {
+  display: block;
+  margin-bottom: var(--s1);
+  font: 500 var(--fs-tiny) var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s2) var(--s4) var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  mask-image: linear-gradient(transparent, #000 var(--s2));
+  scrollbar-width: thin;
+  scrollbar-color: var(--line3) transparent;
+  user-select: text;
+}
+/* A full log scrolls; its entries never squash into each other. */
+.log > * {
+  flex: none;
+}
+.msg {
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  animation: rise var(--t-slow) var(--ease-out) both;
+}
+.msg .who {
+  display: block;
+  margin-bottom: 3px;
+  font: 400 var(--fs-label) var(--mono);
+  color: var(--ink3);
+}
+.msg.you {
+  color: var(--ink2);
+  padding-left: var(--s3);
+  border-left: 1px solid var(--line3);
+}
+.msg.error {
+  color: var(--danger);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  background: var(--bg2);
+  box-shadow: inset 0 0 0 1px var(--line2);
+  font: 400 var(--fs-meta) var(--mono);
+  color: var(--ink2);
+  animation: rise 0.35s var(--ease-out) both;
+}
+.chip::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--ink3);
+  border-radius: 1px;
+  background: var(--ink3);
+}
+.chip.run {
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--uv-line);
+}
+.chip.run::before {
+  background: none;
+  border-color: var(--uv);
+  animation: spin 0.9s linear infinite;
+}
+.working {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 400 var(--fs-meta) var(--mono);
+  color: var(--ink3);
+}
+.working i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--uv);
+  animation: blink 1s infinite;
+}
+.working i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.working i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.working span {
+  margin-left: 2px;
+}
+
+.compose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  padding: var(--s3) var(--s4) 14px;
+  border-top: 1px solid var(--line2);
+}
+.subject {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  font: 400 var(--fs-meta) var(--mono);
+  color: var(--ink3);
+}
+.subject .s {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  height: 20px;
+  max-width: 100%;
+  padding: 0 var(--s1) 0 7px;
+  border-radius: var(--r-sm);
+  background: var(--uv-soft);
+  color: var(--uv-chip);
+  animation: rise 0.3s var(--ease-out) both;
+}
+.subject .s span {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subject .s button {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-xs);
+  color: var(--uv-chip);
+}
+.subject .s button:hover {
+  background: var(--uv-line);
+}
+.subject svg {
+  width: 7px;
+  height: 7px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+.compose .box {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s2);
+  padding: var(--s2) var(--s2) var(--s2) var(--s3);
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  border-radius: var(--r-lg);
+  transition: border-color var(--t-mid);
+}
+.compose .box:focus-within {
+  border-color: var(--uv-line);
+}
+.compose textarea {
+  flex: 1;
+  height: 40px;
+  resize: none;
+  background: none;
+  border: 0;
+  outline: none;
+  font-size: var(--fs-body);
+  line-height: 1.45;
+}
+.compose textarea::placeholder {
+  color: var(--ink4);
+}
+.compose .btn {
+  height: 28px;
+  padding: 0 var(--s3);
+}
+.compose .hint {
+  font-size: var(--fs-label);
+  color: var(--ink4);
+}

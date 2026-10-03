@@ -1,10 +1,11 @@
 import { expect, it } from 'vitest';
 import {
+  bpmSpan,
   feedbackMessage,
-  formatDuration,
   logAgentEvent,
   move,
   orphanRuns,
+  pendingOrder,
   previewLinked,
   recoverRuns,
   rejectRun,
@@ -12,7 +13,7 @@ import {
   runEvent,
   saveLabel,
   saveOutcome,
-  totalDuration,
+  totals,
   type Run,
 } from '../src/renderer/state.js';
 
@@ -37,20 +38,6 @@ it('moves an item without mutating the original', () => {
   expect(move(items, 3, 0)).toEqual(['d', 'a', 'b', 'c']);
   expect(move(items, 0, 2)).toEqual(['b', 'c', 'a', 'd']);
   expect(items).toEqual(['a', 'b', 'c', 'd']);
-});
-
-it('formats durations and marks totals with unknown lengths', () => {
-  expect(formatDuration(305.4)).toBe('5:05');
-  expect(formatDuration()).toBe('');
-  expect(
-    totalDuration([
-      { ...entry('a'), duration_seconds: 300 },
-      { ...entry('b'), duration_seconds: 330 },
-    ]),
-  ).toBe('2 tracks · 11 min');
-  expect(totalDuration([{ ...entry('a'), duration_seconds: 300 }, entry('b')])).toBe(
-    '2 tracks · 5 min+',
-  );
 });
 
 it('names selected tracks as the subject of feedback', () => {
@@ -132,6 +119,15 @@ it('treats a draft as linked only while it owns an active preview', () => {
   expect(previewLinked({})).toBe(false);
 });
 
+it('marks only the request that started a draft as its brief', () => {
+  expect(logAgentEvent([], { kind: 'asked', text: 'deep house', brief: true })).toEqual([
+    { kind: 'you', text: 'deep house', brief: true },
+  ]);
+  expect(logAgentEvent([], { kind: 'asked', text: 'less vocal' })).toEqual([
+    { kind: 'you', text: 'less vocal' },
+  ]);
+});
+
 it('builds a run from numbered host events and resyncs on a gap', () => {
   let a = runEvent(undefined, { kind: 'asked', text: 'deep house\nLength: 12' }, 0)!;
 
@@ -187,4 +183,29 @@ it('catches up from the host record without undoing what already arrived', () =>
     { kind: 'you', text: 'my brief' },
     { kind: 'error', text: 'Refused.' },
   ]);
+});
+
+it('counts known minutes, marking unknown lengths, and the measured tempo span', () => {
+  const items = [
+    { ...entry('a'), duration_seconds: 300, bpm: 121.6 },
+    { ...entry('b'), bpm: 118.2 },
+    entry('c'),
+  ];
+
+  expect(totals(items)).toEqual({ tracks: 3, minutes: 5, partial: true });
+  expect(bpmSpan(items)).toEqual([118, 122]);
+  expect(bpmSpan([entry('a')])).toBeUndefined();
+});
+
+it('shows a pending order over the stored one, keeping what the store changed meanwhile', () => {
+  const stored = [entry('a'), entry('b'), entry('c')];
+
+  expect(pendingOrder(stored)).toBe(stored);
+  expect(pendingOrder(stored, ['c', 'a', 'b']).map((row) => row.entry_id)).toEqual(['c', 'a', 'b']);
+  // Claude removed b and added d while the user's move was still queued.
+  expect(
+    pendingOrder([entry('a'), entry('c'), entry('d')], ['c', 'a', 'b']).map((row) => row.entry_id),
+  ).toEqual(['c', 'a', 'd']);
+  // A removal pending on the last-but-one entry never leaves an empty rail from stale ids.
+  expect(pendingOrder([entry('a')], []).map((row) => row.entry_id)).toEqual(['a']);
 });

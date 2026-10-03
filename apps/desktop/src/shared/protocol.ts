@@ -2,12 +2,18 @@
 // it can receive. The host validates arguments; these types only keep the two
 // ends honest at compile time.
 import type { DraftSummary } from '@selecta/core/drafts/store.js';
+import type { Crate } from '../host/library.js';
 
-export type { DraftSummary };
+export type { Crate, DraftSummary };
 
 export const BRIEF_LIMIT = 4000;
 
+/** A cached thumbnail's file name, null when the track has no artwork, or why it couldn't be read. */
+export type ArtworkAnswer = string | null | { error: string };
+
 export type Methods = {
+  'library.crate': (args: { query?: string }) => Crate;
+  'artwork.get': (args: { track_ids: string[] }) => Record<string, ArtworkAnswer>;
   'drafts.list': () => DraftSummary[];
   'drafts.get': (args: { draft_id: string }) => unknown;
   'drafts.edit': (args: Record<string, unknown>) => unknown;
@@ -21,7 +27,7 @@ export type Methods = {
 export type Method = keyof Methods;
 
 export type AgentEvent =
-  | { kind: 'asked'; text: string }
+  | { kind: 'asked'; text: string; brief?: true }
   | { kind: 'text'; text: string }
   | { kind: 'tool'; name: string }
   | { kind: 'denied'; name: string }

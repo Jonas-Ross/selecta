@@ -1,0 +1,396 @@
+/* The crate above the rail: records standing in a smoked-glass bin, the spec card beside it. */
+.dig {
+  position: relative;
+  flex: none;
+  height: clamp(300px, 44%, 430px);
+  display: flex;
+  flex-direction: column;
+  padding: var(--s3) var(--s5) 0;
+  border-bottom: 1px solid var(--line);
+  /* Records flopped toward you stay in the crate's own band, never over the draft. */
+  overflow: hidden;
+}
+.dig-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  z-index: 6;
+}
+.h-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  white-space: nowrap;
+  font: 700 var(--fs-heading)/1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: 0.02em;
+}
+.h-label span {
+  font: 400 var(--fs-meta) var(--mono);
+  font-stretch: normal;
+  letter-spacing: 0;
+  color: var(--ink3);
+}
+.search {
+  position: relative;
+  width: min(260px, 32%);
+}
+.search input {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px 0 28px;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  border-radius: var(--r-md);
+  font-size: var(--fs-ui);
+  outline: none;
+  transition: border-color var(--t-mid);
+}
+.search input:focus {
+  border-color: var(--uv-line);
+}
+.search input::placeholder {
+  color: var(--ink4);
+}
+.search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+.search svg {
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: var(--ink3);
+  stroke-width: 1.4;
+}
+.counter {
+  margin-left: auto;
+  font-size: var(--fs-meta);
+  color: var(--ink3);
+  white-space: nowrap;
+}
+
+.dig-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 284px;
+  gap: 14px;
+}
+.crate-stage {
+  position: relative;
+  min-height: 0;
+  perspective: 1500px;
+  perspective-origin: 50% 6%;
+  z-index: 1;
+  /* Records flopped toward you fade out before they reach the rail. */
+  mask-image: linear-gradient(#000 0 86%, transparent 100%);
+  outline: none;
+  touch-action: none;
+  cursor: grab;
+}
+.crate-stage.grabbing {
+  cursor: grabbing;
+}
+/* The only light: a cool rim light falling from above onto the bin. */
+.crate-stage::before {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: -10px;
+  height: 78%;
+  background: radial-gradient(
+    ellipse 46% 56% at 50% 0%,
+    rgba(150, 170, 255, 0.09),
+    transparent 72%
+  );
+  pointer-events: none;
+}
+.crate-stage:focus-visible .crate-hint {
+  color: var(--uv-text);
+}
+.world {
+  position: absolute;
+  left: 50%;
+  bottom: 28%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  transform: rotateX(-12deg);
+}
+.sl {
+  position: absolute;
+  bottom: 0;
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.sl-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--bg2);
+}
+.sl-face .sleeve {
+  box-shadow: none;
+}
+.sl-shade {
+  position: absolute;
+  inset: 0;
+  background: #07090d;
+  opacity: 0;
+  pointer-events: none;
+}
+.sl-top {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  transform-origin: 50% 0;
+  transform: rotateX(90deg);
+}
+.tag-draft {
+  position: absolute;
+  bottom: 9px;
+  left: 9px;
+  z-index: 2;
+  padding: 5px 6px 4px;
+  border-radius: 2px;
+  background: var(--uv);
+  color: var(--white);
+  font: 500 var(--fs-fig) / 1 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+/* The bin: smoked glass on anodised edges, lit along the rim. */
+.crate-wall {
+  position: absolute;
+  bottom: 0;
+  transform-origin: 50% 100%;
+}
+.wall-front {
+  background: linear-gradient(180deg, rgba(34, 40, 56, 0.78), rgba(12, 15, 21, 0.92) 70%);
+  border-top: 1px solid var(--rim);
+  border-radius: 2px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(150, 170, 210, 0.1),
+    0 -1px 14px rgba(150, 170, 255, 0.16);
+}
+.wall-front::after {
+  content: attr(data-label);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14%;
+  text-align: center;
+  font: 400 var(--fs-fig) var(--mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(160, 175, 210, 0.38);
+}
+.wall-side {
+  background: linear-gradient(180deg, rgba(28, 33, 46, 0.7), rgba(10, 12, 17, 0.9));
+  border-top: 1px solid rgba(196, 210, 245, 0.35);
+}
+.floor-shadow {
+  position: absolute;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.75), transparent);
+}
+.crate-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 6px;
+  font-size: var(--fs-label);
+  color: var(--ink4);
+  pointer-events: none;
+  transition:
+    color var(--t-mid),
+    opacity var(--t-mid);
+}
+.crate-hint.off {
+  opacity: 0;
+}
+.crate-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--ink2);
+  font-size: var(--fs-body);
+  pointer-events: none;
+}
+.crate-empty b {
+  display: block;
+  margin-bottom: 4px;
+  font: 700 var(--fs-title) var(--display);
+  font-stretch: 125%;
+  color: var(--ink);
+}
+
+/* The spec card: facts about the record in front. */
+.peek {
+  align-self: center;
+  position: relative;
+  z-index: 3;
+}
+.spec {
+  padding: var(--s4) var(--s4) 14px;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  border-radius: var(--r-lg);
+  box-shadow: 0 24px 50px -20px rgba(0, 0, 0, 0.8);
+  animation: rise var(--t-mid) var(--ease-out);
+}
+.spec-kicker {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font: 400 var(--fs-tiny) var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.spec-kicker .in {
+  color: var(--uv-text);
+}
+.spec-title {
+  margin: 9px 0 4px;
+  font: 800 var(--fs-head)/1.05 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.spec-artist {
+  font-size: var(--fs-ui);
+  color: var(--ink2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.facts {
+  margin: var(--s3) 0 0;
+  border-top: 1px solid var(--line3);
+}
+.fact {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 2px 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  align-items: baseline;
+}
+.fact dt {
+  font: 400 var(--fs-tiny) var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.fact dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 7px;
+  align-items: baseline;
+  font: 400 var(--fs-body) / 1.25 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.fact .num {
+  font: 400 21px/1 var(--mono);
+  letter-spacing: -0.02em;
+}
+.fact .word {
+  font: 600 var(--fs-title) / 1.1 var(--body);
+}
+.fact .unit {
+  font-size: var(--fs-meta);
+  color: var(--ink2);
+}
+.fact .meta {
+  grid-column: 2;
+  font: 400 var(--fs-label) / 1.45 var(--mono);
+  color: var(--ink3);
+}
+.fact .miss {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink3);
+}
+.fact .miss::before {
+  content: '';
+  width: 14px;
+  border-top: 1px dashed var(--ink3);
+}
+.prov {
+  padding: 3px 5px 2px;
+  border: 1px solid var(--line3);
+  border-radius: var(--r-xs);
+  font: 400 var(--fs-micro) / 1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink2);
+}
+.spec-actions {
+  display: flex;
+  gap: var(--s2);
+  margin-top: 14px;
+}
+.spec-actions svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+/* Records in the hand and in the air sit above everything, untouchable. */
+.carry,
+.flight {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+.carry .sleeve,
+.flight .sleeve {
+  box-shadow:
+    0 40px 60px -20px rgba(0, 0, 0, 0.9),
+    0 0 0 1px var(--uv-line);
+}
+.flight {
+  will-change: transform;
+}
+
+/* The gap a record from the crate will land in. */
+.drop-slot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--uv-line);
+  border-radius: var(--r-xs);
+  background: var(--uv-soft);
+  color: var(--uv-text);
+  font-size: var(--fs-fig);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  pointer-events: none;
+  animation: rise var(--t-fast) var(--ease-out);
+}

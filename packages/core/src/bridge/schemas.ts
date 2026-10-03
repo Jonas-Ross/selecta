@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRACK_PERSISTENT_ID } from '../types/bridge.js';
 
 export const id = z.string().min(1);
 export const ids = z.array(id);
@@ -153,3 +154,11 @@ export const diagnostic = z.object({
   running: z.literal(true),
   automationAuthorized: z.literal(true),
 });
+export const artwork = z.record(
+  z.string().regex(TRACK_PERSISTENT_ID),
+  z.union([
+    z.string().regex(/^[0-9A-F]{16}\.(jpg|png)$/),
+    z.null(),
+    z.strictObject({ error: z.string().max(300) }),
+  ]),
+);

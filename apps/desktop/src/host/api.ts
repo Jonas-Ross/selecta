@@ -6,7 +6,10 @@ import type { ToolDeps } from '@selecta/core/tools/deps.js';
 import { PlaylistDraftTools, getDraftInputShape } from '@selecta/core/tools/playlist_draft.js';
 import type { DraftStore } from '@selecta/core/drafts/store.js';
 import { BRIEF_LIMIT, type Method } from '../shared/protocol.js';
+import { ARTWORK_GET_LIMIT } from '../shared/artwork.js';
 import type { AgentSessions } from './agent.js';
+import type { ArtworkCache } from './artwork.js';
+import { crate } from './library.js';
 
 const DraftId = z.strictObject(getDraftInputShape);
 const Brief = z.strictObject({
@@ -20,8 +23,15 @@ const Message = z.strictObject({
   // What the user typed, for the log; the message adds the selected tracks.
   text: z.string().max(60_000).optional(),
 });
+const Artwork = z.strictObject({
+  track_ids: z.array(z.string().max(64)).max(ARTWORK_GET_LIMIT),
+});
 
-export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: AgentSessions) {
+export function createApi(
+  deps: ToolDeps & { drafts: () => DraftStore },
+  agent: AgentSessions,
+  artwork: ArtworkCache,
+) {
   const drafts = new PlaylistDraftTools(deps);
 
   // The store refuses linked drafts atomically; this only fails a run before
@@ -36,6 +46,8 @@ export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: 
     'This draft is linked to the Selecta Preview playlist in Music. Detach the preview where you started it to edit the draft here.';
 
   const handlers: Record<Method, (args: unknown) => unknown> = {
+    'library.crate': (args) => crate(deps.cache(), args),
+    'artwork.get': (args) => artwork.get(Artwork.parse(args).track_ids),
     'drafts.list': () => deps.drafts().list(),
     'drafts.get': (args) => drafts.get(args),
     'drafts.edit': (args) => drafts.edit(args),
@@ -43,7 +55,7 @@ export function createApi(deps: ToolDeps & { drafts: () => DraftStore }, agent: 
     'agent.start': (args) => {
       const { draft_id, brief } = Brief.parse(args);
 
-      if (linked(draft_id)) agent.refuse(draft_id, brief, LINKED);
+      if (linked(draft_id)) agent.refuse(draft_id, brief, LINKED, true);
       else agent.start(draft_id, brief);
     },
     'agent.send': (args) => {
