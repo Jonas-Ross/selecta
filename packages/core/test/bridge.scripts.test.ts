@@ -147,3 +147,44 @@ describe('preview navigation script contract', () => {
     );
   });
 });
+
+describe('artwork read script contract', () => {
+  const A = '0123456789ABCDEF';
+  const B = 'FEDCBA9876543210';
+
+  it('passes IDs and the directory only as JSON args, checking Music is running first', async () => {
+    const { buildReadArtworkScript } = await import('../src/bridge/scripts/read_artwork.js');
+    const args = { trackIds: [A, B], dir: '/tmp/art "dir"' };
+    const script = buildReadArtworkScript(args);
+
+    expect(script).toContain(JSON.stringify(args));
+    expect(script).toContain("args.dir + '/' + name");
+    expect(script.indexOf('Music.running()')).toBeLessThan(script.indexOf('$.NSAppleScript'));
+    expect(script).toContain('raw data of artwork 1');
+    expect(script).not.toMatch(
+      /Music\.(make|delete|duplicate|move|add)\(|\.rating =|\.favorited =/,
+    );
+  });
+
+  it('sniffs JPEG and PNG by their signature bytes', async () => {
+    const { buildReadArtworkScript } = await import('../src/bridge/scripts/read_artwork.js');
+    const script = buildReadArtworkScript({ trackIds: [A], dir: '/tmp' });
+
+    expect(script).toContain(JSON.stringify(Buffer.from('ffd8ff', 'hex').toString('base64')));
+    expect(script).toContain(JSON.stringify(Buffer.from('89504e470d0a', 'hex').toString('base64')));
+  });
+
+  it.each([
+    { trackIds: ['0123456789abcdef'], dir: '/tmp' },
+    { trackIds: ['0123456789ABCDE" & do shell script "x'], dir: '/tmp' },
+    { trackIds: ['0123456789ABCDEF0'], dir: '/tmp' },
+    { trackIds: [A], dir: 'relative/dir' },
+    { trackIds: Array.from({ length: 41 }, () => A), dir: '/tmp' },
+  ])('refuses arguments that could reach AppleScript source: %j', async (args) => {
+    const { buildReadArtworkScript } = await import('../src/bridge/scripts/read_artwork.js');
+
+    expect(() => buildReadArtworkScript(args)).toThrow(
+      expect.objectContaining({ errorCode: 'validation_error' }),
+    );
+  });
+});

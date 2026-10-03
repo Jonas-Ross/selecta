@@ -56,8 +56,10 @@ import {
   buildReorderTracksScript,
 } from './scripts/edit_playlist.js';
 import { buildSetLovedScript, buildSetRatingScript } from './scripts/track_signal.js';
+import { buildReadArtworkScript } from './scripts/read_artwork.js';
 import { BridgeError, preWriteError } from '../types/errors.js';
 import {
+  type ArtworkReadResult,
   type Bridge,
   type LibrarySnapshot,
   PLAYLIST_WRITE_TRACK_LIMIT,
@@ -189,7 +191,33 @@ export const bridge: Bridge = {
       input.trackIds,
     );
   },
+  async readArtwork(trackIds, dir): Promise<ArtworkReadResult> {
+    const unique = [...new Set(trackIds)];
+
+    if (unique.length === 0) return {};
+
+    return parseArtworkResult(
+      await runJxa(buildReadArtworkScript({ trackIds: unique, dir }), schemas.artwork),
+      unique,
+    );
+  },
 };
+
+function parseArtworkResult(
+  result: z.infer<typeof schemas.artwork>,
+  requestedIds: string[],
+): ArtworkReadResult {
+  const keys = Object.keys(result);
+
+  if (
+    keys.length !== requestedIds.length ||
+    requestedIds.some((id) => !Object.hasOwn(result, id)) ||
+    requestedIds.some((id) => result[id] !== null && !result[id]!.startsWith(`${id}.`))
+  )
+    throw new BridgeError('jxa_error', 'Artwork readback differs from the requested track IDs.');
+
+  return result;
+}
 
 // The edit scripts return a guard sentinel — without touching Music.app — when
 // the target playlist or a referenced track/position doesn't hold live. Each

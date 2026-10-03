@@ -71,6 +71,14 @@ Only validated pre-creation script guards prove that no write began. Subprocess 
 
 Favorite/rating responses count only confirmed readbacks as `updated`; `mismatches` contains actual values for the remaining tracks. Clearing a rating and reading back null is a confirmed clear.
 
+## Artwork
+
+- **Plain JXA can't read artwork bytes.** `artworks[0].rawData()` returns a hex string, and `.data()` and `.format()` are unusable.
+- **What works:** from JXA, `ObjC.import('Foundation')`, run `tell application "Music" to get raw data of artwork 1 of (first track … whose persistent ID is "<ID>")` with `$.NSAppleScript.alloc.initWithSource(src).executeAndReturnError(err)`, and write the result's `.data` with `writeToFileAtomically(path, true)`. The descriptor type is `'tdta'`; the bytes match plain AppleScript's `raw data` exactly. A nil result (`isNil()`) is a failure; read the code with `ObjC.deepUnwrap(err).NSAppleScriptErrorNumber`.
+- Fast: 50 tracks in one `osascript` call took 0.58s, one cold track 0.16s. Every image on a 3.7k-track library was JPEG, mostly 600×600, up to 1000×1000 (~850 KB).
+- **No artwork reads as -1728** ("Can't get object"). Some tracks report one artwork yet the read throws -1728, with -50 on its properties.
+- **A first read can fail transiently.** About 2% of tracks failed on a first full-library pass, and about half of those read fine moments later. The desktop app remembers a miss only until it restarts and never retries within a session.
+
 ## Opening the preview from a draft
 
 `open_preview({ track_ids })` explicitly reveals the existing reserved `Selecta Preview` in Music.app and brings Music forward. It never populates the slot or starts playback. The draft card supplies its complete ordered track IDs, preserving repeated occurrences. Resolution considers exactly named plain user playlists; smart, subscription, folder and special playlists sharing the name are not slots. Zero eligible targets, multiple eligible targets, or a different live order fail before reveal. The Music operation lock excludes other Selecta writes while the target is checked and opened; iCloud and manual edits can still occur independently. Opening confirms the sequence at that moment, not future synchronization or that any transition was heard.
