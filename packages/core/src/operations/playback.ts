@@ -160,8 +160,8 @@ export function createPlayback(deps: PlaybackDeps) {
   // The entry Music.app is on, read fresh, when it belongs to this draft; the bridge
   // re-checks it in the same call that acts, so a stale screen can't drive other music.
   // `owned` accepts any entry of the draft's own slot, in step or not, for stopping it.
-  // iCloud can rotate the slot's ID after the last play rekeyed it, so a name match is
-  // passed on for the bridge to confirm it is the only playlist of that name.
+  // iCloud can rotate the slot's ID after the last play rekeyed it, so a name match counts
+  // only once the bridge finds it the only playlist of that name, holding the slot's order.
   const onThisDraft = async (draftId: string, owned = false) => {
     const player = await (owned ? read() : readFor(draftId, true));
 
@@ -180,8 +180,15 @@ export function createPlayback(deps: PlaybackDeps) {
     const rotated =
       owned &&
       slot?.owner === draftId &&
+      slot.baseline !== undefined &&
       playlist.persistentId !== slot.playlist_id &&
-      playlist.name === PREVIEW_PLAYLIST_NAME;
+      playlist.name === PREVIEW_PLAYLIST_NAME &&
+      (await bridge
+        .readPreview({ name: PREVIEW_PLAYLIST_NAME, expectedTrackIds: slot.baseline })
+        .then(
+          (live) => live.persistentId === playlist.persistentId,
+          () => false,
+        ));
     const ours = owned
       ? slot?.owner === draftId && (playlist.persistentId === slot.playlist_id || rotated)
       : show(draftId, player).entry_id !== undefined;
@@ -254,8 +261,9 @@ export function createPlayback(deps: PlaybackDeps) {
             'Selecta Preview changed hands before it could play, so nothing was played.',
           );
 
+        const trackIds = now.draft.entries.map((entry) => entry.track_id);
         const result = await bridge.playPreview({
-          expectedTrackIds: now.draft.entries.map((entry) => entry.track_id),
+          expectedTrackIds: trackIds,
           index,
           ...(position !== undefined && { position }),
           ...(queued === undefined && { restart: true }),
@@ -266,7 +274,7 @@ export function createPlayback(deps: PlaybackDeps) {
         const after = current(draftId);
 
         if (!sameOrder(after.draft) || !inStep(after.draft, after.slot)) {
-          const paused = await pauseAfter(result.playlistId, result.player);
+          const paused = await pauseAfter(result.playlistId, result.player, trackIds);
 
           throw new Error(
             paused
@@ -281,7 +289,7 @@ export function createPlayback(deps: PlaybackDeps) {
           try {
             drafts().rekeyPreview(draftId, now.slot.generation, result.playlistId);
           } catch (error) {
-            const paused = await pauseAfter(result.playlistId, result.player);
+            const paused = await pauseAfter(result.playlistId, result.player, trackIds);
             const reason = error instanceof Error ? error.message : String(error);
 
             throw new Error(
@@ -323,7 +331,7 @@ export function createPlayback(deps: PlaybackDeps) {
           const after = current(draftId);
 
           if (entryOrder(after.draft) !== entryOrder(draft) || !inStep(after.draft, after.slot)) {
-            const paused = await pauseAfter(on.playlistId, player);
+            const paused = await pauseAfter(on.playlistId, player, expectedTrackIds);
 
             throw new Error(
               paused
@@ -340,14 +348,14 @@ export function createPlayback(deps: PlaybackDeps) {
     // Pauses first only if Music is playing this draft, never something the user moved on to.
     detach: (draftId: string, revision: number) =>
       withOperation(cache(), 'music', async () => {
-        await pauseOwn(() => onThisDraft(draftId, true));
+        await pauseOwn(() => onThisDraft(draftId, true), current(draftId).slot?.baseline);
         drafts().detachPreview(draftId, revision);
       }),
   };
 
   // Pauses what an action just left playing, naming the reported entry first and then re-reading,
   // following a rotated ID by name for the bridge to confirm it is the only such playlist.
-  async function pauseAfter(playlistId: string, started: PlayerState) {
+  async function pauseAfter(playlistId: string, started: PlayerState, order: string[]) {
     let first = true;
 
     return pauseOwn(async () => {
@@ -371,7 +379,7 @@ export function createPlayback(deps: PlaybackDeps) {
             ...(rotated && { slot: PREVIEW_PLAYLIST_NAME }),
           }
         : undefined;
-    }).then(
+    }, order).then(
       () => true,
       () => false,
     );
@@ -379,7 +387,8 @@ export function createPlayback(deps: PlaybackDeps) {
 
   // A conflict means Music moved between the read and the pause; the preview may only
   // have advanced to its next record, so it reads again rather than assume it's gone.
-  async function pauseOwn(locate: () => ReturnType<typeof onThisDraft>) {
+  // `order` is the playlist's track IDs, which tell an advance from a rewrite.
+  async function pauseOwn(locate: () => ReturnType<typeof onThisDraft>, order?: string[]) {
     let missed: { on: PlayerEntry; error: BridgeError } | undefined;
 
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -387,9 +396,13 @@ export function createPlayback(deps: PlaybackDeps) {
 
       if (!on) return;
 
-      // Only the same record, or the next one, is Music carrying on by itself; any other entry
-      // is one the user picked, so the conflict stands rather than pausing it.
-      if (missed && on.index !== missed.on.index && on.index !== missed.on.index + 1)
+      // Only the same record, or the one after it in order, is Music carrying on by itself; any
+      // other entry was picked or rewritten, so the conflict stands rather than pausing it.
+      if (
+        missed &&
+        !(on.index === missed.on.index && on.trackId === missed.on.trackId) &&
+        !(on.index === missed.on.index + 1 && on.trackId === order?.[missed.on.index])
+      )
         throw missed.error;
 
       const after = await bridge.controlPlayer({ action: 'pause', on }).catch((e: unknown) => {

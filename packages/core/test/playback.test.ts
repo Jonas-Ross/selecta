@@ -396,11 +396,36 @@ it('pauses its own preview on stop after iCloud rotates its ID', async () => {
     ...playing(1, A),
     playlist: { persistentId: 'P-ROTATED', name: 'Selecta Preview' },
   });
+  deps.bridge.readPreview = vi.fn(async () => ({
+    persistentId: 'P-ROTATED',
+    trackCount: 3,
+    trackPersistentIds: [A, B, A],
+  }));
   await player.detach(draft_id, 1);
+  expect(deps.bridge.readPreview).toHaveBeenCalledWith({
+    name: 'Selecta Preview',
+    expectedTrackIds: [A, B, A],
+  });
   expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
     action: 'pause',
     on: { playlistId: 'P-ROTATED', index: 1, trackId: A, slot: 'Selecta Preview' },
   });
+});
+
+it('leaves a playlist of the reserved name alone on stop when it does not hold the slot order', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, 'T-OTHER'),
+    playlist: { persistentId: 'P-ROTATED', name: 'Selecta Preview' },
+  });
+  deps.bridge.readPreview = vi.fn(async () => {
+    throw new BridgeError('preview_conflict', 'The inspected preview order no longer matches.');
+  });
+  await player.detach(draft_id, 1);
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+  expect(deps.drafts!().preview()?.status).toBe('inactive');
 });
 
 it('stays linked when the rotated preview is ambiguous', async () => {
@@ -455,6 +480,34 @@ it('stays linked rather than pause a record the user picked mid-stop', async () 
   await expect(player.detach(draft_id, 1)).rejects.toThrow(/moved off that record/);
   expect(deps.bridge.controlPlayer).toHaveBeenCalledTimes(1);
   expect(deps.drafts!().preview()?.status).toBe('current');
+});
+
+it('stays linked rather than pause a record rewritten into the same place mid-stop', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValueOnce(
+    new BridgeError('preview_conflict', 'Music.app has moved off that record.'),
+  );
+  vi.mocked(deps.bridge.readPlayer)
+    .mockResolvedValueOnce(playing(1, A))
+    .mockResolvedValueOnce(playing(1, 'T-OTHER'));
+  await expect(player.detach(draft_id, 1)).rejects.toThrow(/moved off that record/);
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledTimes(1);
+});
+
+it('stays linked when the record after the conflict is not the next in order', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValueOnce(
+    new BridgeError('preview_conflict', 'Music.app has moved off that record.'),
+  );
+  vi.mocked(deps.bridge.readPlayer)
+    .mockResolvedValueOnce(playing(1, A))
+    .mockResolvedValueOnce(playing(2, A));
+  await expect(player.detach(draft_id, 1)).rejects.toThrow(/moved off that record/);
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledTimes(1);
 });
 
 it('stays linked when Music.app will not pause', async () => {
