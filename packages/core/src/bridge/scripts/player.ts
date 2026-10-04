@@ -191,6 +191,7 @@ export function buildPlayPreviewScript(input: {
       const restart = args.restart === true || from < 1;
       const route = restart ? 'started' : from > target ? 'back from ' + from : from < target ? 'on from ' + from : 'seek';
       let landed = false;
+      let reached = false;
       // Set when the user picks another record of the preview mid-route; cleanup leaves it playing.
       let picked = false;
       const still = function (index) {
@@ -253,6 +254,8 @@ export function buildPlayPreviewScript(input: {
         if (!until(function () { return Math.abs(Music.playerPosition() - goal) < 2; })) {
           return JSON.stringify({ seekMissed: true });
         }
+        // From here Music should sit on the target, so cleanup can tell a record the user picked.
+        reached = true;
         if (!inOrder()) return JSON.stringify({ orderDrifted: true });
         // Shuffle switched on while it stepped would carry on out of order; the finally pauses it.
         if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
@@ -269,6 +272,7 @@ export function buildPlayPreviewScript(input: {
         landed = true;
       } finally {
         // A start that went wrong is left paused, unless the user has moved Music elsewhere.
+        if (!landed && reached) try { still(target); } catch (e) {}
         if (!landed && !picked && !pause()) return JSON.stringify({ leftPlaying: true });
       }
       return JSON.stringify({ playlistId: pl.persistentID(), route: route, player: readPlayer() });

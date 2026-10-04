@@ -329,6 +329,13 @@ describe('player script contract', () => {
     );
     // A start that went wrong is paused, and reported if Music won't pause.
     expect(script.indexOf('} finally {')).toBeLessThan(script.indexOf('leftPlaying'));
+    // Past the seek, cleanup re-reads the entry first, so a record picked during the last checks plays on.
+    expect(script.indexOf('reached = true;')).toBeLessThan(
+      script.indexOf('if (!inOrder()) return'),
+    );
+    expect(script.replace(/\s+/g, ' ')).toContain(
+      'if (!landed && reached) try { still(target); } catch (e) {} if (!landed && !picked && !pause())',
+    );
     // No pause, cleanup's included, ever lands on music the user moved on to.
     expect(script).toContain('if (!ours()) return true;');
     expect(script.indexOf('if (!ours()) return true;')).toBeLessThan(
