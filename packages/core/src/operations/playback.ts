@@ -192,7 +192,8 @@ export function createPlayback(deps: PlaybackDeps) {
       if (draft.revision !== revision)
         throw new Error('The draft changed since you pressed play. Try again.');
 
-      const index = draft.entries.findIndex((entry) => entry.entry_id === entryId);
+      const find = () => draft.entries.findIndex((entry) => entry.entry_id === entryId);
+      let index = find();
 
       if (index < 0) throw new Error('That record is no longer in the draft.');
 
@@ -211,6 +212,11 @@ export function createPlayback(deps: PlaybackDeps) {
           throw new Error(
             'Selecta Preview did not end up in the draft order, so nothing was played.',
           );
+
+        // An edit can move or drop repeated records during the sync without changing the track order.
+        index = find();
+
+        if (index < 0) throw new Error('That record is no longer in the draft.');
       }
 
       // A metadata edit moves the revision but not what Music plays, so the guards below compare order.

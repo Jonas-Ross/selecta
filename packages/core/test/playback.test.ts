@@ -187,6 +187,25 @@ it('follows a rotated preview ID when retrying the pause of a changed draft', as
   });
 });
 
+it('plays the chosen occurrence when a repeat moves while the preview loads', async () => {
+  const { draft_id, entries } = draft();
+  const sync = vi.mocked(deps.bridge.replacePlaylist).getMockImplementation()!;
+
+  // Swaps the two A occurrences, so the track order Music checks is unchanged.
+  vi.mocked(deps.bridge.replacePlaylist).mockImplementationOnce(async (input) => {
+    deps.drafts!().update(draft_id, 1, (d) => ({
+      ...d,
+      entries: [d.entries[2], d.entries[1], d.entries[0]],
+    }));
+
+    return sync(input);
+  });
+  const view = await player.play(draft_id, 1, entries[2].entry_id);
+
+  expect(deps.bridge.playPreview).toHaveBeenLastCalledWith(expect.objectContaining({ index: 0 }));
+  expect(view.entry_id).toBe(entries[2].entry_id);
+});
+
 it('refuses a stale revision or a missing entry before touching Music.app', async () => {
   const { draft_id, entries } = draft();
 
