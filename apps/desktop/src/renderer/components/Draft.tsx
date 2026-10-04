@@ -292,9 +292,12 @@ export function Draft({
   }, []);
 
   async function commit() {
+    if (!latest.current || !(await confirm())) return;
+
+    // The card re-renders as Claude's late edits arrive, so the revision approved is the one it shows now.
     const current = latest.current;
 
-    if (!current || !(await confirm())) return;
+    if (!current) return;
 
     try {
       const result = (await selecta.call('drafts.save', {
