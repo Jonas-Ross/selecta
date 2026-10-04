@@ -229,21 +229,32 @@ export function createPlayback(deps: PlaybackDeps) {
 
         if (after.draft.revision !== revision || !inStep(after.draft, after.slot)) {
           const { player: started } = result;
+          let first = true;
+          // The first pause names the entry the play reported; later ones re-read where it went.
+          const paused = await pauseOwn(async () => {
+            const live = first ? started : await read();
 
-          if (started.running && started.track && started.index !== undefined)
-            await bridge
-              .controlPlayer({
-                action: 'pause',
-                on: {
+            first = false;
+
+            return live.running &&
+              live.track &&
+              live.index !== undefined &&
+              live.playlist?.persistentId === result.playlistId
+              ? {
                   playlistId: result.playlistId,
-                  index: started.index,
-                  trackId: started.track.persistentId,
-                },
-              })
-              .catch(() => undefined);
+                  index: live.index,
+                  trackId: live.track.persistentId,
+                }
+              : undefined;
+          }).then(
+            () => true,
+            () => false,
+          );
 
           throw new Error(
-            'The draft changed while Music started it, so Music was paused. Play again.',
+            paused
+              ? 'The draft changed while Music started it, so Music was paused. Play again.'
+              : 'The draft changed while Music started it, and Music could not be paused. Pause it in Music, then play again.',
           );
         }
 
@@ -273,16 +284,16 @@ export function createPlayback(deps: PlaybackDeps) {
     // Pauses first only if Music is playing this draft, never something the user moved on to.
     detach: (draftId: string, revision: number) =>
       withOperation(cache(), 'music', async () => {
-        await pauseOwn(draftId);
+        await pauseOwn(() => onThisDraft(draftId, true));
         drafts().detachPreview(draftId, revision);
       }),
   };
 
   // A conflict means Music moved between the read and the pause; the preview may only
   // have advanced to its next record, so it reads again rather than assume it's gone.
-  async function pauseOwn(draftId: string) {
+  async function pauseOwn(locate: () => ReturnType<typeof onThisDraft>) {
     for (let attempt = 0; attempt < 3; attempt++) {
-      const on = await onThisDraft(draftId, true);
+      const on = await locate();
 
       if (!on) return;
 

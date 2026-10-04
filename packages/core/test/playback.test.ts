@@ -122,6 +122,35 @@ it('pauses and fails when the draft changes while Music is starting it', async (
   });
 });
 
+it('follows Music to its next record when pausing a play the draft changed under', async () => {
+  const { draft_id, entries } = draft();
+  const conflict = new BridgeError('preview_conflict', 'Music.app has moved off that record.');
+
+  vi.mocked(deps.bridge.playPreview).mockImplementationOnce(async ({ expectedTrackIds, index }) => {
+    deps.drafts!().update(draft_id, 1, (d) => ({ ...d, entries: d.entries.slice(1) }));
+
+    return { playlistId: 'P-SLOT', player: playing(index + 1, expectedTrackIds[index]) };
+  });
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValueOnce(conflict);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(playing(2, B));
+  await expect(player.play(draft_id, 1, entries[0].entry_id)).rejects.toThrow(/was paused/);
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 2, trackId: B },
+  });
+
+  // A pause that never lands is not reported as one.
+  vi.mocked(deps.bridge.playPreview).mockImplementationOnce(async ({ expectedTrackIds, index }) => {
+    deps.drafts!().update(draft_id, 2, (d) => ({ ...d, entries: d.entries.slice(1) }));
+
+    return { playlistId: 'P-SLOT', player: playing(index + 1, expectedTrackIds[index]) };
+  });
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValue(conflict);
+  const { entries: now } = deps.drafts!().get(draft_id);
+
+  await expect(player.play(draft_id, 2, now[0].entry_id)).rejects.toThrow(/could not be paused/);
+});
+
 it('refuses a stale revision or a missing entry before touching Music.app', async () => {
   const { draft_id, entries } = draft();
 
