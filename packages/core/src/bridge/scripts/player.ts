@@ -72,14 +72,16 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       }
       // A pause can be ignored, so it is retried until it reads back; callers rely on it.
       // Each attempt re-checks the entry, so it never pauses music the user moved on to.
-      if (args.action === 'pause' && state === 'playing') {
+      // Fast-forwarding and rewinding are audible too, so anything not paused or stopped is paused.
+      const silent = function (now) { return now === 'paused' || now === 'stopped'; };
+      if (args.action === 'pause' && !silent(state)) {
         let paused = false;
         for (let attempt = 0; attempt < 3 && !paused; attempt++) {
           if (!here()) return JSON.stringify({ elsewhere: true });
           Music.pause();
           for (let tries = 0; tries < 20 && !paused; tries++) {
             delay(0.05);
-            paused = String(Music.playerState()) !== 'playing';
+            paused = silent(String(Music.playerState()));
           }
         }
         if (!paused) return JSON.stringify({ stillPlaying: true });

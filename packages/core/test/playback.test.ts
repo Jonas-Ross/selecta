@@ -258,6 +258,18 @@ it('stays linked when the pause reads back the preview playing under a rotated I
   expect(deps.drafts!().preview()?.status).toBe('current');
 });
 
+it('stays linked when the pause reads back the preview still fast forwarding', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockResolvedValueOnce({
+    ...playing(3, A),
+    state: 'fast forwarding',
+  });
+  await expect(player.detach(draft_id, 1)).rejects.toThrow(/stayed linked/);
+  expect(deps.drafts!().preview()?.status).toBe('current');
+});
+
 it('follows the slot when Music.app gives the preview a new ID', async () => {
   const { draft_id, entries } = draft();
 

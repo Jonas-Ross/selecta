@@ -221,6 +221,9 @@ describe('player script contract', () => {
     expect(script).toContain(
       'if (!here()) return JSON.stringify({ elsewhere: true });\n          Music.pause();',
     );
+    // Fast-forwarding or rewinding is paused too, and only paused or stopped reads back as done.
+    expect(script).toContain("if (args.action === 'pause' && !silent(state))");
+    expect(script).toContain('paused = silent(String(Music.playerState()));');
   });
 
   it('acts on a preview matched by name only while it is the one playlist of that name', async () => {

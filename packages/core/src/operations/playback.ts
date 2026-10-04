@@ -330,7 +330,8 @@ export function createPlayback(deps: PlaybackDeps) {
       // read lost: it may still be ours and audible, so stay linked.
       if (
         after.running &&
-        after.state === 'playing' &&
+        after.state !== 'paused' &&
+        after.state !== 'stopped' &&
         (!after.playlist ||
           after.playlist.persistentId === on.playlistId ||
           after.playlist.name === PREVIEW_PLAYLIST_NAME)
