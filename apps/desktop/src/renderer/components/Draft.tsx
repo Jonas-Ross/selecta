@@ -399,7 +399,7 @@ export function Draft({
           <SaveConfirm
             phase={phase}
             label={saving && phase !== 'confirm' ? 'Saving…' : saveLabel(draft?.save)}
-            disabled={!draft || locked || working || airborne}
+            disabled={!draft || locked || working || airborne || playerHeld}
             done={saved}
             name={draft?.name ?? ''}
             tracks={sum.tracks}
