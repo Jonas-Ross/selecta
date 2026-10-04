@@ -126,8 +126,8 @@ export function Draft({
     canPlay,
   });
   const { player } = listen;
-  // A linked edit syncs the preview under the music lock a player action holds, so it waits too.
-  const playerHeld = linked && listen.busy;
+  // An edit syncs the preview under the music lock a player action holds, and a first play links it mid-flight.
+  const playerHeld = listen.busy;
   const held = transportHeld(listen.busy, linked, pending);
   // One record in the air at a time, so each lands in the gap held for it.
   const canAdd = draft !== undefined && !locked && !airborne && !playerHeld;
