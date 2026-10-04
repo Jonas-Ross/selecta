@@ -276,8 +276,21 @@ export function createPlayback(deps: PlaybackDeps) {
         }
 
         // The play resolved the slot by name and order, so its live ID is the slot's now.
-        if (now.slot && result.playlistId !== now.slot.playlist_id)
-          drafts().rekeyPreview(draftId, now.slot.generation, result.playlistId);
+        // Music is already playing, so a store that can't take the new ID pauses it before failing.
+        if (now.slot && result.playlistId !== now.slot.playlist_id) {
+          try {
+            drafts().rekeyPreview(draftId, now.slot.generation, result.playlistId);
+          } catch (error) {
+            const paused = await pauseAfter(result.playlistId, result.player);
+            const reason = error instanceof Error ? error.message : String(error);
+
+            throw new Error(
+              paused
+                ? `Music started but Selecta could not record the preview (${reason}), so Music was paused.`
+                : `Music started but Selecta could not record the preview (${reason}), and Music could not be paused. Pause it in Music.`,
+            );
+          }
+        }
 
         return result;
       });

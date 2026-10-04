@@ -276,6 +276,31 @@ it('pauses and fails a resume the draft changed under', async () => {
   });
 });
 
+it('pauses a play whose rotated preview ID the store cannot take', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.playPreview).mockImplementationOnce(
+    async ({ expectedTrackIds, index }) => ({
+      playlistId: 'P-ROTATED',
+      player: {
+        ...playing(index + 1, expectedTrackIds[index]),
+        playlist: { persistentId: 'P-ROTATED', name: PREVIEW.name },
+      },
+    }),
+  );
+  vi.spyOn(deps.drafts!(), 'rekeyPreview').mockImplementationOnce(() => {
+    throw new Error('drafts.db is locked');
+  });
+  await expect(player.play(draft_id, 1, entries[1].entry_id)).rejects.toThrow(
+    /could not record the preview \(drafts.db is locked\), so Music was paused/,
+  );
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-ROTATED', index: 2, trackId: B },
+  });
+});
+
 it('detaches the preview so the draft is local again', async () => {
   const { draft_id, entries } = draft();
 
