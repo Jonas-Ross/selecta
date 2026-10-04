@@ -261,14 +261,13 @@ describe('player script contract', () => {
     );
     expect(seek.indexOf('Music.playerPosition = goal')).toBeLessThan(seek.indexOf('seekMissed'));
 
-    // Both re-check the entry right before acting, after the slot lookup.
-    for (const [script, act] of [
-      [resume, 'Music.play();'],
-      [seek, 'Music.playerPosition = goal;'],
-    ])
-      expect(script).toContain(
-        `if (!here()) return JSON.stringify({ elsewhere: true });\n        ${act}`,
-      );
+    // Both re-check the entry right before acting, after the slot lookup; a resume re-reads shuffle too.
+    expect(seek).toContain(
+      'if (!here()) return JSON.stringify({ elsewhere: true });\n        Music.playerPosition = goal;',
+    );
+    expect(resume.replace(/\s+/g, ' ')).toContain(
+      'if (!here()) return JSON.stringify({ elsewhere: true }); // Read again last too, since shuffle can be switched on while the entry check settles. if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true }); Music.play();',
+    );
 
     expect(buildControlPlayerScript({ action: 'pause', on })).not.toMatch(NO_WRITES);
     expect(() => buildControlPlayerScript({ action: 'seek', position: -1, on })).toThrow(

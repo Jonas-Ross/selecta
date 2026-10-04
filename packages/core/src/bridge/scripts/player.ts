@@ -92,6 +92,8 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       // Resume and seek re-check the entry last, since the slot lookup above takes time.
       if (args.action === 'resume' && state === 'paused') {
         if (!here()) return JSON.stringify({ elsewhere: true });
+        // Read again last too, since shuffle can be switched on while the entry check settles.
+        if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
         Music.play();
         // A play can be swallowed (an open Settings window does it), so it must read back.
         let playing = false;
