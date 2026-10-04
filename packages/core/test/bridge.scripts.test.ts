@@ -314,6 +314,10 @@ describe('player script contract', () => {
         `if (${check}) return JSON.stringify({ stepMissed: true }); ${act}`,
       );
 
+    // The rewind before Previous reads back first, or Previous only restarts the record.
+    expect(script.replace(/\s+/g, ' ')).toContain(
+      'Music.playerPosition = 0; // Previous only steps back once the rewind has landed; before that it restarts the record. if (!until(function () { return Music.playerPosition() < 2; })) return JSON.stringify({ stepMissed: true }); Music.previousTrack();',
+    );
     // A step that times out onto a record other than its source or destination counts as picked.
     expect(script).toContain('if (now !== false && now !== entry && now !== prev) picked = true;');
     expect(script).toContain(

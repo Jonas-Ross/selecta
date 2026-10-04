@@ -246,6 +246,8 @@ export function buildPlayPreviewScript(input: {
         for (let entry = from - 1; entry >= target; entry--) {
           if (!still(entry + 1)) return JSON.stringify({ stepMissed: true });
           Music.playerPosition = 0;
+          // Previous only steps back once the rewind has landed; before that it restarts the record.
+          if (!until(function () { return Music.playerPosition() < 2; })) return JSON.stringify({ stepMissed: true });
           Music.previousTrack();
           if (!step(entry, entry + 1)) return JSON.stringify({ stepMissed: true });
         }
