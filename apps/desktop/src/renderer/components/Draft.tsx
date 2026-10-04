@@ -13,6 +13,7 @@ import {
   bpmSpan,
   feedbackMessage,
   move,
+  nextPending,
   pendingOrder,
   previewLinked,
   rows,
@@ -168,7 +169,7 @@ export function Draft({
 
     const ids = items.map((row) => row.entry_id);
 
-    hold({ order: withMoved(ids, entryId, to), known: ids }, moveEntry(entryId, ids[to]));
+    hold(nextPending(pending, withMoved(ids, entryId, to), ids), moveEntry(entryId, ids[to]));
   }
 
   function remove(entryId: string) {
@@ -178,7 +179,11 @@ export function Draft({
     const ids = items.map((row) => row.entry_id);
 
     hold(
-      { order: ids.filter((id) => id !== entryId), known: ids },
+      nextPending(
+        pending,
+        ids.filter((id) => id !== entryId),
+        ids,
+      ),
       setEntries((entries) => entries.filter((other) => other.entry_id !== entryId)),
     );
   }

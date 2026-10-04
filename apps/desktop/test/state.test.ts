@@ -5,6 +5,7 @@ import {
   logAgentEvent,
   move,
   orphanRuns,
+  nextPending,
   pendingOrder,
   previewLinked,
   recoverRuns,
@@ -198,10 +199,11 @@ it('counts known minutes, marking unknown lengths, and the measured tempo span',
   expect(bpmSpan([entry('a')])).toBeUndefined();
 });
 
+const ids = (rows: Row[]) => rows.map((row) => row.entry_id);
+
 it('shows a pending order over the stored one, keeping what the store changed meanwhile', () => {
   const stored = [entry('a'), entry('b'), entry('c')];
   const known = ['a', 'b', 'c'];
-  const ids = (rows: Row[]) => rows.map((row) => row.entry_id);
 
   expect(pendingOrder(stored)).toBe(stored);
   expect(ids(pendingOrder(stored, { order: ['c', 'a', 'b'], known }))).toEqual(['c', 'a', 'b']);
@@ -214,4 +216,15 @@ it('shows a pending order over the stored one, keeping what the store changed me
   // Stale ids never leave an empty rail.
   expect(ids(pendingOrder([entry('d')], { order: ['a'], known: ['a', 'b'] }))).toEqual(['d']);
   expect(ids(pendingOrder([entry('b')], { order: ['a'], known: ['a', 'b'] }))).toEqual(['b']);
+});
+
+it('keeps an unsettled removal out when another edit follows it', () => {
+  const stored = [entry('a'), entry('b'), entry('c')];
+  const removed = nextPending(undefined, ['b', 'c'], ['a', 'b', 'c']);
+  // The reorder is made on the rail as shown, which no longer has a.
+  const moved = nextPending(removed, ['c', 'b'], ['b', 'c']);
+
+  expect(ids(pendingOrder(stored, moved))).toEqual(['c', 'b']);
+  // Claude's additions still show after the pending order.
+  expect(ids(pendingOrder([...stored, entry('d')], moved))).toEqual(['c', 'b', 'd']);
 });

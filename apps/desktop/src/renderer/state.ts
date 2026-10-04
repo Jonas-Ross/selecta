@@ -41,6 +41,11 @@ export function rows(view: DraftView): Row[] {
 /** An order the user just made, and every entry that was on the rail when they made it. */
 export type Pending = { order: string[]; known: string[] };
 
+/** A new pending order that still knows what earlier unsettled edits saw, so their removals stay out. */
+export function nextPending(prev: Pending | undefined, order: string[], ids: string[]): Pending {
+  return { order, known: [...new Set([...(prev?.known ?? []), ...ids])] };
+}
+
 /**
  * The order the user just made, ahead of the stored one until its edit
  * settles. Entries the store has since dropped vanish, ones the user left out
