@@ -3,6 +3,7 @@ import { editQueue } from '../src/renderer/edits.js';
 import {
   elsewhere,
   joinStart,
+  transportHeld,
   livePosition,
   nowIndex,
   queuePlay,
@@ -116,4 +117,12 @@ it('plays on the revision the queued edits leave, unless play stopped being allo
     play,
   );
   expect(play).toHaveBeenCalledOnce();
+});
+
+it('holds the transport while a linked edit syncs, as it does for a running player action', () => {
+  expect(transportHeld(false, true, { order: [], known: [] })).toBe(true);
+  expect(transportHeld(true, false, undefined)).toBe(true);
+  // An unlinked edit never touches Music.app, so the transport stays free.
+  expect(transportHeld(false, false, { order: [], known: [] })).toBe(false);
+  expect(transportHeld(false, true, undefined)).toBe(false);
 });

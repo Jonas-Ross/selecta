@@ -459,7 +459,9 @@ it('claims an entry only when Music.app is provably in step with this draft', ()
       .entry_id,
   ).toBeUndefined();
   expect(playbackView({ running: false }, d, slot)).toEqual({ running: false, state: 'stopped' });
-  expect(playbackView({ running: true, state: 'fast forwarding' }, d, slot).state).toBe('stopped');
+  expect(playbackView({ running: true, state: 'fast forwarding' }, d, slot).state).toBe('playing');
+  expect(playbackView({ running: true, state: 'rewinding' }, d, slot).state).toBe('playing');
+  expect(playbackView({ running: true, state: 'unknown' }, d, slot).state).toBe('stopped');
 });
 
 it('follows the preview when iCloud rotates its ID mid-session, once confirmed unique', async () => {

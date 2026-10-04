@@ -37,11 +37,15 @@ export function inStep(draft: Draft, slot?: PreviewState): boolean {
   );
 }
 
+const AUDIBLE = new Set(['playing', 'fast forwarding', 'rewinding']);
+
 /** What a screen shows: the entry playing only when Music.app is provably in this draft. */
 export function playbackView(player: PlayerState, draft: Draft, slot?: PreviewState): PlaybackView {
   if (!player.running) return { running: false, state: 'stopped' };
 
-  const state = player.state === 'playing' || player.state === 'paused' ? player.state : 'stopped';
+  // Fast-forwarding and rewinding are audible, so the transport offers pause for them.
+  const state =
+    player.state === 'paused' ? 'paused' : AUDIBLE.has(player.state ?? '') ? 'playing' : 'stopped';
   const view: PlaybackView = {
     running: true,
     state,

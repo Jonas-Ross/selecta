@@ -9,6 +9,7 @@ import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
 import { useReducedMotion } from '../hooks/motion.js';
 import { useListen } from '../hooks/useListen.js';
+import { transportHeld } from '../listen.js';
 import { withMoved } from '../reorder.js';
 import {
   bpmSpan,
@@ -127,6 +128,7 @@ export function Draft({
   const { player } = listen;
   // A linked edit syncs the preview under the music lock a player action holds, so it waits too.
   const playerHeld = linked && listen.busy;
+  const held = transportHeld(listen.busy, linked, pending);
   // One record in the air at a time, so each lands in the gap held for it.
   const canAdd = draft !== undefined && !locked && !airborne && !playerHeld;
   // The rail holds a gap for the flying record at a fixed slot, so nothing else moves until it lands.
@@ -417,7 +419,7 @@ export function Draft({
               playing={listen.playing}
               current={listen.current}
               status={listen.status}
-              joinDisabled={!canPlay || listen.busy || !listen.canJoin}
+              joinDisabled={!canPlay || held || !listen.canJoin}
               onJoin={listen.join}
             />
           ) : (
@@ -558,7 +560,7 @@ export function Draft({
               total: listen.whole.elapsed,
               totalPartial: listen.whole.partial,
             }}
-            disabled={!canPlay || listen.busy}
+            disabled={!canPlay || held}
             canPrev={listen.canPrev}
             canNext={listen.now + 1 < items.length}
             onToggle={listen.toggle}
@@ -567,7 +569,7 @@ export function Draft({
             onSeek={listen.current ? player.seek : undefined}
             onOpen={tab === 'listen' ? undefined : () => setTab('listen')}
             onStop={linked ? listen.stop : undefined}
-            stopDisabled={listen.busy || saving}
+            stopDisabled={held || saving}
           />
         </section>
         <p className="sr" aria-live="polite">

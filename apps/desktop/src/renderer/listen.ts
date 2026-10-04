@@ -27,6 +27,11 @@ export function queuePlay(
   });
 }
 
+/** A player action running, or a linked edit still syncing under the music lock, holds the transport. */
+export function transportHeld(busy: boolean, linked: boolean, pending: unknown): boolean {
+  return busy || (linked && pending !== undefined);
+}
+
 /**
  * Where "Hear the join" starts; with no known length there is no end to count back from.
  * Music.app reports an unset length as 0, so that counts as unknown too.
