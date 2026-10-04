@@ -6,7 +6,9 @@ import { ARTWORK_GET_LIMIT, artworkUrl } from '../shared/artwork.js';
 import type { Methods } from '../shared/protocol.js';
 import { selecta } from './api.js';
 
-type Get = (args: { track_ids: string[] }) => Promise<ReturnType<Methods['artwork.get']>>;
+type Get = (
+  args: Parameters<Methods['artwork.get']>[0],
+) => Promise<ReturnType<Methods['artwork.get']>>;
 
 export function createArtworkStore(get: Get) {
   // null: asked and Music.app has none.
@@ -17,6 +19,8 @@ export function createArtworkStore(get: Get) {
   // Why each failed lookup failed, kept so a notice opened later still hears it.
   const failed = new Map<string, string>();
   const reloaded = new Set<string>();
+  // Asked again because the file didn't show, so the host drops its copy first.
+  const stale = new Set<string>();
   let batch: string[] = [];
 
   function settle(id: string, file: string | null) {
@@ -37,8 +41,9 @@ export function createArtworkStore(get: Get) {
 
     for (let start = 0; start < ids.length; start += ARTWORK_GET_LIMIT) {
       const chunk = ids.slice(start, start + ARTWORK_GET_LIMIT);
+      const refresh = chunk.filter((id) => stale.delete(id));
 
-      get({ track_ids: chunk }).then(
+      get({ track_ids: chunk, ...(refresh.length && { refresh }) }).then(
         (files) =>
           chunk.forEach((id) => {
             const file = files[id] ?? null;
@@ -80,6 +85,8 @@ export function createArtworkStore(get: Get) {
       if (!answers.get(id)) return;
 
       answers.delete(id);
+
+      stale.add(id);
 
       if (reloaded.has(id)) {
         fail(id, `the album art file for ${id} can't be shown`);

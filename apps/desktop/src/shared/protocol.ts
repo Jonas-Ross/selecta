@@ -17,7 +17,10 @@ export type ArtworkAnswer = ArtworkReadResult[string];
 
 export type Methods = {
   'library.crate': (args: { query?: string }) => Crate;
-  'artwork.get': (args: { track_ids: string[] }) => Record<string, ArtworkAnswer>;
+  'artwork.get': (args: {
+    track_ids: string[];
+    refresh?: string[];
+  }) => Record<string, ArtworkAnswer>;
   'drafts.list': () => DraftSummary[];
   'drafts.get': (args: { draft_id: string }) => unknown;
   'drafts.edit': (args: Record<string, unknown>) => unknown;

@@ -25,6 +25,7 @@ const Message = z.strictObject({
 });
 const Artwork = z.strictObject({
   track_ids: z.array(z.string().max(64)).max(ARTWORK_GET_LIMIT),
+  refresh: z.array(z.string().max(64)).max(ARTWORK_GET_LIMIT).optional(),
 });
 
 export function createApi(
@@ -47,7 +48,11 @@ export function createApi(
 
   const handlers: Record<Method, (args: unknown) => unknown> = {
     'library.crate': (args) => crate(deps.cache(), args),
-    'artwork.get': (args) => artwork.get(Artwork.parse(args).track_ids),
+    'artwork.get': (args) => {
+      const { track_ids, refresh } = Artwork.parse(args);
+
+      return artwork.get(track_ids, refresh);
+    },
     'drafts.list': () => deps.drafts().list(),
     'drafts.get': (args) => drafts.get(args),
     'drafts.edit': (args) => drafts.edit(args),

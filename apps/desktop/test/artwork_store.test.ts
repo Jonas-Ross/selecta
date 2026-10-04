@@ -111,10 +111,15 @@ it('asks once more for art that would not show, then reports it', async () => {
   store.broken(id(1));
   await tick();
   expect(get).toHaveBeenCalledTimes(2);
+  expect(get).toHaveBeenLastCalledWith({ track_ids: [id(1)], refresh: [id(1)] });
   expect(store.url(id(1))).toContain(id(1));
   store.broken(id(1));
   expect(store.url(id(1))).toBeUndefined();
   expect(failed).toHaveBeenCalledOnce();
+  // Trying again still has the host drop the file that wouldn't show.
+  store.retry();
+  await tick();
+  expect(get).toHaveBeenLastCalledWith({ track_ids: [id(1)], refresh: [id(1)] });
 });
 
 it('tells a listener that arrives later about a failure still standing', async () => {

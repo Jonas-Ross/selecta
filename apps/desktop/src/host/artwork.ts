@@ -21,8 +21,11 @@ export type ArtworkDeps = {
 };
 
 export type ArtworkCache = {
-  /** Never rejects: a track whose read failed answers with the reason, the rest still land. */
-  get(trackIds: string[]): Promise<Record<string, ArtworkAnswer>>;
+  /**
+   * Never rejects: a track whose read failed answers with the reason, the rest still land.
+   * `refresh` names tracks whose thumbnail wouldn't show, read from Music.app again.
+   */
+  get(trackIds: string[], refresh?: string[]): Promise<Record<string, ArtworkAnswer>>;
 };
 
 const run = promisify(execFile);
@@ -166,7 +169,7 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
   }
 
   return {
-    async get(trackIds) {
+    async get(trackIds, refresh = []) {
       // Originals a crashed session left behind are cleared before the first read.
       onDisk ??= rm(incoming, { recursive: true, force: true })
         .catch(() => {})
@@ -177,6 +180,18 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
         );
 
       const cached = await onDisk;
+
+      // A thumbnail that won't decode would otherwise be served again by name forever.
+      await Promise.all(
+        refresh
+          .filter((id) => TRACK_PERSISTENT_ID.test(id) && !settle.has(id))
+          .map((id) => {
+            answers.delete(id);
+            cached.delete(`${id}.jpg`);
+
+            return rm(join(dir, `${id}.jpg`), { force: true }).catch(() => {});
+          }),
+      );
       const answered = await Promise.allSettled(
         trackIds.map((id) => (TRACK_PERSISTENT_ID.test(id) ? lookup(id, cached) : null)),
       );

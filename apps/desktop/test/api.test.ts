@@ -116,9 +116,11 @@ it('hands artwork lookups to the cache only within the request limit', async () 
   const id = '0123456789ABCDEF';
 
   expect(await call('artwork.get', { track_ids: [id] })).toEqual({ [id]: null });
-  expect(artwork.get).toHaveBeenCalledWith([id]);
+  expect(artwork.get).toHaveBeenCalledWith([id], undefined);
+  await call('artwork.get', { track_ids: [id], refresh: [id] });
+  expect(artwork.get).toHaveBeenLastCalledWith([id], [id]);
   await expect(call('artwork.get', { track_ids: Array(201).fill(id) })).rejects.toThrow();
   await expect(call('artwork.get', { track_ids: [id], size: 'large' })).rejects.toThrow();
   await expect(call('artwork.get', { track_ids: 'all' })).rejects.toThrow();
-  expect(artwork.get).toHaveBeenCalledOnce();
+  expect(artwork.get).toHaveBeenCalledTimes(2);
 });

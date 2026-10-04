@@ -1,4 +1,4 @@
-import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
@@ -168,4 +168,18 @@ it('reads a thumbnail again once it has gone from disk', async () => {
   expect(await cache.get([A])).toEqual({ [A]: `${A}.jpg` });
   expect(read).toHaveBeenCalledTimes(2);
   expect(await readdir(dir)).toContain(`${A}.jpg`);
+});
+
+it('reads art again when asked to refresh a thumbnail that would not show', async () => {
+  const { dir, read, deps } = await setup();
+
+  await writeFile(join(dir, `${A}.jpg`), '');
+
+  const cache = createArtworkCache(deps);
+
+  expect(await cache.get([A])).toEqual({ [A]: `${A}.jpg` });
+  expect(read).not.toHaveBeenCalled();
+  expect(await cache.get([A], [A, '../escape'])).toEqual({ [A]: `${A}.jpg` });
+  expect(read).toHaveBeenCalledExactlyOnceWith([A], join(dir, 'incoming'));
+  expect(await readFile(join(dir, `${A}.jpg`), 'utf8')).toBe('png');
 });
