@@ -214,6 +214,16 @@ it('refuses a stale revision or a missing entry before touching Music.app', asyn
   expect(deps.bridge.replacePlaylist).not.toHaveBeenCalled();
 });
 
+it('surfaces a failed player read instead of restarting Music on a guess', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.playPreview).mockClear();
+  vi.mocked(deps.bridge.readPlayer).mockRejectedValueOnce(new Error('malformed player read'));
+  await expect(player.play(draft_id, 1, entries[1].entry_id)).rejects.toThrow(/malformed/);
+  expect(deps.bridge.playPreview).not.toHaveBeenCalled();
+});
+
 it('names the playing entry by its place in the preview, so repeats stay apart', async () => {
   const { draft_id, entries } = draft();
 

@@ -266,12 +266,13 @@ describe('player script contract', () => {
       'if (!here()) return JSON.stringify({ elsewhere: true });\n        Music.playerPosition = goal;',
     );
     expect(resume.replace(/\s+/g, ' ')).toContain(
-      'if (!here()) return JSON.stringify({ elsewhere: true }); // Read again last too, since shuffle can be switched on while the entry check settles. if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true }); if (args.expectedTrackIds !== undefined) {',
+      'if (!here()) return JSON.stringify({ elsewhere: true }); if (args.expectedTrackIds !== undefined) {',
     );
 
-    // The full order is checked last, so a reorder during the checks never resumes.
-    expect(resume.indexOf('args.expectedTrackIds')).toBeLessThan(resume.indexOf('Music.play()'));
-    expect(resume.indexOf('orderDrifted')).toBeLessThan(resume.indexOf('Music.play()'));
+    // Shuffle is read once more after the order read, right before the play.
+    expect(resume.replace(/\s+/g, ' ')).toContain(
+      'return JSON.stringify({ orderDrifted: true }); } // Read again last too, since shuffle can be switched on while the checks above settle. if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true }); Music.play();',
+    );
 
     expect(buildControlPlayerScript({ action: 'pause', on })).not.toMatch(NO_WRITES);
     expect(() => buildControlPlayerScript({ action: 'seek', position: -1, on })).toThrow(
@@ -295,8 +296,9 @@ describe('player script contract', () => {
       script.indexOf('if (!quiet) return true;'),
     );
     expect(script).not.toContain('soundVolume');
-    // A pause that finds Music elsewhere aborts rather than stepping through other music.
-    expect(script.indexOf('if (quiet && !(pause() && ours()))')).toBeLessThan(
+    // A quiet route pauses only the record it starts from, and aborts if Music moved meanwhile.
+    expect(script).toContain('if (quiet && !(still(from) && pause() && ours()))');
+    expect(script.indexOf('if (quiet && !(still(from) && pause() && ours()))')).toBeLessThan(
       script.indexOf('Music.nextTrack()'),
     );
     // Steps within the queue only when the caller vouches for it; otherwise it starts over.

@@ -228,8 +228,8 @@ export function createPlayback(deps: PlaybackDeps) {
       const sameOrder = (now: Draft) =>
         JSON.stringify(now.entries.map((entry) => entry.entry_id)) === order;
 
-      // A failed read only means the queue can't be vouched for; the play itself still runs.
-      await read().catch(() => (queued = undefined));
+      // A failed read surfaces rather than restarting Music on a guess.
+      await read();
 
       const played = await withOperation(cache(), 'music', async () => {
         // Another front end may have detached or taken the slot while this waited; the

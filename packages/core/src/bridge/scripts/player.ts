@@ -92,13 +92,13 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       // Resume and seek re-check the entry last, since the slot lookup above takes time.
       if (args.action === 'resume' && state === 'paused') {
         if (!here()) return JSON.stringify({ elsewhere: true });
-        // Read again last too, since shuffle can be switched on while the entry check settles.
-        if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
         if (args.expectedTrackIds !== undefined) {
           const pl = Music.currentPlaylist;
           const order = pl.tracks.length > 0 ? pl.tracks.persistentID() : [];
           if (JSON.stringify(order) !== JSON.stringify(args.expectedTrackIds)) return JSON.stringify({ orderDrifted: true });
         }
+        // Read again last too, since shuffle can be switched on while the checks above settle.
+        if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
         Music.play();
         // A play can be swallowed (an open Settings window does it), so it must read back.
         let playing = false;
@@ -229,8 +229,8 @@ export function buildPlayPreviewScript(input: {
           // Heard on the first record and then elsewhere in the preview means the user picked one.
           if (!started && heard) still(1);
           if (moved || !started) return JSON.stringify({ stepMissed: true });
-        } else if (quiet && !(pause() && ours())) {
-          // Music moved to other music while pausing; stepping now would skip through that.
+        } else if (quiet && !(still(from) && pause() && ours())) {
+          // The user picked another record, or Music moved to other music while pausing.
           return JSON.stringify({ stepMissed: true });
         }
         // previousTrack restarts a record that's playing past its start, so rewind it first.
