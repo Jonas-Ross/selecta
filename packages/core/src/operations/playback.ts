@@ -65,6 +65,9 @@ export function playbackView(player: PlayerState, draft: Draft, slot?: PreviewSt
   return view;
 }
 
+const UNKNOWN_PLAYER =
+  "Music didn't say what it is playing, so the preview stayed linked. Try again.";
+
 export function createPlayback(deps: PlaybackDeps) {
   const { bridge, cache, drafts } = deps;
   // The preview this process last started as a queue. Music.app reads the same playing one
@@ -146,7 +149,12 @@ export function createPlayback(deps: PlaybackDeps) {
 
     const { playlist, track, index } = player;
 
-    if (!playlist || !track || index === undefined) return undefined;
+    if (!playlist || !track || index === undefined) {
+      // A read that lost what's playing can't prove the preview is silent, so a stop fails closed.
+      if (owned && player.state !== 'stopped') throw new Error(UNKNOWN_PLAYER);
+
+      return undefined;
+    }
 
     const { slot } = current(draftId);
     const rotated =
@@ -242,8 +250,10 @@ export function createPlayback(deps: PlaybackDeps) {
 
             first = false;
 
-            if (!live.running || !live.track || live.index === undefined || !live.playlist)
-              return undefined;
+            if (!live.running || live.state === 'stopped') return undefined;
+
+            if (!live.track || live.index === undefined || !live.playlist)
+              throw new Error(UNKNOWN_PLAYER);
 
             const rotated =
               live.playlist.persistentId !== result.playlistId &&

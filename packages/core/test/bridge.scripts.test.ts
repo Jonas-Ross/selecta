@@ -340,6 +340,13 @@ describe('player script contract', () => {
       script.lastIndexOf('orderDrifted'),
     );
     expect(script.lastIndexOf('Music.play();')).toBeLessThan(script.indexOf('stillPaused'));
+    // The resume re-checks the entry after the shuffle and state reads, right before playing.
+    expect(script.replace(/\s+/g, ' ')).toContain(
+      'if (at() !== target) return JSON.stringify({ stepMissed: true }); Music.play();',
+    );
+    expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(
+      script.indexOf('if (at() !== target)'),
+    );
     // A seek that never lands fails before anything resumes.
     expect(script.indexOf('seekMissed')).toBeLessThan(script.lastIndexOf('Music.play();'));
     expect(script).not.toMatch(NO_WRITES);
