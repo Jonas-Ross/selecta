@@ -325,6 +325,10 @@ describe('player script contract', () => {
     expect(script.indexOf('if (!ours()) return true;')).toBeLessThan(
       script.indexOf('Music.pause();'),
     );
+    // The restart's own pause re-checks the playlist first, as every other pause does.
+    expect(script.replace(/\s+/g, ' ')).toContain(
+      'if (!ours()) return (moved = true); Music.pause();',
+    );
     // A restarted play that seeks is paused first, so the record's start isn't heard.
     expect(script).toContain('(restart || from !== target) && (args.position || 0) > 0');
     // The order and target are re-read right before resuming, and the resume must read back.

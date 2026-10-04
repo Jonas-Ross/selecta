@@ -96,21 +96,22 @@ export function createPlayback(deps: PlaybackDeps) {
     )
       return;
 
+    // The bridge's refusal is remembered too, so a poll never retries it every second; Play still rekeys.
     const resolve = async () => {
-      const live = await bridge.readPreview({
-        name: PREVIEW_PLAYLIST_NAME,
-        expectedTrackIds: draft.entries.map((entry) => entry.track_id),
-      });
+      const live = await bridge
+        .readPreview({
+          name: PREVIEW_PLAYLIST_NAME,
+          expectedTrackIds: draft.entries.map((entry) => entry.track_id),
+        })
+        .catch(() => undefined);
 
-      if (live.persistentId === playlist.persistentId)
+      if (live?.persistentId === playlist.persistentId)
         drafts().rekeyPreview(draftId, slot.generation, live.persistentId);
       else unresolved = playlist.persistentId;
     };
 
-    // A failure is remembered too, so a poll never retries it every second; Play still rekeys.
-    await (locked ? resolve() : withOperation(cache(), 'music', resolve)).catch(
-      () => (unresolved = playlist.persistentId),
-    );
+    // A busy lock never reached the bridge, so the next poll asks again.
+    await (locked ? resolve() : withOperation(cache(), 'music', resolve)).catch(() => {});
   }
 
   const readFor = async (draftId: string, locked = false) => {

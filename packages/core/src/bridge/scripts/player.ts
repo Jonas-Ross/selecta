@@ -186,15 +186,18 @@ export function buildPlayPreviewScript(input: {
           Music.play(pl);
           // Paused the moment it is heard playing, so only a beat of the first record leaks.
           let heard = false;
+          let moved = false;
           const started = until(function () {
             if (at() !== 1) return false;
             if (String(Music.playerState()) !== 'playing') return heard;
             heard = true;
             if (!quiet) return true;
+            // Checked again right before pausing, so music the user switched to is never paused.
+            if (!ours()) return (moved = true);
             Music.pause();
             return false;
           });
-          if (!started) return JSON.stringify({ stepMissed: true });
+          if (moved || !started) return JSON.stringify({ stepMissed: true });
         } else if (quiet && !(pause() && ours())) {
           // Music moved to other music while pausing; stepping now would skip through that.
           return JSON.stringify({ stepMissed: true });

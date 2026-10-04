@@ -337,6 +337,28 @@ it('follows the preview when iCloud rotates its ID mid-session, once confirmed u
   });
 });
 
+it('asks about a rotated preview again when the music lock was busy the first time', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, A),
+    playlist: { persistentId: 'P-ROTATED', name: PREVIEW.name },
+  });
+  deps.bridge.readPreview = vi.fn(async () => ({
+    persistentId: 'P-ROTATED',
+    trackCount: 3,
+    trackPersistentIds: [A, B, A],
+  }));
+
+  await withOperation(deps.cacheInstance, 'music', async () => {
+    expect((await player.state(draft_id)).entry_id).toBeUndefined();
+  });
+  expect(deps.bridge.readPreview).not.toHaveBeenCalled();
+  expect((await player.state(draft_id)).entry_id).toBe(entries[0].entry_id);
+  expect(deps.drafts!().preview()?.playlist_id).toBe('P-ROTATED');
+});
+
 it('leaves a same-named playlist alone when the bridge cannot confirm it, and asks once', async () => {
   const { draft_id, entries } = draft();
 
