@@ -359,17 +359,22 @@ describe('player script contract', () => {
     // Its pauses read back as done only once paused or stopped, not merely off 'playing'.
     expect(script).toContain('if (until(silent)) return true;');
     expect(script).toContain("return now === 'paused' || now === 'stopped';");
-    // The restart's own pause re-checks the playlist first, as every other pause does.
+    // The restart's own pause re-checks entry 1 first, so a record the user picked plays on.
     expect(script.replace(/\s+/g, ' ')).toContain(
-      'if (!ours()) return (moved = true); Music.pause();',
+      'if (!still(1)) return (moved = true); Music.pause();',
+    );
+    // The full order is read again right before the queue starts, outside the cleanup.
+    expect(script.replace(/\s+/g, ' ')).toContain(
+      'if (!sameTracks()) return JSON.stringify({ orderDrifted: true }); try { if (restart) from = 1;',
     );
     // A restarted play that seeks is paused first, so the record's start isn't heard.
     expect(script).toContain('(restart || from !== target) && (args.position || 0) > 0');
     // The order and target are re-read right before resuming, and the resume must read back.
     expect(script.lastIndexOf('orderDrifted')).toBeLessThan(script.lastIndexOf('Music.play();'));
     expect(script).toContain(
-      'return ours() && JSON.stringify(now) === JSON.stringify(args.expectedTrackIds)',
+      'return JSON.stringify(now) === JSON.stringify(args.expectedTrackIds);',
     );
+    expect(script).toContain('return ours() && sameTracks() &&');
     // A repeated track at another occurrence fails the index check.
     expect(script).toContain('Music.currentTrack.index() === target &&');
     expect(script.lastIndexOf('Music.play();')).toBeLessThan(script.indexOf('stillPaused'));

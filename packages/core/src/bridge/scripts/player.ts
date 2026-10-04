@@ -207,9 +207,12 @@ export function buildPlayPreviewScript(input: {
       };
       // Playlist and order are checked, since the user, an edit or iCloud can move them mid-step;
       // the index too, since a repeated track matches by ID at another occurrence.
-      const inOrder = function () {
+      const sameTracks = function () {
         const now = pl.tracks.length > 0 ? pl.tracks.persistentID() : [];
-        return ours() && JSON.stringify(now) === JSON.stringify(args.expectedTrackIds) &&
+        return JSON.stringify(now) === JSON.stringify(args.expectedTrackIds);
+      };
+      const inOrder = function () {
+        return ours() && sameTracks() &&
           Music.currentTrack.index() === target &&
           Music.currentTrack.persistentID() === args.expectedTrackIds[args.index];
       };
@@ -219,6 +222,8 @@ export function buildPlayPreviewScript(input: {
         try { const now = at(); if (now !== false && now !== entry && now !== prev) picked = true; } catch (e) {}
         return false;
       };
+      // The slot's order was read before the shuffle and player reads, so it is read again before anything moves.
+      if (!sameTracks()) return JSON.stringify({ orderDrifted: true });
       try {
         if (restart) from = 1;
         // Paused only when records passed on the way, or a fresh record's start before the seek,
@@ -234,8 +239,8 @@ export function buildPlayPreviewScript(input: {
             if (String(Music.playerState()) !== 'playing') return heard;
             heard = true;
             if (!quiet) return true;
-            // Checked again right before pausing, so music the user switched to is never paused.
-            if (!ours()) return (moved = true);
+            // Checked again right before pausing, so a record or music the user switched to is never paused.
+            if (!still(1)) return (moved = true);
             Music.pause();
             return false;
           });
