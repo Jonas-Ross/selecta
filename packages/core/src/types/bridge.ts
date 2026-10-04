@@ -134,7 +134,8 @@ export type PlayerAction =
   | { action: 'resume' }
   | { action: 'seek'; position: number };
 
-export type PlayerControl = PlayerAction & { on: PlayerEntry };
+// A resume also names the full order it expects, so it never continues a reordered preview.
+export type PlayerControl = PlayerAction & { on: PlayerEntry; expectedTrackIds?: string[] };
 
 export interface Bridge {
   // Explicit UI navigation only; full live order must match, including repeats.

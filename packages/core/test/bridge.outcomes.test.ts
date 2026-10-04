@@ -296,6 +296,17 @@ describe('player boundary', () => {
     ).rejects.toMatchObject({ errorCode: 'validation_error' });
   });
 
+  it('refuses a resume once the preview order has drifted', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ orderDrifted: true });
+    await expect(
+      bridge.controlPlayer({
+        action: 'resume',
+        on: { playlistId: 'P', index: 1, trackId: 'T' },
+        expectedTrackIds: ['T'],
+      }),
+    ).rejects.toMatchObject({ errorCode: 'preview_conflict' });
+  });
+
   it('reports a pause Music.app ignored, so a stop never detaches over playback', async () => {
     vi.mocked(runJxa).mockResolvedValue({ stillPlaying: true });
     await expect(

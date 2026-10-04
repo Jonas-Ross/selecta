@@ -310,7 +310,20 @@ export function createPlayback(deps: PlaybackDeps) {
 
         if (!on) throw new Error("Music isn't playing this draft, so nothing was changed.");
 
-        return show(draftId, watch(await bridge.controlPlayer({ ...input, on })));
+        const { draft } = current(draftId);
+        const expectedTrackIds =
+          input.action === 'resume' ? draft.entries.map((entry) => entry.track_id) : undefined;
+
+        return show(
+          draftId,
+          watch(
+            await bridge.controlPlayer({
+              ...input,
+              on,
+              ...(expectedTrackIds && { expectedTrackIds }),
+            }),
+          ),
+        );
       }),
 
     // Releases the link so Claude can edit again; Music.app keeps the playlist as it is.

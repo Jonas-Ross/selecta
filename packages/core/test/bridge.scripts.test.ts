@@ -266,8 +266,12 @@ describe('player script contract', () => {
       'if (!here()) return JSON.stringify({ elsewhere: true });\n        Music.playerPosition = goal;',
     );
     expect(resume.replace(/\s+/g, ' ')).toContain(
-      'if (!here()) return JSON.stringify({ elsewhere: true }); // Read again last too, since shuffle can be switched on while the entry check settles. if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true }); Music.play();',
+      'if (!here()) return JSON.stringify({ elsewhere: true }); // Read again last too, since shuffle can be switched on while the entry check settles. if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true }); if (args.expectedTrackIds !== undefined) {',
     );
+
+    // The full order is checked last, so a reorder during the checks never resumes.
+    expect(resume.indexOf('args.expectedTrackIds')).toBeLessThan(resume.indexOf('Music.play()'));
+    expect(resume.indexOf('orderDrifted')).toBeLessThan(resume.indexOf('Music.play()'));
 
     expect(buildControlPlayerScript({ action: 'pause', on })).not.toMatch(NO_WRITES);
     expect(() => buildControlPlayerScript({ action: 'seek', position: -1, on })).toThrow(

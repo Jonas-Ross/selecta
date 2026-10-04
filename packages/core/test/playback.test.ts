@@ -229,6 +229,23 @@ it('names the playing entry by its place in the preview, so repeats stay apart',
   });
 });
 
+it('resumes only against the full order the draft expects', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  await player.control(draft_id, { action: 'resume' });
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'resume',
+    on: { playlistId: 'P-SLOT', index: 3, trackId: A },
+    expectedTrackIds: [A, B, A],
+  });
+  await player.control(draft_id, { action: 'pause' });
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 3, trackId: A },
+  });
+});
+
 it('detaches the preview so the draft is local again', async () => {
   const { draft_id, entries } = draft();
 

@@ -216,6 +216,13 @@ export const bridge: Bridge = {
         'Nothing was changed. Read the player again before controlling it.',
       );
 
+    if ('orderDrifted' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        "Selecta Preview's order no longer matches the draft.",
+        'Nothing was resumed. Play the draft again to reload it.',
+      );
+
     if ('seekMissed' in result)
       throw new BridgeError(
         'preview_conflict',

@@ -94,6 +94,11 @@ export function buildControlPlayerScript(input: PlayerControl): string {
         if (!here()) return JSON.stringify({ elsewhere: true });
         // Read again last too, since shuffle can be switched on while the entry check settles.
         if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
+        if (args.expectedTrackIds !== undefined) {
+          const pl = Music.currentPlaylist;
+          const order = pl.tracks.length > 0 ? pl.tracks.persistentID() : [];
+          if (JSON.stringify(order) !== JSON.stringify(args.expectedTrackIds)) return JSON.stringify({ orderDrifted: true });
+        }
         Music.play();
         // A play can be swallowed (an open Settings window does it), so it must read back.
         let playing = false;
