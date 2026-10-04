@@ -46,12 +46,14 @@ export function Transport({
 }) {
   const length = duration ?? row?.duration_seconds;
   // Held while dragging, so Music.app gets one seek on release rather than one per pixel.
-  const [scrubbing, setScrubbing] = useState<number>();
+  // Bound to the entry it started on, so a record that ends mid-drag isn't seeked on the next.
+  const [scrub, setScrub] = useState<{ at: number; entry?: string }>();
+  const scrubbing = scrub?.entry === row?.entry_id ? scrub?.at : undefined;
   const shown = scrubbing ?? position;
   const commit = () => {
     if (scrubbing !== undefined) onSeek?.(scrubbing);
 
-    setScrubbing(undefined);
+    setScrub(undefined);
   };
 
   return (
@@ -129,10 +131,10 @@ export function Transport({
           disabled={disabled || !onSeek || length === undefined}
           aria-label="Position in track"
           aria-valuetext={`${formatClock(shown)} of ${length === undefined ? 'unknown' : formatClock(length)}`}
-          onChange={(e) => setScrubbing(Number(e.target.value))}
+          onChange={(e) => setScrub({ at: Number(e.target.value), entry: row?.entry_id })}
           onPointerUp={commit}
           onKeyUp={commit}
-          onBlur={() => setScrubbing(undefined)}
+          onBlur={() => setScrub(undefined)}
         />
         <span className="mono">{length === undefined ? '–:––' : formatClock(length)}</span>
       </div>
