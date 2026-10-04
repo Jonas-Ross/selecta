@@ -305,9 +305,9 @@ describe('player script contract', () => {
     // Every step and the final seek re-check the entry they start from, so a record the user
     // picked mid-route, or other music, is never stepped from or seeked.
     for (const [check, act] of [
-      ['at() !== entry + 1', 'Music.playerPosition = 0;'],
-      ['at() !== entry - 1', 'Music.nextTrack();'],
-      ['at() !== target', 'Music.playerPosition = goal;'],
+      ['!still(entry + 1)', 'Music.playerPosition = 0;'],
+      ['!still(entry - 1)', 'Music.nextTrack();'],
+      ['!still(target)', 'Music.playerPosition = goal;'],
     ])
       expect(script.replace(/\s+/g, ' ')).toContain(
         `if (${check}) return JSON.stringify({ stepMissed: true }); ${act}`,
@@ -340,20 +340,19 @@ describe('player script contract', () => {
     expect(script).toContain('(restart || from !== target) && (args.position || 0) > 0');
     // The order and target are re-read right before resuming, and the resume must read back.
     expect(script.lastIndexOf('orderDrifted')).toBeLessThan(script.lastIndexOf('Music.play();'));
-    expect(script).toContain('if (!ours() || JSON.stringify(now)');
+    expect(script).toContain(
+      'return ours() && JSON.stringify(now) === JSON.stringify(args.expectedTrackIds)',
+    );
     // A repeated track at another occurrence fails the index check.
-    expect(script).toContain('Music.currentTrack.index() !== target ||');
-    expect(script.indexOf('Music.currentTrack.index() !== target')).toBeLessThan(
-      script.lastIndexOf('orderDrifted'),
-    );
+    expect(script).toContain('Music.currentTrack.index() === target &&');
     expect(script.lastIndexOf('Music.play();')).toBeLessThan(script.indexOf('stillPaused'));
-    // The resume re-checks the entry after the shuffle and state reads, right before playing.
+    // The resume re-checks the entry and the full order after the shuffle and state reads.
     expect(script.replace(/\s+/g, ' ')).toContain(
-      'if (at() !== target) return JSON.stringify({ stepMissed: true }); Music.play();',
+      'if (!still(target)) return JSON.stringify({ stepMissed: true }); if (!inOrder()) return JSON.stringify({ orderDrifted: true }); Music.play();',
     );
-    expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(
-      script.indexOf('if (at() !== target)'),
-    );
+    // A record the user picked mid-route is never paused by the cleanup.
+    expect(script).toContain('if (now !== false && now !== index) picked = true;');
+    expect(script).toContain('if (!landed && !picked && !pause())');
     // A seek that never lands fails before anything resumes.
     expect(script.indexOf('seekMissed')).toBeLessThan(script.lastIndexOf('Music.play();'));
     expect(script).not.toMatch(NO_WRITES);
