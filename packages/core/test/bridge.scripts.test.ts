@@ -316,7 +316,7 @@ describe('player script contract', () => {
 
     // The rewind before Previous reads back first, or Previous only restarts the record.
     expect(script.replace(/\s+/g, ' ')).toContain(
-      'Music.playerPosition = 0; // Previous only steps back once the rewind has landed; before that it restarts the record. if (!until(function () { return Music.playerPosition() < 2; })) return JSON.stringify({ stepMissed: true }); Music.previousTrack();',
+      'const rewound = until(function () { return !still(entry + 1) || Music.playerPosition() < 2; }); if (!rewound || !still(entry + 1)) return JSON.stringify({ stepMissed: true }); Music.previousTrack();',
     );
     // The final play resumes only what Selecta paused or what began paused, never a pause the user made mid-route.
     expect(script).toContain('if (quiet || (!restart && wasPaused)) {');

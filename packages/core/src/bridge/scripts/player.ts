@@ -252,7 +252,9 @@ export function buildPlayPreviewScript(input: {
           if (!still(entry + 1)) return JSON.stringify({ stepMissed: true });
           Music.playerPosition = 0;
           // Previous only steps back once the rewind has landed; before that it restarts the record.
-          if (!until(function () { return Music.playerPosition() < 2; })) return JSON.stringify({ stepMissed: true });
+          // The entry is polled too, so a record the user picks meanwhile is neither stepped from nor paused.
+          const rewound = until(function () { return !still(entry + 1) || Music.playerPosition() < 2; });
+          if (!rewound || !still(entry + 1)) return JSON.stringify({ stepMissed: true });
           Music.previousTrack();
           if (!step(entry, entry + 1)) return JSON.stringify({ stepMissed: true });
         }
