@@ -48,6 +48,8 @@ it('moves a playing position on between reads, and holds a paused one', () => {
   expect(livePosition(read, 1000, 9000)).toBe(12);
   expect(livePosition({ ...read, state: 'paused' }, 1000, 9000)).toBe(10);
   expect(livePosition(undefined, 0, 1000)).toBe(0);
+  // Music.app's unset length of 0 doesn't pin the clock to the start.
+  expect(livePosition({ ...read, duration: 0 }, 1000, 2500)).toBe(11.5);
 });
 
 it('counts set time from the lengths before, flagging an unknown one', () => {

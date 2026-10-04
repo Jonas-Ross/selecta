@@ -223,6 +223,30 @@ export function createPlayback(deps: PlaybackDeps) {
           ...(queued === undefined && { restart: true }),
         });
 
+        // An edit from another front end can land while Music steps; its sync then waits on
+        // this lock, so Music would play an order the draft no longer has.
+        const after = current(draftId);
+
+        if (after.draft.revision !== revision || !inStep(after.draft, after.slot)) {
+          const { player: started } = result;
+
+          if (started.running && started.track && started.index !== undefined)
+            await bridge
+              .controlPlayer({
+                action: 'pause',
+                on: {
+                  playlistId: result.playlistId,
+                  index: started.index,
+                  trackId: started.track.persistentId,
+                },
+              })
+              .catch(() => undefined);
+
+          throw new Error(
+            'The draft changed while Music started it, so Music was paused. Play again.',
+          );
+        }
+
         // The play resolved the slot by name and order, so its live ID is the slot's now.
         if (now.slot && result.playlistId !== now.slot.playlist_id)
           drafts().rekeyPreview(draftId, now.slot.generation, result.playlistId);

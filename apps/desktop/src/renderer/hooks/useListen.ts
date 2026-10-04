@@ -111,7 +111,8 @@ export function useListen({
     current,
     playing,
     position,
-    duration: current ? live?.duration : undefined,
+    // Music.app reports an unset length as 0; the cached one stands in for it.
+    duration: current ? live?.duration || nowRow?.duration_seconds : undefined,
     status,
     setTime: setClock(items, now, position),
     whole: setClock(items, items.length, 0),

@@ -107,6 +107,21 @@ it('plays nothing when the preview is detached while the play waits for Music', 
   expect(deps.bridge.playPreview).not.toHaveBeenCalled();
 });
 
+it('pauses and fails when the draft changes while Music is starting it', async () => {
+  const { draft_id, entries } = draft();
+
+  vi.mocked(deps.bridge.playPreview).mockImplementationOnce(async ({ expectedTrackIds, index }) => {
+    deps.drafts!().update(draft_id, 1, (d) => ({ ...d, entries: d.entries.slice(1) }));
+
+    return { playlistId: 'P-SLOT', player: playing(index + 1, expectedTrackIds[index]) };
+  });
+  await expect(player.play(draft_id, 1, entries[0].entry_id)).rejects.toThrow(/paused/);
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: A },
+  });
+});
+
 it('refuses a stale revision or a missing entry before touching Music.app', async () => {
   const { draft_id, entries } = draft();
 

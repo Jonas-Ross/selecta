@@ -51,7 +51,8 @@ export function livePosition(player: PlayerView | undefined, readAt: number, now
   const at = player?.position ?? 0;
   const moved = player?.state === 'playing' ? Math.max(0, (now - readAt) / 1000) : 0;
 
-  return Math.min(player?.duration ?? Infinity, at + moved);
+  // Music.app reports an unset length as 0, which is no bound.
+  return Math.min(player?.duration || Infinity, at + moved);
 }
 
 /** Seconds into the whole set, and whether an unknown length makes that a lower bound. */
