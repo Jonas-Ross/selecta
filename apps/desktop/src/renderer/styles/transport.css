@@ -1,0 +1,125 @@
+/* The player bar. */
+.transport {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 230px) minmax(160px, 1fr) auto;
+  align-items: center;
+  gap: var(--s5);
+  height: 56px;
+  padding: 0 var(--s5);
+  border-top: 1px solid var(--line2);
+  background: var(--bg);
+}
+.tp-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ib {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--ink2);
+  transition:
+    color var(--t-fast),
+    background var(--t-fast);
+}
+.ib svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+.ib:hover:not([disabled]) {
+  color: var(--ink);
+  background: var(--bg3);
+}
+.ib.play {
+  width: 36px;
+  height: 36px;
+  background: var(--ink);
+  color: var(--bg);
+}
+.ib.play:hover:not([disabled]) {
+  background: var(--white);
+  color: var(--bg);
+}
+.ib.play.on {
+  background: var(--acid);
+}
+.ib[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+.tp-now {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  text-align: left;
+  border-radius: var(--r-sm);
+}
+.tp-now .sleeve {
+  position: relative;
+  width: 36px;
+  height: 36px;
+}
+.tp-now .sleeve-title {
+  display: none;
+}
+.tp-now > span {
+  min-width: 0;
+}
+.tp-now b {
+  display: block;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-now span span {
+  display: block;
+  font: 400 var(--fs-meta) var(--mono);
+  color: var(--ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-scrub {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--s3);
+  align-items: center;
+  min-width: 0;
+}
+.tp-scrub .mono {
+  min-width: 34px;
+  font-size: var(--fs-meta);
+  color: var(--ink2);
+}
+.tp-scrub .mono:last-child {
+  text-align: right;
+  color: var(--ink3);
+}
+.scrub {
+  width: 100%;
+  accent-color: var(--acid);
+}
+.tp-set {
+  /* Fits '24/24' and '1:05:00+ of 1:05:00+', so the clock ticking over never moves the bar. */
+  min-width: 20ch;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  line-height: 1.4;
+  white-space: nowrap;
+  font-size: var(--fs-meta);
+  color: var(--ink3);
+}
+.tp-set b {
+  display: block;
+  font: 400 var(--fs-title) var(--led);
+  color: var(--ink);
+}

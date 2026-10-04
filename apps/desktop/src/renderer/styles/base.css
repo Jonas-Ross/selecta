@@ -179,3 +179,6 @@ p {
     transition-duration: 0.01ms !important;
   }
 }
+.notice.bar .btn {
+  margin-left: var(--s3);
+}
