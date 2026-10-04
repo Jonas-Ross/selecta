@@ -1,11 +1,12 @@
 // The draft screen: the rail, Claude's panel, and Save. Every edit goes
-// through one queue on the newest revision; the rail only shows the order a
-// queued edit will write until that edit settles.
+// through one queue (`edits.ts`); the rail only shows the order a queued edit
+// will write until that edit settles.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { selecta } from '../api.js';
 import { onArtworkFailure, retryArtwork } from '../artwork.js';
 import type { Rect } from '../flight.js';
+import { editQueue, newestHold, type Change } from '../edits.js';
 import { useReducedMotion } from '../motion.js';
 import { withMoved } from '../reorder.js';
 import {
@@ -29,6 +30,8 @@ import { Rail, type Opening, type RailHandle } from './Rail.js';
 import { Rolling } from './Rolling.js';
 import { SaveConfirm, type SavePhase } from './SaveConfirm.js';
 import { TopBar } from './TopBar.js';
+
+type Current = NonNullable<DraftView['draft']>;
 
 export function Draft({
   draftId,
@@ -56,7 +59,8 @@ export function Draft({
   const [leaving, setLeaving] = useState(false);
   const [name, setName] = useState('');
   const [pending, setPending] = useState<string[]>();
-  const pendingToken = useRef(0);
+  // The rail shows the new order at once; the newest of these clears it when its edit settles.
+  const [hold] = useState(() => newestHold(setPending));
   const answer = useRef<(ok: boolean) => void>(undefined);
   const naming = useRef(false);
   // Only typing commits a name, so blurring never writes back a name Claude has since changed.
@@ -64,9 +68,7 @@ export function Draft({
   // Edits queue behind each other on the newest revision, so the rename a blur
   // starts lands before the click that caused the blur.
   const latest = useRef<DraftView['draft']>(undefined);
-  const edits = useRef<Promise<unknown>>(Promise.resolve());
-  // Edits not yet settled, each resolving to whether it landed; a Save waits on these.
-  const inflight = useRef(new Set<Promise<boolean>>());
+  const [queue] = useState(() => editQueue<Current>(() => latest.current, write));
   const rail = useRef<RailHandle>(null);
   const reduced = useReducedMotion();
   const [opening, setOpening] = useState<Opening>();
@@ -113,27 +115,8 @@ export function Draft({
     setView(next);
   }
 
-  type Change = (draft: NonNullable<DraftView['draft']>) => Record<string, unknown> | undefined;
-
-  // A change is worked out from the draft as it stands when its turn comes, so
-  // queued clicks compose instead of replaying the snapshot they were made on.
-  function edit(change: Change): Promise<boolean> {
-    const next = edits.current.then(() => apply(change));
-
-    edits.current = next;
-    inflight.current.add(next);
-    next.finally(() => inflight.current.delete(next));
-
-    return next;
-  }
-
   // Revision checks mean a stale edit fails rather than clobbering Claude's.
-  async function apply(change: Change): Promise<boolean> {
-    const base = latest.current;
-    const args = base && change(base);
-
-    if (!base || !args) return true;
-
+  async function write(base: Current, args: Record<string, unknown>) {
     try {
       const result = (await selecta.call('drafts.edit', {
         draft_id: draftId,
@@ -156,6 +139,8 @@ export function Draft({
     return false;
   }
 
+  const edit = (change: Change<Current>) => queue.edit(change);
+
   const setEntries = (change: (entries: Row[]) => Row[] | undefined) =>
     edit((current) => {
       const next = change(current.entries);
@@ -173,14 +158,6 @@ export function Draft({
 
       return from < 0 || to < 0 ? undefined : move(entries, from, to);
     });
-
-  // The rail shows the new order at once; the newest of these clears it when its edit settles.
-  function hold(order: string[], landing: Promise<boolean>) {
-    const token = ++pendingToken.current;
-
-    setPending(order);
-    landing.finally(() => pendingToken.current === token && setPending(undefined));
-  }
 
   // The entry standing at `to` now is where `move` puts the dragged one.
   function reorder(entryId: string, to: number) {
@@ -283,9 +260,7 @@ export function Draft({
     if (airborne) return;
 
     setLeaving(true);
-    Promise.all(inflight.current).then((landed) =>
-      landed.every(Boolean) ? onBack() : setLeaving(false),
-    );
+    queue.landed().then((landed) => (landed ? onBack() : setLeaving(false)));
   }
 
   // Save is a barrier in the edit queue: controls lock on the click, and it
@@ -295,18 +270,10 @@ export function Draft({
 
     setSaving(true);
 
-    const ahead = [...inflight.current];
-    const step = edits.current
-      .then(() => Promise.all(ahead))
-      .then((landed) => (landed.every(Boolean) ? commit() : undefined))
-      .finally(() => {
-        setSaving(false);
-        setPhase('closed');
-      });
-
-    edits.current = step;
-
-    return step;
+    return queue.barrier(commit).finally(() => {
+      setSaving(false);
+      setPhase('closed');
+    });
   }
 
   // Asked once the queue has drained, so the card names what will really be written.

@@ -21,6 +21,7 @@ The method table in `src/host/api.ts` is the whole surface, typed in `src/shared
 | Module | Holds |
 |---|---|
 | `state.ts` | Rows, totals, the log, run recovery, save outcomes |
+| `edits.ts` | The draft's edit queue: one edit at a time on the newest revision, the barrier Save and Home wait on, and the held order a pending edit shows |
 | `lanes.ts` | Record size, the bands around the rail, tempo and key scales, step paths that break at a missing value, set-time ticks |
 | `joins.ts` | Each gap's tempo step and wheel relation in plain words, from core's `harmonicRelation` |
 | `facts.ts` | Where a tempo or key came from and how sure it was, in words |
