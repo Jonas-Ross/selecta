@@ -121,6 +121,22 @@ it('answers a failed batch with its error for its own IDs only, and asks again l
   expect(read.mock.calls.map(([batch]) => batch)).toEqual([[A], [B], [A]]);
 });
 
+it('clears originals a batch wrote before it aborted', async () => {
+  const { dir, read, deps } = await setup();
+  const cache = createArtworkCache({ ...deps, log: () => {} });
+
+  read.mockImplementationOnce(async (_ids, target) => {
+    await writeFile(join(target, `${A}.png`), 'png');
+    await writeFile(join(target, `${B}.jpg`), 'jpg');
+    throw new Error('Cannot write artwork');
+  });
+  expect(await cache.get([A, B])).toEqual({
+    [A]: { error: 'Cannot write artwork' },
+    [B]: { error: 'Cannot write artwork' },
+  });
+  expect(await readdir(join(dir, 'incoming'))).toEqual([]);
+});
+
 it('fails and drops an original whose thumbnail fails, without remembering it', async () => {
   const { dir, read, resize, deps } = await setup();
   const cache = createArtworkCache({ ...deps, log: () => {} });

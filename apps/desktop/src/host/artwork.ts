@@ -113,6 +113,14 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
       written = await read(batch, incoming);
     } catch (error) {
       log?.(`selecta: cannot read artwork from Music.app: ${String(error)}`);
+      // An abort mid-batch leaves the originals already written with no names reported back.
+      await Promise.all(
+        batch.flatMap((id) =>
+          ['jpg', 'png'].map((ext) =>
+            rm(join(incoming, `${id}.${ext}`), { force: true }).catch(() => {}),
+          ),
+        ),
+      );
 
       for (const id of batch) fail(id, error);
 
