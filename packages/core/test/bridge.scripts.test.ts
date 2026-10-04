@@ -328,6 +328,9 @@ describe('player script contract', () => {
     expect(script.indexOf('if (!ours()) return true;')).toBeLessThan(
       script.indexOf('Music.pause();'),
     );
+    // Its pauses read back as done only once paused or stopped, not merely off 'playing'.
+    expect(script).toContain('if (until(silent)) return true;');
+    expect(script).toContain("return now === 'paused' || now === 'stopped';");
     // The restart's own pause re-checks the playlist first, as every other pause does.
     expect(script.replace(/\s+/g, ' ')).toContain(
       'if (!ours()) return (moved = true); Music.pause();',

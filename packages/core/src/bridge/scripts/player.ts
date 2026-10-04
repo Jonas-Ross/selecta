@@ -161,11 +161,16 @@ export function buildPlayPreviewScript(input: {
       const ours = function () {
         try { return Music.currentPlaylist.persistentID() === pl.persistentID(); } catch (e) { return false; }
       };
+      // Fast-forwarding and rewinding are audible too, so only paused or stopped reads back as done.
+      const silent = function () {
+        const now = String(Music.playerState());
+        return now === 'paused' || now === 'stopped';
+      };
       const pause = function () {
         for (let attempt = 0; attempt < 3; attempt++) {
           if (!ours()) return true;
           Music.pause();
-          if (until(function () { return String(Music.playerState()) !== 'playing'; })) return true;
+          if (until(silent)) return true;
         }
         return false;
       };
