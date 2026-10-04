@@ -210,21 +210,21 @@ export function buildPlayPreviewScript(input: {
           return JSON.stringify({ stepMissed: true });
         }
         // previousTrack restarts a record that's playing past its start, so rewind it first.
-        // Every step re-checks the playlist, since the user can switch music between them.
+        // Every step re-checks the entry it starts from, since the user can pick another between them.
         for (let entry = from - 1; entry >= target; entry--) {
-          if (!ours()) return JSON.stringify({ stepMissed: true });
+          if (at() !== entry + 1) return JSON.stringify({ stepMissed: true });
           Music.playerPosition = 0;
           Music.previousTrack();
           if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
         }
         for (let entry = from + 1; entry <= target; entry++) {
-          if (!ours()) return JSON.stringify({ stepMissed: true });
+          if (at() !== entry - 1) return JSON.stringify({ stepMissed: true });
           Music.nextTrack();
           if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
         }
         // Clamped inside the track, since Music.app ignores a position past the end.
         const goal = Math.min(args.position || 0, Math.max(0, Music.currentTrack.duration() - 1));
-        if (!ours()) return JSON.stringify({ stepMissed: true });
+        if (at() !== target) return JSON.stringify({ stepMissed: true });
         Music.playerPosition = goal;
         if (!until(function () { return Math.abs(Music.playerPosition() - goal) < 2; })) {
           return JSON.stringify({ seekMissed: true });

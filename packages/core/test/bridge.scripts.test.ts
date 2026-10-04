@@ -302,14 +302,15 @@ describe('player script contract', () => {
     expect(script).toContain('Music.previousTrack()');
     expect(script).not.toContain('Music.stop()');
 
-    // Every step and the final seek re-check the playlist, so none lands on other music.
-    for (const act of [
-      'Music.playerPosition = 0;',
-      'Music.nextTrack();',
-      'Music.playerPosition = goal;',
+    // Every step and the final seek re-check the entry they start from, so a record the user
+    // picked mid-route, or other music, is never stepped from or seeked.
+    for (const [check, act] of [
+      ['at() !== entry + 1', 'Music.playerPosition = 0;'],
+      ['at() !== entry - 1', 'Music.nextTrack();'],
+      ['at() !== target', 'Music.playerPosition = goal;'],
     ])
       expect(script.replace(/\s+/g, ' ')).toContain(
-        `if (!ours()) return JSON.stringify({ stepMissed: true }); ${act}`,
+        `if (${check}) return JSON.stringify({ stepMissed: true }); ${act}`,
       );
 
     expect(script).toContain('const restart = args.restart === true || from < 1;');
