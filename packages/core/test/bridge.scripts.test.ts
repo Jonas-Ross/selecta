@@ -265,13 +265,9 @@ describe('player script contract', () => {
     expect(seek).toContain(
       'if (!here()) return JSON.stringify({ elsewhere: true });\n        Music.playerPosition = goal;',
     );
+    // The slow order read comes first; the entry and shuffle are read once more right before the play.
     expect(resume.replace(/\s+/g, ' ')).toContain(
-      'if (!here()) return JSON.stringify({ elsewhere: true }); if (args.expectedTrackIds !== undefined) {',
-    );
-
-    // Shuffle is read once more after the order read, right before the play.
-    expect(resume.replace(/\s+/g, ' ')).toContain(
-      'return JSON.stringify({ orderDrifted: true }); } // Read again last too, since shuffle can be switched on while the checks above settle. if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true }); Music.play();',
+      'return JSON.stringify({ orderDrifted: true }); } if (!here()) return JSON.stringify({ elsewhere: true }); // Read again last too, since shuffle can be switched on while the checks above settle. if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true }); Music.play();',
     );
 
     expect(buildControlPlayerScript({ action: 'pause', on })).not.toMatch(NO_WRITES);
@@ -317,6 +313,15 @@ describe('player script contract', () => {
       expect(script.replace(/\s+/g, ' ')).toContain(
         `if (${check}) return JSON.stringify({ stepMissed: true }); ${act}`,
       );
+
+    // A step that times out onto a record other than its source or destination counts as picked.
+    expect(script).toContain('if (now !== false && now !== entry && now !== prev) picked = true;');
+    expect(script).toContain(
+      'if (!step(entry, entry + 1)) return JSON.stringify({ stepMissed: true });',
+    );
+    expect(script).toContain(
+      'if (!step(entry, entry - 1)) return JSON.stringify({ stepMissed: true });',
+    );
 
     expect(script).toContain('const restart = args.restart === true || from < 1;');
     expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(script.indexOf('Music.play(pl)'));

@@ -91,12 +91,13 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       // play() with nothing paused would start whatever Music.app last had queued.
       // Resume and seek re-check the entry last, since the slot lookup above takes time.
       if (args.action === 'resume' && state === 'paused') {
-        if (!here()) return JSON.stringify({ elsewhere: true });
+        // The slow full-order read goes first, so the entry and shuffle reads sit right before the play.
         if (args.expectedTrackIds !== undefined) {
           const pl = Music.currentPlaylist;
           const order = pl.tracks.length > 0 ? pl.tracks.persistentID() : [];
           if (JSON.stringify(order) !== JSON.stringify(args.expectedTrackIds)) return JSON.stringify({ orderDrifted: true });
         }
+        if (!here()) return JSON.stringify({ elsewhere: true });
         // Read again last too, since shuffle can be switched on while the checks above settle.
         if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
         Music.play();
@@ -207,6 +208,12 @@ export function buildPlayPreviewScript(input: {
           Music.currentTrack.index() === target &&
           Music.currentTrack.persistentID() === args.expectedTrackIds[args.index];
       };
+      // A step that never lands onto a record other than its source or destination was the user's pick.
+      const step = function (entry, prev) {
+        if (until(function () { return at() === entry; })) return true;
+        try { const now = at(); if (now !== false && now !== entry && now !== prev) picked = true; } catch (e) {}
+        return false;
+      };
       try {
         if (restart) from = 1;
         // Paused only when records passed on the way, or a fresh record's start before the seek,
@@ -240,12 +247,12 @@ export function buildPlayPreviewScript(input: {
           if (!still(entry + 1)) return JSON.stringify({ stepMissed: true });
           Music.playerPosition = 0;
           Music.previousTrack();
-          if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
+          if (!step(entry, entry + 1)) return JSON.stringify({ stepMissed: true });
         }
         for (let entry = from + 1; entry <= target; entry++) {
           if (!still(entry - 1)) return JSON.stringify({ stepMissed: true });
           Music.nextTrack();
-          if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
+          if (!step(entry, entry - 1)) return JSON.stringify({ stepMissed: true });
         }
         // Clamped inside the track, since Music.app ignores a position past the end.
         const goal = Math.min(args.position || 0, Math.max(0, Music.currentTrack.duration() - 1));
