@@ -1,6 +1,6 @@
 // A number that rolls to its new value on a spring instead of jumping.
 import { useEffect, useRef, useState } from 'react';
-import { useFrameLoop, useReducedMotion } from '../motion.js';
+import { useFrameLoop, useReducedMotion } from '../hooks/motion.js';
 import { rest, settled, SLIDE, stepSpring } from '../springs.js';
 
 export function Rolling({ value }: { value: number }) {

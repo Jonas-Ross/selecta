@@ -34,3 +34,22 @@ export const settled = (spring: Spring, target: number, eps = 0.002) =>
   Math.abs(spring.x - target) < eps && Math.abs(spring.v) < eps * 10;
 
 export const rest = (x: number): Spring => ({ x, v: 0 });
+
+/**
+ * One frame's stepper: each `step` moves a spring toward its target, or snaps it
+ * there under reduced motion, and `moving` says whether any has yet to settle.
+ */
+export function frameSprings(reduced: boolean, dt: number) {
+  const frame = {
+    moving: false,
+    step(spring: Spring, target: number, config: SpringConfig): Spring {
+      const next = reduced ? rest(target) : stepSpring(spring, target, config, dt);
+
+      frame.moving ||= !settled(next, target);
+
+      return next;
+    },
+  };
+
+  return frame;
+}

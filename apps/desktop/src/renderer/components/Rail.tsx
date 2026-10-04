@@ -28,7 +28,7 @@ import {
   tempoY,
   type Box,
 } from '../lanes.js';
-import { useFrameLoop, useReducedMotion } from '../motion.js';
+import { useFrameLoop, useReducedMotion } from '../hooks/motion.js';
 import { dropSlot, landingIndex, slotUnder, withMoved } from '../reorder.js';
 import { GROW, LIFT, rest, settled, SLIDE, SQUASH, stepSpring, type Spring } from '../springs.js';
 import type { Row } from '../state.js';

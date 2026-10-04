@@ -16,7 +16,7 @@ The method table in `src/host/api.ts` is the whole surface, typed in `src/shared
 
 ## The renderer
 
-`src/renderer/app.tsx` only switches screens and keeps each draft's run record. Screens and their parts live in `src/renderer/components/`, one per file; anything with logic worth testing is a pure module beside them, tested in `test/` without a DOM:
+`src/renderer/app.tsx` only switches screens and keeps each draft's run record. Screens and their parts live in `src/renderer/components/`, one per file, and the hooks that drive their motion in `src/renderer/hooks/`. Anything with logic worth testing is a pure module in `src/renderer/` itself, tested in `test/` without a DOM:
 
 | Module | Holds |
 |---|---|
@@ -25,10 +25,10 @@ The method table in `src/host/api.ts` is the whole surface, typed in `src/shared
 | `lanes.ts` | Record size, the bands around the rail, tempo and key scales, step paths that break at a missing value, set-time ticks |
 | `joins.ts` | Each gap's tempo step and wheel relation in plain words, from core's `harmonicRelation` |
 | `facts.ts` | Where a tempo or key came from and how sure it was, in words |
-| `springs.ts`, `reorder.ts` | The spring step and settle test, and where a dragged or carried record lands |
+| `springs.ts`, `reorder.ts` | The spring step, settle test and per-frame stepper, and where a dragged or carried record lands |
 | `crate.ts`, `flight.ts` | How each record in the crate stands and shades, flick and wheel flips, and the arc a record flies from the crate to the rail |
 
-Styles are split by concern, all built from the custom properties in `tokens.css`: `base.css` (reset, buttons, notices), `chrome.css` (top bar, save card), `home.css` (Home and Brief), `crate.css`, `rail.css`, `panel.css` (Claude), `explain.css`. The fonts are the website's, copied into `src/renderer/fonts/` and served from the bundle, since the page's CSP allows only `'self'`. The window uses an inset title bar, so the top bar is the drag region and leaves the traffic lights 80px.
+Styles live in `src/renderer/styles/`, split by concern and all built from the custom properties in `tokens.css`: `base.css` (reset, buttons, notices), `chrome.css` (top bar, save card), `home.css` (Home and Brief), `crate.css`, `rail.css`, `panel.css` (Claude), `explain.css`. The fonts are the website's, copied into `src/renderer/styles/fonts/` and served from the bundle, since the page's CSP allows only `'self'`. The window uses an inset title bar, so the top bar is the drag region and leaves the traffic lights 80px.
 
 ### The crate
 

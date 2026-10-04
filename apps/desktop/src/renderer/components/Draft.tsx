@@ -7,7 +7,7 @@ import { selecta } from '../api.js';
 import { onArtworkFailure, retryArtwork } from '../artwork.js';
 import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
-import { useReducedMotion } from '../motion.js';
+import { useReducedMotion } from '../hooks/motion.js';
 import { withMoved } from '../reorder.js';
 import {
   bpmSpan,

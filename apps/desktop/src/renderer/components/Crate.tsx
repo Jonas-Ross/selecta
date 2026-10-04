@@ -15,7 +15,7 @@ import {
   wheelFlips,
 } from '../crate.js';
 import type { Rect } from '../flight.js';
-import { useFrameLoop, useReducedMotion } from '../motion.js';
+import { useFrameLoop, useReducedMotion } from '../hooks/motion.js';
 import { rest, settled, stepSpring, type Spring, type SpringConfig } from '../springs.js';
 import type { Crate as CrateData } from '../../shared/protocol.js';
 import { Flight, type FlightPlan } from './Flight.js';
