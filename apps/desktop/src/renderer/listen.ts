@@ -27,9 +27,12 @@ export function queuePlay(
   });
 }
 
-/** Where "Hear the join" starts; with no known length there is no end to count back from. */
+/**
+ * Where "Hear the join" starts; with no known length there is no end to count back from.
+ * Music.app reports an unset length as 0, so that counts as unknown too.
+ */
 export function joinStart(duration?: number): number | undefined {
-  return duration === undefined ? undefined : Math.max(0, duration - JOIN_LEAD);
+  return duration === undefined || duration <= 0 ? undefined : Math.max(0, duration - JOIN_LEAD);
 }
 
 /** The record the Listen screen centres on: what plays if it's in this draft, else the cued one. */

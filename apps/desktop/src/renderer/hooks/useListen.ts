@@ -32,8 +32,8 @@ export function useListen({
   const player = usePlayer(draftId, watching);
   const [cued, setCued] = useState<string>();
   const [clock, setClockNow] = useState(() => performance.now());
-  // A play waiting on the edit queue holds Claude off as a running one does. The ref
-  // sees a second click in the same tick, before the state re-renders.
+  // A play or stop waiting on the edit queue counts as busy, holding Claude and the transport
+  // off as a running one does. The ref sees a second click in the same tick, before a re-render.
   const [queued, setQueued] = useState(false);
   const waiting = useRef(false);
   const allowed = useRef(canPlay);
@@ -46,7 +46,9 @@ export function useListen({
   const playing = current && live?.state === 'playing';
   const position = current ? livePosition(live, player.readAt, clock) : 0;
   // Music's own length for the record it's on, else the cached one.
-  const joinAt = joinStart((current ? live?.duration : undefined) ?? nowRow?.duration_seconds);
+  // Music's own length for the record it's on, else the cached one.
+  const joinAt =
+    joinStart(current ? live?.duration : undefined) ?? joinStart(nowRow?.duration_seconds);
 
   // Music.app is read about once a second; the bar moves smoothly in between.
   useEffect(() => {
@@ -57,21 +59,29 @@ export function useListen({
     return () => clearInterval(timer);
   }, [playing]);
 
-  function playAt(entryId: string, at?: number) {
-    // One Music operation at a time; a second would fail busy or queue an extra route.
-    if (!canPlay || player.busy || waiting.current) return;
+  // One Music operation at a time; a second would fail busy or queue an extra route.
+  function hold(step: () => Promise<unknown>) {
+    if (player.busy || waiting.current) return;
 
     waiting.current = true;
     setQueued(true);
-    void queuePlay(
-      queue,
-      () => allowed.current,
-      () => latest()?.revision,
-      (revision) => player.play(revision, entryId, at),
-    ).finally(() => {
+    void step().finally(() => {
       waiting.current = false;
       setQueued(false);
     });
+  }
+
+  function playAt(entryId: string, at?: number) {
+    if (!canPlay) return;
+
+    hold(() =>
+      queuePlay(
+        queue,
+        () => allowed.current,
+        () => latest()?.revision,
+        (revision) => player.play(revision, entryId, at),
+      ),
+    );
   }
 
   // Moving while Music.app is on this draft plays there; otherwise it only moves the cue.
@@ -123,11 +133,13 @@ export function useListen({
     join: () => nowRow && joinAt !== undefined && playAt(nowRow.entry_id, joinAt),
     // Waits like a play, so a stop never names a revision an edit is about to replace.
     stop() {
-      queue.after(() => {
-        const revision = latest()?.revision;
+      hold(() =>
+        queue.after(() => {
+          const revision = latest()?.revision;
 
-        if (revision !== undefined) return player.detach(revision);
-      });
+          if (revision !== undefined) return player.detach(revision);
+        }),
+      );
     },
   };
 }
