@@ -10,12 +10,12 @@ import {
   revisionInputShape,
 } from '@selecta/core/tools/playlist_draft.js';
 import type { DraftStore } from '@selecta/core/drafts/store.js';
+import { createPlayback } from '@selecta/core/operations/playback.js';
 import { BRIEF_LIMIT, type Method } from '../shared/protocol.js';
 import { ARTWORK_GET_LIMIT } from '../shared/artwork.js';
 import type { AgentSessions } from './agent.js';
 import type { ArtworkCache } from './artwork.js';
 import { crate } from './library.js';
-import { createPlayer } from './player.js';
 
 const DraftId = z.strictObject(getDraftInputShape);
 const Brief = z.strictObject({
@@ -47,12 +47,7 @@ export function createApi(
   artwork: ArtworkCache,
 ) {
   const drafts = new PlaylistDraftTools(deps);
-  const player = createPlayer({
-    bridge: deps.bridge,
-    cache: deps.cache,
-    drafts: deps.drafts,
-    preview: (args) => drafts.preview(args),
-  });
+  const player = createPlayback(deps);
 
   // The store refuses linked drafts atomically; this only fails a run before
   // it starts rather than partway through.

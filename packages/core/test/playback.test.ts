@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { Draft } from '@selecta/core/drafts/contracts.js';
-import type { PlayerState } from '@selecta/core/types/bridge.js';
-import { withOperation } from '@selecta/core/operations/lock.js';
-import { BridgeError } from '@selecta/core/types/errors.js';
-import { PlaylistDraftTools } from '@selecta/core/tools/playlist_draft.js';
-import { makeToolDeps } from '../../../packages/core/test/helpers.js';
-import { createPlayer, inStep, playerView } from '../src/host/player.js';
+import type { Draft } from '../src/drafts/contracts.js';
+import type { PlayerState } from '../src/types/bridge.js';
+import { withOperation } from '../src/operations/lock.js';
+import { BridgeError } from '../src/types/errors.js';
+import { makeToolDeps } from './helpers.js';
+import { createPlayback, inStep, playbackView } from '../src/operations/playback.js';
 
 const A = 'T-TEARDROP';
 const B = 'T-ROADS';
@@ -21,7 +20,7 @@ const playing = (index: number, persistentId: string): PlayerState => ({
 });
 
 let deps: ReturnType<typeof makeToolDeps>;
-let player: ReturnType<typeof createPlayer>;
+let player: ReturnType<typeof createPlayback>;
 
 beforeEach(() => {
   deps = makeToolDeps({
@@ -39,14 +38,7 @@ beforeEach(() => {
     controlPlayer: vi.fn(async () => ({ ...playing(3, A), state: 'paused' })),
   });
 
-  const tools = new PlaylistDraftTools(deps);
-
-  player = createPlayer({
-    bridge: deps.bridge,
-    cache: deps.cache,
-    drafts: deps.drafts!,
-    preview: (args) => tools.preview(args),
-  });
+  player = createPlayback({ ...deps, drafts: deps.drafts! });
 });
 afterEach(() => deps.cacheInstance.close());
 
@@ -292,22 +284,22 @@ it('claims an entry only when Music.app is provably in step with this draft', ()
   expect(inStep(d, { ...slot, owner: randomUUID() })).toBe(false);
   expect(inStep(d, undefined)).toBe(false);
 
-  expect(playerView(playing(2, B), d, slot).entry_id).toBe(d.entries[1].entry_id);
+  expect(playbackView(playing(2, B), d, slot).entry_id).toBe(d.entries[1].entry_id);
   // The track at that place must be the one playing.
-  expect(playerView(playing(2, A), d, slot).entry_id).toBeUndefined();
-  expect(playerView({ ...playing(2, B), playlist: undefined }, d, slot).entry_id).toBeUndefined();
+  expect(playbackView(playing(2, A), d, slot).entry_id).toBeUndefined();
+  expect(playbackView({ ...playing(2, B), playlist: undefined }, d, slot).entry_id).toBeUndefined();
   // A copy of the preview playlist shares its name, not its ID.
   expect(
-    playerView({ ...playing(2, B), playlist: { ...PREVIEW, persistentId: 'P-COPY' } }, d, slot)
+    playbackView({ ...playing(2, B), playlist: { ...PREVIEW, persistentId: 'P-COPY' } }, d, slot)
       .entry_id,
   ).toBeUndefined();
   expect(
-    playerView(playing(2, B), d, { ...slot, playlist_id: undefined }).entry_id,
+    playbackView(playing(2, B), d, { ...slot, playlist_id: undefined }).entry_id,
   ).toBeUndefined();
   expect(
-    playerView({ ...playing(2, B), playlist: { persistentId: 'X', name: 'Gym' } }, d, slot)
+    playbackView({ ...playing(2, B), playlist: { persistentId: 'X', name: 'Gym' } }, d, slot)
       .entry_id,
   ).toBeUndefined();
-  expect(playerView({ running: false }, d, slot)).toEqual({ running: false, state: 'stopped' });
-  expect(playerView({ running: true, state: 'fast forwarding' }, d, slot).state).toBe('stopped');
+  expect(playbackView({ running: false }, d, slot)).toEqual({ running: false, state: 'stopped' });
+  expect(playbackView({ running: true, state: 'fast forwarding' }, d, slot).state).toBe('stopped');
 });

@@ -3,6 +3,7 @@
 // ends honest at compile time.
 import type { toInspectedTrack } from '@selecta/core/domain/track_projections.js';
 import type { DraftSummary } from '@selecta/core/drafts/store.js';
+import type { PlaybackView } from '@selecta/core/operations/playback.js';
 import type { ArtworkReadResult } from '@selecta/core/types/bridge.js';
 
 export type { DraftSummary };
@@ -15,21 +16,7 @@ export type Crate = { tracks: CrateTrack[]; total: number; order: 'recently_adde
 /** A cached thumbnail's file name, null when the track has no artwork, or why it couldn't be read. */
 export type ArtworkAnswer = ArtworkReadResult[string];
 
-/**
- * Music.app's player as the Listen screen sees it. `entry_id` is set only when
- * Music.app is playing this draft's preview in step with the draft, so a
- * repeated track still names the right record.
- */
-export type PlayerView = {
-  running: boolean;
-  state: 'playing' | 'paused' | 'stopped';
-  track_id?: string;
-  position?: number;
-  duration?: number;
-  entry_id?: string;
-  // How a play reached the entry (started, on from N, back from N, seek), for the action log.
-  route?: string;
-};
+export type PlayerView = PlaybackView;
 
 export type Methods = {
   'library.crate': (args: { query?: string }) => Crate;
