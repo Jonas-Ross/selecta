@@ -95,6 +95,18 @@ it('plays nothing when the preview could not be loaded in order', async () => {
   expect(deps.bridge.playPreview).not.toHaveBeenCalled();
 });
 
+it('plays nothing when the preview is detached while the play waits for Music', async () => {
+  const { draft_id, entries } = draft();
+
+  vi.mocked(deps.bridge.readPlayer).mockImplementationOnce(async () => {
+    deps.drafts!().detachPreview(draft_id, 1);
+
+    return playing(1, A);
+  });
+  await expect(player.play(draft_id, 1, entries[0].entry_id)).rejects.toThrow(/changed hands/);
+  expect(deps.bridge.playPreview).not.toHaveBeenCalled();
+});
+
 it('refuses a stale revision or a missing entry before touching Music.app', async () => {
   const { draft_id, entries } = draft();
 

@@ -205,20 +205,31 @@ export function createPlayback(deps: PlaybackDeps) {
       // A failed read only means the queue can't be vouched for; the play itself still runs.
       await read().catch(() => (queued = undefined));
 
-      const played = await withOperation(cache(), 'music', () =>
-        bridge.playPreview({
-          expectedTrackIds: draft.entries.map((entry) => entry.track_id),
+      const played = await withOperation(cache(), 'music', async () => {
+        // Another front end may have detached or taken the slot while this waited; the
+        // playlist would still pass the bridge's order check, so ownership is read again here.
+        const now = current(draftId);
+
+        if (now.draft.revision !== revision || !inStep(now.draft, now.slot))
+          throw new Error(
+            'Selecta Preview changed hands before it could play, so nothing was played.',
+          );
+
+        const result = await bridge.playPreview({
+          expectedTrackIds: now.draft.entries.map((entry) => entry.track_id),
           index,
           ...(position !== undefined && { position }),
           ...(queued === undefined && { restart: true }),
-        }),
-      );
+        });
+
+        // The play resolved the slot by name and order, so its live ID is the slot's now.
+        if (now.slot && result.playlistId !== now.slot.playlist_id)
+          drafts().rekeyPreview(draftId, now.slot.generation, result.playlistId);
+
+        return result;
+      });
 
       queued = played.playlistId;
-
-      // The play resolved the slot by name and order, so its live ID is the slot's now.
-      if (slot && played.playlistId !== slot.playlist_id)
-        drafts().rekeyPreview(draftId, slot.generation, played.playlistId);
 
       return { ...show(draftId, played.player), ...(played.route && { route: played.route }) };
     },
