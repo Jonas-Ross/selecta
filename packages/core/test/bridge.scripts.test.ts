@@ -290,6 +290,13 @@ describe('player script contract', () => {
     expect(script).not.toContain('Music.stop()');
     expect(script).toContain('const restart = args.restart === true || from < 1;');
     expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(script.indexOf('Music.play(pl)'));
+    // Checked again after the route settles, right before the final resume.
+    expect(script.lastIndexOf('Music.shuffleEnabled()')).toBeGreaterThan(
+      script.indexOf('orderDrifted: true'),
+    );
+    expect(script.lastIndexOf('Music.shuffleEnabled()')).toBeLessThan(
+      script.lastIndexOf('Music.play();'),
+    );
     // A start that went wrong is paused, and reported if Music won't pause.
     expect(script.indexOf('} finally {')).toBeLessThan(script.indexOf('leftPlaying'));
     // No pause, cleanup's included, ever lands on music the user moved on to.

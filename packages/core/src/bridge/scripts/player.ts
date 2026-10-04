@@ -218,6 +218,8 @@ export function buildPlayPreviewScript(input: {
           Music.currentTrack.persistentID() !== args.expectedTrackIds[args.index]) {
           return JSON.stringify({ orderDrifted: true });
         }
+        // Shuffle switched on while it stepped would carry on out of order; the finally pauses it.
+        if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
         if (quiet || String(Music.playerState()) === 'paused') {
           Music.play();
           if (!until(function () { return String(Music.playerState()) === 'playing'; })) {
