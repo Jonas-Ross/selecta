@@ -330,6 +330,11 @@ describe('player script contract', () => {
     // The order and target are re-read right before resuming, and the resume must read back.
     expect(script.lastIndexOf('orderDrifted')).toBeLessThan(script.lastIndexOf('Music.play();'));
     expect(script).toContain('if (!ours() || JSON.stringify(now)');
+    // A repeated track at another occurrence fails the index check.
+    expect(script).toContain('Music.currentTrack.index() !== target ||');
+    expect(script.indexOf('Music.currentTrack.index() !== target')).toBeLessThan(
+      script.lastIndexOf('orderDrifted'),
+    );
     expect(script.lastIndexOf('Music.play();')).toBeLessThan(script.indexOf('stillPaused'));
     // A seek that never lands fails before anything resumes.
     expect(script.indexOf('seekMissed')).toBeLessThan(script.lastIndexOf('Music.play();'));

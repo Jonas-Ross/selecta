@@ -221,7 +221,9 @@ export function buildPlayPreviewScript(input: {
         }
         // Playlist and order are checked again here, since the user, an edit or iCloud can move them mid-step.
         const now = pl.tracks.length > 0 ? pl.tracks.persistentID() : [];
+        // The index too, since a repeated track matches by ID at another occurrence.
         if (!ours() || JSON.stringify(now) !== JSON.stringify(args.expectedTrackIds) ||
+          Music.currentTrack.index() !== target ||
           Music.currentTrack.persistentID() !== args.expectedTrackIds[args.index]) {
           return JSON.stringify({ orderDrifted: true });
         }
