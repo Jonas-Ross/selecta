@@ -87,7 +87,9 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       // Shuffle turned on while paused would carry on through the draft out of order.
       if (args.action === 'resume' && Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
       // play() with nothing paused would start whatever Music.app last had queued.
+      // Resume and seek re-check the entry last, since the slot lookup above takes time.
       if (args.action === 'resume' && state === 'paused') {
+        if (!here()) return JSON.stringify({ elsewhere: true });
         Music.play();
         // A play can be swallowed (an open Settings window does it), so it must read back.
         let playing = false;
@@ -100,6 +102,7 @@ export function buildControlPlayerScript(input: PlayerControl): string {
       if (args.action === 'seek' && state !== 'stopped') {
         // Clamped like a play's seek, and read back since a seek can silently not land.
         const goal = Math.min(args.position, Math.max(0, Music.currentTrack.duration() - 1));
+        if (!here()) return JSON.stringify({ elsewhere: true });
         Music.playerPosition = goal;
         let tries = 0;
         while (Math.abs(Music.playerPosition() - goal) >= 2) {
@@ -197,17 +200,21 @@ export function buildPlayPreviewScript(input: {
           return JSON.stringify({ stepMissed: true });
         }
         // previousTrack restarts a record that's playing past its start, so rewind it first.
+        // Every step re-checks the playlist, since the user can switch music between them.
         for (let entry = from - 1; entry >= target; entry--) {
+          if (!ours()) return JSON.stringify({ stepMissed: true });
           Music.playerPosition = 0;
           Music.previousTrack();
           if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
         }
         for (let entry = from + 1; entry <= target; entry++) {
+          if (!ours()) return JSON.stringify({ stepMissed: true });
           Music.nextTrack();
           if (!until(function () { return at() === entry; })) return JSON.stringify({ stepMissed: true });
         }
         // Clamped inside the track, since Music.app ignores a position past the end.
         const goal = Math.min(args.position || 0, Math.max(0, Music.currentTrack.duration() - 1));
+        if (!ours()) return JSON.stringify({ stepMissed: true });
         Music.playerPosition = goal;
         if (!until(function () { return Math.abs(Music.playerPosition() - goal) < 2; })) {
           return JSON.stringify({ seekMissed: true });

@@ -257,6 +257,16 @@ describe('player script contract', () => {
       'Math.min(args.position, Math.max(0, Music.currentTrack.duration() - 1))',
     );
     expect(seek.indexOf('Music.playerPosition = goal')).toBeLessThan(seek.indexOf('seekMissed'));
+
+    // Both re-check the entry right before acting, after the slot lookup.
+    for (const [script, act] of [
+      [resume, 'Music.play();'],
+      [seek, 'Music.playerPosition = goal;'],
+    ])
+      expect(script).toContain(
+        `if (!here()) return JSON.stringify({ elsewhere: true });\n        ${act}`,
+      );
+
     expect(buildControlPlayerScript({ action: 'pause', on })).not.toMatch(NO_WRITES);
     expect(() => buildControlPlayerScript({ action: 'seek', position: -1, on })).toThrow(
       expect.objectContaining({ errorCode: 'validation_error' }),
@@ -288,6 +298,17 @@ describe('player script contract', () => {
     // Going back within a trusted queue steps with previousTrack.
     expect(script).toContain('Music.previousTrack()');
     expect(script).not.toContain('Music.stop()');
+
+    // Every step and the final seek re-check the playlist, so none lands on other music.
+    for (const act of [
+      'Music.playerPosition = 0;',
+      'Music.nextTrack();',
+      'Music.playerPosition = goal;',
+    ])
+      expect(script.replace(/\s+/g, ' ')).toContain(
+        `if (!ours()) return JSON.stringify({ stepMissed: true }); ${act}`,
+      );
+
     expect(script).toContain('const restart = args.restart === true || from < 1;');
     expect(script.indexOf('Music.shuffleEnabled()')).toBeLessThan(script.indexOf('Music.play(pl)'));
     // Checked again after the route settles, right before the final resume.
