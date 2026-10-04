@@ -3,12 +3,30 @@
 // reads it and fills in between reads.
 import { parseCamelot } from '@selecta/core/domain/harmonic.js';
 import type { PlayerView } from '../shared/protocol.js';
+import type { EditQueue } from './edits.js';
 import type { Row } from './state.js';
 
 // AutoMix needs about this much of the outgoing track left to blend into the next.
 export const JOIN_LEAD = 60;
 
 /** Where "Hear the join" starts the outgoing track. */
+/**
+ * Plays once the edits queued ahead have landed, on the revision they left, unless
+ * `allowed` turned false meanwhile: Claude starting then would have its edits refused.
+ */
+export function queuePlay(
+  queue: Pick<EditQueue<unknown>, 'after'>,
+  allowed: () => boolean,
+  revision: () => number | undefined,
+  play: (revision: number) => unknown,
+): Promise<unknown> {
+  return queue.after(() => {
+    const at = revision();
+
+    if (at !== undefined && allowed()) return play(at);
+  });
+}
+
 export function joinStart(duration?: number): number {
   return duration === undefined ? 0 : Math.max(0, duration - JOIN_LEAD);
 }

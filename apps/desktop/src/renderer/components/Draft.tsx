@@ -108,12 +108,8 @@ export function Draft({
   const locked = saved || saving || leaving;
   const sum = totals(items);
   const inDraft = useMemo(() => new Set(items.map((row) => row.track_id)), [items]);
-  // One record in the air at a time, so each lands in the gap held for it.
-  const canAdd = draft !== undefined && !locked && flight === undefined;
   // A record in the air is an edit not yet queued, so Save and Home wait for it to land.
   const airborne = flight !== undefined;
-  // The rail holds a gap for the flying record at a fixed slot, so nothing else moves until it lands.
-  const railLocked = locked || airborne;
   const span = bpmSpan(items);
   // Not while Claude runs: linking the draft mid-run would refuse its edits partway through.
   const canPlay =
@@ -129,6 +125,12 @@ export function Draft({
     canPlay,
   });
   const { player } = listen;
+  // A linked edit syncs the preview under the music lock a player action holds, so it waits too.
+  const playerHeld = linked && listen.busy;
+  // One record in the air at a time, so each lands in the gap held for it.
+  const canAdd = draft !== undefined && !locked && !airborne && !playerHeld;
+  // The rail holds a gap for the flying record at a fixed slot, so nothing else moves until it lands.
+  const railLocked = locked || airborne || playerHeld;
   const outOfStep = linked && OUT_OF_STEP.has(view?.preview?.status ?? '');
 
   // Live revisions keep arriving from Claude; don't overwrite a name being typed.
@@ -352,7 +354,9 @@ export function Draft({
           ? `${saveLabel(draft?.save)}, so the order is fixed here`
           : leaving
             ? 'Finishing your edits'
-            : undefined;
+            : playerHeld
+              ? 'Waiting for Music.app'
+              : undefined;
 
   return (
     <div className="screen-draft">
@@ -582,7 +586,7 @@ export function Draft({
           log={log}
           working={working}
           hasDraft={draft !== undefined}
-          locked={locked || linked}
+          locked={locked || linked || listen.busy}
           selected={items.filter((row) => selected.has(row.entry_id))}
           onUnselect={toggleSelected}
           onSend={send}

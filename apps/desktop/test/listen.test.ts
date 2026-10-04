@@ -1,9 +1,11 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { editQueue } from '../src/renderer/edits.js';
 import {
   elsewhere,
   joinStart,
   livePosition,
   nowIndex,
+  queuePlay,
   setClock,
   wheelCell,
   wheelPoint,
@@ -74,4 +76,41 @@ it('draws the route through the wheel, lifting the pen at a missing key', () => 
   expect(wheelRoute(['12B', '12A'], 0, 1)).toBe('M0.0 -106.0L0.0 -64.0');
   expect(wheelRoute(['12B', undefined, '12A'], 0, 2)).toBe('M0.0 -106.0M0.0 -64.0');
   expect(wheelRoute(['12B', '12A'], 1, 5)).toBe('M0.0 -64.0');
+});
+
+it('plays on the revision the queued edits leave, unless play stopped being allowed meanwhile', async () => {
+  let draft = { revision: 1 };
+  let allowed = true;
+  const queue = editQueue(
+    () => draft,
+    async () => {
+      draft = { revision: draft.revision + 1 };
+
+      return true;
+    },
+  );
+  const play = vi.fn();
+
+  void queue.edit(() => ({ order: [] }));
+  await queuePlay(
+    queue,
+    () => allowed,
+    () => draft.revision,
+    play,
+  );
+  expect(play).toHaveBeenCalledExactlyOnceWith(2);
+
+  // Claude started while an edit ahead of the play was still landing.
+  void queue.edit(() => {
+    allowed = false;
+
+    return { order: [] };
+  });
+  await queuePlay(
+    queue,
+    () => allowed,
+    () => draft.revision,
+    play,
+  );
+  expect(play).toHaveBeenCalledOnce();
 });

@@ -1,9 +1,9 @@
 // The draft's playback controller: which record is cued or playing, where it
 // is, and the transport actions. Plays and stops wait on the draft's edit
 // queue, so the revision they name is the one the rail shows.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { EditQueue } from '../edits.js';
-import { elsewhere, joinStart, livePosition, nowIndex, setClock } from '../listen.js';
+import { elsewhere, joinStart, livePosition, nowIndex, queuePlay, setClock } from '../listen.js';
 import type { DraftView, Row } from '../state.js';
 import { usePlayer } from './usePlayer.js';
 
@@ -32,6 +32,11 @@ export function useListen({
   const player = usePlayer(draftId, watching);
   const [cued, setCued] = useState<string>();
   const [clock, setClockNow] = useState(() => performance.now());
+  // A play waiting on the edit queue holds Claude off as a running one does.
+  const [queued, setQueued] = useState(0);
+  const allowed = useRef(canPlay);
+
+  allowed.current = canPlay;
   const live = player.view;
   const now = nowIndex(items, live, cued);
   const nowRow = items[now];
@@ -51,11 +56,13 @@ export function useListen({
   function playAt(entryId: string, at?: number) {
     if (!canPlay) return;
 
-    queue.after(() => {
-      const revision = latest()?.revision;
-
-      if (revision !== undefined) return player.play(revision, entryId, at);
-    });
+    setQueued((n) => n + 1);
+    void queuePlay(
+      queue,
+      () => allowed.current,
+      () => latest()?.revision,
+      (revision) => player.play(revision, entryId, at),
+    ).finally(() => setQueued((n) => n - 1));
   }
 
   // Moving while Music.app is on this draft plays there; otherwise it only moves the cue.
@@ -79,6 +86,7 @@ export function useListen({
 
   return {
     player,
+    busy: player.busy || queued > 0,
     now,
     nowRow,
     current,
