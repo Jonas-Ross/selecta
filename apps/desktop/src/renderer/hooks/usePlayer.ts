@@ -2,8 +2,8 @@
 // second while Listen is open, the draft is linked or it is playing, and stops reading
 // after a failure until the user acts, so a denied permission isn't hit every second.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PlayerView } from '../shared/protocol.js';
-import { selecta } from './api.js';
+import type { PlayerView } from '../../shared/protocol.js';
+import { selecta } from '../api.js';
 
 const READ_EVERY_MS = 1000;
 

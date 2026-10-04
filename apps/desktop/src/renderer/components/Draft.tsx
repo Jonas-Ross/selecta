@@ -8,8 +8,7 @@ import { onArtworkFailure, retryArtwork } from '../artwork.js';
 import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
 import { useReducedMotion } from '../hooks/motion.js';
-import { elsewhere, joinStart, livePosition, nowIndex, setClock } from '../listen.js';
-import { usePlayer } from '../player.js';
+import { useListen } from '../hooks/useListen.js';
 import { withMoved } from '../reorder.js';
 import {
   bpmSpan,
@@ -37,8 +36,6 @@ import { SaveConfirm, type SavePhase } from './SaveConfirm.js';
 import { TopBar } from './TopBar.js';
 import { Transport } from './Transport.js';
 
-// Back past this many seconds restarts the record, as a player's previous button does.
-const RESTART_AFTER = 4;
 // Preview states that mean Music.app may not hold what the draft says.
 const OUT_OF_STEP = new Set(['pending', 'out_of_date', 'conflict', 'error', 'uncertain']);
 
@@ -86,8 +83,6 @@ export function Draft({
   const [flight, setFlight] = useState<FlightPlan & { at: number }>();
   const [added, setAdded] = useState('');
   const [tab, setTab] = useState<'dig' | 'listen'>('dig');
-  const [cued, setCued] = useState<string>();
-  const [clock, setClockNow] = useState(() => performance.now());
 
   const load = useCallback(
     () =>
@@ -110,8 +105,6 @@ export function Draft({
   const items = pendingOrder(rows(view ?? {}), pending);
   const saved = draft?.save !== undefined;
   const linked = previewLinked(view ?? {});
-  // Linked, Music may be playing this draft whatever the tab, after a remount or mid-sync too.
-  const player = usePlayer(draftId, tab === 'listen' || linked);
   const locked = saved || saving || leaving;
   const sum = totals(items);
   const inDraft = useMemo(() => new Set(items.map((row) => row.track_id)), [items]);
@@ -122,25 +115,21 @@ export function Draft({
   // The rail holds a gap for the flying record at a fixed slot, so nothing else moves until it lands.
   const railLocked = locked || airborne;
   const span = bpmSpan(items);
-  const live = player.view;
-  const now = nowIndex(items, live, cued);
-  const nowRow = items[now];
-  const current = live?.entry_id !== undefined && live.entry_id === nowRow?.entry_id;
-  const playing = current && live?.state === 'playing';
-  const position = current ? livePosition(live, player.readAt, clock) : 0;
   // Not while Claude runs: linking the draft mid-run would refuse its edits partway through.
   const canPlay =
     draft !== undefined && !working && !saving && !leaving && !airborne && phase === 'closed';
+  const listen = useListen({
+    draftId,
+    items,
+    latest: () => latest.current,
+    queue,
+    // Linked, Music may be playing this draft whatever the tab, after a remount or mid-sync too.
+    watching: tab === 'listen' || linked,
+    linked,
+    canPlay,
+  });
+  const { player } = listen;
   const outOfStep = linked && OUT_OF_STEP.has(view?.preview?.status ?? '');
-
-  // Music.app is read about once a second; the bar moves smoothly in between.
-  useEffect(() => {
-    if (!playing) return;
-
-    const timer = setInterval(() => setClockNow(performance.now()), 250);
-
-    return () => clearInterval(timer);
-  }, [playing]);
 
   // Live revisions keep arriving from Claude; don't overwrite a name being typed.
   useEffect(() => {
@@ -353,60 +342,6 @@ export function Draft({
     }
   }
 
-  // Plays wait for queued edits, so the revision they name is the one the rail shows.
-  function playAt(entryId: string, at?: number) {
-    if (!canPlay) return;
-
-    queue.after(() => {
-      const revision = latest.current?.revision;
-
-      if (revision !== undefined) return player.play(revision, entryId, at);
-    });
-  }
-
-  function toggle() {
-    if (!nowRow) return;
-
-    if (!current) playAt(nowRow.entry_id);
-    else if (playing) player.pause();
-    else player.resume();
-  }
-
-  // Moving while Music.app is on this draft plays there; otherwise it only moves the cue.
-  function cue(index: number) {
-    const row = items[index];
-
-    if (!row) return;
-
-    setCued(row.entry_id);
-
-    if (current) playAt(row.entry_id);
-  }
-
-  function prev() {
-    if (current && position > RESTART_AFTER) player.seek(0);
-    else cue(now - 1);
-  }
-
-  // Waits like a play, so a stop never names a revision an edit is about to replace.
-  function stopListening() {
-    queue.after(() => {
-      const revision = latest.current?.revision;
-
-      if (revision !== undefined) return player.detach(revision);
-    });
-  }
-
-  const status =
-    elsewhere(live) ??
-    (current
-      ? 'Plays through Music.app from Selecta Preview. Your edits update it; Claude waits until you stop.'
-      : linked
-        ? 'Selecta Preview holds this draft. Press play, or stop to hand it back to Claude.'
-        : 'Play loads the draft into Selecta Preview in Music.app.');
-  const setTime = setClock(items, now, position);
-  const whole = setClock(items, items.length, 0);
-
   // Why the rail is locked, in the head where the drag hint would be.
   const lock =
     phase === 'confirm'
@@ -474,12 +409,12 @@ export function Draft({
           {tab === 'listen' ? (
             <Listen
               items={items}
-              now={now}
-              playing={playing}
-              current={current}
-              status={status}
-              joinDisabled={!canPlay || player.busy || now + 1 >= items.length}
-              onJoin={() => nowRow && playAt(nowRow.entry_id, joinStart(nowRow.duration_seconds))}
+              now={listen.now}
+              playing={listen.playing}
+              current={listen.current}
+              status={listen.status}
+              joinDisabled={!canPlay || player.busy || listen.now + 1 >= items.length}
+              onJoin={listen.join}
             />
           ) : (
             <Crate
@@ -581,11 +516,11 @@ export function Draft({
             locked={railLocked}
             onToggle={
               tab === 'listen'
-                ? (entryId) => cue(items.findIndex((row) => row.entry_id === entryId))
+                ? (entryId) => listen.cue(items.findIndex((row) => row.entry_id === entryId))
                 : toggleSelected
             }
             pickVerb={tab === 'listen' ? 'plays it' : 'selects'}
-            now={current ? nowRow?.entry_id : undefined}
+            now={listen.current ? listen.nowRow?.entry_id : undefined}
             onClear={() => setSelected(new Set())}
             onMove={reorder}
             onRemove={remove}
@@ -608,22 +543,26 @@ export function Draft({
             }
           />
           <Transport
-            row={nowRow}
-            index={now}
+            row={listen.nowRow}
+            index={listen.now}
             count={items.length}
-            playing={playing}
-            position={position}
-            duration={current ? live?.duration : undefined}
-            set={{ ...setTime, total: whole.elapsed, totalPartial: whole.partial }}
+            playing={listen.playing}
+            position={listen.position}
+            duration={listen.duration}
+            set={{
+              ...listen.setTime,
+              total: listen.whole.elapsed,
+              totalPartial: listen.whole.partial,
+            }}
             disabled={!canPlay || player.busy}
-            canPrev={now > 0 || (current && position > RESTART_AFTER)}
-            canNext={now + 1 < items.length}
-            onToggle={toggle}
-            onPrev={prev}
-            onNext={() => cue(now + 1)}
-            onSeek={current ? player.seek : undefined}
+            canPrev={listen.canPrev}
+            canNext={listen.now + 1 < items.length}
+            onToggle={listen.toggle}
+            onPrev={listen.prev}
+            onNext={listen.next}
+            onSeek={listen.current ? player.seek : undefined}
             onOpen={tab === 'listen' ? undefined : () => setTab('listen')}
-            onStop={linked ? stopListening : undefined}
+            onStop={linked ? listen.stop : undefined}
             stopDisabled={player.busy || saving}
           />
         </section>
