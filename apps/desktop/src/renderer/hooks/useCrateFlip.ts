@@ -145,7 +145,9 @@ export function useCrateFlip({
         motion.wait = reduced ? 0 : (gone++ % 8) * 0.025;
       }
 
-    crate.current.target = 0;
+    // The new list starts at its front; travelling back from deep in the old one would sweep
+    // past indexes the new list doesn't have.
+    Object.assign(crate.current, { pos: rest(0), target: 0, settling: false });
     setPulledId(undefined);
     dirty.current = true;
     kick();
