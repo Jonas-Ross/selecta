@@ -257,9 +257,10 @@ export function buildPlayPreviewScript(input: {
         // Shuffle switched on while it stepped would carry on out of order; the finally pauses it.
         if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
         if (quiet || String(Music.playerState()) === 'paused') {
-          // The reads above take time too, so the entry and order are checked once more before playing.
+          // The reads above take time too, so entry, order and shuffle are checked once more before playing.
           if (!still(target)) return JSON.stringify({ stepMissed: true });
           if (!inOrder()) return JSON.stringify({ orderDrifted: true });
+          if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
           Music.play();
           if (!until(function () { return String(Music.playerState()) === 'playing'; })) {
             return JSON.stringify({ stillPaused: true });

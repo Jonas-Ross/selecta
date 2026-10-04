@@ -353,7 +353,7 @@ describe('player script contract', () => {
     expect(script.lastIndexOf('Music.play();')).toBeLessThan(script.indexOf('stillPaused'));
     // The resume re-checks the entry and the full order after the shuffle and state reads.
     expect(script.replace(/\s+/g, ' ')).toContain(
-      'if (!still(target)) return JSON.stringify({ stepMissed: true }); if (!inOrder()) return JSON.stringify({ orderDrifted: true }); Music.play();',
+      'if (!still(target)) return JSON.stringify({ stepMissed: true }); if (!inOrder()) return JSON.stringify({ orderDrifted: true }); if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true }); Music.play();',
     );
     // A record the user picked mid-route is never paused by the cleanup.
     expect(script).toContain('if (now !== false && now !== index) picked = true;');
