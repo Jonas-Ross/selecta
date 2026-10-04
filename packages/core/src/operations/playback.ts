@@ -183,12 +183,7 @@ export function createPlayback(deps: PlaybackDeps) {
       slot.baseline !== undefined &&
       playlist.persistentId !== slot.playlist_id &&
       playlist.name === PREVIEW_PLAYLIST_NAME &&
-      (await bridge
-        .readPreview({ name: PREVIEW_PLAYLIST_NAME, expectedTrackIds: slot.baseline })
-        .then(
-          (live) => live.persistentId === playlist.persistentId,
-          () => false,
-        ));
+      (await isRotatedSlot(playlist.persistentId, slot.baseline));
     const ours = owned
       ? slot?.owner === draftId && (playlist.persistentId === slot.playlist_id || rotated)
       : show(draftId, player).entry_id !== undefined;
@@ -369,7 +364,9 @@ export function createPlayback(deps: PlaybackDeps) {
         throw new Error(UNKNOWN_PLAYER);
 
       const rotated =
-        live.playlist.persistentId !== playlistId && live.playlist.name === PREVIEW_PLAYLIST_NAME;
+        live.playlist.persistentId !== playlistId &&
+        live.playlist.name === PREVIEW_PLAYLIST_NAME &&
+        (await isRotatedSlot(live.playlist.persistentId, order));
 
       return live.playlist.persistentId === playlistId || rotated
         ? {
@@ -383,6 +380,23 @@ export function createPlayback(deps: PlaybackDeps) {
       () => true,
       () => false,
     );
+  }
+
+  // Whether a playlist of the reserved name under a new ID is the only one and holds `order`.
+  // Only a conflict says it isn't; any other failure leaves ownership unknown, so it throws.
+  async function isRotatedSlot(playlistId: string, order: string[]) {
+    try {
+      const live = await bridge.readPreview({
+        name: PREVIEW_PLAYLIST_NAME,
+        expectedTrackIds: order,
+      });
+
+      return live.persistentId === playlistId;
+    } catch (error) {
+      if (error instanceof BridgeError && error.errorCode === 'preview_conflict') return false;
+
+      throw error;
+    }
   }
 
   // A conflict means Music moved between the read and the pause; the preview may only

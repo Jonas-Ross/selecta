@@ -180,11 +180,42 @@ it('follows a rotated preview ID when retrying the pause of a changed draft', as
     ...playing(1, A),
     playlist: { persistentId: 'P-REKEYED', name: 'Selecta Preview' },
   });
+  deps.bridge.readPreview = vi.fn(async () => ({
+    persistentId: 'P-REKEYED',
+    trackCount: 3,
+    trackPersistentIds: [A, B, A],
+  }));
   await expect(player.play(draft_id, 1, entries[0].entry_id)).rejects.toThrow(/was paused/);
+  expect(deps.bridge.readPreview).toHaveBeenCalledWith({
+    name: 'Selecta Preview',
+    expectedTrackIds: [A, B, A],
+  });
   expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
     action: 'pause',
     on: { playlistId: 'P-REKEYED', index: 1, trackId: A, slot: 'Selecta Preview' },
   });
+});
+
+it('leaves a playlist of the reserved name alone when retrying the pause of a changed draft', async () => {
+  const { draft_id, entries } = draft();
+
+  vi.mocked(deps.bridge.playPreview).mockImplementationOnce(async ({ expectedTrackIds, index }) => {
+    deps.drafts!().update(draft_id, 1, (d) => ({ ...d, entries: d.entries.slice(1) }));
+
+    return { playlistId: 'P-SLOT', player: playing(index + 1, expectedTrackIds[index]) };
+  });
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValueOnce(
+    new BridgeError('preview_conflict', 'Music.app has moved off that record.'),
+  );
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, A),
+    playlist: { persistentId: 'P-OTHER', name: 'Selecta Preview' },
+  });
+  deps.bridge.readPreview = vi.fn(async () => {
+    throw new BridgeError('preview_conflict', 'The inspected preview order no longer matches.');
+  });
+  await expect(player.play(draft_id, 1, entries[0].entry_id)).rejects.toThrow(/was paused/);
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledTimes(1);
 });
 
 it('plays the chosen occurrence when a repeat moves while the preview loads', async () => {
@@ -479,6 +510,22 @@ it('stays linked rather than pause a record the user picked mid-stop', async () 
     .mockResolvedValueOnce(playing(1, A));
   await expect(player.detach(draft_id, 1)).rejects.toThrow(/moved off that record/);
   expect(deps.bridge.controlPlayer).toHaveBeenCalledTimes(1);
+  expect(deps.drafts!().preview()?.status).toBe('current');
+});
+
+it('stays linked when Music cannot say whether a rotated preview is the slot', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, A),
+    playlist: { persistentId: 'P-ROTATED', name: 'Selecta Preview' },
+  });
+  deps.bridge.readPreview = vi.fn(async () => {
+    throw new BridgeError('automation_permission_denied', 'Automation is not allowed.');
+  });
+  await expect(player.detach(draft_id, 1)).rejects.toThrow(/Automation is not allowed/);
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
   expect(deps.drafts!().preview()?.status).toBe('current');
 });
 
