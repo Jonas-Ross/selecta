@@ -324,11 +324,12 @@ export function createPlayback(deps: PlaybackDeps) {
 
       if (!after) continue;
 
-      // Resumed in Music during the pause's settle: still ours and audible, so stay linked.
+      // Resumed in Music during the pause's settle, or playing somewhere the read lost: it may
+      // still be ours and audible, so stay linked.
       if (
         after.running &&
         after.state === 'playing' &&
-        after.playlist?.persistentId === on.playlistId
+        (!after.playlist || after.playlist.persistentId === on.playlistId)
       )
         throw new Error('Music is still playing the preview, so it stayed linked. Try again.');
 

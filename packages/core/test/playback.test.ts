@@ -237,6 +237,15 @@ it('stays linked when Music is playing but the read lost what', async () => {
   expect(deps.drafts!().preview()?.status).toBe('inactive');
 });
 
+it('stays linked when the pause reads back playing without saying where', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockResolvedValueOnce({ running: true, state: 'playing' });
+  await expect(player.detach(draft_id, 1)).rejects.toThrow(/stayed linked/);
+  expect(deps.drafts!().preview()?.status).toBe('current');
+});
+
 it('follows the slot when Music.app gives the preview a new ID', async () => {
   const { draft_id, entries } = draft();
 
