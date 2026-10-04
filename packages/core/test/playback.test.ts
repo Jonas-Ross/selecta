@@ -256,6 +256,26 @@ it('resumes only against the full order the draft expects', async () => {
   });
 });
 
+it('pauses and fails a resume the draft changed under', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockImplementationOnce(async () => {
+    const { revision } = deps.drafts!().get(draft_id);
+
+    deps.drafts!().update(draft_id, revision, (d) => ({ ...d, entries: d.entries.slice(1) }));
+
+    return playing(3, A);
+  });
+  await expect(player.control(draft_id, { action: 'resume' })).rejects.toThrow(
+    /resumed it, so Music was paused/,
+  );
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 3, trackId: A },
+  });
+});
+
 it('detaches the preview so the draft is local again', async () => {
   const { draft_id, entries } = draft();
 
@@ -509,6 +529,27 @@ it('follows the preview when iCloud rotates its ID mid-session, once confirmed u
   expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
     action: 'pause',
     on: { playlistId: 'P-ROTATED', index: 1, trackId: A },
+  });
+});
+
+it('keeps stepping within the queue once a rotated preview ID is confirmed', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, A),
+    playlist: { persistentId: 'P-ROTATED', name: PREVIEW.name },
+  });
+  deps.bridge.readPreview = vi.fn(async () => ({
+    persistentId: 'P-ROTATED',
+    trackCount: 3,
+    trackPersistentIds: [A, B, A],
+  }));
+  await player.state(draft_id);
+  await player.play(draft_id, 1, entries[1].entry_id);
+  expect(deps.bridge.playPreview).toHaveBeenLastCalledWith({
+    expectedTrackIds: [A, B, A],
+    index: 1,
   });
 });
 

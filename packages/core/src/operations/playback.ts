@@ -72,6 +72,8 @@ export function playbackView(player: PlayerState, draft: Draft, slot?: PreviewSt
 const UNKNOWN_PLAYER =
   "Music didn't say what it is playing, so the preview stayed linked. Try again.";
 
+const entryOrder = (draft: Draft) => JSON.stringify(draft.entries.map((entry) => entry.entry_id));
+
 export function createPlayback(deps: PlaybackDeps) {
   const { bridge, cache, drafts } = deps;
   // The preview this process last started as a queue. Music.app reads the same playing one
@@ -79,9 +81,18 @@ export function createPlayback(deps: PlaybackDeps) {
   let queued: string | undefined;
   // A playlist ID already found not to be this draft's slot, so a poll doesn't ask again.
   let unresolved: string | undefined;
+  // The queued ID while Music plays a playlist of the reserved name under another, so a confirmed rekey keeps the queue.
+  let rotatedFrom: string | undefined;
   const watch = (player: PlayerState) => {
-    if (!player.running || player.state === 'stopped' || player.playlist?.persistentId !== queued)
+    if (!player.running || player.state === 'stopped' || player.playlist?.persistentId !== queued) {
+      rotatedFrom =
+        player.running &&
+        player.state !== 'stopped' &&
+        player.playlist?.name === PREVIEW_PLAYLIST_NAME
+          ? (queued ?? rotatedFrom)
+          : undefined;
       queued = undefined;
+    }
 
     return player;
   };
@@ -115,8 +126,11 @@ export function createPlayback(deps: PlaybackDeps) {
       // Remembered before the rekey too, so a store that can't take it isn't retried every poll.
       unresolved = playlist.persistentId;
 
-      if (live?.persistentId === playlist.persistentId)
+      if (live?.persistentId === playlist.persistentId) {
         drafts().rekeyPreview(draftId, slot.generation, live.persistentId);
+
+        if (rotatedFrom === slot.playlist_id) queued = live.persistentId;
+      }
     };
 
     // A busy lock never reached the bridge, so the next poll asks again.
@@ -224,9 +238,8 @@ export function createPlayback(deps: PlaybackDeps) {
       }
 
       // A metadata edit moves the revision but not what Music plays, so the guards below compare order.
-      const order = JSON.stringify(draft.entries.map((entry) => entry.entry_id));
-      const sameOrder = (now: Draft) =>
-        JSON.stringify(now.entries.map((entry) => entry.entry_id)) === order;
+      const order = entryOrder(draft);
+      const sameOrder = (now: Draft) => entryOrder(now) === order;
 
       // A failed read surfaces rather than restarting Music on a guess.
       await read();
@@ -253,36 +266,7 @@ export function createPlayback(deps: PlaybackDeps) {
         const after = current(draftId);
 
         if (!sameOrder(after.draft) || !inStep(after.draft, after.slot)) {
-          const { player: started } = result;
-          let first = true;
-          // The first pause names the entry the play reported; later ones re-read where it went,
-          // following a rotated ID by name for the bridge to confirm it is the only such playlist.
-          const paused = await pauseOwn(async () => {
-            const live = first ? started : await read();
-
-            first = false;
-
-            if (!live.running || live.state === 'stopped') return undefined;
-
-            if (!live.track || live.index === undefined || !live.playlist)
-              throw new Error(UNKNOWN_PLAYER);
-
-            const rotated =
-              live.playlist.persistentId !== result.playlistId &&
-              live.playlist.name === PREVIEW_PLAYLIST_NAME;
-
-            return live.playlist.persistentId === result.playlistId || rotated
-              ? {
-                  playlistId: live.playlist.persistentId,
-                  index: live.index,
-                  trackId: live.track.persistentId,
-                  ...(rotated && { slot: PREVIEW_PLAYLIST_NAME }),
-                }
-              : undefined;
-          }).then(
-            () => true,
-            () => false,
-          );
+          const paused = await pauseAfter(result.playlistId, result.player);
 
           throw new Error(
             paused
@@ -313,17 +297,30 @@ export function createPlayback(deps: PlaybackDeps) {
         const { draft } = current(draftId);
         const expectedTrackIds =
           input.action === 'resume' ? draft.entries.map((entry) => entry.track_id) : undefined;
-
-        return show(
-          draftId,
-          watch(
-            await bridge.controlPlayer({
-              ...input,
-              on,
-              ...(expectedTrackIds && { expectedTrackIds }),
-            }),
-          ),
+        const player = watch(
+          await bridge.controlPlayer({
+            ...input,
+            on,
+            ...(expectedTrackIds && { expectedTrackIds }),
+          }),
         );
+
+        // As with play, an edit from another front end can land during the resume and wait on this lock.
+        if (expectedTrackIds) {
+          const after = current(draftId);
+
+          if (entryOrder(after.draft) !== entryOrder(draft) || !inStep(after.draft, after.slot)) {
+            const paused = await pauseAfter(on.playlistId, player);
+
+            throw new Error(
+              paused
+                ? 'The draft changed while Music resumed it, so Music was paused. Play again.'
+                : 'The draft changed while Music resumed it, and Music could not be paused. Pause it in Music, then play again.',
+            );
+          }
+        }
+
+        return show(draftId, player);
       }),
 
     // Releases the link so Claude can edit again; Music.app keeps the playlist as it is.
@@ -334,6 +331,38 @@ export function createPlayback(deps: PlaybackDeps) {
         drafts().detachPreview(draftId, revision);
       }),
   };
+
+  // Pauses what an action just left playing, naming the reported entry first and then re-reading,
+  // following a rotated ID by name for the bridge to confirm it is the only such playlist.
+  async function pauseAfter(playlistId: string, started: PlayerState) {
+    let first = true;
+
+    return pauseOwn(async () => {
+      const live = first ? started : await read();
+
+      first = false;
+
+      if (!live.running || live.state === 'stopped') return undefined;
+
+      if (!live.track || live.index === undefined || !live.playlist)
+        throw new Error(UNKNOWN_PLAYER);
+
+      const rotated =
+        live.playlist.persistentId !== playlistId && live.playlist.name === PREVIEW_PLAYLIST_NAME;
+
+      return live.playlist.persistentId === playlistId || rotated
+        ? {
+            playlistId: live.playlist.persistentId,
+            index: live.index,
+            trackId: live.track.persistentId,
+            ...(rotated && { slot: PREVIEW_PLAYLIST_NAME }),
+          }
+        : undefined;
+    }).then(
+      () => true,
+      () => false,
+    );
+  }
 
   // A conflict means Music moved between the read and the pause; the preview may only
   // have advanced to its next record, so it reads again rather than assume it's gone.
