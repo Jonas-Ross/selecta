@@ -417,7 +417,7 @@ export function Draft({
               playing={listen.playing}
               current={listen.current}
               status={listen.status}
-              joinDisabled={!canPlay || player.busy || listen.now + 1 >= items.length}
+              joinDisabled={!canPlay || listen.busy || !listen.canJoin}
               onJoin={listen.join}
             />
           ) : (
@@ -558,7 +558,7 @@ export function Draft({
               total: listen.whole.elapsed,
               totalPartial: listen.whole.partial,
             }}
-            disabled={!canPlay || player.busy}
+            disabled={!canPlay || listen.busy}
             canPrev={listen.canPrev}
             canNext={listen.now + 1 < items.length}
             onToggle={listen.toggle}
@@ -567,7 +567,7 @@ export function Draft({
             onSeek={listen.current ? player.seek : undefined}
             onOpen={tab === 'listen' ? undefined : () => setTab('listen')}
             onStop={linked ? listen.stop : undefined}
-            stopDisabled={player.busy || saving}
+            stopDisabled={listen.busy || saving}
           />
         </section>
         <p className="sr" aria-live="polite">

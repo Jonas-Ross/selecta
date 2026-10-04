@@ -27,8 +27,9 @@ export function queuePlay(
   });
 }
 
-export function joinStart(duration?: number): number {
-  return duration === undefined ? 0 : Math.max(0, duration - JOIN_LEAD);
+/** Where "Hear the join" starts; with no known length there is no end to count back from. */
+export function joinStart(duration?: number): number | undefined {
+  return duration === undefined ? undefined : Math.max(0, duration - JOIN_LEAD);
 }
 
 /** The record the Listen screen centres on: what plays if it's in this draft, else the cued one. */

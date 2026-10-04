@@ -45,6 +45,8 @@ export function useListen({
   const current = live?.entry_id !== undefined && live.entry_id === nowRow?.entry_id;
   const playing = current && live?.state === 'playing';
   const position = current ? livePosition(live, player.readAt, clock) : 0;
+  // Music's own length for the record it's on, else the cached one.
+  const joinAt = joinStart((current ? live?.duration : undefined) ?? nowRow?.duration_seconds);
 
   // Music.app is read about once a second; the bar moves smoothly in between.
   useEffect(() => {
@@ -117,7 +119,8 @@ export function useListen({
       else cue(now - 1);
     },
     next: () => cue(now + 1),
-    join: () => nowRow && playAt(nowRow.entry_id, joinStart(nowRow.duration_seconds)),
+    canJoin: joinAt !== undefined && now + 1 < items.length,
+    join: () => nowRow && joinAt !== undefined && playAt(nowRow.entry_id, joinAt),
     // Waits like a play, so a stop never names a revision an edit is about to replace.
     stop() {
       queue.after(() => {

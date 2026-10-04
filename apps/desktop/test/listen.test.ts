@@ -28,7 +28,7 @@ const items = [
 it('starts the join early enough for AutoMix, never before the track', () => {
   expect(joinStart(300)).toBe(240);
   expect(joinStart(30)).toBe(0);
-  expect(joinStart(undefined)).toBe(0);
+  expect(joinStart(undefined)).toBeUndefined();
 });
 
 it('centres on the playing entry, else the cued one, else the first', () => {
