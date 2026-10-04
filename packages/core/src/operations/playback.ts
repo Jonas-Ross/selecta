@@ -70,6 +70,8 @@ export function createPlayback(deps: PlaybackDeps) {
   // The preview this process last started as a queue. Music.app reads the same playing one
   // track alone, which carries on to nothing, so anything else is started over.
   let queued: string | undefined;
+  // A playlist ID already found not to be this draft's slot, so a poll doesn't ask again.
+  let unresolved: string | undefined;
   const watch = (player: PlayerState) => {
     if (!player.running || player.state === 'stopped' || player.playlist?.persistentId !== queued)
       queued = undefined;
@@ -77,6 +79,47 @@ export function createPlayback(deps: PlaybackDeps) {
     return player;
   };
   const read = async () => watch(await bridge.readPlayer());
+
+  // iCloud can rotate the slot's ID mid-session. A playlist of the reserved name is followed
+  // only once the bridge confirms it is the only one and holds this draft's order.
+  async function follow(draftId: string, player: PlayerState, locked: boolean) {
+    const { draft, slot } = current(draftId);
+    const playlist = player.running ? player.playlist : undefined;
+
+    if (
+      !slot ||
+      !playlist ||
+      playlist.name !== PREVIEW_PLAYLIST_NAME ||
+      playlist.persistentId === slot.playlist_id ||
+      playlist.persistentId === unresolved ||
+      !inStep(draft, slot)
+    )
+      return;
+
+    const resolve = async () => {
+      const live = await bridge.readPreview({
+        name: PREVIEW_PLAYLIST_NAME,
+        expectedTrackIds: draft.entries.map((entry) => entry.track_id),
+      });
+
+      if (live.persistentId === playlist.persistentId)
+        drafts().rekeyPreview(draftId, slot.generation, live.persistentId);
+      else unresolved = playlist.persistentId;
+    };
+
+    // A failure is remembered too, so a poll never retries it every second; Play still rekeys.
+    await (locked ? resolve() : withOperation(cache(), 'music', resolve)).catch(
+      () => (unresolved = playlist.persistentId),
+    );
+  }
+
+  const readFor = async (draftId: string, locked = false) => {
+    const player = await read();
+
+    await follow(draftId, player, locked);
+
+    return player;
+  };
 
   const current = (draftId: string) => {
     const store = drafts();
@@ -96,7 +139,7 @@ export function createPlayback(deps: PlaybackDeps) {
   // iCloud can rotate the slot's ID after the last play rekeyed it, so a name match is
   // passed on for the bridge to confirm it is the only playlist of that name.
   const onThisDraft = async (draftId: string, owned = false) => {
-    const player = await read();
+    const player = await (owned ? read() : readFor(draftId, true));
 
     if (!player.running) return undefined;
 
@@ -125,7 +168,7 @@ export function createPlayback(deps: PlaybackDeps) {
   };
 
   return {
-    state: async (draftId: string) => show(draftId, await read()),
+    state: async (draftId: string) => show(draftId, await readFor(draftId)),
 
     async play(
       draftId: string,

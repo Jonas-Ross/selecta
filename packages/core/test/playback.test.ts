@@ -303,3 +303,43 @@ it('claims an entry only when Music.app is provably in step with this draft', ()
   expect(playbackView({ running: false }, d, slot)).toEqual({ running: false, state: 'stopped' });
   expect(playbackView({ running: true, state: 'fast forwarding' }, d, slot).state).toBe('stopped');
 });
+
+it('follows the preview when iCloud rotates its ID mid-session, once confirmed unique', async () => {
+  const { draft_id, entries } = draft();
+  const rotated = { ...playing(1, A), playlist: { persistentId: 'P-ROTATED', name: PREVIEW.name } };
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(rotated);
+  deps.bridge.readPreview = vi.fn(async () => ({
+    persistentId: 'P-ROTATED',
+    trackCount: 3,
+    trackPersistentIds: [A, B, A],
+  }));
+
+  expect((await player.state(draft_id)).entry_id).toBe(entries[0].entry_id);
+  expect(deps.drafts!().preview()?.playlist_id).toBe('P-ROTATED');
+  await player.control(draft_id, { action: 'pause' });
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-ROTATED', index: 1, trackId: A },
+  });
+});
+
+it('leaves a same-named playlist alone when the bridge cannot confirm it, and asks once', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, A),
+    playlist: { persistentId: 'P-COPY', name: PREVIEW.name },
+  });
+  deps.bridge.readPreview = vi.fn(async () => {
+    throw new BridgeError('preview_conflict', 'ambiguous');
+  });
+
+  expect((await player.state(draft_id)).entry_id).toBeUndefined();
+  expect((await player.state(draft_id)).entry_id).toBeUndefined();
+  expect(deps.bridge.readPreview).toHaveBeenCalledOnce();
+  expect(deps.drafts!().preview()?.playlist_id).toBe('P-SLOT');
+  await expect(player.control(draft_id, { action: 'pause' })).rejects.toThrow(/isn't playing/);
+});
