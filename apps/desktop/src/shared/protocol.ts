@@ -15,6 +15,22 @@ export type Crate = { tracks: CrateTrack[]; total: number; order: 'recently_adde
 /** A cached thumbnail's file name, null when the track has no artwork, or why it couldn't be read. */
 export type ArtworkAnswer = ArtworkReadResult[string];
 
+/**
+ * Music.app's player as the Listen screen sees it. `entry_id` is set only when
+ * Music.app is playing this draft's preview in step with the draft, so a
+ * repeated track still names the right record.
+ */
+export type PlayerView = {
+  running: boolean;
+  state: 'playing' | 'paused' | 'stopped';
+  track_id?: string;
+  position?: number;
+  duration?: number;
+  entry_id?: string;
+  // How a play reached the entry (started, on from N, back from N, seek), for the action log.
+  route?: string;
+};
+
 export type Methods = {
   'library.crate': (args: { query?: string }) => Crate;
   'artwork.get': (args: {
@@ -29,6 +45,17 @@ export type Methods = {
   'agent.send': (args: { draft_id: string; message: string; text?: string }) => void;
   'agent.cancel': (args: { draft_id: string }) => void;
   'agent.history': () => Record<string, RunSnapshot>;
+  'player.state': (args: { draft_id: string }) => PlayerView;
+  'player.play': (args: {
+    draft_id: string;
+    revision: number;
+    entry_id: string;
+    position?: number;
+  }) => PlayerView;
+  'player.pause': (args: { draft_id: string }) => PlayerView;
+  'player.resume': (args: { draft_id: string }) => PlayerView;
+  'player.seek': (args: { draft_id: string; position: number }) => PlayerView;
+  'player.detach': (args: { draft_id: string; revision: number }) => void;
 };
 
 export type Method = keyof Methods;

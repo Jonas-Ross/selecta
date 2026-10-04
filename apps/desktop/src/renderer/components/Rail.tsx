@@ -40,6 +40,10 @@ export type RailProps = {
   selected: Set<string>;
   locked: boolean;
   onToggle: (entryId: string) => void;
+  // What Enter or a click does to a record, for its label.
+  pickVerb?: string;
+  // The entry Music.app is playing from this draft, marked on the rail.
+  now?: string;
   onClear: () => void;
   onMove: (entryId: string, to: number) => void;
   onRemove: (entryId: string) => void;
@@ -53,6 +57,8 @@ export function Rail({
   selected,
   locked,
   onToggle,
+  pickVerb = 'selects',
+  now,
   onClear,
   onMove,
   onRemove,
@@ -154,7 +160,7 @@ export function Rail({
     if (scroller.current) edge(scroller.current);
   });
 
-  function reveal(index: number, now = false) {
+  function reveal(index: number, instant = false) {
     const sc = scroller.current;
 
     if (!sc) return;
@@ -164,7 +170,7 @@ export function Rail({
     const left =
       x0 < sc.scrollLeft ? x0 : x1 > sc.scrollLeft + sc.clientWidth ? x1 - sc.clientWidth : -1;
 
-    if (left >= 0) sc.scrollTo({ left, behavior: reduced || now ? 'auto' : 'smooth' });
+    if (left >= 0) sc.scrollTo({ left, behavior: reduced || instant ? 'auto' : 'smooth' });
   }
 
   function key(e: React.KeyboardEvent<HTMLElement>, id: string) {
@@ -254,6 +260,8 @@ export function Rail({
                       reduced={reduced}
                       locked={locked}
                       selected={selected.has(id)}
+                      playing={id === now}
+                      pickVerb={pickVerb}
                       heldDy={held?.id === id ? held.dy : undefined}
                       setNode={(node) => {
                         if (node) recs.current.set(id, node);

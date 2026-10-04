@@ -2,7 +2,8 @@
 .dig {
   position: relative;
   flex: none;
-  height: clamp(300px, 44%, 430px);
+  /* Gives way before the rail does: the draft head, rail and transport below need about 460px. */
+  height: clamp(300px, min(44%, 100% - 460px), 430px);
   display: flex;
   flex-direction: column;
   padding: var(--s3) var(--s5) 0;
@@ -242,6 +243,11 @@
   align-self: center;
   position: relative;
   z-index: 3;
+  /* A short window scrolls the card rather than hiding its actions under the band's edge. */
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line3) transparent;
 }
 .spec {
   padding: var(--s4) var(--s4) 14px;

@@ -110,6 +110,20 @@ export const TRACK_PERSISTENT_ID = /^[0-9A-F]{16}$/;
 // why the read failed for another reason.
 export type ArtworkReadResult = Record<string, string | null | { error: string }>;
 
+// Music.app's player as last read. Stopped has no track; a track playing
+// outside any playlist has no playlist. `index` is the track's 1-based place in
+// the playlist it plays from, which tells repeated entries apart.
+export type PlayerState =
+  | { running: false }
+  | {
+      running: true;
+      state: string;
+      track?: { persistentId: string; duration: number };
+      position?: number;
+      index?: number;
+      playlist?: { persistentId: string; name: string };
+    };
+
 export interface Bridge {
   // Explicit UI navigation only; full live order must match, including repeats.
   openPreview(input: { expectedTrackIds: string[] }): Promise<{
@@ -205,4 +219,26 @@ export interface Bridge {
   // Read-only. Writes each track's first artwork into `dir` (absolute, must
   // exist). At most 40 unique 16-hex IDs; a miss is null, never a batch failure.
   readArtwork(trackIds: string[], dir: string): Promise<ArtworkReadResult>;
+
+  // Read-only, and never launches Music.app.
+  readPlayer(): Promise<PlayerState>;
+
+  // Pause, resume what is paused, or seek what is loaded; never launches Music.app
+  // and never starts playback from nothing.
+  // Acts only while Music.app is still on `on`, checked in the same call.
+  controlPlayer(
+    input: ({ action: 'pause' } | { action: 'resume' } | { action: 'seek'; position: number }) & {
+      on: { playlistId: string; index: number; trackId: string; slot?: string };
+    },
+  ): Promise<PlayerState>;
+
+  // Play one entry (0-based) of the reserved preview, only while its full live
+  // order matches, so Music.app continues through the draft. Explicit user action only.
+  playPreview(input: {
+    expectedTrackIds: string[];
+    index: number;
+    position?: number;
+    // Start the playlist over rather than step within whatever queue Music.app has.
+    restart?: boolean;
+  }): Promise<{ playlistId: string; route?: string; player: PlayerState }>;
 }

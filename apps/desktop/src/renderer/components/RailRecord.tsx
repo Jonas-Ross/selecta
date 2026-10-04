@@ -13,6 +13,9 @@ export type RailRecordProps = {
   reduced: boolean;
   locked: boolean;
   selected: boolean;
+  playing: boolean;
+  /** What Enter or a click does to a record, for its label. */
+  pickVerb: string;
   /** How far the record in hand rides above or below the rail; set only on that record. */
   heldDy?: number;
   setNode: (node: HTMLDivElement | null) => void;
@@ -34,6 +37,8 @@ export function RailRecord({
   reduced,
   locked,
   selected,
+  playing,
+  pickVerb,
   heldDy,
   setNode,
   onPress,
@@ -56,15 +61,17 @@ export function RailRecord({
     row.bpm === undefined ? 'tempo not measured' : `${Math.round(row.bpm)} BPM`,
     row.camelot ?? 'key not measured',
     ...(selected ? ['selected for feedback'] : []),
+    ...(playing ? ['now playing'] : []),
   ].join(', ');
 
   return (
     <div
       ref={setNode}
-      className={`rec${selected ? ' sel' : ''}${isHeld ? ' held' : ''}${leaving ? ' leaving' : ''}`}
+      className={`rec${selected ? ' sel' : ''}${playing ? ' now' : ''}${isHeld ? ' held' : ''}${leaving ? ' leaving' : ''}`}
       role="listitem"
       tabIndex={leaving ? -1 : 0}
-      aria-label={`${label}. Enter selects${locked ? '' : ', Alt and arrow keys move it, Delete removes it'}.`}
+      aria-current={playing ? 'true' : undefined}
+      aria-label={`${label}. Enter ${pickVerb}${locked ? '' : ', Alt and arrow keys move it, Delete removes it'}.`}
       style={{
         width: shelf.size,
         height: shelf.size,
