@@ -103,6 +103,8 @@ export function Draft({
   const canAdd = draft !== undefined && !locked && flight === undefined;
   // A record in the air is an edit not yet queued, so Save and Home wait for it to land.
   const airborne = flight !== undefined;
+  // The rail holds a gap for the flying record at a fixed slot, so nothing else moves until it lands.
+  const railLocked = locked || airborne;
   const span = bpmSpan(items);
 
   // Live revisions keep arriving from Claude; don't overwrite a name being typed.
@@ -161,7 +163,7 @@ export function Draft({
 
   // The entry standing at `to` now is where `move` puts the dragged one.
   function reorder(entryId: string, to: number) {
-    if (locked) return;
+    if (railLocked) return;
 
     const ids = items.map((row) => row.entry_id);
 
@@ -170,7 +172,7 @@ export function Draft({
 
   function remove(entryId: string) {
     // A draft keeps at least one entry; the store would refuse an empty one anyway.
-    if (locked || items.length < 2) return;
+    if (railLocked || items.length < 2) return;
 
     hold(
       items.map((row) => row.entry_id).filter((id) => id !== entryId),
@@ -444,7 +446,7 @@ export function Draft({
           <Rail
             items={items}
             selected={selected}
-            locked={locked}
+            locked={railLocked}
             onToggle={toggle}
             onClear={() => setSelected(new Set())}
             onMove={reorder}
