@@ -442,6 +442,21 @@ it('pauses again when the preview moves on to its next record mid-stop', async (
   expect(deps.drafts!().preview()?.status).toBe('inactive');
 });
 
+it('stays linked rather than pause a record the user picked mid-stop', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValueOnce(
+    new BridgeError('preview_conflict', 'Music.app has moved off that record.'),
+  );
+  vi.mocked(deps.bridge.readPlayer)
+    .mockResolvedValueOnce(playing(3, A))
+    .mockResolvedValueOnce(playing(1, A));
+  await expect(player.detach(draft_id, 1)).rejects.toThrow(/moved off that record/);
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledTimes(1);
+  expect(deps.drafts!().preview()?.status).toBe('current');
+});
+
 it('stays linked when Music.app will not pause', async () => {
   const { draft_id, entries } = draft();
 

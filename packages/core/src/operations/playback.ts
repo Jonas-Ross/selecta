@@ -4,7 +4,7 @@
 import type { Draft, PreviewState } from '../drafts/contracts.js';
 import type { DraftStore } from '../drafts/store.js';
 import type { ToolDeps } from '../tools/deps.js';
-import type { PlayerAction, PlayerState } from '../types/bridge.js';
+import type { PlayerAction, PlayerEntry, PlayerState } from '../types/bridge.js';
 import { BridgeError } from '../types/errors.js';
 import { withOperation } from './lock.js';
 import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
@@ -380,13 +380,22 @@ export function createPlayback(deps: PlaybackDeps) {
   // A conflict means Music moved between the read and the pause; the preview may only
   // have advanced to its next record, so it reads again rather than assume it's gone.
   async function pauseOwn(locate: () => ReturnType<typeof onThisDraft>) {
+    let missed: { on: PlayerEntry; error: BridgeError } | undefined;
+
     for (let attempt = 0; attempt < 3; attempt++) {
       const on = await locate();
 
       if (!on) return;
 
+      // Only the same record, or the next one, is Music carrying on by itself; any other entry
+      // is one the user picked, so the conflict stands rather than pausing it.
+      if (missed && on.index !== missed.on.index && on.index !== missed.on.index + 1)
+        throw missed.error;
+
       const after = await bridge.controlPlayer({ action: 'pause', on }).catch((e: unknown) => {
         if (!(e instanceof BridgeError && e.errorCode === 'preview_conflict')) throw e;
+
+        missed = { on, error: e };
       });
 
       if (!after) continue;
