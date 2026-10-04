@@ -203,6 +203,11 @@ export function createPlayback(deps: PlaybackDeps) {
           );
       }
 
+      // A metadata edit moves the revision but not what Music plays, so the guards below compare order.
+      const order = JSON.stringify(draft.entries.map((entry) => entry.entry_id));
+      const sameOrder = (now: Draft) =>
+        JSON.stringify(now.entries.map((entry) => entry.entry_id)) === order;
+
       // A failed read only means the queue can't be vouched for; the play itself still runs.
       await read().catch(() => (queued = undefined));
 
@@ -211,7 +216,7 @@ export function createPlayback(deps: PlaybackDeps) {
         // playlist would still pass the bridge's order check, so ownership is read again here.
         const now = current(draftId);
 
-        if (now.draft.revision !== revision || !inStep(now.draft, now.slot))
+        if (!sameOrder(now.draft) || !inStep(now.draft, now.slot))
           throw new Error(
             'Selecta Preview changed hands before it could play, so nothing was played.',
           );
@@ -227,23 +232,29 @@ export function createPlayback(deps: PlaybackDeps) {
         // this lock, so Music would play an order the draft no longer has.
         const after = current(draftId);
 
-        if (after.draft.revision !== revision || !inStep(after.draft, after.slot)) {
+        if (!sameOrder(after.draft) || !inStep(after.draft, after.slot)) {
           const { player: started } = result;
           let first = true;
-          // The first pause names the entry the play reported; later ones re-read where it went.
+          // The first pause names the entry the play reported; later ones re-read where it went,
+          // following a rotated ID by name for the bridge to confirm it is the only such playlist.
           const paused = await pauseOwn(async () => {
             const live = first ? started : await read();
 
             first = false;
 
-            return live.running &&
-              live.track &&
-              live.index !== undefined &&
-              live.playlist?.persistentId === result.playlistId
+            if (!live.running || !live.track || live.index === undefined || !live.playlist)
+              return undefined;
+
+            const rotated =
+              live.playlist.persistentId !== result.playlistId &&
+              live.playlist.name === PREVIEW_PLAYLIST_NAME;
+
+            return live.playlist.persistentId === result.playlistId || rotated
               ? {
-                  playlistId: result.playlistId,
+                  playlistId: live.playlist.persistentId,
                   index: live.index,
                   trackId: live.track.persistentId,
+                  ...(rotated && { slot: PREVIEW_PLAYLIST_NAME }),
                 }
               : undefined;
           }).then(

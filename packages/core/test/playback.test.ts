@@ -151,6 +151,42 @@ it('follows Music to its next record when pausing a play the draft changed under
   await expect(player.play(draft_id, 2, now[0].entry_id)).rejects.toThrow(/could not be paused/);
 });
 
+it('keeps playing when only the draft name changed while Music was starting it', async () => {
+  const { draft_id, entries } = draft();
+
+  vi.mocked(deps.bridge.playPreview).mockImplementationOnce(async ({ expectedTrackIds, index }) => {
+    deps.drafts!().update(draft_id, 1, (d) => ({ ...d, name: 'Renamed' }));
+
+    return { playlistId: 'P-SLOT', player: playing(index + 1, expectedTrackIds[index]) };
+  });
+  await expect(player.play(draft_id, 1, entries[0].entry_id)).resolves.toMatchObject({
+    entry_id: entries[0].entry_id,
+  });
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});
+
+it('follows a rotated preview ID when retrying the pause of a changed draft', async () => {
+  const { draft_id, entries } = draft();
+
+  vi.mocked(deps.bridge.playPreview).mockImplementationOnce(async ({ expectedTrackIds, index }) => {
+    deps.drafts!().update(draft_id, 1, (d) => ({ ...d, entries: d.entries.slice(1) }));
+
+    return { playlistId: 'P-SLOT', player: playing(index + 1, expectedTrackIds[index]) };
+  });
+  vi.mocked(deps.bridge.controlPlayer).mockRejectedValueOnce(
+    new BridgeError('preview_conflict', 'Music.app has moved off that record.'),
+  );
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, A),
+    playlist: { persistentId: 'P-REKEYED', name: 'Selecta Preview' },
+  });
+  await expect(player.play(draft_id, 1, entries[0].entry_id)).rejects.toThrow(/was paused/);
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-REKEYED', index: 1, trackId: A, slot: 'Selecta Preview' },
+  });
+});
+
 it('refuses a stale revision or a missing entry before touching Music.app', async () => {
   const { draft_id, entries } = draft();
 
