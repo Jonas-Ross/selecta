@@ -246,6 +246,18 @@ it('stays linked when the pause reads back playing without saying where', async 
   expect(deps.drafts!().preview()?.status).toBe('current');
 });
 
+it('stays linked when the pause reads back the preview playing under a rotated ID', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.controlPlayer).mockResolvedValueOnce({
+    ...playing(3, A),
+    playlist: { persistentId: 'P-ROTATED', name: PREVIEW.name },
+  });
+  await expect(player.detach(draft_id, 1)).rejects.toThrow(/stayed linked/);
+  expect(deps.drafts!().preview()?.status).toBe('current');
+});
+
 it('follows the slot when Music.app gives the preview a new ID', async () => {
   const { draft_id, entries } = draft();
 
@@ -460,6 +472,28 @@ it('asks about a rotated preview again when the music lock was busy the first ti
   expect(deps.bridge.readPreview).not.toHaveBeenCalled();
   expect((await player.state(draft_id)).entry_id).toBe(entries[0].entry_id);
   expect(deps.drafts!().preview()?.playlist_id).toBe('P-ROTATED');
+});
+
+it('asks about a rotated preview once when the store cannot take the new ID', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0].entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue({
+    ...playing(1, A),
+    playlist: { persistentId: 'P-ROTATED', name: PREVIEW.name },
+  });
+  deps.bridge.readPreview = vi.fn(async () => ({
+    persistentId: 'P-ROTATED',
+    trackCount: 3,
+    trackPersistentIds: [A, B, A],
+  }));
+  vi.spyOn(deps.drafts!(), 'rekeyPreview').mockImplementation(() => {
+    throw new Error('database is locked');
+  });
+
+  expect((await player.state(draft_id)).entry_id).toBeUndefined();
+  expect((await player.state(draft_id)).entry_id).toBeUndefined();
+  expect(deps.bridge.readPreview).toHaveBeenCalledOnce();
 });
 
 it('leaves a same-named playlist alone when the bridge cannot confirm it, and asks once', async () => {

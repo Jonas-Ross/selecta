@@ -108,9 +108,11 @@ export function createPlayback(deps: PlaybackDeps) {
         })
         .catch(() => undefined);
 
+      // Remembered before the rekey too, so a store that can't take it isn't retried every poll.
+      unresolved = playlist.persistentId;
+
       if (live?.persistentId === playlist.persistentId)
         drafts().rekeyPreview(draftId, slot.generation, live.persistentId);
-      else unresolved = playlist.persistentId;
     };
 
     // A busy lock never reached the bridge, so the next poll asks again.
@@ -324,12 +326,14 @@ export function createPlayback(deps: PlaybackDeps) {
 
       if (!after) continue;
 
-      // Resumed in Music during the pause's settle, or playing somewhere the read lost: it may
-      // still be ours and audible, so stay linked.
+      // Resumed in Music during the pause's settle, rekeyed by iCloud, or playing somewhere the
+      // read lost: it may still be ours and audible, so stay linked.
       if (
         after.running &&
         after.state === 'playing' &&
-        (!after.playlist || after.playlist.persistentId === on.playlistId)
+        (!after.playlist ||
+          after.playlist.persistentId === on.playlistId ||
+          after.playlist.name === PREVIEW_PLAYLIST_NAME)
       )
         throw new Error('Music is still playing the preview, so it stayed linked. Try again.');
 
