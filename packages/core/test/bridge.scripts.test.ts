@@ -352,6 +352,11 @@ describe('player script contract', () => {
     // A record the user picked mid-route is never paused by the cleanup.
     expect(script).toContain('if (now !== false && now !== index) picked = true;');
     expect(script).toContain('if (!landed && !picked && !pause())');
+    // A record picked while the restart settles counts too.
+    expect(script).toContain('if (!started && heard) still(1);');
+    expect(script.indexOf('if (!started && heard) still(1);')).toBeLessThan(
+      script.indexOf('if (moved || !started)'),
+    );
     // A seek that never lands fails before anything resumes.
     expect(script.indexOf('seekMissed')).toBeLessThan(script.lastIndexOf('Music.play();'));
     expect(script).not.toMatch(NO_WRITES);

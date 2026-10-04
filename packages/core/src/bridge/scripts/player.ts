@@ -221,6 +221,8 @@ export function buildPlayPreviewScript(input: {
             Music.pause();
             return false;
           });
+          // Heard on the first record and then elsewhere in the preview means the user picked one.
+          if (!started && heard) still(1);
           if (moved || !started) return JSON.stringify({ stepMissed: true });
         } else if (quiet && !(pause() && ours())) {
           // Music moved to other music while pausing; stepping now would skip through that.
