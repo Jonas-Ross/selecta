@@ -15,6 +15,7 @@ import {
   saveOutcome,
   totals,
   type Run,
+  type Row,
 } from '../src/renderer/state.js';
 
 const entry = (id: string) => ({ entry_id: id, track_id: `T-${id}` });
@@ -199,13 +200,18 @@ it('counts known minutes, marking unknown lengths, and the measured tempo span',
 
 it('shows a pending order over the stored one, keeping what the store changed meanwhile', () => {
   const stored = [entry('a'), entry('b'), entry('c')];
+  const known = ['a', 'b', 'c'];
+  const ids = (rows: Row[]) => rows.map((row) => row.entry_id);
 
   expect(pendingOrder(stored)).toBe(stored);
-  expect(pendingOrder(stored, ['c', 'a', 'b']).map((row) => row.entry_id)).toEqual(['c', 'a', 'b']);
+  expect(ids(pendingOrder(stored, { order: ['c', 'a', 'b'], known }))).toEqual(['c', 'a', 'b']);
   // Claude removed b and added d while the user's move was still queued.
   expect(
-    pendingOrder([entry('a'), entry('c'), entry('d')], ['c', 'a', 'b']).map((row) => row.entry_id),
+    ids(pendingOrder([entry('a'), entry('c'), entry('d')], { order: ['c', 'a', 'b'], known })),
   ).toEqual(['c', 'a', 'd']);
-  // A removal pending on the last-but-one entry never leaves an empty rail from stale ids.
-  expect(pendingOrder([entry('a')], []).map((row) => row.entry_id)).toEqual(['a']);
+  // A removal stays out until it lands, rather than moving to the end.
+  expect(ids(pendingOrder(stored, { order: ['a', 'c'], known }))).toEqual(['a', 'c']);
+  // Stale ids never leave an empty rail.
+  expect(ids(pendingOrder([entry('d')], { order: ['a'], known: ['a', 'b'] }))).toEqual(['d']);
+  expect(ids(pendingOrder([entry('b')], { order: ['a'], known: ['a', 'b'] }))).toEqual(['b']);
 });

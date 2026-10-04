@@ -38,21 +38,27 @@ export function rows(view: DraftView): Row[] {
   return (view.draft?.entries ?? []).map((entry, index) => ({ ...tracks[index], ...entry }));
 }
 
+/** An order the user just made, and every entry that was on the rail when they made it. */
+export type Pending = { order: string[]; known: string[] };
+
 /**
  * The order the user just made, ahead of the stored one until its edit
- * settles. Entries the store has since dropped vanish, and ones it has since
- * added (Claude, mid-drag) keep their stored place after the pending ones.
+ * settles. Entries the store has since dropped vanish, ones the user left out
+ * stay out, and ones the store has since added (Claude, mid-drag) keep their
+ * stored place after the pending ones.
  */
-export function pendingOrder(items: Row[], pending?: string[]): Row[] {
+export function pendingOrder(items: Row[], pending?: Pending): Row[] {
   if (!pending) return items;
 
   const byId = new Map(items.map((row) => [row.entry_id, row]));
-  const placed = new Set(pending);
-
-  return [
-    ...pending.flatMap((id) => byId.get(id) ?? []),
+  const placed = new Set(pending.known);
+  const shown = [
+    ...pending.order.flatMap((id) => byId.get(id) ?? []),
     ...items.filter((row) => !placed.has(row.entry_id)),
   ];
+
+  // Stale ids never leave an empty rail; the stored order shows until the edit settles.
+  return shown.length ? shown : items;
 }
 
 /** Core mirrors ordered edits of a linked draft into Music.app's preview playlist. */

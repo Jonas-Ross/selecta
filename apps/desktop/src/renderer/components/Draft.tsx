@@ -20,6 +20,7 @@ import {
   saveOutcome,
   totals,
   type DraftView,
+  type Pending,
   type Row,
   type Run,
 } from '../state.js';
@@ -58,7 +59,7 @@ export function Draft({
   const [phase, setPhase] = useState<SavePhase>('closed');
   const [leaving, setLeaving] = useState(false);
   const [name, setName] = useState('');
-  const [pending, setPending] = useState<string[]>();
+  const [pending, setPending] = useState<Pending>();
   // The rail shows the new order at once; the newest of these clears it when its edit settles.
   const [hold] = useState(() => newestHold(setPending));
   const answer = useRef<(ok: boolean) => void>(undefined);
@@ -167,15 +168,17 @@ export function Draft({
 
     const ids = items.map((row) => row.entry_id);
 
-    hold(withMoved(ids, entryId, to), moveEntry(entryId, ids[to]));
+    hold({ order: withMoved(ids, entryId, to), known: ids }, moveEntry(entryId, ids[to]));
   }
 
   function remove(entryId: string) {
     // A draft keeps at least one entry; the store would refuse an empty one anyway.
     if (railLocked || items.length < 2) return;
 
+    const ids = items.map((row) => row.entry_id);
+
     hold(
-      items.map((row) => row.entry_id).filter((id) => id !== entryId),
+      { order: ids.filter((id) => id !== entryId), known: ids },
       setEntries((entries) => entries.filter((other) => other.entry_id !== entryId)),
     );
   }
