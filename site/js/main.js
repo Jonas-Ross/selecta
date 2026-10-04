@@ -34,7 +34,7 @@ initDeck(loop);
 record($('get-vinyl'), {
   ...label('coral'),
   title: 'Selecta',
-  ring: 'PUT CLAUDE ON THE DECKS · FREE · OPEN SOURCE · ',
+  ring: 'PUT YOUR AI ON THE DECKS · FREE · OPEN SOURCE · ',
   sub: 'free · open source',
   seed: 21,
 });

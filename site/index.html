@@ -6,7 +6,7 @@
     <title>Selecta</title>
     <meta
       name="description"
-      content="Selecta lets Claude dig through your Apple Music library, with the tempo and key of every track it can measure, so the playlists it builds actually flow."
+      content="Selecta lets your AI assistant dig through your Apple Music library, with the tempo and key of every track it can measure, so the playlists it builds actually flow."
     />
     <meta name="theme-color" content="#08080a" />
     <link
@@ -84,10 +84,10 @@
           <p class="chip" id="live">
             <i aria-hidden="true"></i><span id="live-text">Warming up the engine</span>
           </p>
-          <h1 id="hero-title">Let Claude dig your crates<span class="dot">.</span></h1>
+          <h1 id="hero-title">Let your AI dig your crates<span class="dot">.</span></h1>
           <p class="lede">
-            Selecta hands Claude your Apple Music library, with the tempo and key of every track it
-            can measure, so the playlists it builds actually flow.
+            Selecta hands your AI assistant your Apple Music library, with the tempo and key of
+            every track it can measure, so the playlists it builds actually flow.
           </p>
           <div class="ctas">
             <a class="btn acid" href="#get">Get Selecta</a>
@@ -112,7 +112,7 @@
             <h2 id="groove-title">Every groove has a number.</h2>
             <p>
               It's the tempo, in beats per minute. Selecta measures it for the tracks you own, so
-              Claude can keep a set moving.
+              your assistant can keep a set moving.
             </p>
           </div>
           <p class="groove-now" aria-live="polite">
@@ -223,10 +223,10 @@
           <article class="step">
             <div class="step-copy">
               <p class="step-n">03</p>
-              <h3>Claude builds the set.</h3>
+              <h3>Your AI builds the set.</h3>
               <p>
-                Ask for a vibe. Claude picks tracks whose tempos and keys blend, and you hear a
-                draft before anything is saved.
+                Ask for a vibe. It picks tracks whose tempos and keys blend, and you hear a draft
+                before anything is saved.
               </p>
             </div>
             <div class="step-visual v-set" aria-hidden="true">
@@ -367,8 +367,8 @@
           </p>
         </div>
         <div class="rule">
-          <p class="big-line">It measures. <em>Claude chooses.</em></p>
-          <p>Selecta hands over facts. The taste is Claude's, and yours.</p>
+          <p class="big-line">It measures. <em>Your AI chooses.</em></p>
+          <p>Selecta hands over facts. The taste is the model's, and yours.</p>
         </div>
         <div class="rule">
           <p class="big-line">When it's guessing, it says so.</p>
@@ -379,8 +379,10 @@
       <section class="get" id="get" aria-labelledby="get-title">
         <div class="get-disc" aria-hidden="true"><canvas id="get-vinyl"></canvas></div>
         <div class="get-copy">
-          <h2 id="get-title">Put Claude<br />on the decks.</h2>
-          <p>Free and open source, for any Mac with Apple Music and Claude.</p>
+          <h2 id="get-title">Put your AI<br />on the decks.</h2>
+          <p>
+            Free and open source, for any Mac with Apple Music and an AI assistant that speaks MCP.
+          </p>
           <div class="ctas">
             <a class="btn ink" href="https://github.com/Jonas-Ross/selecta">Get it on GitHub</a>
             <a class="btn ink-ghost" href="https://github.com/Jonas-Ross/metrognome"
@@ -391,7 +393,7 @@
             <summary>Early days: no installer yet. Build it from source</summary>
             <p>
               You need a Mac with Node 22 and Rust. Install the engine, then Selecta, let it measure
-              your library, and tell Claude about it.
+              your library, and hook it up to your assistant.
             </p>
             <pre><code>git clone https://github.com/Jonas-Ross/metrognome.git
 cd metrognome &amp;&amp; cargo install --path crates/metrognome-cli
@@ -400,7 +402,11 @@ git clone https://github.com/Jonas-Ross/selecta.git
 cd selecta &amp;&amp; npm install &amp;&amp; npm run build
 node dist/index.js refresh
 node dist/index.js enrich &amp;&amp; node dist/index.js enrich --source analysis
-claude mcp add --scope user selecta -- node "$PWD/dist/index.js"</code></pre>
+node dist/index.js setup --apply</code></pre>
+            <p>
+              <code>setup</code> registers Selecta with Claude Desktop and Claude Code. Any other
+              MCP client can run <code>node dist/index.js</code> as a stdio server.
+            </p>
             <p>
               Apple allows about 20 preview lookups a minute, so a big library takes a few hours to
               measure. Stop it whenever; it picks up where it left off.
