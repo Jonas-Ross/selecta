@@ -32,8 +32,10 @@ export function useListen({
   const player = usePlayer(draftId, watching);
   const [cued, setCued] = useState<string>();
   const [clock, setClockNow] = useState(() => performance.now());
-  // A play waiting on the edit queue holds Claude off as a running one does.
-  const [queued, setQueued] = useState(0);
+  // A play waiting on the edit queue holds Claude off as a running one does. The ref
+  // sees a second click in the same tick, before the state re-renders.
+  const [queued, setQueued] = useState(false);
+  const waiting = useRef(false);
   const allowed = useRef(canPlay);
 
   allowed.current = canPlay;
@@ -54,15 +56,20 @@ export function useListen({
   }, [playing]);
 
   function playAt(entryId: string, at?: number) {
-    if (!canPlay) return;
+    // One Music operation at a time; a second would fail busy or queue an extra route.
+    if (!canPlay || player.busy || waiting.current) return;
 
-    setQueued((n) => n + 1);
+    waiting.current = true;
+    setQueued(true);
     void queuePlay(
       queue,
       () => allowed.current,
       () => latest()?.revision,
       (revision) => player.play(revision, entryId, at),
-    ).finally(() => setQueued((n) => n - 1));
+    ).finally(() => {
+      waiting.current = false;
+      setQueued(false);
+    });
   }
 
   // Moving while Music.app is on this draft plays there; otherwise it only moves the cue.
@@ -86,7 +93,7 @@ export function useListen({
 
   return {
     player,
-    busy: player.busy || queued > 0,
+    busy: player.busy || queued,
     now,
     nowRow,
     current,
