@@ -365,7 +365,7 @@ describe('player script contract', () => {
     );
     // The full order is read again right before the queue starts, outside the cleanup.
     expect(script.replace(/\s+/g, ' ')).toContain(
-      'if (!sameTracks()) return JSON.stringify({ orderDrifted: true }); try { if (restart) from = 1;',
+      'if (!sameTracks()) return JSON.stringify({ orderDrifted: true }); // Shuffle would carry on through the draft out of order; read last, right before the queue starts. if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true }); try { if (restart) from = 1;',
     );
     // A restarted play that seeks is paused first, so the record's start isn't heard.
     expect(script).toContain('(restart || from !== target) && (args.position || 0) > 0');

@@ -182,8 +182,6 @@ export function buildPlayPreviewScript(input: {
         }
         return false;
       };
-      // Shuffle would carry on through the draft out of order.
-      if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
       const target = args.index + 1;
       let from = 0;
       let wasPaused = false;
@@ -224,6 +222,8 @@ export function buildPlayPreviewScript(input: {
       };
       // The slot's order was read before the shuffle and player reads, so it is read again before anything moves.
       if (!sameTracks()) return JSON.stringify({ orderDrifted: true });
+      // Shuffle would carry on through the draft out of order; read last, right before the queue starts.
+      if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
       try {
         if (restart) from = 1;
         // Paused only when records passed on the way, or a fresh record's start before the seek,
