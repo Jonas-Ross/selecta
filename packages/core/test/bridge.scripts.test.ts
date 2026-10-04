@@ -318,6 +318,12 @@ describe('player script contract', () => {
     expect(script.replace(/\s+/g, ' ')).toContain(
       'Music.playerPosition = 0; // Previous only steps back once the rewind has landed; before that it restarts the record. if (!until(function () { return Music.playerPosition() < 2; })) return JSON.stringify({ stepMissed: true }); Music.previousTrack();',
     );
+    // The final play resumes only what Selecta paused or what began paused, never a pause the user made mid-route.
+    expect(script).toContain('if (quiet || (!restart && wasPaused)) {');
+    expect(script).not.toContain("String(Music.playerState()) === 'paused') {");
+    expect(script.indexOf('wasPaused = before === ')).toBeLessThan(
+      script.indexOf('Music.play(pl)'),
+    );
     // A step that times out onto a record other than its source or destination counts as picked.
     expect(script).toContain('if (now !== false && now !== entry && now !== prev) picked = true;');
     expect(script).toContain(

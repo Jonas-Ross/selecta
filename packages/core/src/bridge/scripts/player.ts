@@ -186,7 +186,12 @@ export function buildPlayPreviewScript(input: {
       if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
       const target = args.index + 1;
       let from = 0;
-      try { if (String(Music.playerState()) !== 'stopped') from = at() || 0; } catch (e) {}
+      let wasPaused = false;
+      try {
+        const before = String(Music.playerState());
+        wasPaused = before === 'paused';
+        if (before !== 'stopped') from = at() || 0;
+      } catch (e) {}
       // Stepping within a queue the caller knows it started skips a restart; a lone track
       // reads the same from here, so anything else starts the playlist over.
       const restart = args.restart === true || from < 1;
@@ -268,7 +273,8 @@ export function buildPlayPreviewScript(input: {
         if (!inOrder()) return JSON.stringify({ orderDrifted: true });
         // Shuffle switched on while it stepped would carry on out of order; the finally pauses it.
         if (Music.shuffleEnabled()) return JSON.stringify({ shuffled: true });
-        if (quiet || String(Music.playerState()) === 'paused') {
+        // Resumed only if Selecta paused it or it began paused; a pause the user made mid-route stands.
+        if (quiet || (!restart && wasPaused)) {
           // The reads above take time too, so entry, order and shuffle are checked once more before playing.
           if (!still(target)) return JSON.stringify({ stepMissed: true });
           if (!inOrder()) return JSON.stringify({ orderDrifted: true });
