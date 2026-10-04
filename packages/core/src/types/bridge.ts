@@ -124,6 +124,18 @@ export type PlayerState =
       playlist?: { persistentId: string; name: string };
     };
 
+// The entry the caller saw playing; a control acts only while Music.app is still on it.
+// `slot` names a reserved playlist the entry's playlist must be the only one of, for a
+// caller that recognised the preview by name after its ID rotated.
+export type PlayerEntry = { playlistId: string; index: number; trackId: string; slot?: string };
+
+export type PlayerAction =
+  | { action: 'pause' }
+  | { action: 'resume' }
+  | { action: 'seek'; position: number };
+
+export type PlayerControl = PlayerAction & { on: PlayerEntry };
+
 export interface Bridge {
   // Explicit UI navigation only; full live order must match, including repeats.
   openPreview(input: { expectedTrackIds: string[] }): Promise<{
@@ -226,11 +238,7 @@ export interface Bridge {
   // Pause, resume what is paused, or seek what is loaded; never launches Music.app
   // and never starts playback from nothing.
   // Acts only while Music.app is still on `on`, checked in the same call.
-  controlPlayer(
-    input: ({ action: 'pause' } | { action: 'resume' } | { action: 'seek'; position: number }) & {
-      on: { playlistId: string; index: number; trackId: string; slot?: string };
-    },
-  ): Promise<PlayerState>;
+  controlPlayer(input: PlayerControl): Promise<PlayerState>;
 
   // Play one entry (0-based) of the reserved preview, only while its full live
   // order matches, so Music.app continues through the draft. Explicit user action only.

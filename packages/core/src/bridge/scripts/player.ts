@@ -2,6 +2,7 @@
 // pausing never launch Music.app; playing starts only from the reserved
 // preview, and only while its live order is the one the caller expects.
 import { PREVIEW_PLAYLIST_NAME } from '../../operations/playlist.js';
+import type { PlayerControl } from '../../types/bridge.js';
 import { BridgeError } from '../../types/errors.js';
 import { PREVIEW_SLOT } from './preview_slot.js';
 import { wrapJxaScript } from './wrap.js';
@@ -34,17 +35,6 @@ export function buildReadPlayerScript(): string {
     `,
   );
 }
-
-// The entry the caller saw playing; the control acts only while Music.app is still on it.
-// `slot` names a reserved playlist the entry's playlist must be the only one of, for a
-// caller that recognised the preview by name after its ID rotated.
-export type PlayerEntry = { playlistId: string; index: number; trackId: string; slot?: string };
-
-export type PlayerControl = (
-  | { action: 'pause' }
-  | { action: 'resume' }
-  | { action: 'seek'; position: number }
-) & { on: PlayerEntry };
 
 export function buildControlPlayerScript(input: PlayerControl): string {
   if (input.action === 'seek' && !(Number.isFinite(input.position) && input.position >= 0))
