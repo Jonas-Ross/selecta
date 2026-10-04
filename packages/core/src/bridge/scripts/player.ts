@@ -227,8 +227,8 @@ export function buildPlayPreviewScript(input: {
             Music.pause();
             return false;
           });
-          // Heard on the first record and then elsewhere in the preview means the user picked one.
-          if (!started && heard) still(1);
+          // Elsewhere in the preview means the user picked a record, or the start never took; either way it is left alone.
+          if (!started) still(1);
           if (moved || !started) return JSON.stringify({ stepMissed: true });
         } else if (quiet && !(still(from) && pause() && ours())) {
           // The user picked another record, or Music moved to other music while pausing.
