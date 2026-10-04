@@ -272,9 +272,9 @@ export function buildPlayPreviewScript(input: {
         const goal = Math.min(args.position || 0, Math.max(0, Music.currentTrack.duration() - 1));
         if (!still(target)) return JSON.stringify({ stepMissed: true });
         Music.playerPosition = goal;
-        if (!until(function () { return Math.abs(Music.playerPosition() - goal) < 2; })) {
-          return JSON.stringify({ seekMissed: true });
-        }
+        // The entry is polled too, so a record the user picks while a long seek settles plays on.
+        const sought = until(function () { return !still(target) || Math.abs(Music.playerPosition() - goal) < 2; });
+        if (!sought || !still(target)) return JSON.stringify({ seekMissed: true });
         // From here Music should sit on the target, so cleanup can tell a record the user picked.
         reached = true;
         if (!inOrder()) return JSON.stringify({ orderDrifted: true });

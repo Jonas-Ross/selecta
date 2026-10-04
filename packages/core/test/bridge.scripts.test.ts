@@ -324,6 +324,10 @@ describe('player script contract', () => {
     expect(script.indexOf('wasPaused = before === ')).toBeLessThan(
       script.indexOf('Music.play(pl)'),
     );
+    // The final seek polls the target too, so a record picked while it settles is never paused.
+    expect(script.replace(/\s+/g, ' ')).toContain(
+      'if (!sought || !still(target)) return JSON.stringify({ seekMissed: true });',
+    );
     // A step that times out onto a record other than its source or destination counts as picked.
     expect(script).toContain('if (now !== false && now !== entry && now !== prev) picked = true;');
     expect(script).toContain(
