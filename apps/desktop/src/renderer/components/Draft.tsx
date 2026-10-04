@@ -121,7 +121,8 @@ export function Draft({
     latest: () => latest.current,
     queue,
     // Linked, Music may be playing this draft whatever the tab, after a remount or mid-sync too.
-    watching: tab === 'listen' || linked,
+    // Not before the draft exists, since the state read needs it.
+    watching: draft !== undefined && (tab === 'listen' || linked),
     linked,
     canPlay,
   });
