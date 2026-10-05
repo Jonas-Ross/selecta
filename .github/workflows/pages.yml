@@ -39,7 +39,7 @@ jobs:
       # No build cache: deploys are rare and a cold engine build takes under half a minute.
       - name: Build the engine
         run: scripts/build-site.sh metrognome
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
