@@ -303,6 +303,22 @@ export class DraftStore {
     );
   }
 
+  /** Follow the slot to the ID Music.app now gives it, as when iCloud rekeys a new playlist. */
+  rekeyPreview(id: string, generation: string, playlistId: string): PreviewState {
+    return this.access(true, (db) =>
+      db
+        .transaction(() => {
+          const slot = this.readPreview(db);
+
+          if (slot?.owner !== id || slot.generation !== generation || slot.status !== 'current')
+            throw new BridgeError('preview_conflict', 'Preview ownership changed.');
+
+          return this.writePreview(db, { ...slot, playlist_id: playlistId });
+        })
+        .immediate(),
+    );
+  }
+
   adoptPreview(
     id: string,
     revision: number,

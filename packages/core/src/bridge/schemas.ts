@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRACK_PERSISTENT_ID } from '../types/bridge.js';
 
 export const id = z.string().min(1);
 export const ids = z.array(id);
@@ -153,3 +154,46 @@ export const diagnostic = z.object({
   running: z.literal(true),
   automationAuthorized: z.literal(true),
 });
+export const artwork = z.record(
+  z.string().regex(TRACK_PERSISTENT_ID),
+  z.union([
+    z.string().regex(/^[0-9A-F]{16}\.(jpg|png)$/),
+    z.null(),
+    z.strictObject({ error: z.string().max(300) }),
+  ]),
+);
+
+export const player = z.union([
+  z.strictObject({ running: z.literal(false) }),
+  z.object({
+    running: z.literal(true),
+    state: z.string().max(40),
+    track: z.object({ persistentId: id, duration: z.number().nonnegative() }).optional(),
+    position: z.number().nonnegative().optional(),
+    index: count.positive().optional(),
+    playlist: z.object({ persistentId: id, name: z.string() }).optional(),
+  }),
+]);
+export const controlPlayer = z.union([
+  z.strictObject({ elsewhere: z.literal(true) }),
+  z.strictObject({ seekMissed: z.literal(true) }),
+  z.strictObject({ stillPlaying: z.literal(true) }),
+  z.strictObject({ shuffled: z.literal(true) }),
+  z.strictObject({ stillPaused: z.literal(true) }),
+  z.strictObject({ ambiguousPreview: z.literal(true) }),
+  z.strictObject({ orderDrifted: z.literal(true) }),
+  player,
+]);
+export const playPreview = z.union([
+  z.strictObject({ playlistNotFound: z.literal(true) }),
+  z.strictObject({ notEditable: z.literal(true) }),
+  z.strictObject({ ambiguousPreview: z.literal(true) }),
+  z.strictObject({ orderDrifted: z.literal(true) }),
+  z.strictObject({ stepMissed: z.literal(true) }),
+  z.strictObject({ shuffled: z.literal(true) }),
+  z.strictObject({ seekMissed: z.literal(true) }),
+  z.strictObject({ leftPlaying: z.literal(true) }),
+  z.strictObject({ stillPaused: z.literal(true) }),
+  // How the play reached the entry, for the app's action log.
+  z.strictObject({ playlistId: id, route: z.string().optional(), player }),
+]);

@@ -1,0 +1,55 @@
+/* The key wheel on the sleeve back, tracing the set's route round Camelot. */
+.wheel svg {
+  display: block;
+  width: 100%;
+  max-width: 200px;
+  margin: 0 auto;
+  overflow: visible;
+}
+.wheel .cell {
+  fill: transparent;
+  stroke: var(--line2);
+}
+.wheel .cell.on {
+  fill: rgba(150, 170, 210, 0.05);
+}
+.wheel .wl {
+  font: 400 9px var(--mono);
+  fill: var(--ink4);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.wheel .wl.on {
+  fill: var(--ink2);
+}
+.wheel .route {
+  fill: none;
+  stroke: var(--ink3);
+  stroke-width: 1.25;
+  stroke-linejoin: round;
+  stroke-dasharray: 3 3;
+}
+.wheel .route.past {
+  stroke: var(--ink);
+  stroke-dasharray: none;
+}
+.wheel .nowp {
+  fill: var(--acid);
+}
+.wheel .nextp {
+  fill: none;
+  stroke: var(--uv);
+  stroke-width: 1.5;
+}
+.wheel-now {
+  margin-top: var(--s2);
+  text-align: center;
+  font-size: var(--fs-ui);
+}
+.wheel-now .mono {
+  margin: 0 6px 0 10px;
+  font-size: var(--fs-tiny);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}

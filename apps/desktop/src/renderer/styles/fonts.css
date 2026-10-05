@@ -1,0 +1,33 @@
+/* The website's faces, latin subset, served from the app bundle (OFL.txt beside them). */
+@font-face {
+  font-family: 'Hubot Sans';
+  src: url('fonts/hubot-sans.woff2') format('woff2');
+  font-weight: 600 900;
+  font-stretch: 125%;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Mona Sans';
+  src: url('fonts/mona-sans.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+/* Dot-matrix numerals for the readouts, like a hardware display. */
+@font-face {
+  font-family: 'Bitcount';
+  src: url('fonts/bitcount.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'DM Mono';
+  src: url('fonts/dm-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'DM Mono';
+  src: url('fonts/dm-mono-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}

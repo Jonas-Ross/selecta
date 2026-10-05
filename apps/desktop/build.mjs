@@ -1,11 +1,12 @@
 // Bundles each process for its runtime. Core stays external to the host so it
 // resolves to the workspace build, native better-sqlite3 included.
-import { copyFile, mkdir } from 'node:fs/promises';
+import { copyFile, cp, mkdir } from 'node:fs/promises';
 import { build } from 'esbuild';
 
 const shared = { bundle: true, target: 'es2022', logLevel: 'warning', outdir: 'dist' };
 
 await mkdir('dist/renderer', { recursive: true });
+
 await Promise.all([
   build({
     ...shared,
@@ -42,5 +43,6 @@ await Promise.all([
     define: { 'process.env.NODE_ENV': '"production"' },
   }),
   copyFile('src/renderer/index.html', 'dist/renderer/index.html'),
-  copyFile('src/renderer/app.css', 'dist/renderer/app.css'),
+  // Stylesheets and fonts load from the app itself, which the renderer's CSP allows.
+  cp('src/renderer/styles', 'dist/renderer/styles', { recursive: true }),
 ]);

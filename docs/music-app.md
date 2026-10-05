@@ -71,6 +71,14 @@ Only validated pre-creation script guards prove that no write began. Subprocess 
 
 Favorite/rating responses count only confirmed readbacks as `updated`; `mismatches` contains actual values for the remaining tracks. Clearing a rating and reading back null is a confirmed clear.
 
+## Artwork
+
+- **Plain JXA can't read artwork bytes.** `artworks[0].rawData()` returns a hex string, and `.data()` and `.format()` are unusable.
+- **What works:** from JXA, `ObjC.import('Foundation')`, run `tell application "Music" to get raw data of artwork 1 of (first track … whose persistent ID is "<ID>")` with `$.NSAppleScript.alloc.initWithSource(src).executeAndReturnError(err)`, and write the result's `.data` with `writeToFileAtomically(path, true)`. The descriptor type is `'tdta'`; the bytes match plain AppleScript's `raw data` exactly. A nil result (`isNil()`) is a failure; read the code with `ObjC.deepUnwrap(err).NSAppleScriptErrorNumber`.
+- Fast: 50 tracks in one `osascript` call took 0.58s, one cold track 0.16s. Every image on a 3.7k-track library was JPEG, mostly 600×600, up to 1000×1000 (~850 KB).
+- **No artwork reads as -1728** ("Can't get object"). Some tracks report one artwork yet the read throws -1728, with -50 on its properties. Selecta reads only -1728 as no artwork; any other per-track code is reported as a failed read.
+- **A first read can fail transiently.** About 2% of tracks failed on a first full-library pass, and about half of those read fine moments later. The desktop app remembers a miss only until it restarts; a failed read is shown with a try-again action and never retried on its own.
+
 ## Opening the preview from a draft
 
 `open_preview({ track_ids })` explicitly reveals the existing reserved `Selecta Preview` in Music.app and brings Music forward. It never populates the slot or starts playback. The draft card supplies its complete ordered track IDs, preserving repeated occurrences. Resolution considers exactly named plain user playlists; smart, subscription, folder and special playlists sharing the name are not slots. Zero eligible targets, multiple eligible targets, or a different live order fail before reveal. The Music operation lock excludes other Selecta writes while the target is checked and opened; iCloud and manual edits can still occur independently. Opening confirms the sequence at that moment, not future synchronization or that any transition was heard.
@@ -80,6 +88,20 @@ Non-destructive live smoke (2026-09-13): the production bridge resolved and reve
 Dictionary evidence: `/System/Applications/Music.app/Contents/Resources/com.apple.Music.sdef` documents `reveal` for a track or playlist. It also declares `play`, `playpause`, next/previous track, `player state`, and `current playlist`; those declarations do **not** establish safe occurrence identity or playback scoping. #89 remains open for the scoped playback probe, actual play/pause/skip controls, observed entry/pair feedback, lifecycle-bounded now-playing observation, and both-host validation. Permanent Save remains explicit. Once the user starts preview iteration, their requested sequence changes may keep that preview current without repeated confirmation; navigation itself does not authorize replacing a stale slot.
 
 If lock cleanup fails after reveal, the tool retains `opened`, target ID and count alongside the error and lock recovery guidance. A failed navigation plus failed cleanup preserves the original navigation error. Inspect the returned outcome rather than repeating blindly.
+
+## Playback
+
+Probed live 2026-10-03 against a 16-entry Selecta Preview (`src/bridge/scripts/player.ts` holds the scripts):
+
+- **Playing one track stops after it.** `Music.play(playlist.tracks[i])` reports the playlist as `currentPlaylist` and `currentTrack.index()` as the 1-based entry, yet Music goes to stopped when that track ends, with or without `once`. Only `Music.play(playlist)` gives Music a queue it carries on through (entry 3 handed over to entry 4 on its own, AutoMix on). So Listen plays the playlist and steps with `nextTrack()` to the entry. There's no command to jump within the queue, so a step past other records, or into a record about to be seeked, happens paused so nothing on the way is heard; a single step with no seek is a plain Next. The volume is never touched: an earlier build muted while stepping, and a mute and restore sent milliseconds apart lost the restore, leaving Music at 0. A lone track reads exactly like a queued one (same `currentPlaylist`, same index), and the Up Next list isn't scriptable, so only a queue the app started itself in this run is trusted: within it a join on the record playing is a seek and other entries are stepped to, back with `previousTrack()` from position 0 (past the start it would restart the record instead). Anything else, including Music stopped or off the preview since, starts the playlist over. `play(playlist)` restarts at entry 1 whether Music was stopped or paused in it; earlier reads that it did nothing, or that stop-then-play left Music stopped, were taken with Music's Settings window open, which swallows play commands. Stepping either way worked paused or playing.
+- **Commands land a beat late.** Straight after `play(playlist)`, `pause()` or `nextTrack()`, a read still shows the old state, and a `pause()` fired at once may not take. Each step waits until the index reads back before the next.
+- **`currentTrack.index()` tells repeated tracks apart** where a persistent ID can't.
+- **Stopped means no current track.** `currentTrack` and `currentPlaylist` throw "Can't get object" and `playerPosition()` is null. Reading `running()` first keeps a closed Music closed.
+- **`playerPosition` is settable** and reads back within a second. `pause()` and a bare `play()` (resume) work, but a read straight after `pause()` can still say playing, so the control script waits 0.3 s before it reads back.
+- **JXA has a global `delay`.** A script that declares its own `const delay` fails to compile.
+- **A track that plays to its end counts as a play.** Probes that let tracks finish move the user's play counts, so probe by seeking and pausing, not by listening through.
+
+The 2026-09-29 AutoMix spike put the blend's lead at about 45 s, but in use 45 s sometimes missed the blend, so Listen's "Hear the join" leads in 60 s. With shuffle on, Music would carry on through the draft out of order, so a play is refused while `shuffleEnabled()` is true. A start that fails partway is paused, with read-back, and reported if Music won't pause.
 
 ## Linked draft preview guard
 

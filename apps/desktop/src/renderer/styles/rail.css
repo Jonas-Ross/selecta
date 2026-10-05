@@ -1,0 +1,577 @@
+/* The draft screen: records on the lit rail, the tempo lane above, the key lane below. */
+.screen-draft {
+  display: contents;
+}
+.draft-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--claude-w);
+}
+.draft-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background:
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / var(--grid-step) var(--grid-step),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / var(--grid-step) var(--grid-step),
+    var(--bg);
+}
+.draft-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: var(--s4) var(--s5) 0;
+  white-space: nowrap;
+  min-width: 0;
+}
+.draft-head h2 {
+  font: 700 var(--fs-heading)/1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: 0.02em;
+}
+.totals {
+  font-size: var(--fs-small);
+  color: var(--ink2);
+}
+.totals .num {
+  display: inline-block;
+  min-width: 1ch;
+  color: var(--ink);
+  font-weight: 500;
+}
+.totals .num.rolling {
+  color: var(--uv-text);
+}
+.draft-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fs-label);
+  color: var(--ink4);
+}
+.draft-hint.locked {
+  color: var(--uv-text);
+}
+.draft-hint svg {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+/* Locked: the rail dims a touch and records only select. */
+.locked .rail-line {
+  opacity: 0.5;
+}
+.locked .sleeve {
+  filter: saturate(0.6) brightness(0.85);
+}
+.draft-main .notice {
+  width: auto;
+  margin: var(--s3) var(--s5) 0;
+}
+
+.rail-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The left gutter stays put while the rail scrolls under it. */
+.gutter {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 56px;
+  z-index: 3;
+  background: linear-gradient(90deg, var(--bg) 85%, transparent);
+}
+.gutter > span {
+  position: absolute;
+  white-space: nowrap;
+}
+/* The tempo and key titles run on past the gutter, over the lane's empty top edge. */
+.lane-title {
+  left: var(--s5);
+  font: 400 var(--fs-tiny) var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.lane-title .unit {
+  color: var(--ink4);
+}
+.axis {
+  right: var(--s2);
+  font: 400 var(--fs-tiny) var(--mono);
+  color: var(--ink3);
+}
+.band {
+  right: 10px;
+  font: 400 var(--fs-tiny) var(--mono);
+  color: var(--ink3);
+}
+
+.rail-line {
+  position: absolute;
+  left: 56px;
+  right: 0;
+  height: 1px;
+  background: var(--rim);
+  box-shadow:
+    0 0 10px var(--rim-glow),
+    0 6px 18px var(--uv-soft);
+}
+.rail-line::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 1px;
+  height: 22px;
+  background: linear-gradient(var(--uv-soft), transparent);
+  opacity: 0.45;
+}
+.rail-scroll {
+  position: absolute;
+  left: 56px;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line3) transparent;
+}
+.rail-scroll.more-right {
+  mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent);
+}
+.rail-scroll.more-left {
+  mask-image: linear-gradient(90deg, transparent, #000 32px);
+}
+.rail-scroll.more-left.more-right {
+  mask-image: linear-gradient(90deg, transparent, #000 32px, #000 calc(100% - 48px), transparent);
+}
+.rail-content {
+  position: relative;
+  height: 100%;
+}
+.lanes {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+.lane-grid {
+  fill: none;
+  stroke: var(--line);
+}
+.lane-box {
+  fill: none;
+  stroke: var(--line2);
+}
+.lane-seams {
+  fill: none;
+  stroke: var(--line);
+  stroke-dasharray: 2 3;
+}
+.gap {
+  fill: url(#hatch);
+  stroke: var(--line2);
+  stroke-dasharray: 2 3;
+}
+.hatch {
+  stroke: var(--line2);
+}
+.step {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.25;
+  stroke-linejoin: round;
+}
+.step-hot {
+  fill: none;
+  stroke: var(--uv);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.step-caps {
+  fill: none;
+  stroke: var(--ink3);
+}
+
+.slot-labels > *,
+.join,
+.join-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.tick {
+  font: 400 var(--fs-micro) var(--mono);
+  color: var(--ink4);
+  white-space: nowrap;
+}
+.value {
+  padding: 1px 2px;
+  border-radius: var(--r-xs);
+  font: 400 var(--fs-tiny) var(--mono);
+  color: var(--ink2);
+  white-space: nowrap;
+  cursor: help;
+}
+.value:hover,
+.value:focus-visible {
+  color: var(--ink);
+  background: var(--bg3);
+}
+.value.hot {
+  color: var(--uv-text);
+}
+/* A provisional key is a first reading: drawn, but marked as unsettled. */
+.value.provisional {
+  text-decoration: underline dotted var(--ink4);
+  text-underline-offset: 2px;
+}
+.missing {
+  translate: -50% 0;
+  font: 400 var(--fs-tiny) var(--mono);
+  color: var(--ink3);
+  white-space: nowrap;
+}
+
+.join {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 2px 0;
+  border-radius: var(--r-sm);
+  cursor: help;
+}
+.join-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--uv-soft);
+  opacity: 0;
+  pointer-events: none;
+}
+.join-tempo {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 400 var(--fs-label) var(--mono);
+  color: var(--ink2);
+  white-space: nowrap;
+}
+.join-words {
+  max-width: 100%;
+  font-size: var(--fs-label);
+  line-height: 1.3;
+  color: var(--ink3);
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.join:hover .join-words,
+.join:focus-visible .join-words {
+  color: var(--ink2);
+}
+.join.hot .join-tempo,
+.join.hot .join-words {
+  color: var(--uv-text);
+}
+.glyph {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--ink3);
+  stroke-width: 1.2;
+}
+.glyph .inner {
+  opacity: 0.6;
+}
+.glyph .unknown {
+  stroke-dasharray: 2 2.6;
+}
+.glyph .route {
+  stroke: var(--ink2);
+  stroke-width: 1.4;
+}
+.glyph .dot {
+  fill: var(--ink2);
+  stroke: none;
+}
+.join-dot {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--ink3);
+}
+.join-dot.hot {
+  background: var(--uv);
+  box-shadow: inset 0 0 0 1px var(--uv);
+}
+
+.recs {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.rec {
+  position: absolute;
+  left: 0;
+  top: 0;
+  outline: none;
+  cursor: grab;
+  touch-action: none;
+}
+.rec.held {
+  cursor: grabbing;
+}
+.locked .rec {
+  cursor: pointer;
+}
+.rec.leaving {
+  pointer-events: none;
+}
+.rec-body {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+}
+
+/* The white-label sleeve. Its type scales with the record. */
+.sleeve {
+  position: absolute;
+  inset: 0;
+  container-type: size;
+  overflow: hidden;
+  border-radius: var(--r-xs);
+  background: linear-gradient(160deg, var(--bg3), var(--bg1) 70%);
+  box-shadow: var(--sleeve-shadow);
+  transition:
+    transform var(--t-mid) var(--ease-out),
+    box-shadow var(--t-mid);
+}
+/* Album art over the white label, faded in only once it has decoded. */
+.sleeve-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-mid) var(--ease-out);
+}
+.sleeve-art.shown {
+  opacity: 1;
+}
+/* Rim light along the top edge, as on the rail. */
+.sleeve::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(var(--sleeve-light), transparent 22%);
+  box-shadow:
+    inset 0 1px 0 var(--sleeve-rim),
+    inset 0 0 0 1px var(--sleeve-edge);
+  pointer-events: none;
+  transition: box-shadow var(--t-fast);
+}
+.rec:hover .sleeve {
+  transform: translateY(-3px);
+}
+.rec:hover .sleeve::after {
+  box-shadow:
+    inset 0 1px 0 var(--sleeve-rim-hot),
+    inset 0 0 0 1px var(--line3);
+}
+.rec.held .sleeve {
+  transform: none;
+  box-shadow: var(--sleeve-shadow-held);
+}
+.rec.sel .sleeve::after {
+  box-shadow: inset 0 0 0 2px var(--uv);
+}
+.rec:focus-visible .sleeve {
+  outline: 1.5px solid var(--uv);
+  outline-offset: 3px;
+}
+.sleeve-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.sleeve-ring circle,
+.sleeve-ring line {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.sleeve-ring .groove {
+  stroke: var(--line);
+}
+.sleeve-ring .label {
+  stroke: var(--line3);
+  fill: var(--label-fill);
+}
+.sleeve-ring .hole {
+  fill: var(--ink4);
+}
+.sleeve-ring .index {
+  stroke: var(--ink3);
+}
+.sleeve-title {
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  top: 8%;
+  font: 800 10cqw/1.04 var(--display);
+  font-stretch: 112%;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow-wrap: break-word;
+  hyphens: auto;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rec-x {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  background: var(--overlay);
+  color: var(--ink2);
+  box-shadow: inset 0 0 0 1px var(--line3);
+  opacity: 0;
+  transition:
+    opacity var(--t-fast),
+    background var(--t-fast);
+}
+.rec-x svg {
+  width: 9px;
+  height: 9px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+.rec:hover .rec-x:not(:disabled),
+.rec:focus-visible .rec-x:not(:disabled) {
+  opacity: 1;
+}
+.rec.held .rec-x {
+  opacity: 0;
+}
+.rec-x:hover {
+  background: var(--bg4);
+  color: var(--ink);
+}
+
+/* Part of the record: pressing the caption selects or drags it too. */
+.cap {
+  position: absolute;
+  left: 0;
+}
+.cap-title,
+.cap-artist {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cap-title {
+  font: 600 var(--fs-small) / 1.2 var(--body);
+}
+.cap-artist {
+  font-size: var(--fs-label);
+  color: var(--ink3);
+}
+.rec.sel .cap-title {
+  color: var(--uv-chip);
+}
+
+.rail-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.rail-wait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+  background: var(--bg);
+  color: var(--ink3);
+  font-size: var(--fs-body);
+}
+.rail-wait b {
+  font: 700 var(--fs-title) var(--display);
+  font-stretch: 125%;
+  color: var(--ink);
+}
+/* Dig and Listen, as tabs in the draft's head. */
+.modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line2);
+  border-radius: var(--r-md);
+  align-self: center;
+}
+.mode {
+  height: 22px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  font: 600 var(--fs-label) var(--body);
+  letter-spacing: 0.04em;
+  color: var(--ink3);
+  transition:
+    color var(--t-fast),
+    background var(--t-fast);
+}
+.mode:hover {
+  color: var(--ink);
+}
+.mode.on {
+  background: var(--bg3);
+  color: var(--ink);
+}
+
+/* The record Music.app is playing wears an acid line under it. */
+.rec.now .rec-body::after {
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: -7px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--acid);
+  box-shadow: 0 0 10px rgba(214, 255, 58, 0.5);
+}

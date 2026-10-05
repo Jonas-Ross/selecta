@@ -97,6 +97,46 @@ export type TrackSignalResult<State> = {
   preWriteTracks: State[];
 };
 
+// Measured ~12ms per track on a real library, so a batch stays under a second
+// and newly shown records never queue behind a long read.
+export const ARTWORK_BATCH_LIMIT = 40;
+
+// Music.app's track persistent ID. Artwork reads splice it into AppleScript
+// source, so nothing else may reach them.
+export const TRACK_PERSISTENT_ID = /^[0-9A-F]{16}$/;
+
+// Per requested track ID: the file name written into the caller's directory
+// (`<ID>.jpg` or `<ID>.png`), null when the track has no readable artwork, or
+// why the read failed for another reason.
+export type ArtworkReadResult = Record<string, string | null | { error: string }>;
+
+// Music.app's player as last read. Stopped has no track; a track playing
+// outside any playlist has no playlist. `index` is the track's 1-based place in
+// the playlist it plays from, which tells repeated entries apart.
+export type PlayerState =
+  | { running: false }
+  | {
+      running: true;
+      state: string;
+      track?: { persistentId: string; duration: number };
+      position?: number;
+      index?: number;
+      playlist?: { persistentId: string; name: string };
+    };
+
+// The entry the caller saw playing; a control acts only while Music.app is still on it.
+// `slot` names a reserved playlist the entry's playlist must be the only one of, for a
+// caller that recognised the preview by name after its ID rotated.
+export type PlayerEntry = { playlistId: string; index: number; trackId: string; slot?: string };
+
+export type PlayerAction =
+  | { action: 'pause' }
+  | { action: 'resume' }
+  | { action: 'seek'; position: number };
+
+// A resume also names the full order it expects, so it never continues a reordered preview.
+export type PlayerControl = PlayerAction & { on: PlayerEntry; expectedTrackIds?: string[] };
+
 export interface Bridge {
   // Explicit UI navigation only; full live order must match, including repeats.
   openPreview(input: { expectedTrackIds: string[] }): Promise<{
@@ -188,4 +228,26 @@ export interface Bridge {
     trackIds: string[];
     rating: number;
   }): Promise<TrackSignalResult<TrackRatingState>>;
+
+  // Read-only. Writes each track's first artwork into `dir` (absolute, must
+  // exist). At most 40 unique 16-hex IDs; a miss is null, never a batch failure.
+  readArtwork(trackIds: string[], dir: string): Promise<ArtworkReadResult>;
+
+  // Read-only, and never launches Music.app.
+  readPlayer(): Promise<PlayerState>;
+
+  // Pause, resume what is paused, or seek what is loaded; never launches Music.app
+  // and never starts playback from nothing.
+  // Acts only while Music.app is still on `on`, checked in the same call.
+  controlPlayer(input: PlayerControl): Promise<PlayerState>;
+
+  // Play one entry (0-based) of the reserved preview, only while its full live
+  // order matches, so Music.app continues through the draft. Explicit user action only.
+  playPreview(input: {
+    expectedTrackIds: string[];
+    index: number;
+    position?: number;
+    // Start the playlist over rather than step within whatever queue Music.app has.
+    restart?: boolean;
+  }): Promise<{ playlistId: string; route?: string; player: PlayerState }>;
 }

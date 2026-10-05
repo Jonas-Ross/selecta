@@ -60,7 +60,7 @@ export class AgentSessions {
 
   start(draftId: string, brief: string): void {
     this.idle(draftId);
-    this.record(draftId, { kind: 'asked', text: brief });
+    this.record(draftId, { kind: 'asked', text: brief, brief: true });
     this.run(draftId, `Draft ID: ${draftId}\n\nBrief:\n${brief}`);
   }
 
@@ -77,8 +77,8 @@ export class AgentSessions {
   }
 
   /** A request refused before Claude started, kept in the draft's log like any other outcome. */
-  refuse(draftId: string, text: string, message: string): void {
-    this.record(draftId, { kind: 'asked', text });
+  refuse(draftId: string, text: string, message: string, brief?: true): void {
+    this.record(draftId, { kind: 'asked', text, ...(brief && { brief }) });
     this.record(draftId, { kind: 'error', message });
   }
 

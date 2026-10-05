@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DraftStore } from '../drafts/store.js';
 import { withOperation, OperationCleanupError } from '../operations/lock.js';
-import { replacePreview, type PreviewAttempt } from '../operations/preview_playlist.js';
+import { syncDraftPreview, type PreviewAttempt } from '../operations/preview_playlist.js';
 import { PREVIEW_PLAYLIST_NAME } from '../operations/playlist.js';
 import { missingTrackIdsError } from '../operations/resources.js';
 import { Appearance, type Draft, type PreviewState } from '../drafts/contracts.js';
@@ -106,86 +106,8 @@ export class PlaylistDraftTools {
       : slot;
   }
 
-  private async syncPreview(draft: Draft, explicit: boolean, expected?: string[]) {
-    let claim: PreviewState | undefined;
-    let result: PreviewAttempt | undefined;
-    let preview: PreviewState | undefined;
-
-    try {
-      await withOperation(this.deps.cache(), 'music', async () => {
-        const missing = missingTrackIdsError(
-          this.deps.cache(),
-          draft.entries.map((entry) => entry.track_id),
-        );
-
-        if (missing) {
-          result = missing;
-
-          return;
-        }
-
-        claim = this.store.claimPreview(draft.draft_id, draft.revision, explicit, expected);
-
-        if (!claim) return;
-
-        result = await replacePreview(
-          draft.entries.map((entry) => entry.track_id),
-          claim.baseline,
-          this.deps,
-        );
-        const status =
-          result.error === 'preview_conflict'
-            ? 'conflict'
-            : result.error
-              ? result.observed_track_ids
-                ? 'error'
-                : 'uncertain'
-              : result.order_matches_request
-                ? 'current'
-                : 'conflict';
-
-        preview = this.store.finishPreview(claim, {
-          status,
-          result,
-          baseline: result.observed_track_ids ?? claim.baseline,
-          playlist_id: result.playlist_id ?? claim.playlist_id,
-        });
-      });
-    } catch (error) {
-      const failure = toErrorEnvelope(error, {
-        error: 'cache_unavailable',
-        hint: 'Local preview claim/receipt could not be persisted. Inspect the retained result; no automatic retry.',
-      });
-      const cleanup = error instanceof OperationCleanupError;
-
-      result = {
-        ...result,
-        ...failure,
-        hint: [result?.hint, failure.hint].filter(Boolean).join(' '),
-        ...(cleanup
-          ? {
-              error: 'operation_cleanup_failed',
-              lock_path: error.lockPath,
-              hint: error.recoveryHint,
-            }
-          : {}),
-      };
-
-      // Retain the settled write receipt in the response even if storage or lock cleanup failed.
-      if (claim) {
-        preview = { ...(preview ?? claim), status: 'error', result };
-
-        if (cleanup) {
-          try {
-            preview = this.store.finishPreview(claim, preview);
-          } catch (persistenceError) {
-            result.hint = `${result.hint} Cleanup warning could not be persisted: ${String(persistenceError)}.`;
-          }
-        }
-      }
-    }
-
-    return { preview, preview_result: result };
+  private syncPreview(draft: Draft, explicit: boolean, expected?: string[]) {
+    return syncDraftPreview(this.store, this.deps, draft, explicit, expected);
   }
 
   private async afterSync(
