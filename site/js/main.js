@@ -1,5 +1,6 @@
 // Entry point: sends the built-in loop to the engine, starts each section, then the motion.
 import { initDeck } from './deck.js';
+import { initDesk } from './desk.js';
 import { $ } from './dom.js';
 import { SR, analyze, engine, headline } from './engine.js';
 import { initHero } from './hero.js';
@@ -31,10 +32,11 @@ initMachine();
 nav();
 initHero(loop);
 initDeck(loop);
+initDesk();
 record($('get-vinyl'), {
   ...label('coral'),
   title: 'Selecta',
-  ring: 'PUT CLAUDE ON THE DECKS · FREE · OPEN SOURCE · ',
+  ring: 'PUT YOUR AI ON THE DECKS · FREE · OPEN SOURCE · ',
   sub: 'free · open source',
   seed: 21,
 });

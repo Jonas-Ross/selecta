@@ -75,6 +75,10 @@
   margin-top: 12px;
   max-width: 60ch;
 }
+.source p code {
+  font: 400 13px var(--mono);
+  overflow-wrap: anywhere;
+}
 .source pre {
   margin: 12px 0 0;
   padding: 16px;

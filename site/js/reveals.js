@@ -1,4 +1,4 @@
-// Scroll reveals for everything below the story: headlines, the machine, the deck, the rules.
+// Scroll reveals for everything below the story: headlines, the machine, the deck, the app, the rules.
 import { $$ } from './dom.js';
 import { HIDDEN, gsap, maskedSplit } from './motion.js';
 
@@ -59,6 +59,15 @@ export function reveals() {
     duration: 1.4,
     ease: 'expo.out',
     scrollTrigger: { trigger: '#deck', start: 'top 80%' },
+  });
+
+  lineReveal('#desk-title', '.desk', 'top 75%');
+  gsap.from('.window', {
+    y: 80,
+    autoAlpha: 0,
+    duration: 1.1,
+    ease: 'power3.out',
+    scrollTrigger: { trigger: '.window', start: 'top 88%' },
   });
 
   $$('.rule').forEach((rule) => {
