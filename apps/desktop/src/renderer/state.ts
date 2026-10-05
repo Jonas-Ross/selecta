@@ -2,12 +2,23 @@
 import type { Draft } from '@selecta/core/drafts/contracts.js';
 import type { AgentEvent, RunSnapshot } from '../shared/protocol.js';
 
+type Maturity = 'validated' | 'provisional';
+
+/** An inspection track: features carry where they came from and how sure that was. */
 export type Track = {
   title?: string;
   artist?: string;
   duration_seconds?: number;
   bpm?: number;
+  bpm_confidence?: number;
+  bpm_maturity?: Maturity;
+  bpm_source?: string;
+  bpm_half_time?: number;
+  musical_key?: string;
   camelot?: string;
+  key_confidence?: number;
+  key_maturity?: Maturity;
+  key_source?: string;
 };
 export type DraftView = {
   draft?: Draft;
@@ -17,13 +28,42 @@ export type DraftView = {
   hint?: string;
 };
 export type Row = Draft['entries'][number] & Track;
-export type LogItem = { kind: 'you' | 'claude' | 'tool' | 'error'; text: string };
+// `brief` marks the request that started a draft, as opposed to feedback on one.
+export type LogItem = { kind: 'you' | 'claude' | 'tool' | 'error'; text: string; brief?: true };
 
 /** Inspection tracks line up one to one with entries, repeats included. */
 export function rows(view: DraftView): Row[] {
   const tracks = view.inspection?.tracks ?? [];
 
   return (view.draft?.entries ?? []).map((entry, index) => ({ ...tracks[index], ...entry }));
+}
+
+/** An order the user just made, and every entry that was on the rail when they made it. */
+export type Pending = { order: string[]; known: string[] };
+
+/** A new pending order that still knows what earlier unsettled edits saw, so their removals stay out. */
+export function nextPending(prev: Pending | undefined, order: string[], ids: string[]): Pending {
+  return { order, known: [...new Set([...(prev?.known ?? []), ...ids])] };
+}
+
+/**
+ * The order the user just made, ahead of the stored one until its edit
+ * settles. Entries the store has since dropped vanish, ones the user left out
+ * stay out, and ones the store has since added (Claude, mid-drag) keep their
+ * stored place after the pending ones.
+ */
+export function pendingOrder(items: Row[], pending?: Pending): Row[] {
+  if (!pending) return items;
+
+  const byId = new Map(items.map((row) => [row.entry_id, row]));
+  const placed = new Set(pending.known);
+  const shown = [
+    ...pending.order.flatMap((id) => byId.get(id) ?? []),
+    ...items.filter((row) => !placed.has(row.entry_id)),
+  ];
+
+  // Stale ids never leave an empty rail; the stored order shows until the edit settles.
+  return shown.length ? shown : items;
 }
 
 /** Core mirrors ordered edits of a linked draft into Music.app's preview playlist. */
@@ -44,19 +84,22 @@ export function move<T>(items: T[], from: number, to: number): T[] {
   return next;
 }
 
-export function formatDuration(seconds?: number): string {
-  if (seconds === undefined) return '';
+/** Known minutes, and whether some lengths are missing so the real total is longer. */
+export function totals(items: Row[]) {
+  const known = items.flatMap((row) => row.duration_seconds ?? []);
 
-  const whole = Math.round(seconds);
-
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+  return {
+    tracks: items.length,
+    minutes: Math.round(known.reduce((sum, value) => sum + value, 0) / 60),
+    partial: known.length < items.length,
+  };
 }
 
-export function totalDuration(items: Row[]): string {
-  const known = items.flatMap((row) => row.duration_seconds ?? []);
-  const minutes = Math.round(known.reduce((sum, value) => sum + value, 0) / 60);
+/** Slowest and fastest measured tempo, whole BPM; undefined when none is measured. */
+export function bpmSpan(items: Row[]): [number, number] | undefined {
+  const known = items.flatMap((row) => (row.bpm === undefined ? [] : Math.round(row.bpm)));
 
-  return `${items.length} tracks · ${minutes} min${known.length < items.length ? '+' : ''}`;
+  return known.length ? [Math.min(...known), Math.max(...known)] : undefined;
 }
 
 /** Selection travels as text: it names the subject of the feedback, nothing more. */
@@ -76,7 +119,7 @@ export function feedbackMessage(text: string, selected: Row[]): string {
 export function logAgentEvent(log: LogItem[], event: AgentEvent): LogItem[] {
   switch (event.kind) {
     case 'asked':
-      return [...log, { kind: 'you', text: event.text }];
+      return [...log, { kind: 'you', text: event.text, ...(event.brief && { brief: true }) }];
     case 'text':
       return [...log, { kind: 'claude', text: event.text }];
     case 'tool':

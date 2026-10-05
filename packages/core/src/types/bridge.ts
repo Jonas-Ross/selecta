@@ -97,6 +97,19 @@ export type TrackSignalResult<State> = {
   preWriteTracks: State[];
 };
 
+// Measured ~12ms per track on a real library, so a batch stays under a second
+// and newly shown records never queue behind a long read.
+export const ARTWORK_BATCH_LIMIT = 40;
+
+// Music.app's track persistent ID. Artwork reads splice it into AppleScript
+// source, so nothing else may reach them.
+export const TRACK_PERSISTENT_ID = /^[0-9A-F]{16}$/;
+
+// Per requested track ID: the file name written into the caller's directory
+// (`<ID>.jpg` or `<ID>.png`), null when the track has no readable artwork, or
+// why the read failed for another reason.
+export type ArtworkReadResult = Record<string, string | null | { error: string }>;
+
 export interface Bridge {
   // Explicit UI navigation only; full live order must match, including repeats.
   openPreview(input: { expectedTrackIds: string[] }): Promise<{
@@ -188,4 +201,8 @@ export interface Bridge {
     trackIds: string[];
     rating: number;
   }): Promise<TrackSignalResult<TrackRatingState>>;
+
+  // Read-only. Writes each track's first artwork into `dir` (absolute, must
+  // exist). At most 40 unique 16-hex IDs; a miss is null, never a batch failure.
+  readArtwork(trackIds: string[], dir: string): Promise<ArtworkReadResult>;
 }

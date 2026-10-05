@@ -1,0 +1,152 @@
+/* Home and Brief: one centred column on the hairline grid. */
+.page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s7) var(--s5);
+  background:
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / var(--grid-step) var(--grid-step),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / var(--grid-step) var(--grid-step),
+    var(--bg);
+}
+.column {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  animation: rise var(--t-slow) var(--ease-out) both;
+}
+.page-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line3);
+}
+.page-head h1 {
+  font: 800 var(--fs-hero) / 1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.015em;
+}
+.page-head .count {
+  margin-left: auto;
+  font-size: var(--fs-small);
+  color: var(--ink3);
+}
+
+.drafts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.drafts button {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s4);
+  padding: 14px var(--s2);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  border-radius: 0;
+  transition: background var(--t-fast);
+}
+.drafts button:hover {
+  background: var(--bg2);
+}
+.drafts button:hover .draft-name {
+  color: var(--white);
+}
+.draft-name {
+  flex: 1;
+  min-width: 0;
+  font: 700 var(--fs-title) / 1.2 var(--display);
+  font-stretch: 125%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draft-meta {
+  font: 400 var(--fs-small) var(--mono);
+  color: var(--ink3);
+  white-space: nowrap;
+}
+.draft-meta .saved {
+  color: var(--uv-text);
+}
+.draft-meta.working {
+  color: var(--uv-text);
+}
+.draft-meta.error {
+  color: var(--danger);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+  padding: var(--s6) 0;
+  color: var(--ink2);
+}
+.empty b {
+  font: 700 var(--fs-title) var(--display);
+  font-stretch: 125%;
+  color: var(--ink);
+}
+.empty .btn {
+  margin-top: var(--s2);
+}
+
+/* The brief form. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field-label {
+  font: 400 var(--fs-label) var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.field textarea,
+.field input {
+  width: 100%;
+  padding: var(--s3) 14px;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-title);
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  transition: border-color var(--t-mid);
+}
+.field input {
+  height: 40px;
+  padding: 0 var(--s3);
+  font: 400 var(--fs-title) var(--mono);
+}
+.field textarea:focus,
+.field input:focus {
+  border-color: var(--uv-line);
+}
+.field ::placeholder {
+  color: var(--ink4);
+}
+.fields {
+  display: grid;
+  grid-template-columns: 160px 200px;
+  gap: var(--s4);
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+.brief .hint {
+  font-size: var(--fs-small);
+  color: var(--ink4);
+  text-align: right;
+}
