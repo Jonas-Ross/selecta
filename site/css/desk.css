@@ -1,0 +1,149 @@
+.desk {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: clamp(60px, 10vw, 140px) var(--gutter);
+  scroll-margin-top: 40px;
+}
+.desk-head {
+  display: grid;
+  gap: 18px;
+  margin-bottom: clamp(32px, 5vw, 56px);
+}
+.desk-head h2 {
+  font-size: clamp(2.6rem, 6.4vw, 6rem);
+  line-height: 0.98;
+  font-weight: 800;
+}
+.desk-head p {
+  max-width: 46ch;
+  font-size: clamp(1.05rem, 1.3vw, 1.22rem);
+  color: var(--ink-2);
+}
+/* The app's own graphite, so the screenshots sit in a window that matches them. */
+.window {
+  margin: 0;
+  border-radius: clamp(12px, 1.6vw, 20px);
+  overflow: hidden;
+  background: #0a0c10;
+  border: 1px solid rgba(150, 170, 210, 0.14);
+  box-shadow:
+    0 60px 120px -40px rgba(0, 0, 0, 0.95),
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 -1px 0 0 rgba(196, 210, 245, 0.18) inset;
+}
+/* The app's inset title bar leaves room for the traffic lights, at its 1440px width. */
+.lights {
+  position: absolute;
+  z-index: 1;
+  top: calc(100cqi * 18 / 1440);
+  left: calc(100cqi * 18 / 1440);
+  display: flex;
+  gap: calc(100cqi * 8 / 1440);
+}
+.lights i {
+  width: calc(100cqi * 12 / 1440);
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+.lights i:nth-child(1) {
+  background: #ff5f57;
+}
+.lights i:nth-child(2) {
+  background: #febc2e;
+}
+.lights i:nth-child(3) {
+  background: #28c840;
+}
+.views {
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: #12161e;
+  border: 1px solid rgba(150, 170, 210, 0.14);
+}
+.views button {
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--mute);
+  font: 500 13px/1 var(--body);
+  cursor: pointer;
+}
+.views button[aria-pressed='true'] {
+  background: var(--uv);
+  color: var(--on-uv);
+}
+.views button:focus-visible {
+  outline: 2px solid var(--acid);
+  outline-offset: 2px;
+}
+.screens {
+  position: relative;
+  display: grid;
+  container-type: inline-size;
+}
+.screen {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: auto;
+  display: block;
+  opacity: 0;
+  transition: opacity 0.5s var(--ease);
+}
+.screen.on {
+  opacity: 1;
+}
+.window-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 10px 12px 10px 16px;
+  border-top: 1px solid rgba(150, 170, 210, 0.075);
+}
+.window figcaption {
+  font: 400 12px/1.4 var(--mono);
+  color: var(--mute);
+}
+.desk-points {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(20px, 3vw, 40px);
+  margin: clamp(36px, 5vw, 56px) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+}
+.desk-points b {
+  display: block;
+  margin-bottom: 6px;
+  font: 700 1.1rem/1.2 var(--display);
+  color: var(--ink);
+}
+.desk-fine {
+  margin-top: clamp(28px, 4vw, 44px);
+  max-width: 60ch;
+  font-size: 14px;
+  color: var(--mute);
+}
+.desk-fine code {
+  font: 400 13px var(--mono);
+  color: var(--ink-2);
+}
+@media (max-width: 960px) {
+  .desk-points {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .desk-points {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .screen {
+    transition: none;
+  }
+}

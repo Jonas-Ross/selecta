@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="css/machine.css" />
     <link rel="stylesheet" href="css/story.css" />
     <link rel="stylesheet" href="css/deck.css" />
+    <link rel="stylesheet" href="css/desk.css" />
     <link rel="stylesheet" href="css/rules.css" />
     <link rel="stylesheet" href="css/get.css" />
     <link rel="stylesheet" href="css/footer.css" />
@@ -32,6 +33,7 @@
     <link rel="modulepreload" href="js/audio.js" />
     <link rel="modulepreload" href="js/camelot.js" />
     <link rel="modulepreload" href="js/deck.js" />
+    <link rel="modulepreload" href="js/desk.js" />
     <link rel="modulepreload" href="js/dom.js" />
     <link rel="modulepreload" href="js/engine.js" />
     <link rel="modulepreload" href="js/hero.js" />
@@ -68,6 +70,7 @@
       <nav aria-label="Sections">
         <a href="#how">How it works</a>
         <a href="#try">Try it</a>
+        <a href="#app">The app</a>
       </nav>
       <a class="nav-cta" href="https://github.com/Jonas-Ross/selecta">GitHub</a>
     </header>
@@ -359,6 +362,70 @@
         </div>
       </section>
 
+      <section class="desk" id="app" aria-labelledby="desk-title">
+        <div class="desk-head">
+          <h2 id="desk-title">Dig at the desk.</h2>
+          <p>
+            Selecta is a Mac app too. Brief your AI and the set lands on a rail, with its tempo and
+            key drawn underneath. Flip through your crate, drag records in, and hear it in Music
+            before anything is saved.
+          </p>
+        </div>
+
+        <figure class="window">
+          <div class="screens">
+            <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <img
+              class="screen on"
+              data-view="dig"
+              src="media/app-dig.avif"
+              alt="Selecta's Dig screen: the crate of records above, the draft on a rail with its tempo and key lanes, and the assistant's notes beside it."
+              width="1800"
+              height="1125"
+              loading="lazy"
+              decoding="async"
+            /><img
+              class="screen"
+              data-view="listen"
+              src="media/app-listen.avif"
+              alt="Selecta's Listen screen: the record playing in Music, its tempo and key, the join into the next record, and the draft's rail below."
+              width="1800"
+              height="1125"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+          <div class="window-foot">
+            <figcaption>The real app, on a made-up library.</figcaption>
+            <div class="views" role="group" aria-label="Screen">
+              <button type="button" data-view="dig" aria-pressed="true">Dig</button>
+              <button type="button" data-view="listen" aria-pressed="false">Listen</button>
+            </div>
+          </div>
+        </figure>
+
+        <ul class="desk-points">
+          <li>
+            <b>The crate.</b> Your library as records in a bin. Flip through, read the facts, drag
+            one onto the set.
+          </li>
+          <li>
+            <b>The rail.</b> Every join says its tempo step and key move in plain words. Never a
+            score.
+          </li>
+          <li>
+            <b>Listen.</b> Music plays the draft, AutoMix and all, and your edits follow along.
+          </li>
+          <li>
+            <b>Save is yours.</b> The AI can shape the draft. Only your button writes to Music.
+          </li>
+        </ul>
+        <p class="desk-fine">
+          Early days: the app runs from source with <code>npm run desktop</code>, and its assistant
+          runs on your Claude Code login.
+        </p>
+      </section>
+
       <section class="rules" aria-label="House rules">
         <div class="rule">
           <p class="big-line">Your music stays on your Mac.</p>
@@ -407,6 +474,10 @@ node dist/index.js setup --apply</code></pre>
               <code>setup</code> registers Selecta with Claude Desktop and Claude Code. Any other
               MCP client can run <code>node /absolute/path/to/selecta/dist/index.js</code> as a
               stdio server.
+            </p>
+            <p>
+              For the Mac app, run <code>npm run desktop</code> in the selecta folder. It needs the
+              Claude Code CLI, signed in.
             </p>
             <p>
               Apple allows about 20 preview lookups a minute, so a big library takes a few hours to
