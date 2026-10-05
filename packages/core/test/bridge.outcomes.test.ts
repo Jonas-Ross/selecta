@@ -258,8 +258,114 @@ describe('track ID list boundary', () => {
   );
 });
 
+describe('player boundary', () => {
+  const now = {
+    running: true,
+    state: 'playing',
+    track: { persistentId: 'A', duration: 300 },
+    position: 12.5,
+    index: 3,
+    playlist: { persistentId: 'P', name: 'Selecta Preview' },
+  };
+
+  it('passes a validated player read through, closed Music.app included', async () => {
+    vi.mocked(runJxa).mockResolvedValueOnce(now).mockResolvedValueOnce({ running: false });
+    await expect(bridge.readPlayer()).resolves.toEqual(now);
+    await expect(bridge.readPlayer()).resolves.toEqual({ running: false });
+  });
+
+  it.each([{ running: true }, { running: true, state: 'playing', index: 0 }, { running: 'no' }])(
+    'rejects a malformed player read %j',
+    async (payload) => {
+      vi.mocked(runJxa).mockResolvedValue(payload);
+      await expect(bridge.readPlayer()).rejects.toMatchObject({ errorCode: 'jxa_error' });
+    },
+  );
+
+  it('reports a resume Music.app swallowed', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ stillPaused: true });
+    await expect(
+      bridge.controlPlayer({ action: 'resume', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'jxa_error' });
+  });
+
+  it('refuses to resume once shuffle is on', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ shuffled: true });
+    await expect(
+      bridge.controlPlayer({ action: 'resume', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'validation_error' });
+  });
+
+  it('refuses a resume once the preview order has drifted', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ orderDrifted: true });
+    await expect(
+      bridge.controlPlayer({
+        action: 'resume',
+        on: { playlistId: 'P', index: 1, trackId: 'T' },
+        expectedTrackIds: ['T'],
+      }),
+    ).rejects.toMatchObject({ errorCode: 'preview_conflict' });
+  });
+
+  it('reports a pause Music.app ignored, so a stop never detaches over playback', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ stillPlaying: true });
+    await expect(
+      bridge.controlPlayer({ action: 'pause', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'jxa_error' });
+  });
+
+  it('refuses a control on an ambiguous preview', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ ambiguousPreview: true });
+    await expect(
+      bridge.controlPlayer({ action: 'pause', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'validation_error' });
+  });
+
+  it.each([{ elsewhere: true }, { seekMissed: true }])(
+    'refuses a control that did not land: %j',
+    async (payload) => {
+      vi.mocked(runJxa).mockResolvedValue(payload);
+      await expect(
+        bridge.controlPlayer({ action: 'pause', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+      ).rejects.toMatchObject({ errorCode: 'preview_conflict' });
+    },
+  );
+
+  it.each([
+    [{ playlistNotFound: true }, 'playlist_not_found'],
+    [{ ambiguousPreview: true }, 'validation_error'],
+    [{ notEditable: true }, 'playlist_not_editable'],
+    [{ orderDrifted: true }, 'preview_conflict'],
+    [{ stepMissed: true }, 'preview_conflict'],
+    [{ shuffled: true }, 'validation_error'],
+    [{ seekMissed: true }, 'preview_conflict'],
+    [{ leftPlaying: true }, 'jxa_error'],
+    [{ stillPaused: true }, 'jxa_error'],
+    [{ playlistId: 'P', player: { running: 'no' } }, 'jxa_error'],
+  ])('maps a refused play %j', async (payload, errorCode) => {
+    vi.mocked(runJxa).mockResolvedValue(payload);
+    await expect(
+      bridge.playPreview({ expectedTrackIds: ['A', 'B'], index: 0 }),
+    ).rejects.toMatchObject({ errorCode });
+  });
+
+  it('returns what Music.app is playing after a play', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ playlistId: 'P', player: now });
+    await expect(
+      bridge.playPreview({ expectedTrackIds: ['B', 'B', 'A'], index: 2 }),
+    ).resolves.toEqual({ playlistId: 'P', player: now });
+  });
+});
+
 describe('guarded preview navigation', () => {
   const invoke = () => bridge.openPreview({ expectedTrackIds: ['A', 'B', 'A'] });
+
+  it('refuses a control once Music.app has moved off the entry', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ elsewhere: true });
+    await expect(
+      bridge.controlPlayer({ action: 'pause', on: { playlistId: 'P', index: 1, trackId: 'T' } }),
+    ).rejects.toMatchObject({ errorCode: 'preview_conflict' });
+  });
 
   it.each([
     [{ playlistNotFound: true }, 'playlist_not_found'],

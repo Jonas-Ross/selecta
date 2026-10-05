@@ -1,0 +1,85 @@
+/* The sleeve back: facts, the join into the next record, the key wheel. */
+.sleeve-back {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s4) var(--s5) var(--s5);
+  border-left: 1px solid var(--line2);
+  background: var(--bg1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line3) transparent;
+}
+.sleeve-back .facts {
+  margin-top: 0;
+}
+.ls-lab {
+  display: block;
+  margin: var(--s4) 0 var(--s2);
+  font: 400 var(--fs-tiny) var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.next {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: var(--s3);
+  align-items: center;
+}
+.next .sleeve {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+.next .sleeve-title {
+  display: none;
+}
+.next b {
+  display: block;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.next span {
+  display: block;
+  font-size: var(--fs-small);
+  color: var(--ink3);
+}
+.joinbox {
+  margin: var(--s3) 0 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line2);
+  border-bottom: 1px solid var(--line2);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  font-size: var(--fs-ui);
+}
+.joinbox dt {
+  font: 400 var(--fs-label) var(--mono);
+  color: var(--ink3);
+  padding-top: 2px;
+}
+.joinbox dd .mono {
+  color: var(--ink2);
+  font-size: var(--fs-meta);
+}
+.joinbox .prov {
+  margin-left: 6px;
+}
+.hj {
+  margin-top: var(--s3);
+}
+.hj .btn {
+  width: 100%;
+  height: 34px;
+  justify-content: center;
+}
+.hj p,
+.sleeve-back .last {
+  margin-top: 7px;
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+  color: var(--ink3);
+}

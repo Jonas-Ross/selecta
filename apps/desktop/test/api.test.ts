@@ -6,8 +6,8 @@ import { createApi } from '../src/host/api.js';
 import type { AgentSessions } from '../src/host/agent.js';
 
 const base = makeToolDeps();
-const local = new DraftStore(base.drafts!().path, { localOnly: true });
-const deps = { ...base, drafts: () => local };
+const store = new DraftStore(base.drafts!().path);
+const deps = { ...base, drafts: () => store };
 const agent = {
   start: vi.fn(),
   send: vi.fn(),
@@ -74,17 +74,17 @@ it('rejects anything outside the method table', async () => {
   await expect(call('drafts.delete', undefined)).rejects.toThrow('Unknown method');
 });
 
-it('keeps a draft linked to the Music preview read-only for the user and Claude', async () => {
+it('lets the user edit a draft linked to the Music preview, but not Claude', async () => {
   const draftId = randomUUID();
-  const store = base.drafts!();
 
   store.create(draftId, 'Linked', ['T-TEARDROP', 'T-ROADS']);
   store.claimPreview(draftId, 1, true);
 
-  const linked = /linked to the Selecta Preview playlist/;
+  const linked = /plays through the Selecta Preview playlist/;
 
   expect(await call('drafts.edit', { draft_id: draftId, revision: 1, name: 'x' })).toMatchObject({
-    error: 'preview_conflict',
+    local_edit_saved: true,
+    draft: { revision: 2 },
   });
   await call('agent.start', { draft_id: draftId, brief: 'go' });
   await call('agent.send', { draft_id: draftId, message: 'go', text: 'typed' });
@@ -92,7 +92,6 @@ it('keeps a draft linked to the Music preview read-only for the user and Claude'
   expect(agent.refuse).toHaveBeenCalledWith(draftId, 'typed', expect.stringMatching(linked));
   expect(agent.start).not.toHaveBeenCalled();
   expect(agent.send).not.toHaveBeenCalled();
-  expect(store.get(draftId).revision).toBe(1);
 });
 
 it('fills the crate newest first, or by relevance to a search, with provenance', async () => {

@@ -1,6 +1,6 @@
-// The draft screen: the rail, Claude's panel, and Save. Every edit goes
-// through one queue (`edits.ts`); the rail only shows the order a queued edit
-// will write until that edit settles.
+// The draft screen: the crate or Listen above the rail, the player bar, Claude's
+// panel, and Save. Every edit goes through one queue (`edits.ts`); the rail
+// only shows the order a queued edit will write until that edit settles.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { selecta } from '../api.js';
@@ -8,6 +8,8 @@ import { onArtworkFailure, retryArtwork } from '../artwork.js';
 import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
 import { useReducedMotion } from '../hooks/motion.js';
+import { useListen } from '../hooks/useListen.js';
+import { transportHeld } from '../listen.js';
 import { withMoved } from '../reorder.js';
 import {
   bpmSpan,
@@ -28,10 +30,15 @@ import {
 import { ClaudePanel } from './ClaudePanel.js';
 import { Crate, type CrateTrack } from './Crate.js';
 import { Flight, type FlightPlan } from './Flight.js';
+import { Listen } from './Listen.js';
 import { Rail, type Opening, type RailHandle } from './Rail.js';
 import { Rolling } from './Rolling.js';
 import { SaveConfirm, type SavePhase } from './SaveConfirm.js';
 import { TopBar } from './TopBar.js';
+import { Transport } from './Transport.js';
+
+// Preview states that mean Music.app may not hold what the draft says.
+const OUT_OF_STEP = new Set(['pending', 'out_of_date', 'conflict', 'error', 'uncertain']);
 
 type Current = NonNullable<DraftView['draft']>;
 
@@ -76,6 +83,7 @@ export function Draft({
   const [opening, setOpening] = useState<Opening>();
   const [flight, setFlight] = useState<FlightPlan & { at: number }>();
   const [added, setAdded] = useState('');
+  const [tab, setTab] = useState<'dig' | 'listen'>('dig');
 
   const load = useCallback(
     () =>
@@ -98,16 +106,35 @@ export function Draft({
   const items = pendingOrder(rows(view ?? {}), pending);
   const saved = draft?.save !== undefined;
   const linked = previewLinked(view ?? {});
-  const locked = saved || linked || saving || leaving;
+  const locked = saved || saving || leaving;
   const sum = totals(items);
   const inDraft = useMemo(() => new Set(items.map((row) => row.track_id)), [items]);
-  // One record in the air at a time, so each lands in the gap held for it.
-  const canAdd = draft !== undefined && !locked && flight === undefined;
   // A record in the air is an edit not yet queued, so Save and Home wait for it to land.
   const airborne = flight !== undefined;
-  // The rail holds a gap for the flying record at a fixed slot, so nothing else moves until it lands.
-  const railLocked = locked || airborne;
   const span = bpmSpan(items);
+  // Not while Claude runs: linking the draft mid-run would refuse its edits partway through.
+  const canPlay =
+    draft !== undefined && !working && !saving && !leaving && !airborne && phase === 'closed';
+  const listen = useListen({
+    draftId,
+    items,
+    latest: () => latest.current,
+    queue,
+    // Linked, Music may be playing this draft whatever the tab, after a remount or mid-sync too.
+    // Not before the draft exists, since the state read needs it.
+    watching: draft !== undefined && (tab === 'listen' || linked),
+    linked,
+    canPlay,
+  });
+  const { player } = listen;
+  // An edit syncs the preview under the music lock a player action holds, and a first play links it mid-flight.
+  const playerHeld = listen.busy;
+  const held = transportHeld(listen.busy, linked, pending);
+  // One record in the air at a time, so each lands in the gap held for it.
+  const canAdd = draft !== undefined && !locked && !airborne && !playerHeld;
+  // The rail holds a gap for the flying record at a fixed slot, so nothing else moves until it lands.
+  const railLocked = locked || airborne || playerHeld;
+  const outOfStep = linked && OUT_OF_STEP.has(view?.preview?.status ?? '');
 
   // Live revisions keep arriving from Claude; don't overwrite a name being typed.
   useEffect(() => {
@@ -237,7 +264,7 @@ export function Draft({
     });
   }
 
-  function toggle(entryId: string) {
+  function toggleSelected(entryId: string) {
     setSelected((current) => {
       const next = new Set(current);
 
@@ -321,9 +348,8 @@ export function Draft({
   }
 
   // Why the rail is locked, in the head where the drag hint would be.
-  const lock = linked
-    ? 'Read-only while linked'
-    : phase === 'confirm'
+  const lock =
+    phase === 'confirm'
       ? 'Locked while you confirm the save'
       : saving
         ? 'Saving to Music'
@@ -331,7 +357,9 @@ export function Draft({
           ? `${saveLabel(draft?.save)}, so the order is fixed here`
           : leaving
             ? 'Finishing your edits'
-            : undefined;
+            : playerHeld
+              ? 'Waiting for Music.app'
+              : undefined;
 
   return (
     <div className="screen-draft">
@@ -372,7 +400,7 @@ export function Draft({
           <SaveConfirm
             phase={phase}
             label={saving && phase !== 'confirm' ? 'Saving…' : saveLabel(draft?.save)}
-            disabled={!draft || locked || working || airborne}
+            disabled={!draft || locked || working || airborne || playerHeld}
             done={saved}
             name={draft?.name ?? ''}
             tracks={sum.tracks}
@@ -385,17 +413,43 @@ export function Draft({
       />
       <div className="draft-body">
         <section className="draft-main" aria-label="Draft">
-          <Crate
-            inDraft={inDraft}
-            canAdd={canAdd}
-            lockedReason={
-              lock ?? (draft ? 'One record at a time' : 'The draft is still being built')
-            }
-            onAdd={add}
-            onCarry={carry}
-            onCarryEnd={() => setOpening(undefined)}
-          />
+          {tab === 'listen' ? (
+            <Listen
+              items={items}
+              now={listen.now}
+              playing={listen.playing}
+              current={listen.current}
+              status={listen.status}
+              joinDisabled={!canPlay || held || !listen.canJoin}
+              onJoin={listen.join}
+            />
+          ) : (
+            <Crate
+              inDraft={inDraft}
+              canAdd={canAdd}
+              lockedReason={
+                lock ?? (draft ? 'One record at a time' : 'The draft is still being built')
+              }
+              onAdd={add}
+              onCarry={carry}
+              onCarryEnd={() => setOpening(undefined)}
+            />
+          )}
           <div className="draft-head">
+            <div className="modes" role="tablist" aria-label="Above the draft">
+              {(['dig', 'listen'] as const).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === name}
+                  className={tab === name ? 'mode on' : 'mode'}
+                  onClick={() => setTab(name)}
+                >
+                  {name === 'dig' ? 'Dig' : 'Listen'}
+                </button>
+              ))}
+            </div>
             <h2>The draft</h2>
             {draft && (
               <span className="totals mono">
@@ -422,14 +476,23 @@ export function Draft({
                   <path d="M3 4.5V3a2 2 0 0 1 4 0v1.5" />
                 </svg>
               )}
-              {lock ?? 'Drag to reorder · Alt + arrows on a focused record · Delete removes'}
+              {lock ??
+                (tab === 'listen'
+                  ? 'Click a record to play it · drag to reorder'
+                  : 'Drag to reorder · Alt + arrows on a focused record · Delete removes')}
             </span>
           </div>
-          {linked && (
-            <p className="notice bar">
-              This draft is linked to the Selecta Preview playlist in Music, so it's read-only here.
-              Detach the preview where you started it to edit.
+          {outOfStep && (
+            <p className="notice bar error">
+              Selecta Preview in Music may not match this draft ({view?.preview?.status}). Stop
+              listening to release it, then press play to load it again.
             </p>
+          )}
+          {player.problem && (
+            <button type="button" className="notice bar dismiss" onClick={player.dismiss}>
+              Music.app: {player.problem}
+              <span className="mono">dismiss</span>
+            </button>
           )}
           {notice && (
             <button
@@ -458,7 +521,13 @@ export function Draft({
             items={items}
             selected={selected}
             locked={railLocked}
-            onToggle={toggle}
+            onToggle={
+              tab === 'listen'
+                ? (entryId) => listen.cue(items.findIndex((row) => row.entry_id === entryId))
+                : toggleSelected
+            }
+            pickVerb={tab === 'listen' ? 'plays it' : 'selects'}
+            now={listen.current ? listen.nowRow?.entry_id : undefined}
             onClear={() => setSelected(new Set())}
             onMove={reorder}
             onRemove={remove}
@@ -480,6 +549,29 @@ export function Draft({
               </div>
             }
           />
+          <Transport
+            row={listen.nowRow}
+            index={listen.now}
+            count={items.length}
+            playing={listen.playing}
+            position={listen.position}
+            duration={listen.duration}
+            set={{
+              ...listen.setTime,
+              total: listen.whole.elapsed,
+              totalPartial: listen.whole.partial,
+            }}
+            disabled={!canPlay || held}
+            canPrev={listen.canPrev}
+            canNext={listen.now + 1 < items.length}
+            onToggle={listen.toggle}
+            onPrev={listen.prev}
+            onNext={listen.next}
+            onSeek={listen.current ? player.seek : undefined}
+            onOpen={tab === 'listen' ? undefined : () => setTab('listen')}
+            onStop={linked ? listen.stop : undefined}
+            stopDisabled={held || saving}
+          />
         </section>
         <p className="sr" aria-live="polite">
           {added}
@@ -497,9 +589,9 @@ export function Draft({
           log={log}
           working={working}
           hasDraft={draft !== undefined}
-          locked={locked}
+          locked={locked || linked || listen.busy}
           selected={items.filter((row) => selected.has(row.entry_id))}
-          onUnselect={toggle}
+          onUnselect={toggleSelected}
           onSend={send}
           onStop={() => selecta.call('agent.cancel', { draft_id: draftId })}
         />

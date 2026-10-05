@@ -57,6 +57,11 @@ import {
 } from './scripts/edit_playlist.js';
 import { buildSetLovedScript, buildSetRatingScript } from './scripts/track_signal.js';
 import { buildReadArtworkScript } from './scripts/read_artwork.js';
+import {
+  buildControlPlayerScript,
+  buildPlayPreviewScript,
+  buildReadPlayerScript,
+} from './scripts/player.js';
 import { BridgeError, preWriteError } from '../types/errors.js';
 import {
   type ArtworkReadResult,
@@ -190,6 +195,131 @@ export const bridge: Bridge = {
       await runJxa(buildSetRatingScript(input), schemas.ratingResult),
       input.trackIds,
     );
+  },
+  async readPlayer() {
+    return runJxa(buildReadPlayerScript(), schemas.player);
+  },
+  async controlPlayer(input) {
+    const result = await runJxa(buildControlPlayerScript(input), schemas.controlPlayer);
+
+    if ('ambiguousPreview' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Selecta Preview is ambiguous.',
+        'Multiple playlists have the reserved name. Ask the user which copy to keep. Nothing was changed.',
+      );
+
+    if ('elsewhere' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'Music.app has moved off that record.',
+        'Nothing was changed. Read the player again before controlling it.',
+      );
+
+    if ('orderDrifted' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        "Selecta Preview's order no longer matches the draft.",
+        'Nothing was resumed. Play the draft again to reload it.',
+      );
+
+    if ('seekMissed' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'Music.app did not move to that position.',
+        'Read the player again before seeking.',
+      );
+
+    if ('shuffled' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Shuffle is on in Music.app.',
+        'Turn shuffle off in Music so it plays the draft in order. Nothing was resumed.',
+      );
+
+    if ('stillPaused' in result)
+      throw new BridgeError(
+        'jxa_error',
+        'Music.app did not start playing.',
+        'An open Music Settings window can swallow play commands. Close it, then play again.',
+      );
+
+    if ('stillPlaying' in result)
+      throw new BridgeError(
+        'jxa_error',
+        'Music.app would not pause.',
+        'Pause Music, then try again.',
+      );
+
+    return result;
+  },
+  async playPreview(input) {
+    const result = await runJxa(buildPlayPreviewScript(input), schemas.playPreview);
+
+    if ('playlistNotFound' in result)
+      throw new BridgeError(
+        'playlist_not_found',
+        'Selecta Preview does not exist.',
+        'Load the draft into Selecta Preview before playing it.',
+      );
+
+    if ('ambiguousPreview' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Selecta Preview is ambiguous.',
+        'Multiple playlists have the reserved name. Ask the user which copy to keep. Nothing was played.',
+      );
+
+    if ('notEditable' in result)
+      throw new BridgeError(
+        'playlist_not_editable',
+        'Selecta Preview is not a plain user playlist.',
+        'The reserved name belongs to an unsupported playlist. Nothing was played.',
+      );
+
+    if ('orderDrifted' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'Selecta Preview differs from this draft.',
+        'The preview changed in Music.app. Nothing was played.',
+      );
+
+    if ('shuffled' in result)
+      throw new BridgeError(
+        'validation_error',
+        'Shuffle is on in Music.app.',
+        'Turn shuffle off in Music so it plays the draft in order. Nothing was played.',
+      );
+
+    if ('stillPaused' in result)
+      throw new BridgeError(
+        'jxa_error',
+        'Music.app did not start playing.',
+        'An open Music Settings window can swallow play commands. Close it, then play again.',
+      );
+
+    if ('leftPlaying' in result)
+      throw new BridgeError(
+        'jxa_error',
+        'Music.app would not pause after a failed start.',
+        'Pause Music, then play again.',
+      );
+
+    if ('seekMissed' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'Music.app did not move to that position.',
+        'Music was paused. Play again.',
+      );
+
+    if ('stepMissed' in result)
+      throw new BridgeError(
+        'preview_conflict',
+        'Music.app did not reach that record in Selecta Preview.',
+        'Music was paused. Play again.',
+      );
+
+    return result;
   },
   async readArtwork(trackIds, dir): Promise<ArtworkReadResult> {
     const unique = [...new Set(trackIds)];

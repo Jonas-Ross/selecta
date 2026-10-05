@@ -3,6 +3,7 @@
 // ends honest at compile time.
 import type { toInspectedTrack } from '@selecta/core/domain/track_projections.js';
 import type { DraftSummary } from '@selecta/core/drafts/store.js';
+import type { PlaybackView } from '@selecta/core/operations/playback.js';
 import type { ArtworkReadResult } from '@selecta/core/types/bridge.js';
 
 export type { DraftSummary };
@@ -14,6 +15,8 @@ export type Crate = { tracks: CrateTrack[]; total: number; order: 'recently_adde
 
 /** A cached thumbnail's file name, null when the track has no artwork, or why it couldn't be read. */
 export type ArtworkAnswer = ArtworkReadResult[string];
+
+export type PlayerView = PlaybackView;
 
 export type Methods = {
   'library.crate': (args: { query?: string }) => Crate;
@@ -29,6 +32,17 @@ export type Methods = {
   'agent.send': (args: { draft_id: string; message: string; text?: string }) => void;
   'agent.cancel': (args: { draft_id: string }) => void;
   'agent.history': () => Record<string, RunSnapshot>;
+  'player.state': (args: { draft_id: string }) => PlayerView;
+  'player.play': (args: {
+    draft_id: string;
+    revision: number;
+    entry_id: string;
+    position?: number;
+  }) => PlayerView;
+  'player.pause': (args: { draft_id: string }) => PlayerView;
+  'player.resume': (args: { draft_id: string }) => PlayerView;
+  'player.seek': (args: { draft_id: string; position: number }) => PlayerView;
+  'player.detach': (args: { draft_id: string; revision: number }) => void;
 };
 
 export type Method = keyof Methods;

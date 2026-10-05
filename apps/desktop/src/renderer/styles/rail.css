@@ -535,3 +535,43 @@
   font-stretch: 125%;
   color: var(--ink);
 }
+/* Dig and Listen, as tabs in the draft's head. */
+.modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line2);
+  border-radius: var(--r-md);
+  align-self: center;
+}
+.mode {
+  height: 22px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  font: 600 var(--fs-label) var(--body);
+  letter-spacing: 0.04em;
+  color: var(--ink3);
+  transition:
+    color var(--t-fast),
+    background var(--t-fast);
+}
+.mode:hover {
+  color: var(--ink);
+}
+.mode.on {
+  background: var(--bg3);
+  color: var(--ink);
+}
+
+/* The record Music.app is playing wears an acid line under it. */
+.rec.now .rec-body::after {
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: -7px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--acid);
+  box-shadow: 0 0 10px rgba(214, 255, 58, 0.5);
+}
