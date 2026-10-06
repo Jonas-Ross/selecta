@@ -51,7 +51,7 @@ node dist/index.js status
 node dist/index.js doctor
 ```
 
-Three maintenance commands rewrite stored features. Each is a dry run that reports what it would change, per source, until you add `--apply`, and journals every row it touches first so `restore` can put it back. [`docs/destructive-commands.md`](docs/destructive-commands.md) has the details.
+Three maintenance commands rewrite stored features. Each is a dry run that reports what it would change, per source, until you add `--apply`, and journals every row it overwrites or removes first so `restore` can put it back. Undoing a `restore` itself can't remove a row it re-added; [`docs/destructive-commands.md`](docs/destructive-commands.md) has that gap and the rest of the details.
 
 | Command | Use |
 |---|---|
