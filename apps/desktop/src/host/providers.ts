@@ -59,7 +59,9 @@ export type AgentProvider = {
   /** A run's line parser; it may keep state across one run's lines. */
   parser: () => (line: string) => AgentEvent[];
   /** Exits 0 when the CLI is signed in. */
-  loginCheck?: string[];
+  loginCheck: string[];
+  /** What to run to sign in, for the brief to show. */
+  login: string;
 };
 
 export const claude: AgentProvider = {
@@ -91,6 +93,8 @@ export const claude: AgentProvider = {
     ...(turn.resume ? ['--resume', turn.resume] : ['--session-id', turn.newSessionId]),
   ],
   parser: () => parseStreamLine,
+  loginCheck: ['auth', 'status'],
+  login: 'claude auth login',
 };
 
 // Codex has no "no built-in tools" switch, so each tool feature is turned off
@@ -157,6 +161,7 @@ export const codex: AgentProvider = {
   ],
   parser: parseCodexLine,
   loginCheck: ['login', 'status'],
+  login: 'codex login',
 };
 
 export const PROVIDERS: Record<ProviderId, AgentProvider> = { claude, codex };

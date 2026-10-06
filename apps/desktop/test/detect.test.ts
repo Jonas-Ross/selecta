@@ -2,30 +2,44 @@ import { expect, it } from 'vitest';
 import { detectProviders } from '../src/host/detect.js';
 import { claude, codex } from '../src/host/providers.js';
 
-it('offers an installed, signed-in CLI and says why the others cannot run', async () => {
-  const calls: string[] = [];
-  const execFile = (
-    file: string,
-    args: string[],
-    _options: unknown,
-    done: (error: (Error & { code?: unknown }) | null) => void,
-  ) => {
-    calls.push(`${file} ${args.join(' ')}`);
+type Done = (error: (Error & { code?: unknown }) | null) => void;
 
-    if (file === 'claude')
-      done(Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' }));
-    else if (args[0] === 'login') done(Object.assign(new Error('Not logged in'), { code: 1 }));
-    else done(null);
+const fail = (message: string, code: unknown) => Object.assign(new Error(message), { code });
+
+it('offers only installed, signed-in CLIs and says why the others cannot run', async () => {
+  const calls: string[] = [];
+  const answers: Record<string, Error | null> = {
+    'claude --version': null,
+    'claude auth status': fail('Not logged in', 1),
+    '/opt/codex --version': null,
+    '/opt/codex login status': null,
+  };
+  const execFile = (file: string, args: string[], _options: unknown, done: Done) => {
+    const call = `${file} ${args.join(' ')}`;
+
+    calls.push(call);
+    done(answers[call] ?? null);
   };
 
   expect(await detectProviders([claude, codex], { codex: '/opt/codex' }, execFile)).toEqual([
-    { id: 'claude', label: 'Claude', ready: false, problem: claude.missing },
     {
-      id: 'codex',
-      label: 'Codex',
+      id: 'claude',
+      label: 'Claude',
       ready: false,
-      problem: 'Sign in first: run codex login in a terminal.',
+      problem: 'Sign in first: run claude auth login in a terminal.',
     },
+    { id: 'codex', label: 'Codex', ready: true },
   ]);
-  expect(calls).toEqual(['claude --version', '/opt/codex --version', '/opt/codex login status']);
+  expect(calls).toEqual([
+    'claude --version',
+    '/opt/codex --version',
+    'claude auth status',
+    '/opt/codex login status',
+  ]);
+
+  answers['/opt/codex --version'] = fail('spawn /opt/codex ENOENT', 'ENOENT');
+
+  expect((await detectProviders([codex], { codex: '/opt/codex' }, execFile))[0].problem).toBe(
+    codex.missing,
+  );
 });

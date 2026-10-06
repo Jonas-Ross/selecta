@@ -22,27 +22,29 @@ export async function detectProviders(
   execFile: ExecFile = nodeExecFile as ExecFile,
 ): Promise<ProviderStatus[]> {
   return Promise.all(
-    providers.map(async ({ id, label, bin, missing, loginCheck }): Promise<ProviderStatus> => {
-      const file = paths[id] ?? bin;
-      const version = await run(execFile, file, ['--version']);
+    providers.map(
+      async ({ id, label, bin, missing, loginCheck, login }): Promise<ProviderStatus> => {
+        const file = paths[id] ?? bin;
+        const version = await run(execFile, file, ['--version']);
 
-      if (version)
-        return {
-          id,
-          label,
-          ready: false,
-          problem: version.code === 'ENOENT' ? missing : version.message,
-        };
+        if (version)
+          return {
+            id,
+            label,
+            ready: false,
+            problem: version.code === 'ENOENT' ? missing : version.message,
+          };
 
-      if (loginCheck && (await run(execFile, file, loginCheck)))
-        return {
-          id,
-          label,
-          ready: false,
-          problem: `Sign in first: run ${bin} login in a terminal.`,
-        };
+        if (await run(execFile, file, loginCheck))
+          return {
+            id,
+            label,
+            ready: false,
+            problem: `Sign in first: run ${login} in a terminal.`,
+          };
 
-      return { id, label, ready: true };
-    }),
+        return { id, label, ready: true };
+      },
+    ),
   );
 }
