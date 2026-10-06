@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { expect, it, vi } from 'vitest';
-import { AgentSessions, ALLOWED_TOOLS, DENIED_TOOLS } from '../src/host/agent.js';
+import { AgentSessions } from '../src/host/agent.js';
+import { ALLOWED_TOOLS, DENIED_TOOLS } from '../src/host/providers.js';
 import type { AgentEvent } from '../src/shared/protocol.js';
 
 const DRAFT = '11111111-2222-4333-8444-555555555555';
@@ -98,10 +99,10 @@ it('resumes the session the first turn reported', async () => {
   expect(flag(runs[1].args, '--resume')).toBe('S-1');
   expect(flag(runs[1].args, '-p')).toContain('get_playlist_draft');
   expect(events).toEqual([
-    { kind: 'asked', text: 'warmup', brief: true },
+    { kind: 'asked', text: 'warmup', brief: true, by: 'claude' },
     { kind: 'text', text: 'Built it.' },
     { kind: 'done', session_id: 'S-1' },
-    { kind: 'asked', text: 'typed' },
+    { kind: 'asked', text: 'typed', by: 'claude' },
   ]);
   // The host's record is what a reloaded renderer replays.
   expect(agent.history()).toEqual({ [DRAFT]: { events, working: true } });
@@ -115,7 +116,7 @@ it('refuses a second run on a draft that is still working', () => {
 
   expect(() => agent.send(DRAFT, 'two')).toThrow('Claude is already working on this draft.');
   expect(runs).toHaveLength(1);
-  expect(events).toEqual([{ kind: 'asked', text: 'one', brief: true }]);
+  expect(events).toEqual([{ kind: 'asked', text: 'one', brief: true, by: 'claude' }]);
 });
 
 it('records a refused request like any other outcome', () => {
@@ -164,4 +165,73 @@ it('reports a stop, a crash and a missing CLI as one error each', async () => {
 
 it('never lists a tool as both allowed and denied', () => {
   expect(ALLOWED_TOOLS.filter((name) => DENIED_TOOLS.includes(name))).toEqual([]);
+});
+
+const codexArg = (args: string[], key: string) =>
+  args.find((arg, i) => args[i - 1] === '-c' && arg.startsWith(`${key}=`))?.slice(key.length + 1);
+
+it('runs codex read-only with its tools off and only the allowed selecta tools, auto-approved', () => {
+  const { runs, spawn } = fakeClaude();
+
+  sessions(spawn).agent.start(DRAFT, 'warmup', 'codex');
+
+  const { args } = runs[0];
+
+  expect(args.slice(0, 2)).toEqual(['exec', '--json']);
+  expect(args).toContain('--ignore-user-config');
+  expect(flag(args, '--sandbox')).toBe('read-only');
+  expect(codexArg(args, 'features.shell_tool')).toBe('false');
+  expect(codexArg(args, 'features.unified_exec')).toBe('false');
+  expect(codexArg(args, 'web_search')).toBe('"disabled"');
+
+  const server = codexArg(args, 'mcp_servers.selecta')!;
+
+  expect(server).toContain(`enabled_tools=${JSON.stringify(ALLOWED_TOOLS)}`);
+  expect(server).toContain('"save_playlist_draft"');
+  expect(server).toContain('default_tools_approval_mode="approve"');
+  expect(server).toContain('env={SELECTA_LOCAL_DRAFTS="1"}');
+  expect(server).toContain('args=["/repo/dist/index.js"]');
+  expect(args).not.toContain('resume');
+  expect(args.at(-1)).toContain(`Draft ID: ${DRAFT}`);
+});
+
+it('resumes a codex thread, and starts fresh when the draft switches provider', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent, events } = sessions(spawn);
+
+  agent.start(DRAFT, 'warmup', 'codex');
+  runs[0].child.finish([
+    { type: 'thread.started', thread_id: 'T-1' },
+    { type: 'item.completed', item: { type: 'agent_message', text: 'Built it.' } },
+    { type: 'turn.completed', usage: {} },
+  ]);
+  await settle();
+  agent.send(DRAFT, 'darker');
+  runs[1].child.finish([{ type: 'thread.started', thread_id: 'T-1' }, { type: 'turn.completed' }]);
+  await settle();
+  agent.send(DRAFT, 'shorter', 'shorter', 'claude');
+
+  expect(runs[1].args.slice(-3, -1)).toEqual(['resume', 'T-1']);
+  expect(runs[2].args).toContain('--session-id');
+  expect(runs[2].args).not.toContain('--resume');
+  expect(events.filter((event) => event.kind === 'asked').map((event) => event.by)).toEqual([
+    'codex',
+    'codex',
+    'claude',
+  ]);
+  expect(() => agent.send(DRAFT, 'again')).toThrow('Claude is already working on this draft.');
+});
+
+it('names the missing CLI for the provider that was asked for', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent, events } = sessions(spawn);
+
+  agent.start(DRAFT, 'one', 'codex');
+  runs[0].child.emit('error', Object.assign(new Error('spawn codex ENOENT'), { code: 'ENOENT' }));
+  await settle();
+
+  expect(events.at(-1)).toEqual({
+    kind: 'error',
+    message: 'Could not find the codex CLI. Install Codex, or set SELECTA_CODEX_PATH.',
+  });
 });

@@ -7,6 +7,8 @@ import { Brief } from './components/Brief.js';
 import { Draft } from './components/Draft.js';
 import { ExplainProvider } from './components/Explain.js';
 import { Home } from './components/Home.js';
+import type { ProviderId } from '../shared/protocol.js';
+import { rememberedProvider } from './providers.js';
 import { recoverRuns, rejectRun, runEvent, type Run } from './state.js';
 
 type Screen = { name: 'home' } | { name: 'brief' } | { name: 'draft'; draftId: string };
@@ -52,17 +54,20 @@ function App() {
       })),
     );
 
-  const start = (draftId: string, brief: string) =>
-    ask(draftId, brief, selecta.call('agent.start', { draft_id: draftId, brief }));
+  const start = (draftId: string, brief: string, provider?: ProviderId) =>
+    ask(draftId, brief, selecta.call('agent.start', { draft_id: draftId, brief, provider }));
+
+  // The host forgets a draft's agent on restart; the last one picked stands in.
+  const agentFor = (draftId: string) => runs[draftId]?.by ?? rememberedProvider();
 
   if (screen.name === 'brief')
     return (
       <Brief
         onCancel={() => setScreen({ name: 'home' })}
-        onStart={(brief) => {
+        onStart={(brief, provider) => {
           const draftId = crypto.randomUUID();
 
-          start(draftId, brief);
+          start(draftId, brief, provider);
           setScreen({ name: 'draft', draftId });
         }}
       />
@@ -76,9 +81,18 @@ function App() {
         key={draftId}
         draftId={draftId}
         run={runs[draftId]}
-        onStart={(brief) => start(draftId, brief)}
+        onStart={(brief) => start(draftId, brief, agentFor(draftId))}
         onSend={(text, message) =>
-          ask(draftId, text, selecta.call('agent.send', { draft_id: draftId, message, text }))
+          ask(
+            draftId,
+            text,
+            selecta.call('agent.send', {
+              draft_id: draftId,
+              message,
+              text,
+              provider: agentFor(draftId),
+            }),
+          )
         }
         onBack={() => setScreen({ name: 'home' })}
       />

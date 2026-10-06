@@ -150,7 +150,7 @@ Selecta only writes where you point it: it creates playlists, overwrites its own
 
 ## Desktop app (early)
 
-A desktop app is in progress on the same core. Press New playlist, describe what you want, and Claude builds a draft from your library while you watch. You can drag to reorder, send feedback, and save it to Music. It uses your own `claude` CLI login, so there's no API key. Claude can read your library and edit the draft, but only you can save.
+A desktop app is in progress on the same core. Press New playlist, describe what you want, and Claude or Codex builds a draft from your library while you watch. You can drag to reorder, send feedback, and save it to Music. It uses your own `claude` or `codex` CLI login, so there's no API key. The agent can read your library and edit the draft, but only you can save.
 
 ```bash
 npm run build

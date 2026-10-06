@@ -4,6 +4,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { selecta } from '../api.js';
+import { PROVIDER_LABELS } from '../../shared/protocol.js';
+import { rememberedProvider } from '../providers.js';
 import { onArtworkFailure, retryArtwork } from '../artwork.js';
 import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
@@ -586,6 +588,7 @@ export function Draft({
             document.body,
           )}
         <ClaudePanel
+          agent={PROVIDER_LABELS[run?.by ?? rememberedProvider() ?? 'claude']}
           log={log}
           working={working}
           hasDraft={draft !== undefined}
