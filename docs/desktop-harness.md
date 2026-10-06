@@ -31,14 +31,14 @@ Time runs at real speed so the screen moves; `advance(seconds)` skips ahead, and
 ```bash
 npm run e2e                        # build, then the Playwright specs on a Mac
 xvfb-run -a npm run e2e            # the same on Linux, which needs a display
-npx vitest run apps/desktop/test/music_sim.test.ts   # the bridge scripts against the simulator; part of npm test
+npm test                           # includes the bridge scripts against the simulator
 ```
 
 A failure keeps a Playwright trace and screenshot in `apps/desktop/test-results/`. `npx playwright show-trace <trace.zip>` replays it step by step. Linux runs as root need Chromium's sandbox off, which the fixture does.
 
 ## Two tiers, and what only the Mac can say
 
-1. **Bridge scripts against the simulator** (`test/music_sim.test.ts`, in `npm test`). Milliseconds, no Electron. Where a playback race or refusal is pinned.
+1. **Bridge scripts against the simulator** (`test/music_sim.test.ts`, in `npm test`). Milliseconds, no Electron. Where a script's handling of a race or refusal is pinned; never a claim about what Music itself does, which stays with integration.
 2. **The app against the simulator** (`e2e/*.spec.ts`, `npm run e2e`). Seconds per test. Where a screen's behaviour is pinned: the rail follows Music, a reorder reaches the preview, a refusal is shown.
 
 The simulator is only as right as what it was told. What Music actually does still comes from the real one, through `npm run test:integration` and Remote Control on the Mac: whether AutoMix's timing holds, how late commands really land under load, what iCloud does to a fresh playlist. When the Mac shows Music doing something the simulator doesn't, the fix is a change to `MusicSim` and a test that reproduces it, alongside the `docs/music-app.md` note.

@@ -62,7 +62,7 @@ Shared storage and bridge types live in `packages/core/src/types/`; the cross-cu
 
 Two tiers, cheapest first:
 
-1. **Unit (bulk of the suite, sub-second)** — cache layer against in-memory SQLite with fixtures; tool handlers with the bridge *interface* mocked. Don't simulate Music.app's behavior in unit tests — integration owns all "does Music.app actually do that" questions.
+1. **Unit (bulk of the suite, sub-second)** — cache layer against in-memory SQLite with fixtures; tool handlers with the bridge *interface* mocked. Don't simulate Music.app's behavior in unit tests — integration owns all "does Music.app actually do that" questions. The desktop harness's simulated Music.app (`docs/desktop-harness.md`) tests how the bridge's scripts handle Music, not what Music does.
 2. **Bridge integration (tagged `integration`)** — JXA against a real Music.app, scoped to a test playlist, not the whole library.
 
 **Run suites only via the npm scripts, never bare `vitest`:**

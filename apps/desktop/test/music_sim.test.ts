@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { bridge } from '@selecta/core/bridge/index.js';
 import { runJxa } from '@selecta/core/bridge/jxa.js';
-import { AUTOMIX, MusicSim } from '../harness/music.js';
+import { MusicSim } from '../harness/music.js';
 import { fixtureTracks } from '../harness/library.js';
 
 vi.mock('@selecta/core/bridge/jxa.js', () => ({ runJxa: vi.fn() }));
@@ -44,9 +44,6 @@ describe('playing the preview', () => {
       'seek 0',
       'play',
     ]);
-
-    music.advance(tracks[2].duration);
-    expect(music.snapshot().player).toMatchObject({ state: 'playing', index: 4 });
   });
 
   it('steps within a queue it started rather than starting over', async () => {
@@ -60,18 +57,6 @@ describe('playing the preview', () => {
     expect(route).toBe('on from 1');
     expect(music.snapshot().player).toMatchObject({ index: 2, position: expect.closeTo(60, 0) });
     expect(music.calls).not.toContain('play Selecta Preview');
-  });
-
-  it('hands over early under AutoMix and stops after the last record', async () => {
-    const order = await preview(ids.slice(0, 2));
-
-    music.automix = AUTOMIX;
-    await bridge.playPreview({ expectedTrackIds: order, index: 0 });
-    music.advance(tracks[0].duration - 4);
-    expect(music.snapshot().player).toMatchObject({ index: 2, position: expect.closeTo(7.5, 0) });
-
-    music.advance(tracks[1].duration);
-    expect(music.snapshot().player.state).toBe('stopped');
   });
 
   it('refuses to play shuffled', async () => {
