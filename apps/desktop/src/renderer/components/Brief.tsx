@@ -38,6 +38,8 @@ export function Brief({
     .join('\n');
   // Checked here as well as in the host, so an over-long brief stays on screen to fix.
   const tooLong = brief.length > BRIEF_LIMIT;
+  // Still checking, or none can run. A failed check leaves it to the host, which says what's missing.
+  const noAgent = !providers || (providers.length > 0 && !provider);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -84,7 +86,7 @@ export function Brief({
               />
             </label>
           </div>
-          {providers && providers.length > 1 && (
+          {providers && providers.length > 0 && (
             <fieldset className="field agents">
               <legend className="field-label">Built by</legend>
               <div className="agent-choice">
@@ -116,7 +118,7 @@ export function Brief({
             <button type="button" className="btn line" onClick={onCancel}>
               Cancel
             </button>
-            <button className="btn uv" disabled={!text.trim() || tooLong}>
+            <button className="btn uv" disabled={!text.trim() || tooLong || noAgent}>
               Build it
             </button>
           </div>

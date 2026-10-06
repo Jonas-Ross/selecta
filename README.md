@@ -11,7 +11,7 @@ There's no recommendation engine in here, no similarity scoring, no ML. Your age
 - macOS with Music.app
 - Node.js 22+
 - Optional: [metrognome](https://github.com/Jonas-Ross/metrognome) (`brew install jonas-ross/tap/metrognome`), to measure tempo and key for tracks the free catalogs don't know
-- Optional: a signed-in [Claude Code CLI](https://docs.claude.com/en/docs/claude-code), for the desktop app
+- Optional: a signed-in [Claude Code](https://docs.claude.com/en/docs/claude-code) or [Codex](https://developers.openai.com/codex/cli) CLI, for the desktop app
 
 ## Setup
 

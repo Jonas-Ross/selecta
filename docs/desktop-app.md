@@ -53,7 +53,7 @@ While linked, your edits on the rail or from the crate keep the playlist in step
 
 ## The agent
 
-Each turn is one run of a coding-agent CLI on the user's own login to it, so the app needs no API key and builds on a subscription they already pay for (`src/host/agent.ts`). `src/host/providers.ts` holds one adapter per CLI: the arguments for a turn and a parser for its event stream. The brief offers every CLI that is installed and signed in (`src/host/detect.ts`, asked fresh each time the brief opens) and remembers the last one picked; the panel takes that agent's name. Feedback goes to whichever agent the draft last used.
+Each turn is one run of a coding-agent CLI on the user's own login to it, so the app needs no API key and builds on a subscription they already pay for (`src/host/agent.ts`). `src/host/providers.ts` holds one adapter per CLI: the arguments for a turn and a parser for its event stream. The brief offers every CLI that is installed and signed in (`src/host/detect.ts`, asked fresh each time the brief opens), says why any other can't run, holds Build until one can, and remembers the last one picked; the panel takes that agent's name. Feedback goes to whichever agent the draft last used.
 
 | Agent | Run | Stream |
 |---|---|---|

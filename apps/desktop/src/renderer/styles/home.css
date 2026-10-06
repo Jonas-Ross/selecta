@@ -140,7 +140,7 @@
   grid-template-columns: 160px 200px;
   gap: var(--s4);
 }
-/* Which agent builds it, shown only when more than one is installed. */
+/* Which agent builds it, and why one that's installed can't yet. */
 .agents {
   border: 0;
   padding: 0;
