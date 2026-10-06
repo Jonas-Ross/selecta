@@ -2,7 +2,7 @@
 
 > A *selecta* is the soundsystem term for the one who picks the records. Your AI agent is the selector; your library is the crate.
 
-A local MCP server that gives AI agents access to your Apple Music library, so they can build playlists from music you actually own and write them back to Music.app.
+A local engine over your Apple Music library, so an AI agent can build playlists from music you actually own and write them back to Music.app. It runs as an MCP server for any agent that speaks MCP, and as an early [desktop app](#desktop-app-early) on the same core. The website is at [jonas-ross.github.io/selecta](https://jonas-ross.github.io/selecta/), where you can try the tempo and key analyzer on a file of your own in the browser.
 
 There's no recommendation engine in here, no similarity scoring, no ML. Your agent does the picking. Selecta tells it what you own, how you listen (plays, favorites, ratings, skips, your own playlists) and, where known, how the music moves (BPM, key, danceability), and turns the tracklist your agent comes up with into a real playlist.
 
@@ -10,27 +10,25 @@ There's no recommendation engine in here, no similarity scoring, no ML. Your age
 
 - macOS with Music.app
 - Node.js 22+
+- Optional: [metrognome](https://github.com/Jonas-Ross/metrognome) (`brew install jonas-ross/tap/metrognome`), to measure tempo and key for tracks the free catalogs don't know
+- Optional: a signed-in [Claude Code CLI](https://docs.claude.com/en/docs/claude-code), for the desktop app
 
 ## Setup
 
 ```bash
+brew install jonas-ross/tap/metrognome   # optional, see Requirements
 git clone https://github.com/Jonas-Ross/selecta.git
 cd selecta
 npm install
 npm run build
 node dist/index.js setup           # reports what is missing; changes nothing
 node dist/index.js setup --apply   # registers Selecta with Claude Desktop and Claude Code
+node dist/index.js refresh         # reads your library into the cache
 ```
 
 `setup` adds Selecta to whichever of Claude Desktop and Claude Code is installed, using absolute paths so the apps can launch it without your shell's `PATH`. It backs up the Desktop config before writing it, keeps every other server and any `env` you set on Selecta's entry, and does nothing on a rerun once everything is registered. It then checks for metrognome, Music.app automation access and the library cache, and prints the command that fixes each one that is missing. Claude Desktop doesn't see your shell's `PATH`, so setup pins the metrognome it checked into the entry unless it is in Homebrew's bin; point it at another one with `--metrognome-path`. Restart Claude Desktop afterwards. Limit it to one client with `--client desktop` or `--client code`.
 
-Then populate the cache. macOS will ask for Music.app automation permission the first time; allow it.
-
-```bash
-node dist/index.js refresh
-```
-
-This reads your whole library into a SQLite cache at `~/Library/Application Support/Selecta/library.db`. A few thousand tracks take 10–15 seconds. The cache never refreshes itself, so rerun `refresh` (or ask your agent to call `refresh_library`) after your library changes.
+`refresh` populates the cache. macOS will ask for Music.app automation permission the first time; allow it. It reads your whole library into a SQLite cache at `~/Library/Application Support/Selecta/library.db`. A few thousand tracks take 10–15 seconds. The cache never refreshes itself, so rerun `refresh` (or ask your agent to call `refresh_library`) after your library changes.
 
 Optionally, backfill tempo and key data so your agent can sequence by BPM:
 
@@ -42,7 +40,7 @@ node dist/index.js enrich --source analysis  # then analyze the previews of what
 
 The default pass looks tracks up on MusicBrainz/AcousticBrainz and Deezer (free, no API keys) at roughly 1–3 seconds per track, so a large library takes a while — it's safe to interrupt and resume. AcousticBrainz has had no new data since early 2022, so recent releases mostly come back empty.
 
-`--source analysis` fills that gap by measuring the music itself: it runs [metrognome](https://github.com/Jonas-Ross/metrognome) over each track's 30-second store preview for tempo and key. Install that binary first with `brew install jonas-ross/tap/metrognome` (Selecta finds it on `PATH` or in Homebrew's bin, or point `SELECTA_METROGNOME_PATH` at it; `node dist/index.js doctor` shows which one it found); without it the command reports every track skipped and changes nothing. The two passes keep separate records, so a track the lookup found nothing for is still worth analyzing, and neither overwrites what the other already found. An estimate the analyzer isn't sure about is discarded rather than stored — a missing BPM is better than a wrong one. If your library wasn't bought in the US store, set `SELECTA_STORE_COUNTRY` to your two-letter country code (`gb`, `de`, `jp`) so previews are looked up where your music is sold; `docs/audio-features.md` lists this and the key-profile option.
+`--source analysis` fills that gap by measuring the music itself: it runs [metrognome](https://github.com/Jonas-Ross/metrognome) over each track's 30-second store preview for tempo and key. The audio is analyzed in memory and discarded. Selecta finds the binary on `PATH` or in Homebrew's bin, or wherever `SELECTA_METROGNOME_PATH` points, and refuses one older than it can read (`brew upgrade metrognome` fixes that); `node dist/index.js doctor` shows which one it found. Without it the command reports every track skipped and changes nothing. The two passes keep separate records, so a track the lookup found nothing for is still worth analyzing, and neither overwrites what the other already found. An estimate the analyzer isn't sure about is discarded rather than stored — a missing BPM is better than a wrong one. A fast tempo the analyzer folded from a half-time reading says so, and carries the half-time figure alongside. If your library wasn't bought in the US store, set `SELECTA_STORE_COUNTRY` to your two-letter country code (`gb`, `de`, `jp`) so previews are looked up where your music is sold; `docs/audio-features.md` lists this and the key-profile option.
 
 Whichever pass runs, dead ends are remembered so they aren't attempted twice, and refreshing the library never discards features already fetched.
 
@@ -52,6 +50,14 @@ For a read-only health report, use `status`. It checks the database without crea
 node dist/index.js status
 node dist/index.js doctor
 ```
+
+Three maintenance commands rewrite stored features. Each is a dry run that reports what it would change, per source, until you add `--apply`, and journals every row it overwrites or removes first so `restore` can put it back. Undoing a `restore` itself can't remove a row it re-added; [`docs/destructive-commands.md`](docs/destructive-commands.md) has that gap and the rest of the details.
+
+| Command | Use |
+|---|---|
+| `supersede [--source S] [-p <algo>...] [--apply]` | List what produced each stored feature; with `-p`, clear what those algorithms measured so the next `enrich` measures it again |
+| `reopen -s S -m <field> [--apply]` | Give tracks with no value in a field another try from that source, for example after setting `SELECTA_STORE_COUNTRY` |
+| `restore <journal> [--apply]` | Put back the rows an applied command journalled |
 
 Set `SELECTA_DEBUG=1` to mirror stderr logging to `~/Library/Logs/Selecta/selecta.log`. Failure to create or append that file is reported on stderr and never stops the MCP server.
 
@@ -79,8 +85,6 @@ claude mcp add --scope user selecta -- node /ABSOLUTE/PATH/TO/selecta/dist/index
 ```
 
 Then try: *"Make a playlist around Teardrop by Massive Attack — late-night vibe. Preview it first."*
-
-For visual iteration without reconnecting MCP, run `npm run preview` and open [the consolidated design gallery](http://127.0.0.1:8767). The gallery shows the draft and explorer together with independent fixtures, simulated writes, live reload, and shared width/surface controls.
 
 ## Tools
 
@@ -117,7 +121,7 @@ Ask your agent to **open the library explorer**. Click a decade or genre, toggle
 | `open_preview` | Reveals the existing Selecta Preview in Music.app after checking its complete live order against the supplied draft IDs. Does not replace tracks or start playback. |
 | `save_playlist_draft` | Saves an explicitly approved revision using the existing `create_playlist` contract. Selection and feedback never call it. |
 
-Ask your agent to **open an interactive playlist draft**. Select entries to identify the subject of your feedback, then open **Feedback on N tracks** and explain what you want. With no selection, **Feedback on the playlist** applies to the whole draft. Selection alone never means replace, remove or keep. Arrow buttons change order. **Keep feedback in draft** persists text; **Send feedback** requests a revision. Codex receives context/messages directly; Claude Desktop Code exposes context through **Read widget context** and may stage feedback in the composer for you to send. The compact Setlist card displays track, artist, duration and BPM, with an optional feedback drawer and no pin controls or musical-key display.
+Ask your agent to **open an interactive playlist draft**. Select entries to identify the subject of your feedback, then open **Feedback on N tracks** and explain what you want. With no selection, **Feedback on the playlist** applies to the whole draft. Selection alone never means replace, remove or keep. Arrow buttons change order. **Keep feedback in draft** persists text; **Send feedback** requests a revision. Codex receives context/messages directly; Claude Desktop Code exposes context through **Read widget context** and may stage feedback in the composer for you to send. The compact Setlist card lists track, artist, duration and BPM, with a collapsible timeline of the set whose optional tempo and key lanes show each track's cached tempo and its key as a position on the Camelot wheel (the map DJs use to see which keys sit next to each other), and a feedback drawer. Its Appearance menu defaults to Follow host and offers Copper, Cobalt, Ember, Moss, Oxblood and OLED; the choice persists across cards.
 
 Drafts live in `~/Library/Application Support/Selecta/drafts.db`, separate from library refreshes. **Load into Selecta Preview** fills the shared `Selecta Preview` playlist in Music.app with this draft and links the two; it does not start playback. Once linked, subsequent requested track edits synchronize Music.app without another confirmation. Name, selection and feedback stay local. Preview status distinguishes current, out of date, pending, conflict and error. Manual Music.app changes stop replacement and preserve the local draft; ask the agent to reconcile before explicit recovery. A different draft or raw preview takes ownership. Visible cards read local draft state every three seconds, one request at a time; hidden cards resume on focus/visibility. Errors pause reads until **Reload latest**. Reads stop on errors or disposal; no Music.app polling or library refresh is involved. **Reload latest** restores persisted edits. If a host omits the original result after reload, the card recovers from the original tool input's draft ID; you can also paste that ID into **Recover draft**. A missing draft is reported explicitly. Uncommitted feedback text must be kept or sent before closing the card. Missing library tracks remain visible by ID in recovered drafts, with an inspection error; ask the agent to replace them before saving.
 
@@ -150,16 +154,22 @@ Selecta only writes where you point it: it creates playlists, overwrites its own
 
 ## Desktop app (early)
 
-A desktop app is in progress on the same core. Press New playlist, describe what you want, and Claude builds a draft from your library while you watch. You can drag to reorder, send feedback, and save it to Music. It uses your own `claude` CLI login, so there's no API key. Claude can read your library and edit the draft, but only you can save.
+A desktop app on the same core. Press New playlist, describe what you want, and Claude builds a draft from your library while you watch. The draft is a row of records on a rail, with tempo and key lanes underneath that show how the set moves from track to track. Above it is a crate of your library to flip through and drag records from. Drag to reorder, select records to point your feedback at them, and save to Music.app when you're happy.
+
+Listen plays the draft through Music.app from the Selecta Preview playlist: the record playing, the join into the next one, and a Camelot wheel tracing the set's route. Selecta never touches audio or Music's volume itself, and Claude waits until you stop listening before it edits again.
+
+It uses your own `claude` CLI login, so there's no API key. Claude can read your library and edit the draft, but it can't save or touch Music.app; only you can.
 
 ```bash
 npm run build
 npm run desktop
 ```
 
-It needs the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) signed in. The UI is deliberately bare for now. [`docs/desktop-app.md`](docs/desktop-app.md) has the details.
+It reads the same cache as the MCP server, so run `refresh` first. [`docs/desktop-app.md`](docs/desktop-app.md) has the details.
 
 ## Development
+
+The repo is an npm workspace. `packages/core` holds the cache, the Music.app bridge, enrichment and the tool handlers, with no MCP in it. `packages/mcp` is the MCP server, the CLI and the widgets, `apps/desktop` the Electron app, and `site/` the static website, deployed to GitHub Pages from `main`.
 
 The application version is maintained in `packages/core/package.json`; MCP server metadata and the enrichment User-Agent read it through `packages/core/src/version.ts`. Bump `packages/mcp/package.json` and the root `package.json` with it, and keep `package-lock.json` in sync.
 
@@ -168,11 +178,12 @@ The application version is maintained in `packages/core/package.json`; MCP serve
 | `npm test` | Unit suite (fast, no Music.app) |
 | `npm run test:integration` | Bridge tests against your real Music.app. Needs a user playlist named `Selecta Test` with at least two tracks. |
 | `npm run smoke` | End-to-end scenario over real MCP stdio: refresh → search → context → preview → create, then cleans up after itself. |
-| `npm run build` | TypeScript and bundled widget → `dist/`, then the desktop app bundle |
+| `npm run build` | Core, then the MCP server and widgets, then the root `dist/index.js` entry, then the desktop app bundle |
 | `npm run desktop` | Build and launch the desktop app |
 | `npm run lint` | oxlint |
 | `npm run format:check` | oxfmt check (`npm run format` rewrites) |
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |
+| `npm run preview` | Draft and explorer widget gallery at [127.0.0.1:8767](http://127.0.0.1:8767), with fixtures, simulated writes and live reload |
 | `scripts/build-site.sh [metrognome checkout]` | Build the website's demo engine from a metrognome checkout (default `../metrognome`); then serve `site/` with any static server |
 
 ⚠️ Always use the npm scripts, never bare `vitest`. The bare runner ignores the tag filter and will launch Music.app from the unit suite.
@@ -193,5 +204,3 @@ Architecture and working conventions are in [`CLAUDE.md`](CLAUDE.md); Music.app 
 - Tools return `cache_age_hours: null`: the cache was never populated. Run `refresh`.
 - `track_not_found` on writes: the cache is stale. Refresh and re-resolve track IDs.
 - A created playlist appears twice in Music.app: run `refresh` to inspect recent rekeys and ambiguous copies. Identical tracks and names cannot distinguish an iCloud echo from an intentional copy, so refresh never deletes playlists. Choose which copy to keep before deleting the other.
-
-Playlist draft cards use the Setlist design. Their Appearance menu defaults to Follow host and offers Copper, Cobalt, Ember, Moss, Oxblood and OLED. The local preference persists across cards independently of draft edits.
