@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+// claude for the desktop harness: the turn is the test's script, run in the test process.
+const response = await fetch(`${process.env.SELECTA_SIM_URL}/claude`, {
+  method: 'POST',
+  body: JSON.stringify(process.argv.slice(2)),
+});
+
+for await (const chunk of response.body) process.stdout.write(chunk);
