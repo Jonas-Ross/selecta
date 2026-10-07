@@ -75,7 +75,7 @@ Codex has no switch for "no built-in tools", so it gets the same boundary piece 
 - the selecta server with `enabled_tools` set to the same allowlist and `disabled_tools` to the same denylist. A call to a tool outside it never reaches the server;
 - `default_tools_approval_mode = "approve"` on that server, since `exec` can't ask and would otherwise fail every MCP call.
 
-Against Codex 0.160.1 that leaves the model selecta's eight allowed tools plus Codex's own MCP resource readers and its ask-the-user tool, which `exec` can't answer. A new Codex release can add tool features that are on by default; the read-only sandbox bounds what they can do, and the feature list is where to turn them off.
+Against Codex 0.160.1 that leaves the model selecta's eight allowed tools plus Codex's own MCP resource readers and its ask-the-user tool, which `exec` can't answer. A new Codex release can add tool features that are on by default; the read-only sandbox bounds what they can do, and the feature list is where to turn them off. Builds before 0.150.0 are held back as needing an update: `--ignore-user-config` and `--ignore-rules` arrived in 0.122.0, and until 0.150.0 `view_image` (and `apply_patch` in 0.122) stayed on whatever the feature flags said.
 
 Claude never saves. Save is the app's button, calling the same revision-checked operation as `save_playlist_draft`. A recorded save attempt, good or uncertain, blocks another from the app, as it does over MCP.
 

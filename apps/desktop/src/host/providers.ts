@@ -55,6 +55,8 @@ export type AgentProvider = {
   /** Overrides `bin` when set, like SELECTA_CLAUDE_PATH. */
   binEnv: string;
   missing: string;
+  /** Oldest version whose flags keep the run to selecta's tools. */
+  minVersion?: string;
   args: (turn: Turn) => string[];
   /** A run's line parser; it may keep state across one run's lines. */
   parser: () => (line: string) => AgentEvent[];
@@ -140,6 +142,9 @@ export const codex: AgentProvider = {
   bin: 'codex',
   binEnv: 'SELECTA_CODEX_PATH',
   missing: 'Could not find the codex CLI. Install Codex, or set SELECTA_CODEX_PATH.',
+  // Older builds lack --ignore-user-config and still offer view_image or apply_patch
+  // whatever the feature flags say.
+  minVersion: '0.150.0',
   args: (turn) => [
     'exec',
     '--json',
