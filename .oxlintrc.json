@@ -109,9 +109,15 @@
       }
     },
     {
-      "files": ["packages/mcp/scripts/**"],
+      "files": ["packages/mcp/scripts/**", "apps/desktop/harness/**"],
       "rules": {
         "typescript/no-misused-promises": "off"
+      }
+    },
+    {
+      "files": ["apps/desktop/harness/**"],
+      "rules": {
+        "typescript/no-explicit-any": "off"
       }
     }
   ]

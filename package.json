@@ -26,7 +26,8 @@
     "format:check": "oxfmt --check",
     "check": "npm test && npm run lint && npm run format:check",
     "preview": "npm run build && node packages/mcp/scripts/preview.mjs",
-    "desktop": "npm run build && npm start -w @selecta/desktop"
+    "desktop": "npm run build && npm start -w @selecta/desktop",
+    "e2e": "npm run build && npm run e2e -w @selecta/desktop"
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.10.0",

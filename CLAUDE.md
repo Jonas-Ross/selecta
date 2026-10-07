@@ -9,6 +9,7 @@ A local engine over an Apple Music library that anyone on a Mac can install: it 
 `docs/destructive-commands.md` covers the dry-run/`--apply` convention, the undo journal and the test pattern every destructive command owes.
 `docs/merge-gate.md` covers which PRs merge without the user and why.
 `docs/desktop-app.md` covers the desktop app's processes, the in-app agent's tool allowlist and how drafts update live.
+`docs/desktop-harness.md` covers running the desktop app end to end against a simulated Music.app and a scripted Claude.
 
 ## Architecture
 
@@ -37,6 +38,7 @@ Shared storage and bridge types live in `packages/core/src/types/`; the cross-cu
 | `npm install` | Install deps |
 | `npm run build` | Compile core, then the MCP server and widgets, then write the root `dist/index.js` entry, then bundle the desktop app; each package also typechecks its tests (`tsconfig.json`), emitting from `tsconfig.build.json` |
 | `npm run desktop` | Build and launch the desktop app (needs a signed-in `claude` CLI) |
+| `npm run e2e` | Build, then drive the desktop app with Playwright against a simulated Music.app and Claude (`xvfb-run -a` on Linux) |
 | `npm test` | Unit suite (fast, no Music.app) |
 | `npm run test:integration` | Bridge integration suite against real Music.app (slow, opt-in) |
 | `npm run lint` | oxlint with type-aware rules (`oxlint-tsgolint`), so floating promises and the like fail CI |
@@ -60,7 +62,7 @@ Shared storage and bridge types live in `packages/core/src/types/`; the cross-cu
 
 Two tiers, cheapest first:
 
-1. **Unit (bulk of the suite, sub-second)** — cache layer against in-memory SQLite with fixtures; tool handlers with the bridge *interface* mocked. Don't simulate Music.app's behavior in unit tests — integration owns all "does Music.app actually do that" questions.
+1. **Unit (bulk of the suite, sub-second)** — cache layer against in-memory SQLite with fixtures; tool handlers with the bridge *interface* mocked. Don't simulate Music.app's behavior in unit tests — integration owns all "does Music.app actually do that" questions. The desktop harness's simulated Music.app (`docs/desktop-harness.md`) tests how the bridge's scripts handle Music, not what Music does.
 2. **Bridge integration (tagged `integration`)** — JXA against a real Music.app, scoped to a test playlist, not the whole library.
 
 **Run suites only via the npm scripts, never bare `vitest`:**

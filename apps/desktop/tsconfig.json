@@ -4,7 +4,9 @@
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "paths": { "@selecta/core/*": ["../../packages/core/src/*"] }
+    "paths": {
+      "@selecta/core/*": ["../../packages/core/src/*"]
+    }
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "harness", "e2e", "playwright.config.ts"]
 }
