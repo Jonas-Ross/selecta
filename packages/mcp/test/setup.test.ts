@@ -23,6 +23,7 @@ import {
   type CommandResult,
   type SetupDeps,
   type SetupReport,
+  type SetupStep,
 } from '../src/setup.js';
 import { BridgeError } from '@selecta/core/types/errors.js';
 import { SelectaCache } from '@selecta/core/cache/index.js';
@@ -79,8 +80,8 @@ function fixture(
   return { deps, calls, home };
 }
 
-const step = (report: { steps: { step: string }[] }, name: string): any =>
-  report.steps.find((s) => s.step === name);
+const step = (report: SetupReport, name: string): SetupStep =>
+  report.steps.find((s) => s.step === name)!;
 
 const mcpCalls = (calls: string[][]): string[][] => calls.filter((call) => call[1] === 'mcp');
 
@@ -113,7 +114,7 @@ describe('setup --apply', () => {
       mcpServers: { other: { command: 'x' }, selecta: SERVER },
       theme: 'dark',
     });
-    expect(readFileSync(desktop.backup, 'utf8')).toBe(original);
+    expect(readFileSync(desktop.backup!, 'utf8')).toBe(original);
   });
 
   it('writes through a symlinked Desktop config instead of replacing the link', async () => {
@@ -165,7 +166,7 @@ describe('setup --apply', () => {
     expect(desktop.status).toBe('changed');
     // The entry can carry keys anywhere, so only the backup holds it.
     expect(JSON.stringify(desktop)).not.toContain('/old/dist/index.js');
-    expect(JSON.parse(readFileSync(desktop.backup, 'utf8')).mcpServers.selecta).toEqual(stale);
+    expect(JSON.parse(readFileSync(desktop.backup!, 'utf8')).mcpServers.selecta).toEqual(stale);
     expect(JSON.parse(readFileSync(desktopConfigPath(home), 'utf8')).mcpServers.selecta).toEqual({
       ...SERVER,
       env: { SELECTA_DEBUG: '1' },
@@ -197,8 +198,8 @@ describe('setup --apply', () => {
     const code = step(await runSetup(deps, { apply: true }), 'claude_code');
 
     expect(code.status).toBe('changed');
-    expect(JSON.parse(readFileSync(code.backup, 'utf8'))).toEqual({ selecta: stale });
-    expect(statSync(code.backup).mode & 0o777).toBe(0o600);
+    expect(JSON.parse(readFileSync(code.backup!, 'utf8'))).toEqual({ selecta: stale });
+    expect(statSync(code.backup!).mode & 0o777).toBe(0o600);
     expect(mcpCalls(calls)).toEqual([
       ['/usr/local/bin/claude', 'mcp', 'remove', '--scope', 'user', 'selecta'],
       [

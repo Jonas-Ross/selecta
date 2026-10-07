@@ -247,6 +247,7 @@ export async function connectExplorer(app, { host, el, observeSize, applyHostSty
       } catch (error) {
         throw new Error(
           `Library refreshed, but the view could not reload: ${error.message} Use Reload view.`,
+          { cause: error },
         );
       }
     });

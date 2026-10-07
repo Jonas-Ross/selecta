@@ -137,7 +137,7 @@ describe('progress on a terminal', () => {
 
       h.reporter.update(snapshot(1, char.repeat(40)));
 
-      return [...h.stderr.at(-1)!].filter((c) => c === char).length;
+      return Array.from(h.stderr.at(-1)!).filter((c) => c === char).length;
     };
 
     // ⌚ 〈 🚀 sit outside the CJK blocks, and Hangul jamo outside the syllable
@@ -153,11 +153,18 @@ describe('progress on a terminal', () => {
 
     // Ten columns of spinner and counts, then a title whose every character
     // takes two: seven fit before the ellipsis, not thirteen.
-    h.reporter.update({ done: 0, total: 9, enriched: 0, skipped: 0, current: '未来'.repeat(10) });
+    h.reporter.update({
+      done: 0,
+      total: 9,
+      enriched: 0,
+      returned: 0,
+      skipped: 0,
+      current: '未来'.repeat(10),
+    });
     const rendered = h.stderr.at(-1)!.replace(CLEAR, '');
 
     expect(
-      [...rendered].reduce((w, c) => w + (/[\u4e00-\u9fff]/.test(c) ? 2 : 1), 0),
+      Array.from(rendered).reduce((w, c) => w + (/[\u4e00-\u9fff]/.test(c) ? 2 : 1), 0),
     ).toBeLessThanOrEqual(24);
     expect(rendered.endsWith('…')).toBe(true);
     // Whole characters only — a lone surrogate would render as a replacement box.

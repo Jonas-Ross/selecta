@@ -4,6 +4,7 @@ import { runJxa } from '../src/bridge/jxa.js';
 import { SelectaCache } from '../src/cache/index.js';
 import { createSources } from '../src/enrich/sources.js';
 import { enrichPendingTracks } from '../src/enrich/engine.js';
+import type { LibrarySnapshot } from '../src/types/bridge.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 vi.mock('../src/bridge/jxa.js', () => ({ runJxa: vi.fn() }));
 afterEach(() => vi.clearAllMocks());
@@ -68,7 +69,7 @@ describe('external payload boundaries', () => {
     const cache = SelectaCache.open(':memory:');
 
     try {
-      cache.refreshFromSnapshot(fixture, { durationMs: 1 });
+      cache.refreshFromSnapshot(fixture as LibrarySnapshot, { durationMs: 1 });
       const fetchLike = vi.fn(async () => ({ ok: true, status: 200, json: async () => body }));
       const result = await enrichPendingTracks(
         cache,
@@ -90,7 +91,7 @@ describe('external payload boundaries', () => {
       const cache = SelectaCache.open(':memory:');
 
       try {
-        cache.refreshFromSnapshot(fixture, { durationMs: 1 });
+        cache.refreshFromSnapshot(fixture as LibrarySnapshot, { durationMs: 1 });
         const urls: string[] = [];
         const result = await enrichPendingTracks(
           cache,

@@ -11,7 +11,13 @@ import { connectExplorer } from '../ui/explorer-controller.js';
 import { handleLibraryExplorer } from '@selecta/core/tools/library_explorer.js';
 import { makeToolDeps } from '../../core/test/helpers.js';
 import { elementLookup, Element } from './dom.js';
+import type { LibrarySnapshot } from '@selecta/core/types/bridge.js';
 import fixture from '../../core/test/fixtures/library.json' with { type: 'json' };
+
+const snapshot = fixture as LibrarySnapshot;
+
+// Only the text the tests read back from context updates and messages.
+type HostMessage = { content: { text: string }[] };
 
 const closers: (() => void)[] = [];
 
@@ -35,13 +41,16 @@ async function setup(initialResult?: object | null) {
     }),
     getHostContext: () => ({ theme: 'dark' }),
     sendSizeChanged: vi.fn(async () => {}),
-    updateModelContext: vi.fn(async () => {}),
-    sendMessage: vi.fn(async () => ({})),
-    callServerTool: vi.fn(async ({ name, arguments: args }) => {
-      if (name !== 'show_library_explorer') throw new Error(`Unexpected tool: ${name}`);
+    updateModelContext: vi.fn<(context: HostMessage) => Promise<void>>(async () => {}),
+    sendMessage: vi.fn<(message: HostMessage) => Promise<object>>(async () => ({})),
+    // The host returns whichever tool's result was called, not only the explorer's.
+    callServerTool: vi.fn(
+      async ({ name, arguments: args }): Promise<{ structuredContent: object }> => {
+        if (name !== 'show_library_explorer') throw new Error(`Unexpected tool: ${name}`);
 
-      return { structuredContent: await handleLibraryExplorer(args, deps) };
-    }),
+        return { structuredContent: await handleLibraryExplorer(args, deps) };
+      },
+    ),
   };
 
   await connectExplorer(app, {
@@ -169,13 +178,13 @@ it.each([0, 0.3])(
     const { deps, el } = await setup();
 
     deps.cacheInstance.refreshFromSnapshot(
-      { ...fixture, tracks: [{ ...fixture.tracks[0], durationSeconds }], playlists: [] },
+      { ...snapshot, tracks: [{ ...snapshot.tracks[0]!, durationSeconds }], playlists: [] },
       { durationMs: 1 },
     );
     const result = await handleLibraryExplorer({}, deps);
 
     expect(result).toHaveProperty('tracks.0.duration_seconds', 0);
-    expect(unpackExplorer({ structuredContent: result }).tracks[0].duration_seconds).toBe(0);
+    expect(unpackExplorer({ structuredContent: result }).tracks[0]!.duration_seconds).toBe(0);
     await el('reload').onclick();
     expect(el('tracks').querySelectorAll('input')).toHaveLength(1);
     expect(el('summary').textContent).toContain('1 tracks');
@@ -186,7 +195,7 @@ it.each([0, 0.3])(
 
 it('preserves checkbox nodes on selection and carries seeds across pages into the explicit message', async () => {
   const { el, app, state } = await setup();
-  const check = el('tracks').querySelectorAll('input')[0];
+  const check = el('tracks').querySelectorAll('input')[0]!;
 
   check.onchange();
   expect(check.checked).toBe(true);
@@ -198,8 +207,10 @@ it('preserves checkbox nodes on selection and carries seeds across pages into th
   expect(el('selection-label').textContent).toBe('1 seed track selected');
   el('request').value = 'Make a slow opening';
   await el('ask').onclick();
-  expect(app.sendMessage.mock.calls[0][0].content[0].text).toContain(state.tracks[0].persistent_id);
-  expect(app.sendMessage.mock.calls[0][0].content[0].text).toContain('Make a slow opening');
+  expect(app.sendMessage.mock.calls[0]![0].content[0]!.text).toContain(
+    state.tracks[0]!.persistent_id,
+  );
+  expect(app.sendMessage.mock.calls[0]![0].content[0]!.text).toContain('Make a slow opening');
   expect(el('status').textContent).toContain('composer');
 });
 
@@ -211,7 +222,7 @@ it.each([
   async (_name, failure, message) => {
     const { el, app, state } = await setup();
 
-    el('tracks').querySelectorAll('input')[0].onchange();
+    el('tracks').querySelectorAll('input')[0]!.onchange();
     el('request').value = 'Make a slow opening';
 
     if (failure instanceof Error) app.sendMessage.mockRejectedValueOnce(failure);
@@ -222,11 +233,11 @@ it.each([
     expect(el('status').textContent).toContain(message);
     expect(el('status').dataset.error).toBe('true');
     expect(el('request').value).toBe('Make a slow opening');
-    expect(el('tracks').querySelectorAll('input')[0].checked).toBe(true);
+    expect(el('tracks').querySelectorAll('input')[0]!.checked).toBe(true);
     expect(el('selection-label').textContent).toBe('1 seed track selected');
     expect(el('ask').disabled).toBe(false);
-    expect(app.sendMessage.mock.calls[0][0].content[0].text).toContain(
-      state.tracks[0].persistent_id,
+    expect(app.sendMessage.mock.calls[0]![0].content[0]!.text).toContain(
+      state.tracks[0]!.persistent_id,
     );
 
     await el('ask').onclick();
@@ -240,14 +251,14 @@ it.each([
 it('clears selection on a successful filter change and ignores a replayed original result', async () => {
   const { el, app, state } = await setup();
 
-  el('tracks').querySelectorAll('input')[0].onchange();
+  el('tracks').querySelectorAll('input')[0]!.onchange();
   el('loved').onclick();
   await settled(el);
   expect(el('selection').children).toHaveLength(0);
   expect(el('loved').attributes['aria-pressed']).toBe('true');
   app.ontoolresult({ structuredContent: state });
   expect(el('loved').attributes['aria-pressed']).toBe('true');
-  const lastContext = app.updateModelContext.mock.calls.at(-1)[0].content[0].text;
+  const lastContext = app.updateModelContext.mock.calls.at(-1)![0].content[0]!.text;
 
   expect(lastContext).toContain('"loved":true');
   expect(lastContext).toContain('"selected_track_ids":[]');
@@ -256,7 +267,7 @@ it('clears selection on a successful filter change and ignores a replayed origin
 it('retains the previous slice and selection on failure, restores filter inputs and allows an explicit retry', async () => {
   const { el, app } = await setup();
 
-  el('tracks').querySelectorAll('input')[0].onchange();
+  el('tracks').querySelectorAll('input')[0]!.onchange();
   app.callServerTool.mockRejectedValueOnce(new Error('Cache offline'));
   el('query').value = 'new query';
   el('search-form').onsubmit({ preventDefault() {} });
@@ -295,7 +306,7 @@ it('orders asynchronous context updates so an old selection cannot overwrite a n
         finish = resolve;
       }),
   );
-  const [one, two] = el('tracks').querySelectorAll('input');
+  const [one, two] = el('tracks').querySelectorAll('input') as [Element, Element];
 
   one.onchange();
   await vi.waitFor(() => expect(app.updateModelContext).toHaveBeenCalledTimes(1));
@@ -303,7 +314,7 @@ it('orders asynchronous context updates so an old selection cannot overwrite a n
   expect(app.updateModelContext).toHaveBeenCalledTimes(1);
   finish();
   await vi.waitFor(() => expect(app.updateModelContext).toHaveBeenCalledTimes(2));
-  const final = app.updateModelContext.mock.calls[1][0].content[0].text;
+  const final = app.updateModelContext.mock.calls[1]![0].content[0]!.text;
 
   expect(final).toContain(one.dataset.trackId);
   expect(final).toContain(two.dataset.trackId);
@@ -323,7 +334,7 @@ it('rejects malformed refresh receipts and reloads only after a validated succes
     'refresh_library',
     'show_library_explorer',
   ]);
-  expect(app.callServerTool.mock.calls[1][0].arguments.offset).toBe(0);
+  expect(app.callServerTool.mock.calls[1]![0].arguments.offset).toBe(0);
 });
 
 it('invalidates old rows and seed context when refresh succeeds but the next read fails', async () => {
@@ -331,7 +342,7 @@ it('invalidates old rows and seed context when refresh succeeds but the next rea
 
   el('loved').onclick();
   await settled(el);
-  el('tracks').querySelectorAll('input')[0].onchange();
+  el('tracks').querySelectorAll('input')[0]!.onchange();
   app.callServerTool.mockResolvedValueOnce({
     structuredContent: { track_count: 6, playlist_count: 2, refreshed_at: '2026-09-09T00:00:00Z' },
   });
@@ -342,9 +353,9 @@ it('invalidates old rows and seed context when refresh succeeds but the next rea
   expect(el('selection').children).toHaveLength(0);
   expect(el('status').textContent).toContain('Library refreshed, but the view could not reload');
   await vi.waitFor(() =>
-    expect(app.updateModelContext.mock.calls.at(-1)[0].content[0].text).toContain('unavailable'),
+    expect(app.updateModelContext.mock.calls.at(-1)![0].content[0]!.text).toContain('unavailable'),
   );
   await el('reload').onclick();
   expect(el('browse').inert).toBe(false);
-  expect(app.callServerTool.mock.calls.at(-1)[0].arguments.filters).toEqual({ loved: true });
+  expect(app.callServerTool.mock.calls.at(-1)![0].arguments.filters).toEqual({ loved: true });
 });

@@ -97,7 +97,7 @@ describe('the migration 4 backfill', () => {
 
     expect(keys.length).toBe(42); // seven letters, three accidentals, two modes
 
-    for (const [, key, position] of keys) expect(camelotFor(key!)).toBe(position);
+    for (const [, key, position] of keys) expect(camelotFor(key)).toBe(position);
   });
 
   it('fills every stored key and leaves an unparseable one as it was', () => {

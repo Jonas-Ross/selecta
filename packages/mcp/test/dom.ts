@@ -23,14 +23,16 @@ export class Element {
   title = '';
   value = '';
   type = '';
-  onclick = () => {};
-  onchange = () => {};
+  // UI handlers are often async; tests await what they return.
+  onclick: () => unknown = () => {};
+  onchange: () => unknown = () => {};
+  onsubmit: (event: { preventDefault(): void }) => unknown = () => {};
   constructor(readonly tag = 'div') {}
   append(...nodes: Element[]) {
     for (const node of nodes) this.insertBefore(node, null);
   }
   replaceChildren(...nodes: Element[]) {
-    while (this.children.length) this.children[0].remove();
+    while (this.children[0]) this.children[0].remove();
 
     this.append(...nodes);
   }

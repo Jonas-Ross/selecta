@@ -19,7 +19,7 @@ it('lists confidence, status and the half-time reading only when known', () => {
       bpm_half_time: 70,
     }).map((fact) => fact.label),
   ).toEqual(['source', 'confidence', 'status', 'or']);
-  expect(tempoFacts({ bpm: 120, bpm_source: 'deezer' })[1].text).toBe('None given');
+  expect(tempoFacts({ bpm: 120, bpm_source: 'deezer' })[1]!.text).toBe('None given');
   expect(keyFacts({ key_confidence: 0.6, key_maturity: 'provisional' })).toEqual([
     { label: 'source', text: 'Not recorded' },
     { label: 'confidence', text: '0.60 of 1' },

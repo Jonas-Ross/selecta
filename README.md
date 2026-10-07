@@ -170,7 +170,7 @@ The application version is maintained in `packages/core/package.json`; MCP serve
 | `npm run smoke` | End-to-end scenario over real MCP stdio: refresh → search → context → preview → create, then cleans up after itself. |
 | `npm run build` | TypeScript and bundled widget → `dist/`, then the desktop app bundle |
 | `npm run desktop` | Build and launch the desktop app |
-| `npm run lint` | oxlint |
+| `npm run lint` | oxlint, type-aware |
 | `npm run format:check` | oxfmt check (`npm run format` rewrites) |
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |
 | `scripts/build-site.sh [metrognome checkout]` | Build the website's demo engine from a metrognome checkout (default `../metrognome`); then serve `site/` with any static server |

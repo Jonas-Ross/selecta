@@ -184,7 +184,7 @@ export function Rail({
 
       if (next < 0 || next >= count) return;
 
-      if (!e.altKey) return recs.current.get(ids[next])?.focus({ preventScroll: true });
+      if (!e.altKey) return recs.current.get(ids[next]!)?.focus({ preventScroll: true });
 
       if (locked) return;
 
@@ -197,7 +197,7 @@ export function Rail({
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && !locked && count > 1) {
       e.preventDefault();
       focused.current = ids[index + 1] ?? ids[index - 1];
-      recs.current.get(focused.current)?.focus({ preventScroll: true });
+      recs.current.get(focused.current!)?.focus({ preventScroll: true });
       onRemove(id);
     } else if (e.key === 'Escape') onClear();
   }

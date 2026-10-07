@@ -61,9 +61,9 @@ it('links explicit preview and synchronizes repeated occurrences at the accepted
     preview: { status: 'current', content_revision: 2, baseline: [B, A, A] },
   });
   expect(changed.draft.entries.map((e) => e.entry_id)).toEqual([
-    draft.entries[1].entry_id,
-    draft.entries[0].entry_id,
-    draft.entries[2].entry_id,
+    draft.entries[1]!.entry_id,
+    draft.entries[0]!.entry_id,
+    draft.entries[2]!.entry_id,
   ]);
   expect(deps.bridge.replacePlaylist).toHaveBeenLastCalledWith({
     name: 'Selecta Preview',
@@ -79,7 +79,7 @@ it('keeps name, selection, feedback and identical ordered-track changes local', 
 
   for (const patch of [
     { name: 'Renamed' },
-    { selected_entry_ids: [draft.entries[2].entry_id] },
+    { selected_entry_ids: [draft.entries[2]!.entry_id] },
     { feedback: 'louder' },
     { entries: draft.entries },
   ]) {
@@ -327,8 +327,8 @@ it('adopts manual order after an interrupted pending write without rewriting Mus
 
   expect(order(adopted.draft)).toEqual([B, A]);
   expect(adopted.draft.entries.map((entry) => entry.entry_id)).toEqual([
-    draft.entries[1].entry_id,
-    draft.entries[0].entry_id,
+    draft.entries[1]!.entry_id,
+    draft.entries[0]!.entry_id,
   ]);
   expect(adopted.preview).toMatchObject({
     status: 'current',

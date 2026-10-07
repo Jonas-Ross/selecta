@@ -204,8 +204,9 @@ export function useRailSprings({
     for (const [k, dir] of [
       [index - 1, -1],
       [index + 1, 1],
-    ]) {
-      const anim = anims.current.get(ids[k]);
+    ] as const) {
+      const neighbour = ids[k];
+      const anim = neighbour === undefined ? undefined : anims.current.get(neighbour);
 
       if (anim) anim.pos.v += dir * 1.6;
     }
@@ -225,7 +226,7 @@ export function useRailSprings({
 
     if (d.samples.length > 8) d.samples.shift();
 
-    const [t0, p0] = d.samples[0];
+    const [t0, p0] = d.samples[0]!;
 
     d.vel += ((d.pos - p0) / Math.max(0.016, (now - t0) / 1000) - d.vel) * 0.4;
 

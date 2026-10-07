@@ -194,7 +194,7 @@ function acceptDrops() {
     e.preventDefault();
     depth = 0;
     document.body.classList.remove('dragging');
-    takeFile(e.dataTransfer.files[0]);
+    void takeFile(e.dataTransfer.files[0]);
     $('try').scrollIntoView();
   });
 }
@@ -204,18 +204,18 @@ export function initDeck(loop) {
   spin = new Spinner(document.querySelector('#deck-disc .spin'));
   beatRing();
   $('play').addEventListener('click', () => toggle('deck', playTrack));
-  $('loop').addEventListener('click', loadLoop);
+  $('loop').addEventListener('click', () => void loadLoop());
   $('file').addEventListener('change', (e) => {
     const [file] = e.target.files;
 
     // Cleared so picking the same file again still fires change.
     e.target.value = '';
-    takeFile(file);
+    void takeFile(file);
   });
   $('deck-platter').addEventListener('click', () => $('file').click());
   acceptDrops();
 
   if (motion) spin.speed(IDLE_RATE, 0.01);
 
-  loadLoop();
+  void loadLoop();
 }

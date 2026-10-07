@@ -3,9 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createCliProgram } from '../src/cli.js';
-import { runDestructive } from '@selecta/core/operations/destructive.js';
+import { runDestructive, type DestructiveOutcome } from '@selecta/core/operations/destructive.js';
 import { SelectaCache } from '@selecta/core/cache/index.js';
-import { reopenFeatures, type ReopenPlan } from '@selecta/core/cache/audio_features.js';
+import {
+  reopenFeatures,
+  type ReopenPlan,
+  type ReopenSummary,
+} from '@selecta/core/cache/audio_features.js';
 import type { LibrarySnapshot } from '@selecta/core/types/bridge.js';
 import fixture from '../../core/test/fixtures/library.json' with { type: 'json' };
 import { featuresRow } from '../../core/test/helpers.js';
@@ -51,7 +55,10 @@ function inspect<T>(dbPath: string, read: (cache: SelectaCache) => T): T {
   }
 }
 
-async function run(dbPath: string, argv: string[]): Promise<any> {
+async function run(
+  dbPath: string,
+  argv: string[],
+): Promise<DestructiveOutcome<ReopenSummary> & { pending_remaining: number }> {
   const writes: string[] = [];
 
   await createCliProgram({
@@ -353,7 +360,7 @@ describe('reopening a discarded estimate', () => {
     const before = inspect(dbPath, (cache) => snapshotCache(cache.db));
     const { undo_journal: journal } = await run(dbPath, ['reopen', '-m', 'musicalKey', '--apply']);
 
-    await run(dbPath, ['restore', journal, '--apply']);
+    await run(dbPath, ['restore', journal!, '--apply']);
 
     expectOnlyChanged(
       before,

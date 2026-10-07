@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 import { BridgeError } from './errors.js';
 
 /** Diagnostics name the boundary and path, never echo the external payload. */

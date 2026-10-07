@@ -89,8 +89,8 @@ Tool input supplies a recovery hint only until the card accepts a draft result.
 Later input notifications cannot retarget that initialized draft; a validated
 result or explicit recovery establishes a different draft.
 
-`npm run typecheck:ui` checks the draft entry point, controller, pure state module
-and controller tests without emitting files; the normal build includes it, so
+The package's `tsconfig.json` typechecks the draft entry point, controller, pure
+state module and the tests without emitting files; the normal build includes it, so
 `npm run check` and the hosted build/test jobs also enforce it. Existing
 rendering modules and their keyed DOM tests remain in place. These checks and the
 fixture gallery do not establish that an actual client has loaded the new bundle.

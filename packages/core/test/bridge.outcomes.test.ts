@@ -111,13 +111,13 @@ describe.each(writes)('$name validated outcomes', ({ name, invoke }) => {
 const signals = [
   {
     name: 'loved',
-    row: (persistentId: string) => ({ persistentId, loved: false }),
+    row: (persistentId: string): object => ({ persistentId, loved: false }),
     invoke: (trackIds: string[]) => bridge.setTrackLoved({ trackIds, loved: true }),
     malformedRow: { persistentId: 'A', loved: 1 },
   },
   {
     name: 'rating',
-    row: (persistentId: string) => ({ persistentId, rating: null }),
+    row: (persistentId: string): object => ({ persistentId, rating: null }),
     invoke: (trackIds: string[]) => bridge.setTrackRating({ trackIds, rating: 80 }),
     malformedRow: { persistentId: 'A', rating: 101 },
   },

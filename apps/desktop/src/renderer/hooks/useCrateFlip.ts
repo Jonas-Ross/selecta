@@ -319,8 +319,8 @@ export function useCrateFlip({
       else if (p.id) goTo(tracks.findIndex((track) => track.persistent_id === p.id));
     } else if (p.kind === 'flip') {
       const now = performance.now();
-      const [t0, x0] = p.samples.find(([t]) => now - t < 120) ?? p.samples[0];
-      const [t1, x1] = p.samples[p.samples.length - 1];
+      const [t0, x0] = p.samples.find(([t]) => now - t < 120) ?? p.samples[0]!;
+      const [t1, x1] = p.samples[p.samples.length - 1]!;
       const velocity = (x1 - x0) / Math.max(0.016, (t1 - t0) / 1000);
 
       goTo(reduced ? crate.current.pos.x : flickTarget(crate.current.pos.x, velocity, count));
@@ -440,10 +440,11 @@ export function useCrateFlip({
       PageUp: -5,
     };
     const base = crate.current.target;
+    const flip = flips[e.key];
 
-    if (e.key in flips) {
+    if (flip !== undefined) {
       e.preventDefault();
-      goTo(base + flips[e.key]);
+      goTo(base + flip);
     } else if (e.key === 'Home') goTo(0);
     else if (e.key === 'End') goTo(count - 1);
     else if (e.key === 'Enter' && front) {

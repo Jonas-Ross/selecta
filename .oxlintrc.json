@@ -1,12 +1,82 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "categories": { "correctness": "error" },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
   "jsPlugins": ["@stylistic/eslint-plugin"],
   "rules": {
-    "no-unused-vars": ["error", { "ignoreRestSiblings": true }],
+    "eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ],
+    "import/no-cycle": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        "ignoreRestSiblings": true
+      }
+    ],
+    "typescript/await-thenable": "error",
+    "typescript/consistent-type-imports": [
+      "error",
+      {
+        "fixStyle": "inline-type-imports"
+      }
+    ],
+    "typescript/no-explicit-any": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/only-throw-error": "error",
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      {
+        "considerDefaultExhaustiveForUnions": true
+      }
+    ],
+    "vitest/expect-expect": [
+      "error",
+      {
+        "assertFunctionNames": ["expect", "expect*", "assert*"]
+      }
+    ],
+    "vitest/no-disabled-tests": "error",
+    "vitest/no-focused-tests": "error",
+    "vitest/valid-expect": [
+      "error",
+      {
+        "maxArgs": 2
+      }
+    ],
+    "import/no-unassigned-import": "off",
+    "no-shadow": "off",
+    "no-underscore-dangle": "off",
+    "promise/always-return": "off",
+    "promise/no-callback-in-promise": "off",
+    "typescript/consistent-return": "off",
+    "typescript/no-base-to-string": "off",
+    "typescript/no-misused-spread": "off",
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/restrict-template-expressions": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "unicorn/no-array-reverse": "off",
+    "unicorn/no-array-sort": "off",
+    "unicorn/prefer-add-event-listener": "off",
+    "unicorn/require-post-message-target-origin": "off",
+    "vitest/no-conditional-expect": "off",
+    "vitest/require-mock-type-parameters": "off",
+    "vitest/require-to-throw-message": "off",
     "@stylistic/padding-line-between-statements": [
       "error",
-      { "blankLine": "always", "prev": "*", "next": "return" },
+      {
+        "blankLine": "always",
+        "prev": "*",
+        "next": "return"
+      },
       {
         "blankLine": "always",
         "prev": "*",
@@ -17,7 +87,11 @@
         "prev": ["block-like", "if", "for", "while", "do", "switch", "try"],
         "next": "*"
       },
-      { "blankLine": "always", "prev": ["const", "let", "var"], "next": "*" },
+      {
+        "blankLine": "always",
+        "prev": ["const", "let", "var"],
+        "next": "*"
+      },
       {
         "blankLine": "any",
         "prev": ["const", "let", "var"],
@@ -25,5 +99,20 @@
       }
     ]
   },
-  "ignorePatterns": ["dist/", "coverage/", ".claude/", "site/vendor/"]
+  "ignorePatterns": ["dist/", "coverage/", ".claude/", "site/vendor/"],
+  "plugins": ["typescript", "unicorn", "oxc", "import", "vitest", "promise", "node"],
+  "overrides": [
+    {
+      "files": ["**/test/**"],
+      "rules": {
+        "typescript/unbound-method": "off"
+      }
+    },
+    {
+      "files": ["packages/mcp/scripts/**"],
+      "rules": {
+        "typescript/no-misused-promises": "off"
+      }
+    }
+  ]
 }

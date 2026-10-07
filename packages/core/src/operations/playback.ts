@@ -291,6 +291,7 @@ export function createPlayback(deps: PlaybackDeps) {
               paused
                 ? `Music started but Selecta could not record the preview (${reason}), so Music was paused.`
                 : `Music started but Selecta could not record the preview (${reason}), and Music could not be paused. Pause it in Music.`,
+              { cause: error },
             );
           }
         }

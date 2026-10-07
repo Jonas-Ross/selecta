@@ -11,8 +11,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc && npm run typecheck:ui && node scripts/build-ui.mjs",
-    "typecheck:ui": "tsc -p tsconfig.ui.json"
+    "build": "tsc -p tsconfig.build.json && tsc && node scripts/build-ui.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.2.0",
