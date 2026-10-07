@@ -159,9 +159,7 @@ export function ClaudePanel({
             </button>
           )}
         </div>
-        <p className="hint">
-          Click records on the rail to talk about them. Selecting never changes the draft.
-        </p>
+        <p className="hint">Click records on the rail to talk about them.</p>
       </form>
     </aside>
   );

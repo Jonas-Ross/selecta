@@ -23,7 +23,7 @@ it('lists confidence, status and the half-time reading only when known', () => {
   expect(keyFacts({ key_confidence: 0.6, key_maturity: 'provisional' })).toEqual([
     { label: 'source', text: 'Not recorded' },
     { label: 'confidence', text: '0.60 of 1' },
-    { label: 'status', text: 'Provisional: a first reading, still being checked' },
+    { label: 'status', text: 'Still being tested, so treat it as a hint' },
   ]);
 });
 

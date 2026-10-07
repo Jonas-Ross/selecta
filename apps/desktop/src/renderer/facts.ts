@@ -29,8 +29,8 @@ export function sourceShort(source?: string): string {
 }
 
 const MATURITY = {
-  validated: 'Validated: the method was checked against real tracks',
-  provisional: 'Provisional: a first reading, still being checked',
+  validated: 'Checked against real tracks',
+  provisional: 'Still being tested, so treat it as a hint',
 };
 
 export type Fact = { label: string; text: string };
@@ -48,7 +48,7 @@ export function tempoFacts(track: Track): Fact[] {
     ...(track.bpm_maturity ? [{ label: 'status', text: MATURITY[track.bpm_maturity] }] : []),
     // The analyzer can't tell a tempo from its half, so slow music may read double.
     ...(track.bpm_half_time !== undefined
-      ? [{ label: 'or', text: `${Math.round(track.bpm_half_time)} BPM, if it is half time` }]
+      ? [{ label: 'or', text: `${Math.round(track.bpm_half_time)} BPM, if it feels half as fast` }]
       : []),
   ];
 }

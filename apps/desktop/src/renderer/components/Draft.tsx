@@ -350,11 +350,11 @@ export function Draft({
   // Why the rail is locked, in the head where the drag hint would be.
   const lock =
     phase === 'confirm'
-      ? 'Locked while you confirm the save'
+      ? 'Confirming the save'
       : saving
         ? 'Saving to Music'
         : saved
-          ? `${saveLabel(draft?.save)}, so the order is fixed here`
+          ? saveLabel(draft?.save)
           : leaving
             ? 'Finishing your edits'
             : playerHeld
@@ -390,7 +390,6 @@ export function Draft({
                   else setName(draft.name);
                 }}
               />
-              <span className="rev mono">rev {draft.revision}</span>
             </>
           ) : (
             <h1 className="crumb-title">{working ? 'Building…' : 'No draft yet'}</h1>
@@ -476,16 +475,12 @@ export function Draft({
                   <path d="M3 4.5V3a2 2 0 0 1 4 0v1.5" />
                 </svg>
               )}
-              {lock ??
-                (tab === 'listen'
-                  ? 'Click a record to play it · drag to reorder'
-                  : 'Drag to reorder · Alt + arrows on a focused record · Delete removes')}
+              {lock ?? (tab === 'listen' ? 'Click to play · drag to reorder' : 'Drag to reorder')}
             </span>
           </div>
           {outOfStep && (
             <p className="notice bar error">
-              Selecta Preview in Music may not match this draft ({view?.preview?.status}). Stop
-              listening to release it, then press play to load it again.
+              Music may be playing an old copy of this draft. Stop, then play again.
             </p>
           )}
           {player.problem && (
@@ -537,13 +532,12 @@ export function Draft({
               <div className="rail-wait">
                 {working ? (
                   <>
-                    <b>Claude is pulling records</b>
-                    <span>They stand on the rail as soon as the draft exists.</span>
+                    <b>Claude is picking tracks</b>
                   </>
                 ) : (
                   <>
                     <b>No draft yet</b>
-                    <span>Describe the playlist in the panel to try again.</span>
+                    <span>Try again in the Claude panel.</span>
                   </>
                 )}
               </div>
