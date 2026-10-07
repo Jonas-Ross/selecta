@@ -97,11 +97,7 @@ export function useListen({
 
   const status =
     elsewhere(live) ??
-    (current
-      ? 'Plays through Music.app from Selecta Preview. Your edits update it; Claude waits until you stop.'
-      : linked
-        ? 'Selecta Preview holds this draft. Press play, or stop to hand it back to Claude.'
-        : 'Play loads the draft into Selecta Preview in Music.app.');
+    (current || linked ? 'Claude waits until you stop listening.' : 'Plays in Music.');
 
   return {
     player,
