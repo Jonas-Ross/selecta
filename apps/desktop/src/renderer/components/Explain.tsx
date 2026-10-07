@@ -130,7 +130,7 @@ function KickFigure() {
 }
 
 function WheelFigure() {
-  const at = (n: number, r: number) => [
+  const at = (n: number, r: number): [number, number] => [
     130 + r * Math.sin((n % 12) * (Math.PI / 6)),
     70 - r * Math.cos((n % 12) * (Math.PI / 6)),
   ];

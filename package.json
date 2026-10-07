@@ -21,12 +21,11 @@
     "test:integration": "vitest run --tags-filter=integration",
     "smoke": "npm run build && node packages/mcp/scripts/smoke.mjs",
     "dev": "node dist/index.js",
-    "lint": "oxlint",
+    "lint": "oxlint --type-aware",
     "format": "oxlint --fix && oxfmt",
     "format:check": "oxfmt --check",
     "check": "npm test && npm run lint && npm run format:check",
     "preview": "npm run build && node packages/mcp/scripts/preview.mjs",
-    "typecheck:ui": "npm run typecheck:ui -w selecta",
     "desktop": "npm run build && npm start -w @selecta/desktop",
     "e2e": "npm run build && npm run e2e -w @selecta/desktop"
   },
@@ -37,6 +36,7 @@
     "esbuild": "0.28.2",
     "oxfmt": "^0.71.0",
     "oxlint": "^1.86.0",
+    "oxlint-tsgolint": "^7.0.2003",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
   }

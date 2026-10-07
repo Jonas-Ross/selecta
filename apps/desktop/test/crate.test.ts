@@ -77,9 +77,9 @@ it('counts records and names the library behind a capped crate', () => {
 
 it('flies a record along an arc that starts where it was and ends on its slot', () => {
   const frames = arcFrames({ left: 100, top: 100, width: 200 }, { left: 500, top: 400, width: 80 });
-  const first = frames[0].transform as string;
-  const last = frames[frames.length - 1].transform as string;
-  const mid = frames[(frames.length / 2 - 0.5) | 0].transform as string;
+  const first = frames[0]!.transform as string;
+  const last = frames[frames.length - 1]!.transform as string;
+  const mid = frames[(frames.length / 2 - 0.5) | 0]!.transform as string;
   const y = (t: string) => Number(/translate\([^,]+, (-?[\d.]+)px/.exec(t)![1]);
 
   expect(first).toContain('translate(0.0px, 0.0px)');

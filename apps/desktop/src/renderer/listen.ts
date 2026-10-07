@@ -23,7 +23,7 @@ export function queuePlay(
   return queue.after(() => {
     const at = revision();
 
-    if (at !== undefined && allowed()) return play(at);
+    return at !== undefined && allowed() ? play(at) : undefined;
   });
 }
 

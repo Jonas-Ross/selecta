@@ -181,8 +181,8 @@ export function RailLanes({
                 className="tick"
                 style={{ transform: `translate(${slot.x0 + 4}px, ${shelf.tick}px)` }}
               >
-                {formatClock(starts[k].seconds)}
-                {starts[k].partial ? '+' : ''}
+                {formatClock(starts[k]!.seconds)}
+                {starts[k]!.partial ? '+' : ''}
               </span>
               {slot.tempo === undefined ? (
                 missing(slot.x0, shelf.tempo)
@@ -211,7 +211,7 @@ export function RailLanes({
       )}
 
       {slots.slice(1).map((slot, k) => {
-        const prev = slots[k];
+        const prev = slots[k]!;
         // A join's room is the narrower slot beside it; squeezed joins drop their words first.
         const room = Math.min(slot.x0 - prev.x0, (slots[k + 2]?.x0 ?? slot.x0 + step) - slot.x0);
 

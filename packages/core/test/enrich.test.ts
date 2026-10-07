@@ -52,7 +52,7 @@ describe('match heuristics', () => {
 describe('source request identity', () => {
   it('sends the identifying Selecta User-Agent', async () => {
     let requestInit: RequestInit | undefined;
-    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchImpl = (async (_input: string | URL | Request, init?: RequestInit) => {
       requestInit = init;
 
       return new Response('{}');
@@ -438,7 +438,7 @@ describe('enrichPendingTracks', () => {
           playCount: 100 - i,
         })),
         playlists: [],
-      } as LibrarySnapshot,
+      },
       { durationMs: 1 },
     );
     const { fetchLike } = fakeFetch((url) => {
@@ -493,7 +493,7 @@ describe('enrichPendingTracks', () => {
           },
         ],
         playlists: [],
-      } as LibrarySnapshot,
+      },
       { durationMs: 1 },
     );
     const { fetchLike, calls } = fakeFetch((url) => {

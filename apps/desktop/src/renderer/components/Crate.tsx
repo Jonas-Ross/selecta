@@ -82,7 +82,7 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
     let live = true;
     const timer = setTimeout(
       () =>
-        selecta.call('library.crate', query.trim() ? { query } : {}).then(
+        void selecta.call('library.crate', query.trim() ? { query } : {}).then(
           (next) => live && (setData({ ...next, query }), setError(undefined)),
           (e: Error) => live && setError(e.message),
         ),

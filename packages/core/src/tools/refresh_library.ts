@@ -5,7 +5,7 @@ import { RECONCILE_WINDOW_MINUTES } from '../cache/index.js';
 import type { SelectaError } from '../types/errors.js';
 import { parseInput, toErrorEnvelope } from './errors.js';
 import type { ToolDeps } from './deps.js';
-import { refreshLibrary } from '../operations/refresh.js';
+import { refreshLibrary, type RefreshLibraryOutput } from '../operations/refresh.js';
 export type { SyncReconciliation, RefreshLibraryOutput } from '../operations/refresh.js';
 
 export { RECONCILE_WINDOW_MINUTES };
@@ -19,7 +19,7 @@ export const REFRESH_LIBRARY_DESCRIPTION = `Reread the entire Music.app library 
 export async function handleRefreshLibrary(
   raw: unknown,
   deps: ToolDeps,
-): Promise<import('../operations/refresh.js').RefreshLibraryOutput | SelectaError> {
+): Promise<RefreshLibraryOutput | SelectaError> {
   const parsed = parseInput(RefreshLibraryInput, raw ?? {});
 
   if (!parsed.ok) return parsed.error;

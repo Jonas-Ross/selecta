@@ -201,7 +201,9 @@ export function createArtworkCache({ dir, read, resize, log }: ArtworkDeps): Art
           }),
       );
       const answered = await Promise.allSettled(
-        trackIds.map((id) => (TRACK_PERSISTENT_ID.test(id) ? lookup(id, cached) : null)),
+        trackIds.map((id) =>
+          TRACK_PERSISTENT_ID.test(id) ? lookup(id, cached) : Promise.resolve(null),
+        ),
       );
 
       return Object.fromEntries(

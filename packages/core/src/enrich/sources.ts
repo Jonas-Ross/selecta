@@ -243,7 +243,7 @@ export function createSources(deps: SourceDeps) {
       throw new BridgeError('enrichment_error', `Deezer error: ${data.error.message ?? 'unknown'}`);
     }
 
-    return data as T;
+    return data;
   }
 
   // Deezer documents no escape for quotes inside artist:"…"/track:"…" — an

@@ -3,7 +3,7 @@
 // Implements library reads, playlist writes and edits, and track signal updates.
 
 import { runJxa as runUncheckedJxa } from './jxa.js';
-import { z } from 'zod';
+import type { z } from 'zod';
 import * as schemas from './schemas.js';
 import { parsePayload } from '../types/validation.js';
 

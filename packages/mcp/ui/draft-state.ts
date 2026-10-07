@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  Draft,
+  type Draft,
   DraftResponse,
   DraftSaveOutcome,
   type DraftView,
@@ -118,7 +118,7 @@ export function acceptDraftResponse(
     (inspection.track_count !== draft.entries.length ||
       inspection.tracks.length !== draft.entries.length ||
       inspection.tracks.some(
-        (track, index) => track.persistent_id !== draft.entries[index].track_id,
+        (track, index) => track.persistent_id !== draft.entries[index]?.track_id,
       ))
   )
     throw new Error('Draft inspection does not match its ordered tracks. Use Reload latest.');

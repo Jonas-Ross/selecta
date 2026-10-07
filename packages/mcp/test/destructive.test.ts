@@ -71,7 +71,16 @@ async function invoke(
   return { writes, logged, exitCode };
 }
 
-async function run(dbPath: string, argv: string[]): Promise<{ json: any; logged: string[] }> {
+// The CLI's JSON, typed for the fields read here; journals are read only after --apply.
+type CliJson = {
+  dry_run: boolean;
+  summary: unknown;
+  undo_journal: string;
+  pending_remaining: number;
+  provenance: unknown;
+};
+
+async function run(dbPath: string, argv: string[]): Promise<{ json: CliJson; logged: string[] }> {
   const { writes, logged } = await invoke(dbPath, argv);
 
   expect(writes).toHaveLength(1);

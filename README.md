@@ -180,7 +180,7 @@ The application version is maintained in `packages/core/package.json`; MCP serve
 | `npm run smoke` | End-to-end scenario over real MCP stdio: refresh → search → context → preview → create, then cleans up after itself. |
 | `npm run build` | Core, then the MCP server and widgets, then the root `dist/index.js` entry, then the desktop app bundle |
 | `npm run desktop` | Build and launch the desktop app |
-| `npm run lint` | oxlint |
+| `npm run lint` | oxlint, type-aware |
 | `npm run format:check` | oxfmt check (`npm run format` rewrites) |
 | `npm run check` | Everything CI runs: build, unit tests, lint, format check |
 | `npm run preview` | Draft and explorer widget gallery at [127.0.0.1:8767](http://127.0.0.1:8767), with fixtures, simulated writes and live reload |

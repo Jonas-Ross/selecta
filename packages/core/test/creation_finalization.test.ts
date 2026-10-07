@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, realpathSync } from 'node:fs';
+import type * as nodeFs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -14,7 +15,7 @@ import { makeBridge } from './helpers.js';
 import fixture from './fixtures/library.json' with { type: 'json' };
 
 vi.mock('node:fs', async (importOriginal) => {
-  const fs = await importOriginal<typeof import('node:fs')>();
+  const fs = await importOriginal<typeof nodeFs>();
 
   return { ...fs, rmSync: vi.fn(fs.rmSync) };
 });

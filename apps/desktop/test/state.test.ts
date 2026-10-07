@@ -24,7 +24,14 @@ const entry = (id: string) => ({ entry_id: id, track_id: `T-${id}` });
 it('lines tracks up with entries, repeats included', () => {
   expect(
     rows({
-      draft: { draft_id: 'd', revision: 1, name: 'n', entries: [entry('a'), entry('b')] },
+      draft: {
+        draft_id: 'd',
+        revision: 1,
+        name: 'n',
+        entries: [entry('a'), entry('b')],
+        selected_entry_ids: [],
+        feedback: '',
+      },
       inspection: { tracks: [{ title: 'Roads' }, { title: 'Roads' }] },
     }),
   ).toEqual([
@@ -93,11 +100,16 @@ it('keeps what Music.app was seen to do when the save also reports an error', ()
 
 it('labels the save button by what the draft recorded', () => {
   expect(saveLabel(undefined)).toBe('Save to Music');
-  expect(saveLabel({ status: 'pending' })).toBe('Save pending');
-  expect(saveLabel({ status: 'finished', result: { playlist_id: 'P' } })).toBe('Saved');
-  expect(saveLabel({ status: 'finished', result: { error: 'jxa_error' } })).toBe('Save uncertain');
+  expect(saveLabel({ revision: 1, status: 'pending' })).toBe('Save pending');
+  expect(saveLabel({ revision: 1, status: 'finished', result: { playlist_id: 'P' } })).toBe(
+    'Saved',
+  );
+  expect(saveLabel({ revision: 1, status: 'finished', result: { error: 'jxa_error' } })).toBe(
+    'Save uncertain',
+  );
   expect(
     saveLabel({
+      revision: 1,
       status: 'finished',
       result: { error: 'operation_cleanup_failed', creation_committed: true },
     }),

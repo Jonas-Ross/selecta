@@ -64,14 +64,14 @@ describe('library explorer', () => {
     'pages every owned ID exactly once under tied %s values',
     async (sort) => {
       const deps = setup();
-      const snapshot: LibrarySnapshot = {
+      const snapshot = {
         ...fixture,
         playlists: [],
         tracks: Array.from({ length: 123 }, (_, i) => ({
           ...fixture.tracks[0],
           persistentId: `COPY-${String(i).padStart(3, '0')}`,
         })),
-      };
+      } as LibrarySnapshot;
 
       deps.cacheInstance.refreshFromSnapshot(snapshot, { durationMs: 1 });
       const ids: string[] = [];
@@ -225,5 +225,5 @@ it('keeps alternate copy reporting intact when the cache pages deduplicated rows
 
   expect(page.total).toBe(all.total);
   expect(page.rows).toEqual(all.rows.slice(1, 2));
-  expect(page.rows[0].alternateIds).toHaveLength(1);
+  expect(page.rows[0]!.alternateIds).toHaveLength(1);
 });

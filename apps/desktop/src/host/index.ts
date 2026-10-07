@@ -52,16 +52,18 @@ const stopWatching = watchDrafts(
   (error) => console.error(`selecta: cannot watch drafts.db for changes: ${error.message}`),
 );
 
-createInterface({ input: process.stdin })
-  .on('line', async (line) => {
-    const { id, method, args } = JSON.parse(line) as { id: number; method: string; args?: unknown };
+async function answer(line: string) {
+  const { id, method, args } = JSON.parse(line) as { id: number; method: string; args?: unknown };
 
-    try {
-      send({ id, result: (await actions.record(method, args, () => call(method, args))) ?? null });
-    } catch (error) {
-      send({ id, error: error instanceof Error ? error.message : String(error) });
-    }
-  })
+  try {
+    send({ id, result: (await actions.record(method, args, () => call(method, args))) ?? null });
+  } catch (error) {
+    send({ id, error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+createInterface({ input: process.stdin })
+  .on('line', (line) => void answer(line))
   // Main closing stdin is the shutdown signal.
   .on('close', () => {
     agent.cancelAll();

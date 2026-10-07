@@ -2,7 +2,7 @@
 // a browser or Music.app. Replacing moving nodes cancels their animations.
 import { expect, it, vi } from 'vitest';
 import { renderDraft } from '../ui/render.js';
-import { elementLookup } from './dom.js';
+import { elementLookup, type Element } from './dom.js';
 
 it('updates row and timeline nodes in place across selection, reorder and busy renders', () => {
   const el = elementLookup();
@@ -35,7 +35,7 @@ it('updates row and timeline nodes in place across selection, reorder and busy r
   expect(el('feedback-toggle').textContent).toBe('Feedback on the playlist');
   expect(el('feedback-label').textContent).toBe('Feedback on the whole playlist');
   expect(el('timeline-note').textContent).toBe('Inspection unavailable.');
-  const [rowA, rowB] = el('tracks').children;
+  const [rowA, rowB] = el('tracks').children as [Element, Element];
   const [blockA, blockB] = el('timeline').children;
 
   expect(rowA.classes.has('selected')).toBe(false);
@@ -46,7 +46,7 @@ it('updates row and timeline nodes in place across selection, reorder and busy r
   // Selection is painted onto the nodes that already exist.
   expect(el('tracks').children).toEqual([rowA, rowB]);
   expect(rowB.classes.has('selected')).toBe(true);
-  expect(rowB.children[0].checked).toBe(true);
+  expect(rowB.children[0]!.checked).toBe(true);
   expect(el('timeline').children).toEqual([blockA, blockB]);
   expect(el('timeline').children.map((node) => node.attributes['aria-pressed'])).toEqual([
     'false',
@@ -87,7 +87,7 @@ it('updates row and timeline nodes in place across selection, reorder and busy r
   // A reorder moves the existing nodes instead of rebuilding them.
   expect(el('tracks').children).toEqual([rowB, rowA]);
   expect(el('timeline').children).toEqual([blockB, blockA]);
-  expect(rowB.children[1].textContent).toBe('01');
+  expect(rowB.children[1]!.textContent).toBe('01');
   busy = false;
   render();
   expect(el('editor').inert).toBe(false);
@@ -103,11 +103,11 @@ it('updates row and timeline nodes in place across selection, reorder and busy r
     true,
   );
   expect(controls.filter((node) => node.tag === 'button' && node.disabled)).toHaveLength(2);
-  el('timeline').children[0].onclick();
+  el('timeline').children[0]!.onclick();
   expect(edit).toHaveBeenLastCalledWith({ selected_entry_ids: [] });
-  el('timeline').children[1].onclick();
+  el('timeline').children[1]!.onclick();
   expect(edit).toHaveBeenLastCalledWith({ selected_entry_ids: ['b', 'a'] });
-  el('tracks').controls()[0].onchange();
+  el('tracks').controls()[0]!.onchange();
   expect(edit).toHaveBeenLastCalledWith({ selected_entry_ids: [] });
   // A pending save disables controls in place; the rendered nodes survive.
   const timelineButtons = [...el('timeline').children];
@@ -127,7 +127,7 @@ it('updates row and timeline nodes in place across selection, reorder and busy r
   expect(el('timeline').classes.has('show-key')).toBe(false);
   expect(el('timeline').children).toEqual(timelineButtons);
   // An entry the agent removed takes its nodes with it; a new one gets fresh nodes.
-  draft.entries = [draft.entries[0], { entry_id: 'c', track_id: 'other' }];
+  draft.entries = [draft.entries[0]!, { entry_id: 'c', track_id: 'other' }];
   render();
   expect(el('tracks').children[0]).toBe(rowB);
   expect(el('tracks').children[1]).not.toBe(rowA);
@@ -135,5 +135,5 @@ it('updates row and timeline nodes in place across selection, reorder and busy r
   expect(el('timeline').children.map((node) => node.dataset.entryId)).toEqual(['b', 'c']);
   expect(rowA.parentNode).toBeNull();
   // The repeat badge follows the data: b is no longer a repeated track.
-  expect(rowB.children[2].children[0].children[1].textContent).toBe('');
+  expect(rowB.children[2]!.children[0]!.children[1]!.textContent).toBe('');
 });

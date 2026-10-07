@@ -1,5 +1,5 @@
 import { withOperation } from './lock.js';
-import { SelectaCache, RECONCILE_WINDOW_MINUTES } from '../cache/index.js';
+import { type SelectaCache, RECONCILE_WINDOW_MINUTES } from '../cache/index.js';
 import type { Bridge } from '../types/bridge.js';
 import { formatReconciliationSummary } from '../diagnostics/status.js';
 import { log } from '../log.js';

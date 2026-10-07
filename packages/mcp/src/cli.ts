@@ -71,7 +71,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
   const bridge = options.bridge ?? defaultBridge;
   const dbPath = options.dbPath ?? defaultDbPath();
   const logger = options.logger ?? defaultLogger;
-  const isTty = options.isTty ?? process.stderr.isTTY === true;
+  const isTty = options.isTty ?? process.stderr.isTTY;
   const setExitCode = options.setExitCode ?? ((code) => (process.exitCode = code));
   const writeStderr = options.writeStderr ?? ((text) => process.stderr.write(text));
   const writeStdout = options.writeStdout ?? ((text) => process.stdout.write(text));

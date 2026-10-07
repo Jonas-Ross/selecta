@@ -1,5 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "noEmit": true },
-  "include": ["src/host", "src/main", "src/shared"]
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "paths": {
+      "@selecta/core/*": ["../../packages/core/src/*"]
+    }
+  },
+  "include": ["src", "test", "harness", "e2e", "playwright.config.ts"]
 }
