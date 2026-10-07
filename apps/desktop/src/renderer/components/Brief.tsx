@@ -74,10 +74,7 @@ export function Brief({
               Build it
             </button>
           </div>
-          <p className="hint">
-            Claude searches your library and lays a draft on the rail. Nothing reaches Music.app
-            until you save.
-          </p>
+          <p className="hint">Nothing goes to Music until you save.</p>
         </form>
       </main>
     </>

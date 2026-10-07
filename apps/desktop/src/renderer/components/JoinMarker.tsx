@@ -85,17 +85,18 @@ export function JoinMarker({
               <dl>
                 <dt>tempo</dt>
                 <dd>
-                  {facts.tempo} · {bpmOf(from)} → {bpmOf(to)}
+                  {bpmOf(from)} → {bpmOf(to)}
+                  {from.bpm !== undefined && to.bpm !== undefined && ` · ${facts.tempo}`}
                 </dd>
                 <dt>key</dt>
                 <dd>
-                  {facts.words} · {from.camelot ?? 'not measured'} → {to.camelot ?? 'not measured'}
+                  {from.camelot ?? 'not measured'} → {to.camelot ?? 'not measured'}
+                  {facts.relation !== 'unknown' && ` · ${facts.words}`}
                 </dd>
               </dl>
               {facts.provisional && (
-                <p className="tip-note">Rests on a key reading that is still provisional.</p>
+                <p className="tip-note">One of these keys is still a rough reading.</p>
               )}
-              <p className="tip-note">Geometry only, never a verdict.</p>
             </>
           ),
         },

@@ -54,7 +54,6 @@ export function FeatureFacts({ track }: { track: Track }) {
             </dd>
             <div className="meta">
               <Source kind="tempo" track={track} />
-              {track.bpm_maturity === 'validated' && ' · validated'}
             </div>
           </>
         )}
@@ -82,7 +81,6 @@ export function FeatureFacts({ track }: { track: Track }) {
             </dd>
             <div className="meta">
               <Source kind="key" track={track} />
-              {camelot && (camelot.endsWith('A') ? ' · minor, inner ring' : ' · major, outer ring')}
             </div>
           </>
         )}

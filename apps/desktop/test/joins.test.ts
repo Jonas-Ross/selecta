@@ -10,10 +10,10 @@ it('words the tempo step in whole BPM', () => {
 
 it('names each wheel relation in plain words', () => {
   expect(join({ camelot: '8A' }, { camelot: '8A' }).words).toBe('Same key');
-  expect(join({ camelot: '8A' }, { camelot: '9A' }).words).toBe('Next door on the key wheel');
+  expect(join({ camelot: '8A' }, { camelot: '9A' }).words).toBe('Neighbouring keys');
   expect(join({ camelot: '8A' }, { camelot: '8B' }).words).toBe('Same notes, other ring');
-  expect(join({ camelot: '8A' }, { camelot: '10A' }).words).toBe('Two steps up the wheel');
-  expect(join({ camelot: '8A' }, { camelot: '3B' }).words).toBe('Far apart on the key wheel');
+  expect(join({ camelot: '8A' }, { camelot: '10A' }).words).toBe('Two keys up');
+  expect(join({ camelot: '8A' }, { camelot: '3B' }).words).toBe('Distant keys');
   expect(join({ camelot: '8A' }, {}).words).toBe('Key unknown');
   expect(Object.keys(RELATION_WORDS)).toHaveLength(6);
 });
