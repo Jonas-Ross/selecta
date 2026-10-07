@@ -270,8 +270,8 @@ const TERMS = {
           blends each join.
         </p>
         <p>
-          While it plays, your edits update it too. Claude waits until you stop listening, and the
-          draft is saved as its own playlist only when you press Save.
+          While it plays, your edits update it too. The agent waits until you stop listening, and
+          the draft is saved as its own playlist only when you press Save.
         </p>
       </>
     ),
