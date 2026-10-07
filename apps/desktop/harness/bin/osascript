@@ -1,0 +1,10 @@
+#!/usr/bin/env node
+const script = process.argv[process.argv.indexOf('-e') + 1];
+const response = await fetch(`${process.env.SELECTA_SIM_URL}/osascript`, { method: 'POST', body: script });
+const out = await response.json();
+
+if (out.stderr === undefined) process.stdout.write(`${out.stdout}\n`);
+else {
+  process.stderr.write(`${out.stderr}\n`);
+  process.exit(1);
+}

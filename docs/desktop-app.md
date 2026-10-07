@@ -99,4 +99,4 @@ npm run build
 npm run desktop
 ```
 
-It uses the same `~/Library/Application Support/Selecta/library.db` as the MCP server, so refresh the library first. CI typechecks and bundles the app (`ELECTRON_SKIP_BINARY_DOWNLOAD=1`) but never launches it; the tests cover the host, the stream parser and the view logic, rail geometry included, without Electron or Claude.
+It uses the same `~/Library/Application Support/Selecta/library.db` as the MCP server, so refresh the library first. CI typechecks and bundles the app (`ELECTRON_SKIP_BINARY_DOWNLOAD=1`) but never launches it; the tests cover the host, the stream parser and the view logic, rail geometry included, without Electron or Claude. `npm run e2e` launches it against a simulated Music.app and a scripted Claude (`docs/desktop-harness.md`).
