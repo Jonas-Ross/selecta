@@ -1,5 +1,3 @@
-// The bridge's real playback scripts against the simulated Music.app: the
-// races and refusals Listen depends on, without a Mac.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { bridge } from '@selecta/core/bridge/index.js';
 import { runJxa } from '@selecta/core/bridge/jxa.js';
@@ -31,7 +29,6 @@ describe('playing the preview', () => {
 
     expect(route).toBe('started');
     expect(player).toMatchObject({ state: 'playing', index: 3, track: { persistentId: order[2] } });
-    // Paused while stepping, so the records passed on the way are never heard.
     // A pause is resent until one reads back, so repeats are collapsed.
     expect(
       music.calls.filter((call, i) => call !== 'pause' || music.calls[i - 1] !== 'pause'),

@@ -1,5 +1,3 @@
-// Playwright fixtures: the real app, built as shipped, in a throwaway HOME with
-// osascript, sips and claude swapped for the simulator through PATH.
 import { test as base, _electron, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,7 +14,6 @@ import { startSim, type ClaudeScript } from './server.js';
 const app = fileURLToPath(new URL('..', import.meta.url));
 const bin = fileURLToPath(new URL('./bin', import.meta.url));
 
-/** Builds a draft of the first tracks a search returns, as Claude would. */
 export const buildFromSearch =
   (count = 8): ClaudeScript =>
   async ({ draftId, resumed, call, say }) => {
@@ -35,13 +32,11 @@ export const buildFromSearch =
 type Fixtures = {
   tracks: FixtureTrack[];
   music: MusicSim;
-  // What Claude does each turn; override with test.use. Wrapped, since Playwright
-  // would take a bare function for a fixture.
+  // Wrapped, since Playwright would take a bare function for a fixture.
   claude: { script: ClaudeScript };
   home: string;
   electronApp: ElectronApplication;
   page: Page;
-  /** The host's action log, one parsed line per call. */
   actions: () => { method?: string; ok?: boolean; error?: string; [key: string]: unknown }[];
 };
 
@@ -58,7 +53,7 @@ export const test = base.extend<Fixtures>({
   electronApp: async ({ music, claude, home }, use) => {
     const sim = await startSim({ music, claude: claude.script, home });
     const electronApp = await _electron.launch({
-      // Chromium refuses to run as root, which the Linux sandbox is, with its sandbox on.
+      // Chromium won't run as root with its sandbox on.
       args: [...(process.getuid?.() === 0 ? ['--no-sandbox'] : []), app],
       cwd: app,
       env: {
@@ -90,8 +85,6 @@ export const test = base.extend<Fixtures>({
 
 export { expect } from '@playwright/test';
 
-// The cache as a refresh would leave it, read through the real snapshot script,
-// plus the tempo and key metrognome would have measured.
 function seed(dbPath: string, music: MusicSim, tracks: FixtureTrack[]) {
   const cache = SelectaCache.open(dbPath);
   const snapshot = JSON.parse(music.run(buildReadLibraryScript())) as LibrarySnapshot;

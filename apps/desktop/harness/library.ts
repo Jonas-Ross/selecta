@@ -1,5 +1,3 @@
-// A made-up electronic library: deterministic IDs, durations, tempos and keys,
-// and a sleeve per record so screenshots show art without Music.app.
 import { crc32, deflateSync } from 'node:zlib';
 import type { SimTrack } from './music.js';
 
@@ -41,12 +39,11 @@ export function fixtureTracks(count = 40): FixtureTrack[] {
     dateAdded: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
     playedCount: i % 7,
     artwork: sleeve((i * 47) % 360),
-    // Every fifth record unmeasured, so lanes show their "not measured" spans.
+    // Some unmeasured, so the lanes' "not measured" spans get drawn.
     ...(i % 5 !== 4 && { bpm: 118 + ((i * 3) % 12), musicalKey: KEYS[i % KEYS.length] }),
   }));
 }
 
-/** A 64px PNG: a diagonal gradient around one hue. */
 export function sleeve(hue: number, size = 64): Uint8Array {
   const rows = Buffer.alloc(size * (size * 3 + 1));
 

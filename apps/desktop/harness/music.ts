@@ -1,5 +1,4 @@
-// A simulated Music.app that runs the bridge's real JXA scripts in a VM, modelling
-// what docs/music-app.md records; docs/desktop-harness.md lists what it covers.
+// Runs the bridge's real JXA scripts against a model of Music; docs/desktop-harness.md.
 import { writeFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
@@ -13,7 +12,6 @@ export type SimTrack = {
   duration: number;
   dateAdded?: string;
   playedCount?: number;
-  // PNG or JPEG bytes; absent reads as a track with no artwork.
   artwork?: Uint8Array;
 };
 
@@ -26,7 +24,7 @@ type PlayerState = 'stopped' | 'playing' | 'paused';
 // before the end, already about 7 s in.
 export const AUTOMIX = { lead: 4.5, into: 7 };
 
-// previousTrack restarts a record past this point rather than stepping back.
+// Past this, previousTrack restarts the record instead of stepping back.
 const RESTART_AFTER = 3;
 
 const cantGet = () => new Error("Can't get object. (-1728)");
@@ -36,12 +34,9 @@ export class MusicSim {
   running = true;
   shuffle = false;
   settingsOpen = false;
-  // Seconds before a play, pause, step or seek reads back.
   latency = 0.15;
-  // Every add materialises twice, as iCloud sometimes does.
   doubleAdds = false;
   automix?: { lead: number; into: number };
-  // Commands as the scripts sent them, for assertions and debugging.
   readonly calls: string[] = [];
 
   private speed = 1;
@@ -64,12 +59,10 @@ export class MusicSim {
     this.playlists = [this.library];
   }
 
-  /** Simulated seconds since start: real time times speed, plus every skip. */
   now(): number {
     return this.base + ((performance.now() - this.realBase) / 1000) * this.speed;
   }
 
-  /** 0 freezes time between commands, so a test sees exact positions. */
   setSpeed(speed: number): void {
     this.base = this.now();
     this.realBase = performance.now();
@@ -80,8 +73,6 @@ export class MusicSim {
     this.base += seconds;
     this.settle();
   }
-
-  // ---- fixtures and things the user does in Music itself, which land at once
 
   addPlaylist(name: string, trackIds: string[], kind: Kind = 'user'): string {
     const pl = this.playlist(
@@ -95,7 +86,6 @@ export class MusicSim {
     return pl.persistentId;
   }
 
-  /** iCloud handing a playlist a new persistent ID. */
   rekey(name: string): string {
     const pl = this.named(name);
 
@@ -104,7 +94,6 @@ export class MusicSim {
     return pl.persistentId;
   }
 
-  /** The user picks a record of the playing playlist in Music. */
   pick(index: number): void {
     this.settle();
     const pl = this.player.playlist;
@@ -119,7 +108,6 @@ export class MusicSim {
     });
   }
 
-  /** What a person would see in Music: playlist names and orders, and the player. */
   snapshot() {
     this.settle();
     const { state, playlist, entry } = this.player;
@@ -142,7 +130,6 @@ export class MusicSim {
     };
   }
 
-  /** Runs one osascript JXA script; returns its stdout or throws what it printed to stderr. */
   run(script: string): string {
     try {
       const out: unknown = runInNewContext(script, this.globals(), { timeout: 10_000 });
@@ -155,8 +142,6 @@ export class MusicSim {
     }
   }
 
-  // ---- time
-
   private position(at: number): number {
     const { state, pos, at: since } = this.player;
 
@@ -168,7 +153,6 @@ export class MusicSim {
     this.player.at = at;
   }
 
-  // When the playing record hands over: its end, or AutoMix's lead before it.
   private handover(): number {
     const { state, entry } = this.player;
 
@@ -189,7 +173,6 @@ export class MusicSim {
     return index === -1 ? undefined : playlist.entries[index + 1];
   }
 
-  /** Lands due commands and track ends in the order they happen. */
   private settle(): void {
     for (;;) {
       const now = this.now();
@@ -220,8 +203,6 @@ export class MusicSim {
     this.pending.push({ at: this.now() + this.latency, apply });
   }
 
-  // ---- library model
-
   private newId(): string {
     return (0xa000000000000000n + BigInt(++this.ids)).toString(16).toUpperCase();
   }
@@ -245,8 +226,6 @@ export class MusicSim {
 
     return found[0];
   }
-
-  // ---- the JXA object model
 
   private globals() {
     const music = this.application();
@@ -366,7 +345,6 @@ export class MusicSim {
       activate: () => this.calls.push('activate'),
     };
 
-    // JXA properties: read as specifiers, and the playhead set by assignment.
     return Object.defineProperties(methods, {
       playerPosition: {
         get: () => () => (live(), this.position(this.now())),
@@ -426,8 +404,7 @@ export class MusicSim {
     return pl;
   }
 
-  // An array-like collection: live length, specifiers by index, whose(), and
-  // bulk property getters that fail on an empty collection like Music's do.
+  // Bulk getters fail on an empty collection, as Music's do.
   private collection<T>(items: () => T[], spec: (item: T, index: number) => object): any {
     return new Proxy(
       {},
@@ -551,7 +528,6 @@ export class MusicSim {
     return spec;
   }
 
-  // Just enough of the ObjC bridge for the artwork script's NSAppleScript read.
   private objc() {
     const $ = Object.assign(() => ({ value: undefined as unknown }), {
       NSMakeRange: (location: number, length: number) => ({ location, length }),

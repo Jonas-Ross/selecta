@@ -1,5 +1,4 @@
-// The other end of the PATH shims in bin/: osascript runs against the simulated
-// Music.app, and claude runs a scripted turn against the real MCP server.
+// The other end of the PATH shims in bin/.
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Client } from '@modelcontextprotocol/client';
@@ -9,9 +8,7 @@ import type { MusicSim } from './music.js';
 export type Turn = {
   prompt: string;
   draftId: string;
-  // A later turn on a draft, resumed rather than started.
   resumed: boolean;
-  /** A selecta MCP tool, refused like `claude -p` would if the app didn't allow it. */
   call: (tool: string, args: object) => Promise<any>;
   say: (text: string) => void;
 };
@@ -20,12 +17,7 @@ export type ClaudeScript = (turn: Turn) => Promise<void>;
 
 type Config = { mcpServers: { selecta: { command: string; args: string[]; env?: object } } };
 
-export async function startSim(options: {
-  music: MusicSim;
-  claude: ClaudeScript;
-  // The app's HOME, which the MCP server needs to find the same cache.
-  home: string;
-}) {
+export async function startSim(options: { music: MusicSim; claude: ClaudeScript; home: string }) {
   const server = createServer(async (request, response) => {
     let body = '';
 

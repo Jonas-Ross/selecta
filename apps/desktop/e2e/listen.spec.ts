@@ -1,4 +1,3 @@
-// The app as shipped, against a simulated Music.app and a scripted Claude.
 import type { Page } from '@playwright/test';
 import { expect, test } from '../harness/fixture.js';
 
@@ -35,13 +34,11 @@ test('plays the draft through Selecta Preview, follows Music on, and keeps it in
     index: 1,
   });
 
-  // Music carries on through its queue by itself; the rail follows.
   const first = tracks.find((t) => t.persistentId === preview(music)![0])!;
 
   music.advance(first.duration);
   await expect(records.nth(1)).toHaveAttribute('aria-current', 'true');
 
-  // A reorder on the rail while listening reaches the preview, so Music plays what the rail shows.
   const before = preview(music)!;
 
   await records.nth(4).focus();
