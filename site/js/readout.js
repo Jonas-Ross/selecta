@@ -172,7 +172,6 @@ export function render(track, ms) {
   status(
     `Measured ${track.head.long ? 'the middle 30 seconds' : 'it'} in ${Math.round(ms)} ms. Nothing left this tab.`,
   );
-  $('build').textContent = `This is algorithm ${track.report.algorithm_version}.`;
   record($('deck-vinyl'), { sub: discSub(tempo, key) });
   $('play-label').textContent = playLabel(track.report);
   $('play').disabled = false;
