@@ -207,7 +207,7 @@ async function runCatalogPass(
     let rows: AudioFeaturesRow[];
 
     try {
-      rows = await resolveChunk(sources, chunk, now().toISOString(), tally.touch);
+      rows = await resolveChunk(sources, chunk, now().toISOString(), (label) => tally.touch(label));
     } catch (err) {
       // Only source failures are skippable; anything else is a bug and rethrows.
       if (!(err instanceof BridgeError) || err.errorCode !== 'enrichment_error') throw err;

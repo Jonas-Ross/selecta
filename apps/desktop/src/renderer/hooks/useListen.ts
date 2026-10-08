@@ -97,11 +97,7 @@ export function useListen({
 
   const status =
     elsewhere(live) ??
-    (current
-      ? 'Plays through Music.app from Selecta Preview. Your edits update it; the agent waits until you stop.'
-      : linked
-        ? 'Selecta Preview holds this draft. Press play, or stop to hand it back to the agent.'
-        : 'Play loads the draft into Selecta Preview in Music.app.');
+    (current || linked ? 'The agent waits until you stop listening.' : 'Plays in Music.');
 
   return {
     player,
@@ -118,27 +114,27 @@ export function useListen({
     whole: setClock(items, items.length, 0),
     canPrev: now > 0 || (current && position > RESTART_AFTER),
     cue,
-    toggle() {
+    toggle: () => {
       if (!nowRow) return;
 
       if (!current) playAt(nowRow.entry_id);
-      else if (playing) player.pause();
-      else player.resume();
+      else if (playing) void player.pause();
+      else void player.resume();
     },
-    prev() {
-      if (current && position > RESTART_AFTER) player.seek(0);
+    prev: () => {
+      if (current && position > RESTART_AFTER) void player.seek(0);
       else cue(now - 1);
     },
     next: () => cue(now + 1),
     canJoin: joinAt !== undefined && now + 1 < items.length,
     join: () => nowRow && joinAt !== undefined && playAt(nowRow.entry_id, joinAt),
     // Waits like a play, so a stop never names a revision an edit is about to replace.
-    stop() {
+    stop: () => {
       hold(() =>
         queue.after(() => {
           const revision = latest()?.revision;
 
-          if (revision !== undefined) return player.detach(revision);
+          return revision === undefined ? undefined : player.detach(revision);
         }),
       );
     },

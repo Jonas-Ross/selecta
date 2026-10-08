@@ -48,7 +48,7 @@ Promise.all([titleFont(40), '500 20px "DM Mono"'].map((f) => document.fonts.load
 
 if (motion) {
   gsap.registerPlugin(ScrollTrigger, SplitText);
-  document.fonts.ready.then(() => {
+  void document.fonts.ready.then(() => {
     intro();
     story();
     reveals();

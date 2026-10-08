@@ -89,7 +89,7 @@ async function serveArtwork(request: Request): Promise<Response> {
   }
 }
 
-app.whenReady().then(() => {
+void app.whenReady().then(() => {
   protocol.handle(ARTWORK_SCHEME, serveArtwork);
   window = new BrowserWindow({
     width: 1440,
@@ -111,7 +111,7 @@ app.whenReady().then(() => {
       nodeIntegration: false,
     },
   });
-  window.loadFile(here('./renderer/index.html'));
+  void window.loadFile(here('./renderer/index.html'));
 });
 
 app.on('before-quit', () => {

@@ -4,6 +4,7 @@ import { DraftStore } from '@selecta/core/drafts/store.js';
 import { makeToolDeps } from '../../../packages/core/test/helpers.js';
 import { createApi } from '../src/host/api.js';
 import type { AgentSessions } from '../src/host/agent.js';
+import type { ProviderStatus } from '../src/shared/protocol.js';
 
 const base = makeToolDeps();
 const store = new DraftStore(base.drafts!().path);
@@ -19,7 +20,9 @@ const agent = {
 const artwork = {
   get: vi.fn(async (ids: string[]) => Object.fromEntries(ids.map((id) => [id, null]))),
 };
-const providers = vi.fn(async () => [{ id: 'codex', label: 'Codex', ready: true }]);
+const providers = vi.fn(async (): Promise<ProviderStatus[]> => [
+  { id: 'codex', label: 'Codex', ready: true },
+]);
 const call = createApi(deps, agent as unknown as AgentSessions, artwork, providers);
 
 afterEach(() => vi.clearAllMocks());

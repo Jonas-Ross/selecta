@@ -57,7 +57,7 @@ it('runs a save only after every edit queued before it landed', async () => {
   const { queue, settle } = store(['a', 'b']);
   const commit = vi.fn(async () => 'saved');
 
-  queue.edit((d) => ({ entries: [...d.entries].reverse() }));
+  void queue.edit((d) => ({ entries: [...d.entries].reverse() }));
 
   const saving = queue.barrier(commit);
 
@@ -83,7 +83,7 @@ it('skips the save when an edit before it failed, and the draft stays as stored'
 it('reports whether everything pending has landed, for leaving the draft', async () => {
   const { queue, settle } = store(['a', 'b'], new Set([1]));
 
-  queue.edit((d) => ({ entries: [...d.entries].reverse() }));
+  void queue.edit((d) => ({ entries: [...d.entries].reverse() }));
 
   const landed = queue.landed();
 

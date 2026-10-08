@@ -98,9 +98,11 @@ export function Draft({
   );
 
   useEffect(() => {
-    load();
+    void load();
 
-    return selecta.on((event) => event.event === 'drafts.changed' && load());
+    return selecta.on((event) => {
+      if (event.event === 'drafts.changed') void load();
+    });
   }, [load]);
 
   useEffect(() => onArtworkFailure(setArtProblem), []);
@@ -199,7 +201,7 @@ export function Draft({
 
     const ids = items.map((row) => row.entry_id);
 
-    hold(nextPending(pending, withMoved(ids, entryId, to), ids), moveEntry(entryId, ids[to]));
+    hold(nextPending(pending, withMoved(ids, entryId, to), ids), moveEntry(entryId, ids[to]!));
   }
 
   function remove(entryId: string) {
@@ -251,7 +253,7 @@ export function Draft({
   }
 
   function insert(trackId: string, at: number, title?: string) {
-    edit((current) => {
+    void edit((current) => {
       const entries = current.entries.map(({ entry_id, track_id }) => ({ entry_id, track_id }));
 
       entries.splice(Math.min(at, entries.length), 0, {
@@ -291,7 +293,7 @@ export function Draft({
         )
       : onStart(text);
 
-    request.finally(() => setAsking(false));
+    void request.finally(() => setAsking(false));
   }
 
   // Leaving locks the controls and waits for queued edits, and stays put if
@@ -300,7 +302,7 @@ export function Draft({
     if (airborne) return;
 
     setLeaving(true);
-    queue.landed().then((landed) => (landed ? onBack() : setLeaving(false)));
+    void queue.landed().then((landed) => (landed ? onBack() : setLeaving(false)));
   }
 
   // Save is a barrier in the edit queue: controls lock on the click, and it
@@ -353,11 +355,11 @@ export function Draft({
   // Why the rail is locked, in the head where the drag hint would be.
   const lock =
     phase === 'confirm'
-      ? 'Locked while you confirm the save'
+      ? 'Confirming the save'
       : saving
         ? 'Saving to Music'
         : saved
-          ? `${saveLabel(draft?.save)}, so the order is fixed here`
+          ? saveLabel(draft?.save)
           : leaving
             ? 'Finishing your edits'
             : playerHeld
@@ -389,11 +391,10 @@ export function Draft({
                   naming.current = false;
                   typed.current = false;
 
-                  if (next && next !== draft.name) edit(() => ({ name: next }));
+                  if (next && next !== draft.name) void edit(() => ({ name: next }));
                   else setName(draft.name);
                 }}
               />
-              <span className="rev mono">rev {draft.revision}</span>
             </>
           ) : (
             <h1 className="crumb-title">{working ? 'Building…' : 'No draft yet'}</h1>
@@ -409,7 +410,7 @@ export function Draft({
             tracks={sum.tracks}
             minutes={sum.minutes}
             partial={sum.partial}
-            onSave={save}
+            onSave={() => void save()}
             onAnswer={respond}
           />
         }
@@ -479,16 +480,12 @@ export function Draft({
                   <path d="M3 4.5V3a2 2 0 0 1 4 0v1.5" />
                 </svg>
               )}
-              {lock ??
-                (tab === 'listen'
-                  ? 'Click a record to play it · drag to reorder'
-                  : 'Drag to reorder · Alt + arrows on a focused record · Delete removes')}
+              {lock ?? (tab === 'listen' ? 'Click to play · drag to reorder' : 'Drag to reorder')}
             </span>
           </div>
           {outOfStep && (
             <p className="notice bar error">
-              Selecta Preview in Music may not match this draft ({view?.preview?.status}). Stop
-              listening to release it, then press play to load it again.
+              Music may be playing an old copy of this draft. Stop, then play again.
             </p>
           )}
           {player.problem && (
@@ -540,13 +537,12 @@ export function Draft({
               <div className="rail-wait">
                 {working ? (
                   <>
-                    <b>{agent} is pulling records</b>
-                    <span>They stand on the rail as soon as the draft exists.</span>
+                    <b>{agent} is picking tracks</b>
                   </>
                 ) : (
                   <>
                     <b>No draft yet</b>
-                    <span>Describe the playlist in the panel to try again.</span>
+                    <span>Try again in the {agent} panel.</span>
                   </>
                 )}
               </div>
@@ -570,7 +566,7 @@ export function Draft({
             onToggle={listen.toggle}
             onPrev={listen.prev}
             onNext={listen.next}
-            onSeek={listen.current ? player.seek : undefined}
+            onSeek={listen.current ? (position) => void player.seek(position) : undefined}
             onOpen={tab === 'listen' ? undefined : () => setTab('listen')}
             onStop={linked ? listen.stop : undefined}
             stopDisabled={held || saving}
@@ -597,7 +593,7 @@ export function Draft({
           selected={items.filter((row) => selected.has(row.entry_id))}
           onUnselect={toggleSelected}
           onSend={send}
-          onStop={() => selecta.call('agent.cancel', { draft_id: draftId })}
+          onStop={() => void selecta.call('agent.cancel', { draft_id: draftId })}
         />
       </div>
     </div>

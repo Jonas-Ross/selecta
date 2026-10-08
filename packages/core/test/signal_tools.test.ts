@@ -4,7 +4,7 @@
 // guarantees.
 
 import { describe, it, expect, vi } from 'vitest';
-import { SelectaCache } from '../src/cache/index.js';
+import type { SelectaCache } from '../src/cache/index.js';
 import { handleSetLoved, type SetLovedOutput } from '../src/tools/set_loved.js';
 import { handleSetRating, type SetRatingOutput } from '../src/tools/set_rating.js';
 import { BridgeError } from '../src/types/errors.js';

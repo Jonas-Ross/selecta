@@ -42,7 +42,7 @@ it('offers only installed, signed-in CLIs and says why the others cannot run', a
 
   answers['/opt/codex --version'] = fail('spawn /opt/codex ENOENT', 'ENOENT');
 
-  expect((await detectProviders([codex], { codex: '/opt/codex' }, execFile))[0].problem).toBe(
+  expect((await detectProviders([codex], { codex: '/opt/codex' }, execFile))[0]!.problem).toBe(
     codex.missing,
   );
 });

@@ -82,7 +82,7 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
     let live = true;
     const timer = setTimeout(
       () =>
-        selecta.call('library.crate', query.trim() ? { query } : {}).then(
+        void selecta.call('library.crate', query.trim() ? { query } : {}).then(
           (next) => live && (setData({ ...next, query }), setError(undefined)),
           (e: Error) => live && setError(e.message),
         ),
@@ -264,7 +264,7 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
             </div>
           )}
           <p className={`crate-hint mono${isPulled ? ' off' : ''}`}>
-            Scroll, drag or arrow keys to flip · drag the front record onto the rail
+            Scroll to flip · drag a record onto the rail
           </p>
         </div>
         <aside className="peek" aria-live="polite">

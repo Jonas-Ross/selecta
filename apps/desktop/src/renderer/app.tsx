@@ -35,13 +35,13 @@ function App() {
       setRuns((current) => {
         const run = runEvent(current[event.draft_id], event.data, event.seq);
 
-        if (!run) queueMicrotask(resync);
+        if (!run) queueMicrotask(() => void resync());
 
         return run ? { ...current, [event.draft_id]: run } : current;
       });
     });
 
-    resync();
+    void resync();
 
     return unsubscribe;
   }, [resync]);
@@ -67,7 +67,7 @@ function App() {
         onStart={(brief, provider) => {
           const draftId = crypto.randomUUID();
 
-          start(draftId, brief, provider);
+          void start(draftId, brief, provider);
           setScreen({ name: 'draft', draftId });
         }}
       />

@@ -20,25 +20,27 @@ const run = (execFile: ExecFile, file: string, args: string[]) =>
     );
   });
 
-const parts = (version: string) => version.split('.').map(Number);
-
 /** False when `output` names no version, so an unreadable one is not trusted. */
 export function atLeast(output: string, floor: string): boolean {
   const found = /(\d+)\.(\d+)\.(\d+)/.exec(output);
 
   if (!found) return false;
 
-  const have = found.slice(1).map(Number);
-  const need = parts(floor);
-  const at = have.findIndex((part, index) => part !== need[index]);
+  const need = floor.split('.').map(Number);
 
-  return at === -1 || have[at] > need[at];
+  for (const [index, part] of found.slice(1).map(Number).entries()) {
+    const want = need[index] ?? 0;
+
+    if (part !== want) return part > want;
+  }
+
+  return true;
 }
 
 export async function detectProviders(
   providers: AgentProvider[],
   paths: Partial<Record<ProviderId, string>> = {},
-  execFile: ExecFile = nodeExecFile as ExecFile,
+  execFile: ExecFile = nodeExecFile,
 ): Promise<ProviderStatus[]> {
   return Promise.all(
     providers.map(

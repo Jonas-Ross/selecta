@@ -31,7 +31,7 @@ export function fixtureTracks(count = 40): FixtureTrack[] {
   return Array.from({ length: count }, (_, i) => ({
     persistentId: (0x1000000000000000n + BigInt(i) * 0x1111n).toString(16).toUpperCase(),
     name: `${WORDS[i % WORDS.length]} ${WORDS[(i * 3 + 1) % WORDS.length]}`,
-    artist: ARTISTS[i % ARTISTS.length],
+    artist: ARTISTS[i % ARTISTS.length]!,
     album: `${WORDS[(i + 4) % WORDS.length]} EP`,
     genre: 'Electronic',
     year: 2016 + (i % 9),

@@ -57,7 +57,7 @@ async function runClaude(
   options: { claude: ClaudeScript; home: string },
   line: (data: object) => void,
 ) {
-  const flag = (name: string) => args[args.indexOf(name) + 1];
+  const flag = (name: string) => args[args.indexOf(name) + 1] ?? '';
   const list = (name: string) => {
     const start = args.indexOf(name) + 1;
     const end = args.findIndex((arg, i) => i >= start && arg.startsWith('--'));

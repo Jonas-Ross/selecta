@@ -25,27 +25,30 @@ const COVERS = [
 const dig = { p: 0, crate: null };
 const digTo = () => dig.crate?.render(dig.p);
 
+async function mount3d(visual, canvas) {
+  try {
+    const { crate3d } = await import('./crate.js');
+
+    canvas.hidden = false;
+    dig.crate = await crate3d(canvas, { covers: COVERS, wood: 'media/wood.avif' });
+    new ResizeObserver(() => dig.crate.resize()).observe(canvas);
+    digTo();
+    visual.classList.add('is-3d');
+  } catch {
+    // No WebGL, or a texture failed: the photographed crate is still there.
+    canvas.hidden = true;
+  }
+}
+
 // Three.js is the page's heaviest script, so it loads only as the crate comes near.
 function load3d(visual) {
   const canvas = visual.querySelector('canvas');
   const near = new IntersectionObserver(
-    async ([entry]) => {
+    ([entry]) => {
       if (!entry.isIntersecting) return;
 
       near.disconnect();
-
-      try {
-        const { crate3d } = await import('./crate.js');
-
-        canvas.hidden = false;
-        dig.crate = await crate3d(canvas, { covers: COVERS, wood: 'media/wood.avif' });
-        new ResizeObserver(() => dig.crate.resize()).observe(canvas);
-        digTo();
-        visual.classList.add('is-3d');
-      } catch {
-        // No WebGL, or a texture failed: the photographed crate is still there.
-        canvas.hidden = true;
-      }
+      void mount3d(visual, canvas);
     },
     { rootMargin: '800px 0px' },
   );

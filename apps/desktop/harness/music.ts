@@ -224,7 +224,7 @@ export class MusicSim {
 
     if (found.length !== 1) throw new Error(`Expected one playlist named ${name}.`);
 
-    return found[0];
+    return found[0]!;
   }
 
   private globals() {
@@ -414,7 +414,7 @@ export class MusicSim {
 
           if (typeof prop === 'symbol') return undefined;
 
-          if (/^\d+$/.test(prop)) return spec(items()[Number(prop)], Number(prop));
+          if (/^\d+$/.test(prop)) return spec(items()[Number(prop)]!, Number(prop));
 
           if (prop === 'whose')
             return (where: Record<string, unknown>) => () =>

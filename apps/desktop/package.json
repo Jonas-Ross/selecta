@@ -6,7 +6,7 @@
   "type": "module",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc --noEmit && tsc --noEmit -p tsconfig.renderer.json && tsc --noEmit -p tsconfig.harness.json && node build.mjs",
+    "build": "tsc -p tsconfig.host.json && tsc -p tsconfig.renderer.json && tsc && node build.mjs",
     "e2e": "playwright test",
     "start": "electron ."
   },

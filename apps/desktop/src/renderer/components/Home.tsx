@@ -20,9 +20,11 @@ export function Home({
     const load = () =>
       selecta.call('drafts.list').then(setDrafts, (e: Error) => setError(e.message));
 
-    load();
+    void load();
 
-    return selecta.on((event) => event.event === 'drafts.changed' && load());
+    return selecta.on((event) => {
+      if (event.event === 'drafts.changed') void load();
+    });
   }, []);
 
   const orphans = drafts ? orphanRuns(runs, drafts) : [];

@@ -18,7 +18,7 @@ export const KeyWheel = memo(function KeyWheel({ items, now }: { items: Row[]; n
   return (
     <div className="wheel">
       <span className="ls-lab">
-        <Term name="camelot">Key wheel</Term> · this set's route
+        <Term name="camelot">Key wheel</Term>
       </span>
       <svg
         viewBox="-150 -150 300 300"

@@ -143,7 +143,7 @@ function expectLegendIsComplete(
   compact: CompactTrackContextOutput | CompactMultiSeedContextOutput,
 ): void {
   expect(compact.playlist_legend).toHaveLength(PLAYLISTS.length);
-  const expectedById = new Map(PLAYLISTS);
+  const expectedById = new Map<string, string>(PLAYLISTS);
 
   for (const playlist of compact.playlist_legend) {
     expect(playlist.name).toBe(expectedById.get(playlist.id));

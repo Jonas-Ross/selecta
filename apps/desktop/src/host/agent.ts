@@ -144,7 +144,7 @@ export class AgentSessions {
       stderr = (stderr + chunk.toString()).slice(-2000);
     });
 
-    createInterface({ input: child.stdout! }).on('line', (line) => {
+    createInterface({ input: child.stdout }).on('line', (line) => {
       for (const event of parse(line)) {
         if (event.kind === 'done') {
           if (event.session_id)

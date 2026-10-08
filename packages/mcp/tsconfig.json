@@ -1,8 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src"
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": false,
+    "paths": { "@selecta/core/*": ["../core/src/*"] }
   },
-  "include": ["src"]
+  "include": ["src", "test", "ui", "scripts"]
 }

@@ -86,10 +86,6 @@ button.brand:hover .wordmark {
 .crumb-name:disabled {
   color: var(--ink);
 }
-.rev {
-  font-size: var(--fs-meta);
-  color: var(--ink3);
-}
 .topbar-right {
   display: flex;
   align-items: center;

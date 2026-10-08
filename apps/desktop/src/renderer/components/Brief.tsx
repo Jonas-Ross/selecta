@@ -122,15 +122,9 @@ export function Brief({
               Build it
             </button>
           </div>
-          <p className="hint">
-            {label(providers, provider)} searches your library and lays a draft on the rail. Nothing
-            reaches Music.app until you save.
-          </p>
+          <p className="hint">Nothing goes to Music until you save.</p>
         </form>
       </main>
     </>
   );
 }
-
-const label = (found: ProviderStatus[] | undefined, id: ProviderId | undefined) =>
-  found?.find((option) => option.id === id)?.label ?? 'Claude';

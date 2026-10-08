@@ -349,7 +349,9 @@ export class DraftStore {
           const entries = trackIds.map((track_id) => {
             const index = remaining.findIndex((entry) => entry.track_id === track_id);
 
-            return index < 0 ? { entry_id: randomUUID(), track_id } : remaining.splice(index, 1)[0];
+            return index < 0
+              ? { entry_id: randomUUID(), track_id }
+              : remaining.splice(index, 1)[0]!;
           });
           const ids = new Set(entries.map((entry) => entry.entry_id));
           const changed =

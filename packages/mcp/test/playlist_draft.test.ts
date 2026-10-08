@@ -99,12 +99,12 @@ describe('playlist drafts', () => {
       draft_id: original.draft_id,
       revision: 1,
       entries,
-      selected_entry_ids: [entries[0].entry_id],
+      selected_entry_ids: [entries[0]!.entry_id],
       feedback: 'Keep this occurrence',
     });
 
     expect(edited).toMatchObject({
-      draft: { revision: 2, entries, selected_entry_ids: [entries[0].entry_id] },
+      draft: { revision: 2, entries, selected_entry_ids: [entries[0]!.entry_id] },
     });
     const reopened = new PlaylistDraftTools({ ...deps, drafts: () => new DraftStore(store.path) });
 
@@ -147,7 +147,7 @@ describe('playlist drafts', () => {
     for (const patch of [
       { entries: [original.entries[0], original.entries[0]] },
       { selected_entry_ids: [randomUUID()] },
-      { selected_entry_ids: [original.entries[0].entry_id, original.entries[0].entry_id] },
+      { selected_entry_ids: [original.entries[0]!.entry_id, original.entries[0]!.entry_id] },
       { entries: [{ ...original.entries[0], entry_id: randomUUID() }] },
       { entries: [{ ...original.entries[0], track_id: 'MISSING' }] },
     ])
@@ -270,7 +270,7 @@ describe('playlist drafts', () => {
       draft_id: original.draft_id,
       revision: 3,
       feedback: 'Keep both',
-      selected_entry_ids: [original.entries[0].entry_id],
+      selected_entry_ids: [original.entries[0]!.entry_id],
     });
     expect(store.get(original.draft_id).save?.status).toBe('finished');
     expect(await tools.save({ draft_id: original.draft_id, revision: 4 })).toHaveProperty('error');
@@ -315,11 +315,12 @@ describe('playlist drafts', () => {
         ).structuredContent,
       ).toEqual({ appearance: 'oled' });
       const resource = await client.readResource({ uri: DRAFT_RESOURCE });
+      const html = resource.contents[0] as { mimeType?: string; text: string };
 
-      expect(resource.contents[0].mimeType).toBe('text/html;profile=mcp-app');
-      expect(resource.contents[0].text).toContain('Save this revision to Music.app');
-      expect(resource.contents[0].text).not.toContain('/*__APP__*/');
-      expect(resource.contents[0].text).not.toContain('/*__PULSE__*/');
+      expect(html.mimeType).toBe('text/html;profile=mcp-app');
+      expect(html.text).toContain('Save this revision to Music.app');
+      expect(html.text).not.toContain('/*__APP__*/');
+      expect(html.text).not.toContain('/*__PULSE__*/');
       const id = randomUUID();
       const result = await client.callTool({
         name: 'show_playlist_draft',
@@ -327,7 +328,7 @@ describe('playlist drafts', () => {
       });
 
       expect(result.structuredContent).toMatchObject({ draft: { draft_id: id, revision: 1 } });
-      expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual(
+      expect(JSON.parse((result.content as { text: string }[])[0]!.text)).toEqual(
         result.structuredContent,
       );
       // The injected store path, not the default location, holds the draft.
@@ -375,7 +376,7 @@ it('opens legacy pinned drafts without leaking pins or mutating the stored revis
     const result = await tools.edit({
       draft_id: original.draft_id,
       revision: 1,
-      selected_entry_ids: [original.entries[1].entry_id],
+      selected_entry_ids: [original.entries[1]!.entry_id],
       feedback: 'Move this earlier',
     });
 
@@ -383,7 +384,7 @@ it('opens legacy pinned drafts without leaking pins or mutating the stored revis
       draft: {
         revision: 2,
         entries: original.entries,
-        selected_entry_ids: [original.entries[1].entry_id],
+        selected_entry_ids: [original.entries[1]!.entry_id],
       },
     });
     expect(

@@ -7,8 +7,8 @@
 // (The integration suite talks to Music.app via osascript — no fetch — so
 // this guard applies to every suite.)
 
-globalThis.fetch = (async (input: unknown) => {
+globalThis.fetch = async (input: unknown) => {
   throw new Error(
     `network egress blocked in tests: fetch(${String(input)}) — inject a FetchLike (see test/enrich.test.ts fakeFetch)`,
   );
-}) as typeof fetch;
+};

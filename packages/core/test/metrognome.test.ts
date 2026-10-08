@@ -53,6 +53,7 @@ function line(clientRef: string): string {
   return found;
 }
 
+// oxlint-disable-next-line typescript/no-explicit-any -- tests mutate recorded lines of any shape
 function parsed(clientRef: string): Record<string, any> {
   return JSON.parse(line(clientRef));
 }
@@ -93,7 +94,7 @@ function stubChild(
       stdin,
       stdout,
       stderr,
-      on: (event: string, listener: (...args: never[]) => void) => events.on(event, listener),
+      on: (event: string, listener: (...args: unknown[]) => void) => events.on(event, listener),
     } as unknown as ChildLike,
     input: () => input,
   };
@@ -424,7 +425,7 @@ describe('contract failures', () => {
               stdin,
               stdout,
               stderr: new PassThrough().end(),
-              on: (event: string, listener: (...args: never[]) => void) =>
+              on: (event: string, listener: (...args: unknown[]) => void) =>
                 events.on(event, listener),
             }) as unknown as ChildLike,
         },

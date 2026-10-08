@@ -15,10 +15,13 @@ import { Draft, type DraftView } from '@selecta/core/drafts/contracts.js';
 import { Element } from './dom.js';
 
 const id = '00000000-0000-4000-8000-000000000001';
-const entries = [1, 2].map((n) => ({
+const entry = (n: number) => ({
   entry_id: `00000000-0000-4000-8001-${String(n).padStart(12, '0')}`,
   track_id: 'same',
-}));
+});
+
+type Entry = DraftView['draft']['entries'][number];
+const entries: [Entry, Entry] = [entry(1), entry(2)];
 const initial = (): DraftView => ({
   draft: {
     draft_id: id,
@@ -139,7 +142,7 @@ it('imports without connecting and never saves without the explicit save action'
   await f.start();
   await f.controller.edit({ selected_entry_ids: [entries[1].entry_id] });
   expect(f.calls.map((call) => call.name)).toEqual(['edit_playlist_draft']);
-  expect(f.app.updateModelContext.mock.calls[0][0].content?.[0]).toMatchObject({
+  expect(f.app.updateModelContext.mock.calls[0]![0].content?.[0]).toMatchObject({
     text: expect.stringContaining(entries[1].entry_id),
   });
 });
@@ -194,7 +197,7 @@ it('rejects older revisions without changing feedback, selection or keyed nodes'
   expect(f.el('revision').textContent).toBe('Revision 2');
   expect(f.el('feedback').value).toBe('still typing');
   expect(f.el('tracks').children).toEqual(rows);
-  expect(rows[1].children[0].checked).toBe(true);
+  expect(rows[1]!.children[0]!.checked).toBe(true);
 });
 
 it('keeps row identity and restores focus across an edit and failed context delivery', async () => {
@@ -231,7 +234,7 @@ it.each(['rejection', 'exception'])(
     expect(f.app.sendMessage).toHaveBeenCalledTimes(2);
     expect(f.calls.filter((call) => call.name === 'edit_playlist_draft')).toHaveLength(1);
     expect(f.el('status').dataset.tone).toBe('ok');
-    expect(f.app.sendMessage.mock.calls[1][0].content[0]).toMatchObject({
+    expect(f.app.sendMessage.mock.calls[1]![0].content[0]).toMatchObject({
       text: expect.stringContaining('Keep the second occurrence'),
     });
   },
@@ -702,7 +705,7 @@ it('background draft reads preserve dirty feedback, selection and the currently 
       content: [expect.objectContaining({ text: expect.stringContaining('"revision":2') })],
     }),
   );
-  expect(f.el('tracks').children[0].dataset.entryId).toBe(entries[1].entry_id);
+  expect(f.el('tracks').children[0]!.dataset.entryId).toBe(entries[1].entry_id);
   f.controller.dispose();
 });
 

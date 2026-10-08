@@ -96,7 +96,9 @@ function compareVersions(a: string, b: string): number {
   const [left, right] = [a, b].map((v) => v.split('.').map(Number));
 
   for (let i = 0; i < 3; i += 1) {
-    if (left[i] !== right[i]) return left[i] - right[i];
+    const diff = (left?.[i] ?? 0) - (right?.[i] ?? 0);
+
+    if (diff !== 0) return diff;
   }
 
   return 0;

@@ -124,13 +124,13 @@ function KickFigure() {
           />
         ))}
       </svg>
-      <figcaption>120 BPM: two beats a second, four seconds shown</figcaption>
+      <figcaption>120 BPM is two beats a second</figcaption>
     </figure>
   );
 }
 
 function WheelFigure() {
-  const at = (n: number, r: number) => [
+  const at = (n: number, r: number): [number, number] => [
     130 + r * Math.sin((n % 12) * (Math.PI / 6)),
     70 - r * Math.cos((n % 12) * (Math.PI / 6)),
   ];
@@ -186,103 +186,45 @@ const TERMS = {
     body: (
       <>
         <KickFigure />
-        <p>Beats per minute: the steady pulse you would tap along to.</p>
-        <p>Neighbouring tracks a few BPM apart sit close in pace.</p>
+        <p>Beats per minute: the pulse you would tap your foot to.</p>
       </>
     ),
   },
   key: {
     title: 'Key',
-    body: (
-      <p>
-        The set of notes a track is built on. Keys next to each other on the wheel share most of
-        their notes.
-      </p>
-    ),
+    body: <p>The set of notes a track uses. Nearby keys on the wheel share most of their notes.</p>,
   },
   camelot: {
-    title: 'Camelot key wheel',
+    title: 'Key wheel',
     body: (
       <>
         <WheelFigure />
-        <p>Keys drawn as a clock, 1 to 12. A is a minor key, B is a major key.</p>
-        <p>Next-door numbers share most of their notes, so key closeness becomes arithmetic.</p>
+        <p>Every key as a spot on a clock. Neighbouring spots share most of their notes.</p>
       </>
     ),
   },
   major: {
     title: 'B: major keys',
-    body: <p>On the wheel, major keys are the outer ring, 1B to 12B.</p>,
+    body: <p>The outer ring of the key wheel. Major keys tend to sound brighter.</p>,
   },
   minor: {
     title: 'A: minor keys',
-    body: <p>On the wheel, minor keys are the inner ring, 1A to 12A.</p>,
+    body: <p>The inner ring of the key wheel. Minor keys tend to sound darker.</p>,
   },
   join: {
     title: 'The joins',
-    body: (
-      <>
-        <p>
-          How two neighbouring tracks relate: the tempo step between them and where their keys sit
-          on the key wheel.
-        </p>
-        <p>Geometry only. It says how far apart, never whether that is good.</p>
-      </>
-    ),
+    body: <p>How tempo and key change from one track to the next.</p>,
   },
   provisional: {
     title: 'Provisional',
-    body: (
-      <p>
-        A first reading from a method still being checked against real tracks. Treat it as a hint,
-        however sure the number looks.
-      </p>
-    ),
+    body: <p>Key detection is still being tested. Treat this one as a hint.</p>,
   },
   missing: {
     title: 'Not measured',
-    body: (
-      <p>
-        Selecta leaves a value empty rather than guess. A wrong tempo or key is worse than none.
-      </p>
-    ),
-  },
-  automix: {
-    title: 'AutoMix',
-    body: (
-      <>
-        <p>
-          Music.app's own blend from one track into the next. Selecta asks Music to play, and Music
-          does the mixing.
-        </p>
-        <p>
-          It needs the outgoing track's last minute or so, so a join starts a minute before the end.
-        </p>
-      </>
-    ),
-  },
-  preview: {
-    title: 'Selecta Preview',
-    body: (
-      <>
-        <p>
-          A playlist in Music.app that Listen fills with this draft, so Music plays it in order and
-          blends each join.
-        </p>
-        <p>
-          While it plays, your edits update it too. The agent waits until you stop listening, and
-          the draft is saved as its own playlist only when you press Save.
-        </p>
-      </>
-    ),
+    body: <p>No reliable reading yet, so it is left blank rather than guessed.</p>,
   },
   time: {
     title: 'Set time',
-    body: (
-      <p>
-        When each record starts, from the lengths before it. A + means a length is unknown, so the
-        real time is later.
-      </p>
-    ),
+    body: <p>When each track starts. A + means some lengths are unknown.</p>,
   },
 } satisfies Record<string, Explanation>;

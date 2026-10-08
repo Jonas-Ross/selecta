@@ -34,7 +34,7 @@ export function Listen({
   if (!row)
     return (
       <section className="deck deck-empty" aria-label="Listen">
-        <p>Nothing to play until the draft has records.</p>
+        <p>Nothing to play yet.</p>
       </section>
     );
 
@@ -102,17 +102,11 @@ export function Listen({
               <button type="button" className="btn uv" disabled={joinDisabled} onClick={onJoin}>
                 Hear the join
               </button>
-              <p>
-                Plays through Music.app from {JOIN_LEAD} s before the end of{' '}
-                {row.title ?? 'this record'}, and <Term name="automix">AutoMix</Term> blends it into{' '}
-                {next.title ?? 'the next'}.
-              </p>
+              <p>Plays the last {JOIN_LEAD} seconds of this track into the next.</p>
             </div>
           </>
         ) : (
-          <p className="last">
-            {row.title ?? 'This record'} closes the draft, so there is no join.
-          </p>
+          <p className="last">Last track in the draft.</p>
         )}
         <KeyWheel items={items} now={now} />
       </aside>

@@ -139,12 +139,13 @@ describe('MCP server over in-memory transport', () => {
     expect(value.next_offset).toBe(1);
     expect(result.structuredContent).toEqual(value);
     const resource = await client.readResource({ uri: 'ui://selecta/library-explorer.html' });
+    const html = resource.contents[0] as { mimeType?: string; text: string };
 
-    expect(resource.contents[0].mimeType).toBe('text/html;profile=mcp-app');
-    expect(resource.contents[0].text).toContain('Your library');
-    expect(resource.contents[0].text).not.toContain('/*__APP__*/');
-    expect(resource.contents[0].text).not.toContain('/*__EXPLORER__*/');
-    expect(resource.contents[0].text).not.toMatch(/(?:src|href)="https?:/);
+    expect(html.mimeType).toBe('text/html;profile=mcp-app');
+    expect(html.text).toContain('Your library');
+    expect(html.text).not.toContain('/*__APP__*/');
+    expect(html.text).not.toContain('/*__EXPLORER__*/');
+    expect(html.text).not.toMatch(/(?:src|href)="https?:/);
     await client.close();
   });
 

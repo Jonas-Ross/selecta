@@ -96,13 +96,13 @@ describe('controlling the player', () => {
   it('pauses only the record the caller saw, and leaves one the user picked', async () => {
     const order = await preview();
     const { playlistId } = await bridge.playPreview({ expectedTrackIds: order, index: 0 });
-    const on = { playlistId, index: 1, trackId: order[0] };
+    const on = { playlistId, index: 1, trackId: order[0]! };
 
     music.pick(3);
     await expect(bridge.controlPlayer({ action: 'pause', on })).rejects.toThrow('moved off');
     expect(music.snapshot().player.state).toBe('playing');
 
-    const here = { playlistId, index: 3, trackId: order[2] };
+    const here = { playlistId, index: 3, trackId: order[2]! };
 
     expect(await bridge.controlPlayer({ action: 'pause', on: here })).toMatchObject({
       state: 'paused',
@@ -112,7 +112,7 @@ describe('controlling the player', () => {
   it('will not resume a preview that was reordered while paused', async () => {
     const order = await preview();
     const { playlistId } = await bridge.playPreview({ expectedTrackIds: order, index: 0 });
-    const on = { playlistId, index: 1, trackId: order[0] };
+    const on = { playlistId, index: 1, trackId: order[0]! };
 
     await bridge.controlPlayer({ action: 'pause', on });
     await bridge.reorderPlaylistTracks({
@@ -130,7 +130,7 @@ describe('controlling the player', () => {
     const order = await preview();
     const { playlistId } = await bridge.playPreview({ expectedTrackIds: order, index: 0 });
     const rotated = music.rekey('Selecta Preview');
-    const on = { playlistId: rotated, index: 1, trackId: order[0], slot: 'Selecta Preview' };
+    const on = { playlistId: rotated, index: 1, trackId: order[0]!, slot: 'Selecta Preview' };
 
     expect(playlistId).not.toBe(rotated);
     expect(await bridge.controlPlayer({ action: 'seek', position: 30, on })).toMatchObject({
@@ -146,16 +146,16 @@ it('reads the whole library through the real snapshot script', async () => {
   const snapshot = await bridge.readLibrary();
 
   expect(snapshot.tracks).toHaveLength(6);
-  expect(snapshot.tracks[0]).toMatchObject({ persistentId: ids[0], title: tracks[0].name });
+  expect(snapshot.tracks[0]).toMatchObject({ persistentId: ids[0], title: tracks[0]!.name });
 });
 
 it('trims the double an iCloud add can leave', async () => {
   const order = await preview(ids.slice(0, 2));
-  const playlistId = music.snapshot().playlists[0].id;
+  const playlistId = music.snapshot().playlists[0]!.id;
 
   music.doubleAdds = true;
 
-  const result = await bridge.addPlaylistTracks({ playlistId, trackIds: [ids[4]] });
+  const result = await bridge.addPlaylistTracks({ playlistId, trackIds: [ids[4]!] });
 
   expect(result.trackPersistentIds).toEqual([...order, ids[4]]);
 });
