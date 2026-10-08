@@ -50,7 +50,7 @@ export function Home({
           {drafts?.length === 0 && !orphans.length && (
             <div className="empty">
               <b>No drafts yet</b>
-              <p>Describe a playlist and Claude builds it from your library.</p>
+              <p>Describe a playlist and your AI builds it from your library.</p>
               <button type="button" className="btn uv" onClick={onNew}>
                 New playlist
               </button>

@@ -4,6 +4,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { selecta } from '../api.js';
+import { PROVIDER_LABELS } from '../../shared/protocol.js';
+import { rememberedProvider } from '../providers.js';
 import { onArtworkFailure, retryArtwork } from '../artwork.js';
 import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
@@ -57,6 +59,7 @@ export function Draft({
 }) {
   const [view, setView] = useState<DraftView>();
   const log = run?.log ?? [];
+  const agent = PROVIDER_LABELS[run?.by ?? rememberedProvider() ?? 'claude'];
   // The host records a request before answering it, so until the answer the run may not show it yet.
   const [asking, setAsking] = useState(false);
   const working = (run?.working ?? false) || asking;
@@ -534,12 +537,12 @@ export function Draft({
               <div className="rail-wait">
                 {working ? (
                   <>
-                    <b>Claude is picking tracks</b>
+                    <b>{agent} is picking tracks</b>
                   </>
                 ) : (
                   <>
                     <b>No draft yet</b>
-                    <span>Try again in the Claude panel.</span>
+                    <span>Try again in the {agent} panel.</span>
                   </>
                 )}
               </div>
@@ -582,6 +585,7 @@ export function Draft({
             document.body,
           )}
         <ClaudePanel
+          agent={agent}
           log={log}
           working={working}
           hasDraft={draft !== undefined}

@@ -8,7 +8,7 @@
 |---|---|---|
 | Renderer | Electron, sandboxed, no Node | Screens. Talks only through `window.selecta` (`src/main/preload.ts`). |
 | Main | Electron | The window, and a pipe to the host. No logic. |
-| Host | System `node` | Every call into core (`src/host/api.ts`), `claude -p` runs, and the draft watcher. |
+| Host | System `node` | Every call into core (`src/host/api.ts`), agent runs, and the draft watcher. |
 
 The host runs outside Electron so `better-sqlite3` keeps the one native build that the MCP server, the CLI and the tests use. Rebuilding it for Electron's ABI would rewrite the shared `node_modules` copy and break the others. It talks to main over JSON lines on stdio, one request `{id, method, args}` per line, answered with `{id, result}` or `{id, error}`; events are `{event, ...}` lines. `SELECTA_NODE` picks the Node binary (default `node` on `PATH`).
 
@@ -53,18 +53,35 @@ While linked, your edits on the rail or from the crate keep the playlist in step
 
 ## The agent
 
-Each turn is one `claude -p --output-format stream-json` run on the user's own Claude login (`src/host/agent.ts`). It gets:
+Each turn is one run of a coding-agent CLI on the user's own login to it, so the app needs no API key and builds on a subscription they already pay for (`src/host/agent.ts`). `src/host/providers.ts` holds one adapter per CLI: the arguments for a turn and a parser for its event stream. The brief offers every CLI that is installed and signed in (`src/host/detect.ts`, asked fresh each time the brief opens), says why any other can't run, holds Build until one can, and remembers the last one picked; the panel takes that agent's name. Feedback goes to whichever agent the draft last used.
+
+| Agent | Run | Stream |
+|---|---|---|
+| Claude | `claude -p --output-format stream-json` | `src/host/stream.ts` |
+| Codex | `codex exec --json` | `src/host/codex_stream.ts` |
+
+Claude gets:
 
 - no built-in tools (`--tools ""`), so no shell or file access;
 - only the selecta MCP server, launched from `<repo>/dist/index.js` (`--strict-mcp-config`);
 - read tools plus `show_playlist_draft`, `get_playlist_draft` and `edit_playlist_draft` as the allowlist, under `--permission-mode dontAsk`;
 - every other selecta tool in `--disallowedTools`, because a deny rule beats an allow rule in the user's own Claude settings. `test/agent_tools.test.ts` fails when a new MCP tool is in neither list.
 
+Codex has no switch for "no built-in tools", so it gets the same boundary piece by piece:
+
+- `--ignore-user-config` and `--ignore-rules`, so the user's own MCP servers, profiles and rules stay out while their login still applies;
+- each tool feature off by name (shell, exec, images, web search, browser and computer use, sub-agents and the rest), as `-c features.<name>=false`, which an older Codex without that feature ignores where `--disable` would refuse to start;
+- `--sandbox read-only` underneath, in case a future Codex adds a tool the list doesn't name;
+- the selecta server with `enabled_tools` set to the same allowlist and `disabled_tools` to the same denylist. A call to a tool outside it never reaches the server;
+- `default_tools_approval_mode = "approve"` on that server, since `exec` can't ask and would otherwise fail every MCP call.
+
+Against Codex 0.160.1 that leaves the model selecta's eight allowed tools plus Codex's own MCP resource readers and its ask-the-user tool, which `exec` can't answer. A new Codex release can add tool features that are on by default; the read-only sandbox bounds what they can do, and the feature list is where to turn them off. Builds before 0.150.0 are held back as needing an update: `--ignore-user-config` and `--ignore-rules` arrived in 0.122.0, and until 0.150.0 `view_image` (and `apply_patch` in 0.122) stayed on whatever the feature flags said.
+
 Claude never saves. Save is the app's button, calling the same revision-checked operation as `save_playlist_draft`. A recorded save attempt, good or uncertain, blocks another from the app, as it does over MCP.
 
 Claude can't edit a draft linked to the Selecta Preview playlist, whether Listen or `preview_playlist_draft` over MCP linked it, and the app refuses to start a run on one. Core mirrors every ordered edit of a linked draft into that Music.app playlist, and Claude's only route to Music stays closed. The refusal is the draft store's local-only mode, checked inside the write transaction, so a preview linked mid-run can't slip an agent edit through to Music; the agent's MCP server gets the mode through `SELECTA_LOCAL_DRAFTS=1`. The host's own store is not local-only, so your edits sync the preview. The app's Music writes are Save, and filling and playing Selecta Preview from Listen.
 
-The app mints the draft ID and passes it in the brief, so the screen can open before the draft exists. Later turns `--resume` the session the first turn reported, and always tell Claude to re-read the draft, since the user may have reordered it. Sessions are held in memory: after a restart, feedback starts a fresh session on the same draft. Leaving a draft doesn't stop Claude: the host keeps each draft's numbered run record and the app replays it after a reload or a missed event, so a run that finishes or fails while you're elsewhere is there when you reopen it, and a build that failed before creating its draft stays on Home to retry. `SELECTA_CLAUDE_PATH` overrides the `claude` binary.
+The app mints the draft ID and passes it in the brief, so the screen can open before the draft exists. Later turns resume the session the first turn reported (`--resume` for Claude, `exec resume <thread>` for Codex), and always tell the agent to re-read the draft, since the user may have reordered it. Sessions are held in memory: after a restart, or when the draft moves to another agent, feedback starts a fresh session on the same draft, since the draft itself is what the agent needs. Leaving a draft doesn't stop Claude: the host keeps each draft's numbered run record and the app replays it after a reload or a missed event, so a run that finishes or fails while you're elsewhere is there when you reopen it, and a build that failed before creating its draft stays on Home to retry. `SELECTA_CLAUDE_PATH` and `SELECTA_CODEX_PATH` override the binaries.
 
 ## Live updates
 

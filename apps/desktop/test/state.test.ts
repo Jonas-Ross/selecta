@@ -66,7 +66,7 @@ it('turns agent events into log lines', () => {
   expect(log).toEqual([
     { kind: 'tool', text: 'show playlist draft' },
     { kind: 'claude', text: 'Built it.' },
-    { kind: 'error', text: 'Blocked save_playlist_draft: the app saves, not Claude.' },
+    { kind: 'error', text: 'Blocked save_playlist_draft: only the app saves.' },
   ]);
 });
 
@@ -239,4 +239,32 @@ it('keeps an unsettled removal out when another edit follows it', () => {
   expect(ids(pendingOrder(stored, moved))).toEqual(['c', 'b']);
   // Claude's additions still show after the pending order.
   expect(ids(pendingOrder([...stored, entry('d')], moved))).toEqual(['c', 'b', 'd']);
+});
+
+it('names the agent that took the latest request, live or recovered', () => {
+  let a = runEvent(undefined, { kind: 'asked', text: 'x', brief: true, by: 'codex' }, 0)!;
+
+  a = runEvent(a, { kind: 'done', session_id: 'T' }, 1)!;
+  expect(a.by).toBe('codex');
+  a = runEvent(a, { kind: 'asked', text: 'y', by: 'claude' }, 2)!;
+  expect(a.by).toBe('claude');
+  expect(rejectRun(a, 'Linked.').by).toBe('claude');
+
+  const recovered = recoverRuns(
+    {},
+    {
+      b: {
+        events: [
+          { kind: 'asked', text: 'x', by: 'claude' },
+          { kind: 'done' },
+          { kind: 'asked', text: 'y', by: 'codex' },
+          // A refusal is recorded without one and leaves the name alone.
+          { kind: 'asked', text: 'z' },
+        ],
+        working: false,
+      },
+    },
+  );
+
+  expect(recovered.b!.by).toBe('codex');
 });

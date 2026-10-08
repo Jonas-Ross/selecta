@@ -250,7 +250,7 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
                 </div>
               ) : (
                 <div>
-                  <b>The crate is empty</b>Refresh the library from Claude or the CLI first.
+                  <b>The crate is empty</b>Refresh the library from your AI or the CLI first.
                 </div>
               )}
             </div>

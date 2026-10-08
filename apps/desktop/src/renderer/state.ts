@@ -1,6 +1,6 @@
 // Pure view logic, kept out of the components so it tests without a DOM.
 import type { Draft } from '@selecta/core/drafts/contracts.js';
-import type { AgentEvent, RunSnapshot } from '../shared/protocol.js';
+import type { AgentEvent, ProviderId, RunSnapshot } from '../shared/protocol.js';
 
 type Maturity = 'validated' | 'provisional';
 
@@ -124,7 +124,7 @@ export function logAgentEvent(log: LogItem[], event: AgentEvent): LogItem[] {
     case 'tool':
       return [...log, { kind: 'tool', text: event.name.replaceAll('_', ' ') }];
     case 'denied':
-      return [...log, { kind: 'error', text: `Blocked ${event.name}: the app saves, not Claude.` }];
+      return [...log, { kind: 'error', text: `Blocked ${event.name}: only the app saves.` }];
     case 'error':
       return [...log, { kind: 'error', text: event.message }];
     case 'done':
@@ -133,7 +133,11 @@ export function logAgentEvent(log: LogItem[], event: AgentEvent): LogItem[] {
 }
 
 /** A draft's conversation as the host numbered it; `seen` is how many host events it holds. */
-export type Run = { log: LogItem[]; working: boolean; seen: number };
+export type Run = { log: LogItem[]; working: boolean; seen: number; by?: ProviderId };
+
+/** Who answered the latest request, for the panel's name. */
+const askedBy = (by: ProviderId | undefined, event: AgentEvent) =>
+  event.kind === 'asked' && event.by ? event.by : by;
 
 /** Host event `seq` applied in order; undefined means one was missed, so resync from the host. */
 export function runEvent(run: Run | undefined, event: AgentEvent, seq: number): Run | undefined {
@@ -147,6 +151,7 @@ export function runEvent(run: Run | undefined, event: AgentEvent, seq: number): 
     log: logAgentEvent(run?.log ?? [], event),
     working: event.kind !== 'done' && event.kind !== 'error',
     seen: seen + 1,
+    by: askedBy(run?.by, event),
   };
 }
 
@@ -159,7 +164,12 @@ export function recoverRuns(
 
   for (const [id, { events, working }] of Object.entries(history))
     if (events.length > (runs[id]?.seen ?? 0))
-      next[id] = { log: events.reduce(logAgentEvent, []), working, seen: events.length };
+      next[id] = {
+        log: events.reduce(logAgentEvent, []),
+        working,
+        seen: events.length,
+        by: events.reduce(askedBy, undefined),
+      };
 
   return next;
 }
@@ -175,6 +185,7 @@ export function rejectRun(run: Run | undefined, message: string, asked?: string)
     ],
     working: run?.working ?? false,
     seen: run?.seen ?? 0,
+    by: run?.by,
   };
 }
 

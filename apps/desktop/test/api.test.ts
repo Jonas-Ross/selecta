@@ -4,6 +4,7 @@ import { DraftStore } from '@selecta/core/drafts/store.js';
 import { makeToolDeps } from '../../../packages/core/test/helpers.js';
 import { createApi } from '../src/host/api.js';
 import type { AgentSessions } from '../src/host/agent.js';
+import type { ProviderStatus } from '../src/shared/protocol.js';
 
 const base = makeToolDeps();
 const store = new DraftStore(base.drafts!().path);
@@ -14,11 +15,15 @@ const agent = {
   refuse: vi.fn(),
   cancel: vi.fn(),
   history: vi.fn(() => ({})),
+  provider: vi.fn(() => ({ label: 'Codex' })),
 };
 const artwork = {
   get: vi.fn(async (ids: string[]) => Object.fromEntries(ids.map((id) => [id, null]))),
 };
-const call = createApi(deps, agent as unknown as AgentSessions, artwork);
+const providers = vi.fn(async (): Promise<ProviderStatus[]> => [
+  { id: 'codex', label: 'Codex', ready: true },
+]);
+const call = createApi(deps, agent as unknown as AgentSessions, artwork, providers);
 
 afterEach(() => vi.clearAllMocks());
 
@@ -61,9 +66,20 @@ it('hands briefs and feedback to the agent only when they validate', async () =>
   await call('agent.cancel', { draft_id: draftId });
   expect(await call('agent.history', undefined)).toEqual({});
 
-  expect(agent.start).toHaveBeenCalledWith(draftId, 'deep house');
-  expect(agent.send).toHaveBeenCalledWith(draftId, 'slower', 'typed');
-  expect(agent.send).toHaveBeenCalledTimes(2);
+  await call('agent.start', { draft_id: draftId, brief: 'techno', provider: 'codex' });
+  await call('agent.send', { draft_id: draftId, message: 'faster', provider: 'codex' });
+
+  expect(agent.start).toHaveBeenCalledWith(draftId, 'deep house', undefined);
+  expect(agent.start).toHaveBeenCalledWith(draftId, 'techno', 'codex');
+  expect(agent.send).toHaveBeenCalledWith(draftId, 'slower', 'typed', undefined);
+  expect(agent.send).toHaveBeenCalledWith(draftId, 'faster', undefined, 'codex');
+  expect(agent.send).toHaveBeenCalledTimes(3);
+  expect(await call('agent.providers', undefined)).toEqual([
+    { id: 'codex', label: 'Codex', ready: true },
+  ]);
+  await expect(
+    call('agent.start', { draft_id: draftId, brief: 'x', provider: 'gemini' }),
+  ).rejects.toThrow();
   expect(agent.cancel).toHaveBeenCalledWith(draftId);
   await expect(call('agent.start', { draft_id: draftId, brief: ' ' })).rejects.toThrow();
   await expect(call('agent.start', { draft_id: 'nope', brief: 'x' })).rejects.toThrow();
@@ -74,13 +90,13 @@ it('rejects anything outside the method table', async () => {
   await expect(call('drafts.delete', undefined)).rejects.toThrow('Unknown method');
 });
 
-it('lets the user edit a draft linked to the Music preview, but not Claude', async () => {
+it('lets the user edit a draft linked to the Music preview, but not the agent', async () => {
   const draftId = randomUUID();
 
   store.create(draftId, 'Linked', ['T-TEARDROP', 'T-ROADS']);
   store.claimPreview(draftId, 1, true);
 
-  const linked = /plays through the Selecta Preview playlist/;
+  const linked = /^Codex can't edit this draft while it plays through the Selecta Preview playlist/;
 
   expect(await call('drafts.edit', { draft_id: draftId, revision: 1, name: 'x' })).toMatchObject({
     local_edit_saved: true,
@@ -92,6 +108,14 @@ it('lets the user edit a draft linked to the Music preview, but not Claude', asy
   expect(agent.refuse).toHaveBeenCalledWith(draftId, 'typed', expect.stringMatching(linked));
   expect(agent.start).not.toHaveBeenCalled();
   expect(agent.send).not.toHaveBeenCalled();
+
+  // After a restart the host has no choice on record; the one asked for names the refusal.
+  await call('agent.send', { draft_id: draftId, message: 'go', provider: 'claude' });
+  expect(agent.refuse).toHaveBeenLastCalledWith(
+    draftId,
+    'go',
+    expect.stringMatching(/^Claude can't edit this draft/),
+  );
 });
 
 it('fills the crate newest first, or by relevance to a search, with provenance', async () => {

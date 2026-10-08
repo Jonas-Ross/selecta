@@ -28,8 +28,14 @@ export type Methods = {
   'drafts.get': (args: { draft_id: string }) => unknown;
   'drafts.edit': (args: Record<string, unknown>) => unknown;
   'drafts.save': (args: { draft_id: string; revision: number }) => unknown;
-  'agent.start': (args: { draft_id: string; brief: string }) => void;
-  'agent.send': (args: { draft_id: string; message: string; text?: string }) => void;
+  'agent.providers': () => ProviderStatus[];
+  'agent.start': (args: { draft_id: string; brief: string; provider?: ProviderId }) => void;
+  'agent.send': (args: {
+    draft_id: string;
+    message: string;
+    text?: string;
+    provider?: ProviderId;
+  }) => void;
   'agent.cancel': (args: { draft_id: string }) => void;
   'agent.history': () => Record<string, RunSnapshot>;
   'player.state': (args: { draft_id: string }) => PlayerView;
@@ -47,8 +53,15 @@ export type Methods = {
 
 export type Method = keyof Methods;
 
+export const PROVIDER_IDS = ['claude', 'codex'] as const;
+export type ProviderId = (typeof PROVIDER_IDS)[number];
+export const PROVIDER_LABELS: Record<ProviderId, string> = { claude: 'Claude', codex: 'Codex' };
+
+/** An agent CLI the app can drive, and why it can't run yet when it can't. */
+export type ProviderStatus = { id: ProviderId; label: string; ready: boolean; problem?: string };
+
 export type AgentEvent =
-  | { kind: 'asked'; text: string; brief?: true }
+  | { kind: 'asked'; text: string; brief?: true; by?: ProviderId }
   | { kind: 'text'; text: string }
   | { kind: 'tool'; name: string }
   | { kind: 'denied'; name: string }

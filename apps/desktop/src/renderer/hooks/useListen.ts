@@ -97,7 +97,7 @@ export function useListen({
 
   const status =
     elsewhere(live) ??
-    (current || linked ? 'Claude waits until you stop listening.' : 'Plays in Music.');
+    (current || linked ? 'The agent waits until you stop listening.' : 'Plays in Music.');
 
   return {
     player,

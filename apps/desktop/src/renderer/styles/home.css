@@ -140,6 +140,53 @@
   grid-template-columns: 160px 200px;
   gap: var(--s4);
 }
+/* Which agent builds it, and why one that's installed can't yet. */
+.agents {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.agent-choice {
+  display: flex;
+  gap: var(--s2);
+}
+.agent-choice label {
+  position: relative;
+}
+.agent-choice input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+}
+.agent-choice span {
+  display: block;
+  padding: 7px var(--s3);
+  border: 1px solid var(--line2);
+  border-radius: var(--r-lg);
+  font: 400 var(--fs-title) var(--mono);
+  color: var(--ink2);
+  transition:
+    border-color var(--t-mid),
+    color var(--t-mid);
+}
+.agent-choice input:checked + span {
+  border-color: var(--uv-line);
+  background: var(--uv-soft);
+  color: var(--uv-text);
+}
+.agent-choice input:focus-visible + span {
+  outline: 1px solid var(--uv-line);
+  outline-offset: 2px;
+}
+.agent-choice input:disabled + span {
+  color: var(--ink4);
+}
+.agents .hint {
+  text-align: left;
+}
 .actions {
   display: flex;
   justify-content: flex-end;
