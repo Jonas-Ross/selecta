@@ -11,7 +11,14 @@ import {
 } from '@selecta/core/tools/playlist_draft.js';
 import type { DraftStore } from '@selecta/core/drafts/store.js';
 import { createPlayback } from '@selecta/core/operations/playback.js';
-import { BRIEF_LIMIT, PROVIDER_IDS, type Method, type ProviderStatus } from '../shared/protocol.js';
+import {
+  BRIEF_LIMIT,
+  PROVIDER_IDS,
+  PROVIDER_LABELS,
+  type Method,
+  type ProviderId,
+  type ProviderStatus,
+} from '../shared/protocol.js';
 import { ARTWORK_GET_LIMIT } from '../shared/artwork.js';
 import type { AgentSessions } from './agent.js';
 import type { ArtworkCache } from './artwork.js';
@@ -61,8 +68,9 @@ export function createApi(
     return slot?.owner === draftId && slot.status !== 'inactive';
   }
 
-  const linkedMessage = (draftId: string) =>
-    `${agent.provider(draftId).label} can't edit this draft while it plays through the Selecta Preview playlist in Music. Stop listening to send it feedback.`;
+  // Named for the agent the user asked, which may not be the one the host last ran.
+  const linkedMessage = (draftId: string, provider?: ProviderId) =>
+    `${provider ? PROVIDER_LABELS[provider] : agent.provider(draftId).label} can't edit this draft while it plays through the Selecta Preview playlist in Music. Stop listening to send it feedback.`;
 
   const handlers: Record<Method, (args: unknown) => unknown> = {
     'library.crate': (args) => crate(deps.cache(), args),
@@ -79,13 +87,14 @@ export function createApi(
     'agent.start': (args) => {
       const { draft_id, brief, provider } = Brief.parse(args);
 
-      if (linked(draft_id)) agent.refuse(draft_id, brief, linkedMessage(draft_id), true);
+      if (linked(draft_id)) agent.refuse(draft_id, brief, linkedMessage(draft_id, provider), true);
       else agent.start(draft_id, brief, provider);
     },
     'agent.send': (args) => {
       const { draft_id, message, text, provider } = Message.parse(args);
 
-      if (linked(draft_id)) agent.refuse(draft_id, text ?? message, linkedMessage(draft_id));
+      if (linked(draft_id))
+        agent.refuse(draft_id, text ?? message, linkedMessage(draft_id, provider));
       else agent.send(draft_id, message, text, provider);
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),

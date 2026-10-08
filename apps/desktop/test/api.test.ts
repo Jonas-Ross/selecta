@@ -108,6 +108,14 @@ it('lets the user edit a draft linked to the Music preview, but not the agent', 
   expect(agent.refuse).toHaveBeenCalledWith(draftId, 'typed', expect.stringMatching(linked));
   expect(agent.start).not.toHaveBeenCalled();
   expect(agent.send).not.toHaveBeenCalled();
+
+  // After a restart the host has no choice on record; the one asked for names the refusal.
+  await call('agent.send', { draft_id: draftId, message: 'go', provider: 'claude' });
+  expect(agent.refuse).toHaveBeenLastCalledWith(
+    draftId,
+    'go',
+    expect.stringMatching(/^Claude can't edit this draft/),
+  );
 });
 
 it('fills the crate newest first, or by relevance to a search, with provenance', async () => {
