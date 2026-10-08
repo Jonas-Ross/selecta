@@ -16,7 +16,7 @@ it('reduces a recorded run to narration, tool calls and a done carrying the thre
   ]);
 });
 
-it('ends on turn.failed and skips the retry notices before it', () => {
+it('ends on turn.failed, after saying why it was retrying', () => {
   const parse = parseCodexLine();
   const lines = [
     { type: 'error', message: 'Reconnecting... 1/5 (unexpected status 401 Unauthorized)' },
@@ -24,7 +24,23 @@ it('ends on turn.failed and skips the retry notices before it', () => {
   ];
 
   expect(lines.flatMap((line) => parse(JSON.stringify(line)))).toEqual([
+    { kind: 'text', text: 'Reconnecting... 1/5 (unexpected status 401 Unauthorized)' },
     { kind: 'error', message: 'unexpected status 401 Unauthorized' },
   ]);
   expect(parse('not json')).toEqual([]);
+});
+
+it('keeps an offline run open, naming the wait once rather than per retry', () => {
+  const parse = parseCodexLine();
+  const waiting = JSON.stringify({
+    type: 'error',
+    message: 'Reconnecting... waiting for network (Connection failed: error sending request)',
+  });
+
+  expect([waiting, waiting, waiting].flatMap(parse)).toEqual([
+    {
+      kind: 'text',
+      text: 'Reconnecting... waiting for network (Connection failed: error sending request)',
+    },
+  ]);
 });

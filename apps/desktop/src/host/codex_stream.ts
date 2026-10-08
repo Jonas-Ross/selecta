@@ -5,6 +5,7 @@ import type { AgentEvent } from '../shared/protocol.js';
 type Item = { type?: string; text?: string; tool?: string };
 type Line = {
   type?: string;
+  message?: string;
   thread_id?: string;
   item?: Item;
   error?: { message?: string };
@@ -12,6 +13,7 @@ type Line = {
 
 export function parseCodexLine(): (raw: string) => AgentEvent[] {
   let thread: string | undefined;
+  let notice: string | undefined;
 
   return (raw) => {
     let line: Line;
@@ -39,7 +41,14 @@ export function parseCodexLine(): (raw: string) => AgentEvent[] {
         return [{ kind: 'done', session_id: thread }];
       case 'turn.failed':
         return [{ kind: 'error', message: line.error?.message || 'Codex stopped with an error.' }];
-      // Top-level `error` lines are retry notices; a turn that gives up ends in turn.failed.
+      // Codex keeps retrying after these ("Reconnecting...", even indefinitely while offline),
+      // so the run stays open; shown once each so a stalled run says why.
+      case 'error':
+        if (!line.message || line.message === notice) return [];
+
+        notice = line.message;
+
+        return [{ kind: 'text', text: line.message }];
       default:
         return [];
     }
