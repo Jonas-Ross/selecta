@@ -1,5 +1,7 @@
-import { useState, type FormEvent } from 'react';
-import { BRIEF_LIMIT } from '../../shared/protocol.js';
+import { useEffect, useState, type FormEvent } from 'react';
+import { selecta } from '../api.js';
+import { pickProvider, rememberProvider } from '../providers.js';
+import { BRIEF_LIMIT, type ProviderId, type ProviderStatus } from '../../shared/protocol.js';
 import { TopBar } from './TopBar.js';
 
 export function Brief({
@@ -7,8 +9,22 @@ export function Brief({
   onStart,
 }: {
   onCancel: () => void;
-  onStart: (brief: string) => void;
+  onStart: (brief: string, provider?: ProviderId) => void;
 }) {
+  const [providers, setProviders] = useState<ProviderStatus[]>();
+  const [provider, setProvider] = useState<ProviderId>();
+
+  useEffect(() => {
+    selecta
+      .call('agent.providers')
+      .then((found) => {
+        setProviders(found);
+        setProvider((current) => current ?? pickProvider(found));
+      })
+      // Without the list the host's default still runs, and says what's missing if it can't.
+      .catch(() => setProviders([]));
+  }, []);
+
   const [text, setText] = useState('');
   const [length, setLength] = useState('');
   const [tempo, setTempo] = useState('');
@@ -22,10 +38,15 @@ export function Brief({
     .join('\n');
   // Checked here as well as in the host, so an over-long brief stays on screen to fix.
   const tooLong = brief.length > BRIEF_LIMIT;
+  // Still checking, or none can run. A failed check leaves it to the host, which says what's missing.
+  const noAgent = !providers || (providers.length > 0 && !provider);
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    onStart(brief);
+
+    if (provider) rememberProvider(provider);
+
+    onStart(brief, provider);
   }
 
   return (
@@ -65,12 +86,39 @@ export function Brief({
               />
             </label>
           </div>
+          {providers && providers.length > 0 && (
+            <fieldset className="field agents">
+              <legend className="field-label">Built by</legend>
+              <div className="agent-choice">
+                {providers.map((option) => (
+                  <label key={option.id} title={option.problem}>
+                    <input
+                      type="radio"
+                      name="agent"
+                      value={option.id}
+                      checked={provider === option.id}
+                      disabled={!option.ready}
+                      onChange={() => setProvider(option.id)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              {providers
+                .filter((option) => !option.ready)
+                .map((option) => (
+                  <p key={option.id} className="hint">
+                    {option.label}: {option.problem}
+                  </p>
+                ))}
+            </fieldset>
+          )}
           {tooLong && <p className="notice">Keep the brief under {BRIEF_LIMIT} characters.</p>}
           <div className="actions">
             <button type="button" className="btn line" onClick={onCancel}>
               Cancel
             </button>
-            <button className="btn uv" disabled={!text.trim() || tooLong}>
+            <button className="btn uv" disabled={!text.trim() || tooLong || noAgent}>
               Build it
             </button>
           </div>

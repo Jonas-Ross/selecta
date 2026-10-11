@@ -11,16 +11,25 @@ import {
 } from '@selecta/core/tools/playlist_draft.js';
 import type { DraftStore } from '@selecta/core/drafts/store.js';
 import { createPlayback } from '@selecta/core/operations/playback.js';
-import { BRIEF_LIMIT, type Method } from '../shared/protocol.js';
+import {
+  BRIEF_LIMIT,
+  PROVIDER_IDS,
+  PROVIDER_LABELS,
+  type Method,
+  type ProviderId,
+  type ProviderStatus,
+} from '../shared/protocol.js';
 import { ARTWORK_GET_LIMIT } from '../shared/artwork.js';
 import type { AgentSessions } from './agent.js';
 import type { ArtworkCache } from './artwork.js';
 import { crate } from './library.js';
 
 const DraftId = z.strictObject(getDraftInputShape);
+const Provider = z.enum(PROVIDER_IDS).optional();
 const Brief = z.strictObject({
   ...getDraftInputShape,
   brief: z.string().trim().min(1).max(BRIEF_LIMIT),
+  provider: Provider,
 });
 const Message = z.strictObject({
   ...getDraftInputShape,
@@ -28,6 +37,7 @@ const Message = z.strictObject({
   message: z.string().trim().min(1).max(60_000),
   // What the user typed, for the log; the message adds the selected tracks.
   text: z.string().max(60_000).optional(),
+  provider: Provider,
 });
 const Revision = z.strictObject({ ...revisionInputShape });
 const Play = z.strictObject({
@@ -45,6 +55,7 @@ export function createApi(
   deps: ToolDeps & { drafts: () => DraftStore },
   agent: AgentSessions,
   artwork: ArtworkCache,
+  providers: () => Promise<ProviderStatus[]>,
 ) {
   const drafts = new PlaylistDraftTools(deps);
   const player = createPlayback(deps);
@@ -57,8 +68,9 @@ export function createApi(
     return slot?.owner === draftId && slot.status !== 'inactive';
   }
 
-  const LINKED =
-    "Claude can't edit this draft while it plays through the Selecta Preview playlist in Music. Stop listening to send it feedback.";
+  // Named for the agent the user asked, which may not be the one the host last ran.
+  const linkedMessage = (draftId: string, provider?: ProviderId) =>
+    `${provider ? PROVIDER_LABELS[provider] : agent.provider(draftId).label} can't edit this draft while it plays through the Selecta Preview playlist in Music. Stop listening to send it feedback.`;
 
   const handlers: Record<Method, (args: unknown) => unknown> = {
     'library.crate': (args) => crate(deps.cache(), args),
@@ -71,17 +83,19 @@ export function createApi(
     'drafts.get': (args) => drafts.get(args),
     'drafts.edit': (args) => drafts.edit(args),
     'drafts.save': (args) => drafts.save(args),
+    'agent.providers': () => providers(),
     'agent.start': (args) => {
-      const { draft_id, brief } = Brief.parse(args);
+      const { draft_id, brief, provider } = Brief.parse(args);
 
-      if (linked(draft_id)) agent.refuse(draft_id, brief, LINKED, true);
-      else agent.start(draft_id, brief);
+      if (linked(draft_id)) agent.refuse(draft_id, brief, linkedMessage(draft_id, provider), true);
+      else agent.start(draft_id, brief, provider);
     },
     'agent.send': (args) => {
-      const { draft_id, message, text } = Message.parse(args);
+      const { draft_id, message, text, provider } = Message.parse(args);
 
-      if (linked(draft_id)) agent.refuse(draft_id, text ?? message, LINKED);
-      else agent.send(draft_id, message, text);
+      if (linked(draft_id))
+        agent.refuse(draft_id, text ?? message, linkedMessage(draft_id, provider));
+      else agent.send(draft_id, message, text, provider);
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),
     'agent.history': () => agent.history(),

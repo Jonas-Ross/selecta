@@ -3,7 +3,7 @@ import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from 'selecta/dist/server.js';
 import { SelectaCache } from '@selecta/core/cache/index.js';
 import { makeBridge } from '../../../packages/core/test/helpers.js';
-import { ALLOWED_TOOLS, DENIED_TOOLS } from '../src/host/agent.js';
+import { ALLOWED_TOOLS, DENIED_TOOLS } from '../src/host/providers.js';
 
 // A tool added to the MCP server must be sorted into one list or the other,
 // so the app's agent never picks up a new write by default.

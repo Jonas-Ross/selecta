@@ -11,6 +11,8 @@ import { artworkDir } from '../shared/artwork.js';
 import type { HostEvent } from '../shared/protocol.js';
 import { createActionLog } from './actions.js';
 import { AgentSessions } from './agent.js';
+import { detectProviders } from './detect.js';
+import { PROVIDERS } from './providers.js';
 import { createApi } from './api.js';
 import { createArtworkCache, sipsThumbnail } from './artwork.js';
 import { watchDrafts } from './watch.js';
@@ -21,10 +23,14 @@ const emit = (event: HostEvent) => send(event);
 const actions = createActionLog();
 const dbPath = defaultDbPath();
 let cache: SelectaCache | undefined;
+const paths = {
+  claude: process.env.SELECTA_CLAUDE_PATH,
+  codex: process.env.SELECTA_CODEX_PATH,
+};
 const agent = new AgentSessions({
   // The root build keeps <repo>/dist/index.js pointing at the MCP server.
   mcpEntry: fileURLToPath(new URL('../../../dist/index.js', import.meta.url)),
-  claudePath: process.env.SELECTA_CLAUDE_PATH,
+  paths,
   // Outside any project, so no CLAUDE.md or project settings leak into the run.
   cwd: tmpdir(),
   emit: (draft_id, data, seq) => {
@@ -45,6 +51,7 @@ const call = createApi(
     resize: sipsThumbnail,
     log: (message) => console.error(message),
   }),
+  () => detectProviders(Object.values(PROVIDERS), paths),
 );
 const stopWatching = watchDrafts(
   draftDbPath(dbPath),

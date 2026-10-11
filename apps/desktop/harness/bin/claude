@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// The brief's checks that claude is installed and signed in.
+if (process.argv[2] === '--version' || process.argv[2] === 'auth') process.exit(0);
+
 const response = await fetch(`${process.env.SELECTA_SIM_URL}/claude`, {
   method: 'POST',
   body: JSON.stringify(process.argv.slice(2)),

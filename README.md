@@ -11,7 +11,7 @@ There's no recommendation engine in here, no similarity scoring, no ML. Your age
 - macOS with Music.app
 - Node.js 22+
 - Optional: [metrognome](https://github.com/Jonas-Ross/metrognome) (`brew install jonas-ross/tap/metrognome`), to measure tempo and key for tracks the free catalogs don't know
-- Optional: a signed-in [Claude Code CLI](https://docs.claude.com/en/docs/claude-code), for the desktop app
+- Optional: a signed-in [Claude Code](https://docs.claude.com/en/docs/claude-code) or [Codex](https://developers.openai.com/codex/cli) CLI, for the desktop app
 
 ## Setup
 
@@ -154,11 +154,11 @@ Selecta only writes where you point it: it creates playlists, overwrites its own
 
 ## Desktop app (early)
 
-A desktop app on the same core. Press New playlist, describe what you want, and Claude builds a draft from your library while you watch. The draft is a row of records on a rail, with tempo and key lanes underneath that show how the set moves from track to track. Above it is a crate of your library to flip through and drag records from. Drag to reorder, select records to point your feedback at them, and save to Music.app when you're happy.
+A desktop app on the same core. Press New playlist, describe what you want, and Claude or Codex builds a draft from your library while you watch. The draft is a row of records on a rail, with tempo and key lanes underneath that show how the set moves from track to track. Above it is a crate of your library to flip through and drag records from. Drag to reorder, select records to point your feedback at them, and save to Music.app when you're happy.
 
-Listen plays the draft through Music.app from the Selecta Preview playlist: the record playing, the join into the next one, and a Camelot wheel tracing the set's route. Selecta never touches audio or Music's volume itself, and Claude waits until you stop listening before it edits again.
+Listen plays the draft through Music.app from the Selecta Preview playlist: the record playing, the join into the next one, and a Camelot wheel tracing the set's route. Selecta never touches audio or Music's volume itself, and the agent waits until you stop listening before it edits again.
 
-It uses your own `claude` CLI login, so there's no API key. Claude can read your library and edit the draft, but it can't save or touch Music.app; only you can.
+It uses your own `claude` or `codex` CLI login, so there's no API key. The agent can read your library and edit the draft, but it can't save or touch Music.app; only you can.
 
 ```bash
 npm run build

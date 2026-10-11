@@ -1,4 +1,4 @@
-// Claude, docked right: the brief, the run's log, and the feedback box.
+// The agent, docked right: the brief, the run's log, and the feedback box.
 // Selected records ride above the box as the subject of what you type.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { LogItem, Row } from '../state.js';
@@ -21,6 +21,7 @@ function group(log: LogItem[]): Group[] {
 }
 
 export function ClaudePanel({
+  agent,
   log,
   working,
   hasDraft,
@@ -30,6 +31,7 @@ export function ClaudePanel({
   onSend,
   onStop,
 }: {
+  agent: string;
   log: LogItem[];
   working: boolean;
   hasDraft: boolean;
@@ -62,9 +64,9 @@ export function ClaudePanel({
   }
 
   return (
-    <aside className="claude" aria-label="Claude">
+    <aside className="claude" aria-label={agent}>
       <div className="claude-head">
-        <h2>Claude</h2>
+        <h2>{agent}</h2>
         <span className={working ? 'state working' : 'state'}>{working ? 'working' : 'ready'}</span>
       </div>
       {brief && (
@@ -93,14 +95,14 @@ export function ClaudePanel({
           ) : (
             <div key={index} className={`msg ${item.kind}`}>
               <span className="who">
-                {item.kind === 'you' ? 'You' : item.kind === 'claude' ? 'Claude' : 'Problem'}
+                {item.kind === 'you' ? 'You' : item.kind === 'claude' ? agent : 'Problem'}
               </span>
               {item.text}
             </div>
           ),
         )}
         {working && (
-          <div className="working" aria-label="Claude is working">
+          <div className="working" aria-label={`${agent} is working`}>
             <i />
             <i />
             <i />
@@ -140,13 +142,13 @@ export function ClaudePanel({
                 e.currentTarget.form?.requestSubmit();
               }
             }}
-            aria-label="Message to Claude"
+            aria-label={`Message to ${agent}`}
             placeholder={
               !hasDraft && !working
                 ? 'Describe the playlist to try again'
                 : selected.length
                   ? `What should change about ${selected.length === 1 ? 'this track' : 'these tracks'}?`
-                  : 'Tell Claude what to change'
+                  : `Tell ${agent} what to change`
             }
           />
           {working ? (
