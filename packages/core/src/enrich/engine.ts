@@ -54,6 +54,9 @@ export type EnrichOptions = (
   | {
       trackIds: string[];
       limit?: undefined;
+      // Measure again even where this source already settled the track, as a
+      // user asking for one track does; the latest attempt replaces the old.
+      retry?: boolean;
     }
 ) & { source?: FeatureSource };
 
@@ -372,7 +375,7 @@ function selectTargets(
         ? cache.getAudioFeatures(id)?.catalogStatus
         : cache.getAudioFeatures(id)?.analysisStatus;
 
-    if (attempted != null) {
+    if (attempted != null && opts.retry !== true) {
       alreadyAttempted.push({ trackPersistentId: id, existingResult: resultForStatus(attempted) });
       continue;
     }

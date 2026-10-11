@@ -28,7 +28,7 @@ the whole point, since that is exactly the 2022-and-later gap. The two
 backlogs are counted separately by `status` and by each pass's
 `pending_remaining`.
 
-Those columns record the latest attempt, so a retry that fails after an earlier
+A targeted run can ask to `retry`, which attempts tracks that source already settled instead of reporting them as already attempted; the desktop app's Measure button is the one caller. Those columns record the latest attempt, so a retry that fails after an earlier
 success reads `no_match` while the earlier value stays on the row. `status`
 therefore reports each source's `owns` beside its attempt outcomes: how many
 stored values carry that source's provenance. `successful` can drop after a

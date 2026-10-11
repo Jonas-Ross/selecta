@@ -712,6 +712,42 @@ describe('the analysis enrichment pass', () => {
     cache.close();
   });
 
+  it('measures a settled track again when asked to retry, keeping what it had', async () => {
+    const cache = seeded();
+
+    cache.saveAudioFeatures([
+      featuresRow({
+        trackPersistentId: 'T-MIDNIGHT',
+        musicalKey: null,
+        camelot: null,
+        sources: { bpm: 'deezer' },
+        catalogStatus: null,
+        analysisStatus: 'ok',
+      }),
+    ]);
+
+    const stub = answeringStub({ 'T-MIDNIGHT': line('T-MIDNIGHT') });
+    const summary = await enrichPendingTracks(
+      cache,
+      { trackIds: ['T-MIDNIGHT'], source: 'analysis', retry: true },
+      stub,
+    );
+
+    expect(stub.input().map((raw) => JSON.parse(raw).client_ref)).toEqual(['T-MIDNIGHT']);
+    expect(summary).toMatchObject({
+      processed: 1,
+      enriched: 1,
+      alreadyAttempted: 0,
+      outcomes: [{ trackPersistentId: 'T-MIDNIGHT', outcome: 'enriched' }],
+    });
+    expect(cache.getAudioFeatures('T-MIDNIGHT')).toMatchObject({
+      bpm: 78.42, // gap-fill still keeps the tempo it had
+      musicalKey: parsed('T-MIDNIGHT').features.key.key,
+      analysisStatus: 'ok',
+    });
+    cache.close();
+  });
+
   it('reports a second attempt on the same source as already attempted', async () => {
     const cache = seeded();
 
