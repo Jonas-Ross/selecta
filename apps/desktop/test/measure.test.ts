@@ -1,0 +1,167 @@
+import { readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { expect, it, vi } from 'vitest';
+import { featuresRow, makeToolDeps } from '../../../packages/core/test/helpers.js';
+import { DraftStore } from '@selecta/core/drafts/store.js';
+import { withOperation } from '@selecta/core/operations/lock.js';
+import { createApi } from '../src/host/api.js';
+import type { AgentSessions } from '../src/host/agent.js';
+import { createMeasurer, SEARCH_SPACING_MS, verdict } from '../src/host/measure.js';
+
+const recorded = readFileSync(
+  new URL('../../../packages/core/test/fixtures/metrognome.jsonl', import.meta.url),
+  'utf8',
+)
+  .trim()
+  .split('\n');
+
+/** A clock that only moves when the measurer sleeps. */
+function clock() {
+  let t = 0;
+  const waits: number[] = [];
+
+  return {
+    waits,
+    now: () => t,
+    sleep: async (ms: number) => {
+      waits.push(ms);
+      t += ms;
+    },
+  };
+}
+
+it('joins a second request for the same track and batches the ones that queue meanwhile', async () => {
+  const runs: string[][] = [];
+  let finish!: () => void;
+  const time = clock();
+  const measurer = createMeasurer({
+    run: (ids) => {
+      runs.push(ids);
+
+      return runs.length === 1
+        ? new Promise((resolve) => (finish = () => resolve({ skipped: [], errors: [] })))
+        : Promise.resolve({ skipped: [], errors: [] });
+    },
+    features: (id) => featuresRow({ trackPersistentId: id, analysisStatus: 'ok' }),
+    ...time,
+  });
+
+  const first = measurer.measure('A');
+
+  expect(measurer.measure('A')).toBe(first);
+  await Promise.resolve();
+
+  const queued = [measurer.measure('B'), measurer.measure('C'), measurer.measure('B')];
+
+  finish();
+  await Promise.all([first, ...queued]);
+
+  expect(runs).toEqual([['A'], ['B', 'C']]);
+  // The second run waits out the first's share of the store's search budget.
+  expect(time.waits).toEqual([0, SEARCH_SPACING_MS]);
+});
+
+it('says why each blank feature is still blank', () => {
+  const row = (over: Parameters<typeof featuresRow>[0]) => featuresRow({ ...over });
+
+  expect(verdict(row({ analysisStatus: 'ok' }))).toEqual({});
+  expect(verdict(row({ musicalKey: null, analysisStatus: 'ok' }))).toEqual({ key: 'unsure' });
+  expect(verdict(row({ bpm: null, musicalKey: null, analysisStatus: 'no_data' }))).toEqual({
+    tempo: 'no_reading',
+    key: 'no_reading',
+  });
+  expect(verdict(row({ bpm: null, analysisStatus: 'no_match' }))).toEqual({ tempo: 'not_found' });
+  expect(verdict(undefined, 'metrognome was not found')).toEqual({
+    tempo: 'failed',
+    key: 'failed',
+    error: 'metrognome was not found',
+  });
+});
+
+it('hands a run failure to every waiting request', async () => {
+  const measurer = createMeasurer({
+    run: () => Promise.reject(new Error('Another enrich operation is active')),
+    features: () => undefined,
+    ...clock(),
+  });
+
+  await expect(measurer.measure('A')).rejects.toThrow('Another enrich operation');
+  // A failed run leaves nothing behind, so asking again tries again.
+  await expect(measurer.measure('A')).rejects.toThrow('Another enrich operation');
+});
+
+function apiWith(metrognome: object) {
+  const base = makeToolDeps();
+  const store = new DraftStore(base.drafts!().path);
+  const deps = { ...base, drafts: () => store, enrich: { metrognome } };
+  const artwork = { get: vi.fn() };
+
+  return {
+    cache: base.cacheInstance,
+    call: createApi(deps, {} as AgentSessions, artwork, async () => []),
+  };
+}
+
+const installed = { binaryPath: 'metrognome', readVersion: async () => 'metrognome 0.1.0\n' };
+
+it('measures a track metrognome already gave up on, and stores what it hears', async () => {
+  // Echoes the recorded M83 result for whichever track is asked about.
+  const answer = recorded.find((l) => l.includes('"client_ref":"T-MIDNIGHT"'))!;
+  const script = `require('readline').createInterface({ input: process.stdin }).on('line', (l) => {
+    const ref = JSON.parse(l).client_ref;
+    console.log(${JSON.stringify(answer)}.replace('"T-MIDNIGHT"', JSON.stringify(ref)));
+  });`;
+  const { cache, call } = apiWith({
+    ...installed,
+    spawnLike: () => spawn(process.execPath, ['-e', script]),
+  });
+
+  cache.saveAudioFeatures([
+    featuresRow({
+      trackPersistentId: 'T-ROADS',
+      bpm: null,
+      musicalKey: null,
+      camelot: null,
+      sources: null,
+      status: 'no_data',
+      catalogStatus: null,
+      analysisStatus: 'no_data',
+    }),
+  ]);
+
+  expect(await call('features.measure', { track_id: 'T-ROADS' })).toEqual({});
+  expect(cache.getAudioFeatures('T-ROADS')).toMatchObject({
+    camelot: '8A',
+    keyMaturity: 'provisional',
+    analysisStatus: 'ok',
+  });
+  expect(cache.getAudioFeatures('T-ROADS')!.sources).toMatchObject({
+    bpm: 'metrognome/onset-autocorrelation-comb@1',
+  });
+});
+
+it('says plainly when metrognome cannot run', async () => {
+  const { call } = apiWith({
+    ...installed,
+    spawnLike: () => {
+      throw new Error('spawn metrognome ENOENT');
+    },
+  });
+
+  expect(await call('features.measure', { track_id: 'T-ROADS' })).toMatchObject({
+    tempo: 'failed',
+    key: 'failed',
+    error: expect.stringContaining('ENOENT'),
+  });
+  await expect(call('features.measure', { track_id: '' })).rejects.toThrow();
+});
+
+it('says so in plain words when another run holds the cache', async () => {
+  const { cache, call } = apiWith(installed);
+
+  await withOperation(cache, 'enrich', () =>
+    expect(call('features.measure', { track_id: 'T-ROADS' })).rejects.toThrow(
+      'Another measuring run is going',
+    ),
+  );
+});

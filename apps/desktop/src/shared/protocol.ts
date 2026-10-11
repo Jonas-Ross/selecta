@@ -38,6 +38,7 @@ export type Methods = {
   }) => void;
   'agent.cancel': (args: { draft_id: string }) => void;
   'agent.history': () => Record<string, RunSnapshot>;
+  'features.measure': (args: { track_id: string }) => Measured;
   'player.state': (args: { draft_id: string }) => PlayerView;
   'player.play': (args: {
     draft_id: string;
@@ -52,6 +53,12 @@ export type Methods = {
 };
 
 export type Method = keyof Methods;
+
+/** Why a feature is still blank after metrognome tried it. */
+export type MissReason = 'unsure' | 'no_reading' | 'not_found' | 'failed';
+
+/** A measurement's outcome: each feature still blank, and why; `error` when the run itself failed. */
+export type Measured = { tempo?: MissReason; key?: MissReason; error?: string };
 
 export const PROVIDER_IDS = ['claude', 'codex'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
