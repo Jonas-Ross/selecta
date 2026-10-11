@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { SelectaCache, defaultDbPath } from '@selecta/core/cache/index.js';
 import { bridge } from '@selecta/core/bridge/index.js';
 import { DraftStore, draftDbPath } from '@selecta/core/drafts/store.js';
+import { releaseHeldEnrichLocks } from '@selecta/core/operations/lock.js';
 import { artworkDir } from '../shared/artwork.js';
 import type { HostEvent } from '../shared/protocol.js';
 import { createActionLog } from './actions.js';
@@ -15,6 +16,7 @@ import { detectProviders } from './detect.js';
 import { PROVIDERS } from './providers.js';
 import { createApi } from './api.js';
 import { createArtworkCache, sipsThumbnail } from './artwork.js';
+import { trackedSpawn } from './measure.js';
 import { watchDrafts } from './watch.js';
 
 const send = (message: object) => process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -23,6 +25,7 @@ const emit = (event: HostEvent) => send(event);
 const actions = createActionLog();
 const dbPath = defaultDbPath();
 let cache: SelectaCache | undefined;
+const metrognome = trackedSpawn();
 const paths = {
   claude: process.env.SELECTA_CLAUDE_PATH,
   codex: process.env.SELECTA_CODEX_PATH,
@@ -43,6 +46,7 @@ const call = createApi(
     cache: () => (cache ??= SelectaCache.open(dbPath)),
     bridge,
     drafts: () => new DraftStore(draftDbPath(dbPath)),
+    enrich: { metrognome: { spawnLike: metrognome.spawnLike } },
   },
   agent,
   createArtworkCache({
@@ -74,6 +78,9 @@ createInterface({ input: process.stdin })
   // Main closing stdin is the shutdown signal.
   .on('close', () => {
     agent.cancelAll();
+    // A measurement mid-run would otherwise hold the enrich lock past the cache closing.
+    metrognome.killAll();
+    releaseHeldEnrichLocks();
     stopWatching();
     cache?.close();
   });

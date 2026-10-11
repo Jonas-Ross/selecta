@@ -6,7 +6,7 @@ import { DraftStore } from '@selecta/core/drafts/store.js';
 import { withOperation } from '@selecta/core/operations/lock.js';
 import { createApi } from '../src/host/api.js';
 import type { AgentSessions } from '../src/host/agent.js';
-import { createMeasurer, SEARCH_SPACING_MS, verdict } from '../src/host/measure.js';
+import { createMeasurer, SEARCH_SPACING_MS, trackedSpawn, verdict } from '../src/host/measure.js';
 
 const recorded = readFileSync(
   new URL('../../../packages/core/test/fixtures/metrognome.jsonl', import.meta.url),
@@ -164,4 +164,13 @@ it('says so in plain words when another run holds the cache', async () => {
       'Another measuring run is going',
     ),
   );
+});
+
+it('stops a metrognome still running when the app quits', async () => {
+  const tracked = trackedSpawn();
+  const child = tracked.spawnLike(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)']);
+  const closed = new Promise((resolve) => child.on('close', (_code, signal) => resolve(signal)));
+
+  tracked.killAll();
+  expect(await closed).toBe('SIGTERM');
 });

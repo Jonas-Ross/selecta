@@ -1,6 +1,8 @@
 // Measuring one track on request: metrognome over that track's store preview,
 // through the same analysis pass `enrich --source analysis` runs. Requests
 // share one queue so a run of clicks never outpaces the iTunes rate limit.
+import { spawn, type ChildProcess } from 'node:child_process';
+import type { SpawnLike } from '@selecta/core/enrich/metrognome.js';
 import type { AudioFeaturesRow } from '@selecta/core/types/cache.js';
 import type { Measured, MissReason } from '../shared/protocol.js';
 
@@ -99,5 +101,24 @@ export function verdict(row: AudioFeaturesRow | undefined, failure?: string): Me
     ...(row?.bpm == null && { tempo: why }),
     ...(row?.musicalKey == null && { key: why }),
     ...(failure !== undefined && { error: failure }),
+  };
+}
+
+/** Spawns metrognome and remembers it, so quitting the app can stop a measurement mid-run. */
+export function trackedSpawn() {
+  const children = new Set<ChildProcess>();
+
+  return {
+    spawnLike: ((command, args) => {
+      const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+
+      children.add(child);
+      child.on('close', () => children.delete(child));
+
+      return child;
+    }) satisfies SpawnLike,
+    killAll(): void {
+      for (const child of children) child.kill();
+    },
   };
 }
