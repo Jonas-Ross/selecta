@@ -9,6 +9,10 @@ import { fileURLToPath } from 'node:url';
 import { ARTWORK_SCHEME, artworkDir, artworkFileFor } from '../shared/artwork.js';
 import type { HostEvent } from '../shared/protocol.js';
 
+// Named Selecta, Electron would put its profile in the folder core keeps library.db in;
+// this is where it lived before the rename.
+app.setPath('userData', join(app.getPath('appData'), '@selecta/desktop'));
+
 const here = (file: string) => fileURLToPath(new URL(file, import.meta.url));
 const pending = new Map<
   number,

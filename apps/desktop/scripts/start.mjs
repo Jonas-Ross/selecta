@@ -72,7 +72,7 @@ function bundle() {
   }
 
   // Editing Info.plist breaks Electron's signature, which macOS then refuses to run.
-  execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'ignore' });
+  execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'pipe' });
   writeFileSync(stampFile, stamp);
 
   return app;

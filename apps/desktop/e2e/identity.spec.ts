@@ -16,12 +16,15 @@ test('names itself Selecta and points Help at Selecta, not Electron', async ({
     return {
       name: app.getName(),
       version: app.getVersion(),
+      userData: app.getPath('userData'),
       labels: labels(Menu.getApplicationMenu()?.items ?? []),
     };
   });
 
   expect(identity.name).toBe('Selecta');
   expect(identity.version).toBe(pkg.version);
+  // Electron's profile never lands in the folder named for the app, where core keeps library.db.
+  expect(identity.userData.split('/').at(-1)).not.toBe('Selecta');
   expect(identity.labels).toEqual(expect.arrayContaining(['Selecta Website', 'Report a Problem']));
   expect(identity.labels.filter((label) => /electron/i.test(label))).toEqual([]);
 });
