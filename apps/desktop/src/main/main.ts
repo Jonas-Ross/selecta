@@ -1,5 +1,5 @@
 // Electron main stays a pipe: a window, and the core host process behind it.
-import { app, BrowserWindow, dialog, ipcMain, protocol } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -89,8 +89,29 @@ async function serveArtwork(request: Request): Promise<Response> {
   }
 }
 
+// Electron's default menu, with Help pointing at Selecta rather than Electron.
+function menu() {
+  const open = (url: string) => () => void shell.openExternal(url);
+
+  return Menu.buildFromTemplate([
+    { role: 'appMenu' },
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Selecta Website', click: open('https://jonas-ross.github.io/selecta/') },
+        { label: 'Report a Problem', click: open('https://github.com/Jonas-Ross/selecta/issues') },
+      ],
+    },
+  ]);
+}
+
 void app.whenReady().then(() => {
   protocol.handle(ARTWORK_SCHEME, serveArtwork);
+  Menu.setApplicationMenu(menu());
   window = new BrowserWindow({
     width: 1440,
     height: 900,

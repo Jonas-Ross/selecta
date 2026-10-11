@@ -19,3 +19,6 @@ coverage/
 
 # Playwright's traces and screenshots from the desktop harness.
 apps/desktop/test-results/
+
+# The renamed Electron.app the desktop app runs from on macOS.
+apps/desktop/.dev/

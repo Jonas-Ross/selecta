@@ -1,5 +1,6 @@
 {
   "name": "@selecta/desktop",
+  "productName": "Selecta",
   "version": "0.1.0",
   "private": true,
   "description": "Selecta desktop app: build playlists from your library with Claude.",
@@ -8,7 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.host.json && tsc -p tsconfig.renderer.json && tsc && node build.mjs",
     "e2e": "playwright test",
-    "start": "electron ."
+    "start": "node scripts/start.mjs"
   },
   "dependencies": {
     "@selecta/core": "0.1.0",
@@ -24,5 +25,15 @@
     "@types/react-dom": "^19.3.0",
     "electron": "^44.5.1",
     "selecta": "0.1.0"
+  },
+  "build": {
+    "appId": "io.github.jonas-ross.selecta",
+    "copyright": "Copyright © 2026 Jonas Ross",
+    "mac": {
+      "category": "public.app-category.music",
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "Selecta reads your library and plays your drafts in Music."
+      }
+    }
   }
 }
