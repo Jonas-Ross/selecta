@@ -222,14 +222,14 @@ it('resumes a codex thread, and starts fresh when the draft switches provider', 
   expect(() => agent.send(DRAFT, 'again')).toThrow('Claude is already working on this draft.');
 });
 
-it('hands a swapped-in agent the earlier requests, and not one that is resuming', async () => {
+it('hands a swapped-in agent the earlier requests as sent, and not one that is resuming', async () => {
   const { runs, spawn } = fakeClaude();
   const { agent } = sessions(spawn);
 
   agent.start(DRAFT, 'deep house\nLength: about 10 tracks.');
   runs[0]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
   await settle();
-  agent.send(DRAFT, 'less vocal');
+  agent.send(DRAFT, 'About these tracks:\n- Halo\n\nless vocal', 'less vocal');
   runs[1]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
   await settle();
   // Refused before running, so never part of the conversation.
@@ -238,7 +238,7 @@ it('hands a swapped-in agent the earlier requests, and not one that is resuming'
 
   expect(flag(runs[1]!.args, '-p')).not.toContain('Earlier requests');
   expect(runs[2]!.args.at(-1)).toContain(
-    'Earlier requests on this draft, oldest first:\n- deep house\n  Length: about 10 tracks.\n- less vocal\n\nFeedback:\ndarker',
+    'Earlier requests on this draft, oldest first:\n- deep house\n  Length: about 10 tracks.\n- About these tracks:\n  - Halo\n  \n  less vocal\n\nFeedback:\ndarker',
   );
   expect(runs[2]!.args.at(-1)).not.toContain('linked');
 });

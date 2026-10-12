@@ -1,6 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ProviderStatus } from '../src/shared/protocol.js';
-import { pickProvider, rememberProvider, rememberedProvider } from '../src/renderer/providers.js';
+import {
+  canSwap,
+  pickProvider,
+  rememberProvider,
+  rememberedProvider,
+} from '../src/renderer/providers.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -37,4 +42,17 @@ it('treats storage that throws as nothing remembered', () => {
 
   expect(() => rememberProvider('codex')).not.toThrow();
   expect(pickProvider(found)).toBe('claude');
+});
+
+it('offers a swap with two agents ready, or when the draft is stuck on one that cannot run', () => {
+  const claude = { id: 'claude', label: 'Claude', ready: true } as const;
+  const codex = { id: 'codex', label: 'Codex', ready: true } as const;
+  const signedOut = { ...claude, ready: false };
+
+  expect(canSwap([claude, codex], 'claude')).toBe(true);
+  expect(canSwap([claude, { ...codex, ready: false }], 'claude')).toBe(false);
+  expect(canSwap([signedOut, codex], 'claude')).toBe(true);
+  expect(canSwap([signedOut, codex], 'codex')).toBe(false);
+  expect(canSwap([signedOut, { ...codex, ready: false }], 'claude')).toBe(false);
+  expect(canSwap(undefined, 'claude')).toBe(false);
 });

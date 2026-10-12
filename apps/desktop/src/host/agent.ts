@@ -29,6 +29,8 @@ export class AgentSessions {
   private running = new Map<string, () => void>();
   // The host outlives any renderer, so it keeps the record a reload replays.
   private events = new Map<string, AgentEvent[]>();
+  // What each agent was actually sent, selection included, for a handoff.
+  private asks = new Map<string, string[]>();
 
   constructor(private options: AgentOptions) {}
 
@@ -51,6 +53,7 @@ export class AgentSessions {
       brief: true,
       by: this.provider(draftId).id,
     });
+    this.asked(draftId, brief);
     this.run(draftId, `Draft ID: ${draftId}\n\nBrief:\n${brief}`);
   }
 
@@ -66,6 +69,7 @@ export class AgentSessions {
     const earlier = this.handoff(draftId, by);
 
     this.record(draftId, { kind: 'asked', text, by });
+    this.asked(draftId, message);
     this.run(
       draftId,
       `Draft ID: ${draftId}\n\nRead the current draft with get_playlist_draft before changing it; the user may have edited it.${earlier}\n\nFeedback:\n${message}`,
@@ -77,13 +81,17 @@ export class AgentSessions {
   private handoff(draftId: string, by: ProviderId): string {
     if (this.sessions.get(draftId)?.provider === by) return '';
 
-    const asked = (this.events.get(draftId) ?? []).flatMap((event) =>
-      event.kind === 'asked' && event.by ? [`- ${event.text.replaceAll('\n', '\n  ')}`] : [],
+    const asked = (this.asks.get(draftId) ?? []).map(
+      (message) => `- ${message.replaceAll('\n', '\n  ')}`,
     );
 
     return asked.length
       ? `\n\nEarlier requests on this draft, oldest first:\n${asked.join('\n')}`
       : '';
+  }
+
+  private asked(draftId: string, message: string): void {
+    this.asks.set(draftId, [...(this.asks.get(draftId) ?? []), message]);
   }
 
   /** A request refused before Claude started, kept in the draft's log like any other outcome. */

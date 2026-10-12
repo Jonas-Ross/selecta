@@ -2,6 +2,7 @@
 // Selected records ride above the box as the subject of what you type.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PROVIDER_LABELS, type ProviderId, type ProviderStatus } from '../../shared/protocol.js';
+import { canSwap } from '../providers.js';
 import type { LogItem, Row } from '../state.js';
 
 type Group = { kind: 'tools'; names: string[] } | LogItem;
@@ -35,7 +36,7 @@ export function ClaudePanel({
   onStop,
 }: {
   by: ProviderId;
-  /** The agents this machine has; with two that can run, the head lets you swap. */
+  /** The agents this machine has, for the head's swap. */
   choices?: ProviderStatus[];
   onPick: (id: ProviderId) => void;
   log: LogItem[];
@@ -73,7 +74,7 @@ export function ClaudePanel({
   return (
     <aside className="claude" aria-label={agent}>
       <div className="claude-head">
-        {choices && choices.filter((option) => option.ready).length > 1 ? (
+        {choices && canSwap(choices, by) ? (
           <div className="agent-choice small" role="radiogroup" aria-label="Agent">
             {choices.map((option) => (
               <label key={option.id} title={option.problem}>
