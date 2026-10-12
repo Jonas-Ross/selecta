@@ -107,4 +107,11 @@ it('stops an audition only once one still starting has landed, however it lands'
 
   await stopAfter(undefined, stop);
   expect(calls).toEqual(['stop', 'stop']);
+
+  // A pause that fails is the caller's to say, not swallowed here.
+  await expect(
+    stopAfter(Promise.resolve(), async () => {
+      throw new Error('Music could not be paused. Pause it in Music.');
+    }),
+  ).rejects.toThrow('Music could not be paused');
 });

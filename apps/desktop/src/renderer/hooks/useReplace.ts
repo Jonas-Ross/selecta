@@ -19,7 +19,12 @@ export type Replacing = {
   shown: string[];
 };
 
-export function useReplace(draftId: string, provider: () => ProviderId | undefined) {
+export function useReplace(
+  draftId: string,
+  provider: () => ProviderId | undefined,
+  // Closing outlives the shortlist, so a pause that fails is said where the draft shows notices.
+  warn: (message: string) => void,
+) {
   const [state, setState] = useState<Replacing>();
   const [heard, setHeard] = useState<AuditionView>();
   const [busy, setBusy] = useState(false);
@@ -77,14 +82,14 @@ export function useReplace(draftId: string, provider: () => ProviderId | undefin
 
     if (auditioned.current)
       void stopAfter(starting.current, () => selecta.call('player.auditionStop')).catch(
-        () => undefined,
+        (e: Error) => warn(e.message),
       );
 
     auditioned.current = false;
     starting.current = undefined;
     setPolling(false);
     setHeard(undefined);
-  }, [draftId]);
+  }, [draftId, warn]);
 
   // Leaving the draft leaves Music where it was, minus the audition.
   useEffect(() => close, [close]);

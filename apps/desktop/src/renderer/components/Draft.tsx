@@ -95,7 +95,7 @@ export function Draft({
   const [tab, setTab] = useState<'dig' | 'listen'>('dig');
   const [menu, setMenu] = useState<{ entryId: string; x: number; y: number }>();
   const [swapped, setSwapped] = useState<{ text: string; undo?: () => void }>();
-  const replace = useReplace(draftId, () => run?.by ?? rememberedProvider());
+  const replace = useReplace(draftId, () => run?.by ?? rememberedProvider(), setNotice);
   const replacing = replace.state;
   const closeMenu = useCallback(() => setMenu(undefined), []);
 
