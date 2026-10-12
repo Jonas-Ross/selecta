@@ -38,7 +38,7 @@ export function packagedPath(
   env: NodeJS.ProcessEnv,
   home: string,
   bundledBin: string,
-  shellPath = loginShellPath(env.SHELL ?? '/bin/zsh'),
+  shellPath: string | undefined,
 ): string {
   const dirs = (shellPath ?? [env.PATH ?? '', ...FALLBACK_DIRS(home)].join(delimiter))
     .split(delimiter)

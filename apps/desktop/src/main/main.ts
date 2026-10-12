@@ -8,7 +8,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { ARTWORK_SCHEME, artworkDir, artworkFileFor } from '../shared/artwork.js';
 import type { HostEvent } from '../shared/protocol.js';
-import { packagedPath } from './env.js';
+import { loginShellPath, packagedPath } from './env.js';
 
 // Named Selecta, Electron would put its profile in the folder core keeps library.db in;
 // this is where it lived before the rename.
@@ -30,7 +30,12 @@ const host = app.isPackaged
       stdio: ['pipe', 'pipe', 'inherit'],
       env: {
         ...process.env,
-        PATH: packagedPath(process.env, homedir(), core('')),
+        PATH: packagedPath(
+          process.env,
+          homedir(),
+          core(''),
+          loginShellPath(process.env.SHELL ?? '/bin/zsh'),
+        ),
         SELECTA_MCP_ENTRY: core('mcp.js'),
       },
     })
