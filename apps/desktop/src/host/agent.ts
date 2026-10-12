@@ -62,11 +62,28 @@ export class AgentSessions {
 
     if (provider) this.chosen.set(draftId, provider);
 
-    this.record(draftId, { kind: 'asked', text, by: this.provider(draftId).id });
+    const by = this.provider(draftId).id;
+    const earlier = this.handoff(draftId, by);
+
+    this.record(draftId, { kind: 'asked', text, by });
     this.run(
       draftId,
-      `Draft ID: ${draftId}\n\nRead the current draft with get_playlist_draft before changing it; the user may have edited it.\n\nFeedback:\n${message}`,
+      `Draft ID: ${draftId}\n\nRead the current draft with get_playlist_draft before changing it; the user may have edited it.${earlier}\n\nFeedback:\n${message}`,
     );
+  }
+
+  // A swapped-in agent starts with no conversation, so it gets the user's own
+  // earlier requests; the draft already holds what came of them.
+  private handoff(draftId: string, by: ProviderId): string {
+    if (this.sessions.get(draftId)?.provider === by) return '';
+
+    const asked = (this.events.get(draftId) ?? []).flatMap((event) =>
+      event.kind === 'asked' && event.by ? [`- ${event.text.replaceAll('\n', '\n  ')}`] : [],
+    );
+
+    return asked.length
+      ? `\n\nEarlier requests on this draft, oldest first:\n${asked.join('\n')}`
+      : '';
   }
 
   /** A request refused before Claude started, kept in the draft's log like any other outcome. */

@@ -4,8 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { selecta } from '../api.js';
-import { PROVIDER_LABELS } from '../../shared/protocol.js';
-import { rememberedProvider } from '../providers.js';
+import { PROVIDER_LABELS, type ProviderId, type ProviderStatus } from '../../shared/protocol.js';
 import { onArtworkFailure, retryArtwork } from '../artwork.js';
 import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
@@ -47,19 +46,25 @@ type Current = NonNullable<DraftView['draft']>;
 export function Draft({
   draftId,
   run,
+  by,
+  onPick,
   onStart,
   onSend,
   onBack,
 }: {
   draftId: string;
   run?: Run;
+  /** Who answers the next message: the one picked here, else whoever answered last. */
+  by: ProviderId;
+  onPick: (id: ProviderId) => void;
   onStart: (brief: string) => Promise<unknown>;
   onSend: (text: string, message: string) => Promise<unknown>;
   onBack: () => void;
 }) {
   const [view, setView] = useState<DraftView>();
   const log = run?.log ?? [];
-  const agent = PROVIDER_LABELS[run?.by ?? rememberedProvider() ?? 'claude'];
+  const agent = PROVIDER_LABELS[by];
+  const [choices, setChoices] = useState<ProviderStatus[]>();
   // The host records a request before answering it, so until the answer the run may not show it yet.
   const [asking, setAsking] = useState(false);
   const working = (run?.working ?? false) || asking;
@@ -106,6 +111,11 @@ export function Draft({
   }, [load]);
 
   useEffect(() => onArtworkFailure(setArtProblem), []);
+
+  // Without the list the panel just names the agent; the host still says what's missing.
+  useEffect(() => {
+    selecta.call('agent.providers').then(setChoices, () => {});
+  }, []);
 
   const draft = view?.draft;
   const items = pendingOrder(rows(view ?? {}), pending);
@@ -585,7 +595,9 @@ export function Draft({
             document.body,
           )}
         <ClaudePanel
-          agent={agent}
+          by={by}
+          choices={choices}
+          onPick={onPick}
           log={log}
           working={working}
           hasDraft={draft !== undefined}

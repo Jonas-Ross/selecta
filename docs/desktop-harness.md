@@ -10,6 +10,7 @@ Selecta never touches audio: Music.app plays, and the app only reads and moves M
 |---|---|---|
 | `osascript` | `harness/bin/osascript` | Sends the JXA script to `MusicSim`, which runs it in a VM against a model of Music's scripting objects |
 | `claude` | `harness/bin/claude` (via `SELECTA_CLAUDE_PATH`) | Runs the test's turn script, which calls the real MCP server the app configured, under the app's own allow and deny lists |
+| `codex` | `harness/bin/codex` (via `SELECTA_CODEX_PATH`) | The same turn script, told which agent it is, answering in Codex's own event stream |
 | `sips` | `harness/bin/sips` | Copies the sleeve, which is already thumbnail-sized |
 
 The shims post to a small HTTP server inside the Playwright process (`harness/server.ts`), so a test holds the simulator and the Claude script directly. Each test gets a throwaway `HOME`, with the cache seeded through the real `read_library` script, so the app's database, drafts, artwork and action log all land there.

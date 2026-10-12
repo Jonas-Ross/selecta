@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+// The brief's version and sign-in checks, then the run itself.
+if (process.argv[2] === '--version') {
+  console.log('codex-cli 0.150.0');
+  process.exit(0);
+}
+
+if (process.argv[2] === 'login') process.exit(0);
+
+const response = await fetch(`${process.env.SELECTA_SIM_URL}/codex`, {
+  method: 'POST',
+  body: JSON.stringify(process.argv.slice(2)),
+});
+
+for await (const chunk of response.body) process.stdout.write(chunk);
