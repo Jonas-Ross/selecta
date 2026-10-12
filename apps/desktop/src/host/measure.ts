@@ -56,10 +56,14 @@ export function createMeasurer({
       const batch = [...queued];
 
       queued.clear();
-      nextStart = now() + batch.length * SEARCH_SPACING_MS;
+
+      const started = now();
 
       try {
         const { skipped, errors } = await run(batch.map(([id]) => id));
+
+        // A run that never reached the store (metrognome missing) spent none of its budget.
+        nextStart = started + (batch.length - skipped.length) * SEARCH_SPACING_MS;
 
         for (const [id, waiter] of batch)
           waiter.resolve(verdict(features(id), skipped.includes(id) ? errors[0] : undefined));

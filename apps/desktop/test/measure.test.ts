@@ -84,6 +84,22 @@ it('says why each blank feature is still blank', () => {
   });
 });
 
+it('charges the search budget only for tracks a run got to', async () => {
+  const time = clock();
+  let runs = 0;
+  const measurer = createMeasurer({
+    // The first run can't start metrognome, so it skips everything it was given.
+    run: async (ids) => ({ skipped: runs++ === 0 ? ids : [], errors: ['spawn metrognome ENOENT'] }),
+    features: () => undefined,
+    ...time,
+  });
+
+  await Promise.all([measurer.measure('A'), measurer.measure('B')]);
+  await measurer.measure('A');
+
+  expect(time.waits).toEqual([0, 0]);
+});
+
 it('hands a run failure to every waiting request', async () => {
   const measurer = createMeasurer({
     run: () => Promise.reject(new Error('Another enrich operation is active')),
