@@ -65,7 +65,7 @@ on runStep(stepName, label)
 			delay 0.3
 		end repeat
 	on error number -128
-		do shell script "kill -TERM -- -" & pid & " 2> /dev/null; true"
+		do shell script "kill -TERM -- -" & pid & " 2> /dev/null; cat " & quoted form of outFile & " >> " & quoted form of logFile & "; echo stopped >> " & quoted form of logFile & "; rm -f " & quoted form of outFile & " " & quoted form of codeFile & "*"
 		error number -128
 	end try
 	set code to do shell script "cat " & quoted form of codeFile
