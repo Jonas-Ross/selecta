@@ -942,6 +942,22 @@ it('still pauses the audition Music plays on after a Play that took the slot fai
   });
 });
 
+it('leaves the draft its playback after iCloud rekeys the slot it took, even in the audition order', async () => {
+  const { draft_id, entries } = draft([A, B]);
+
+  await player.audition([A, B], 0);
+  vi.mocked(deps.bridge.playPreview).mockRejectedValueOnce(new Error('Music went away'));
+  await expect(player.play(draft_id, 1, entries[0]!.entry_id)).rejects.toThrow();
+  vi.mocked(deps.bridge.controlPlayer).mockClear();
+
+  // Another front end plays the draft, and iCloud moves the slot to a new ID.
+  vi.mocked(deps.bridge.readPreview).mockImplementation(holding([A, B]));
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(rotated(1, A));
+  expect(await player.auditionState()).toEqual({ state: 'stopped' });
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});
+
 it('keeps a first audition to pause when Music fails to start it cleanly', async () => {
   vi.mocked(deps.bridge.playPreview).mockRejectedValueOnce(
     new BridgeError('jxa_error', 'Music.app would not pause after a failed start.'),

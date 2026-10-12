@@ -210,6 +210,19 @@ export function createPlayback(deps: PlaybackDeps) {
     }
   };
 
+  // The slot's draft follows a rotated ID first, so its playback is never taken for the audition's.
+  const followOwner = async (player: PlayerState, locked: boolean) => {
+    const owner = drafts().preview()?.owner;
+
+    if (owner === undefined) return;
+
+    try {
+      await follow(owner, player, locked);
+    } catch (e) {
+      if (!(e instanceof BridgeError && e.errorCode === 'draft_not_found')) throw e;
+    }
+  };
+
   // The entry Music.app is on, read fresh, when it belongs to this draft; the bridge
   // re-checks it in the same call that acts, so a stale screen can't drive other music.
   // `owned` accepts any entry of the draft's own slot, in step or not, for stopping it.
@@ -472,6 +485,8 @@ export function createPlayback(deps: PlaybackDeps) {
     async auditionState() {
       const player = await read();
 
+      await followOwner(player, false);
+
       await followAudition(player);
 
       return auditionView(player);
@@ -489,6 +504,8 @@ export function createPlayback(deps: PlaybackDeps) {
 
         const { playlistId, trackIds } = auditioning;
         const live = await read();
+
+        await followOwner(live, true);
 
         if (draftPlaying(live)) {
           auditioning = undefined;
