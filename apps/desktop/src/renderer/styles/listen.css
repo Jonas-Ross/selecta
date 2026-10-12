@@ -161,3 +161,9 @@
     animation: none;
   }
 }
+:root[data-motion='reduce'] .deck-disc {
+  transition: none;
+}
+:root[data-motion='reduce'] .deck-label {
+  animation: none;
+}

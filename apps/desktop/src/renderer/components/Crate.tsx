@@ -9,6 +9,8 @@ import type { Rect } from '../flight.js';
 import { useReducedMotion } from '../hooks/motion.js';
 import { useCrateFlip } from '../hooks/useCrateFlip.js';
 import { onMeasured } from '../hooks/useMeasure.js';
+import { useSettings } from '../hooks/useSettings.js';
+import { CRATE_ORDER_LABELS } from '../settings.js';
 import type { Crate as CrateData, CrateTrack } from '../../shared/protocol.js';
 import { Flight } from './Flight.js';
 import { Sleeve } from './Sleeve.js';
@@ -45,6 +47,7 @@ export type CrateProps = {
 
 export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEnd }: CrateProps) {
   const reduced = useReducedMotion();
+  const { crateOrder } = useSettings().settings;
   const stage = useRef<HTMLDivElement>(null);
   const faces = useRef(new Map<string, HTMLElement>());
   const [size, setSize] = useState(0);
@@ -85,7 +88,7 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
     let live = true;
     const timer = setTimeout(
       () =>
-        void selecta.call('library.crate', query.trim() ? { query } : {}).then(
+        void selecta.call('library.crate', query.trim() ? { query } : { order: crateOrder }).then(
           (next) => live && (setData({ ...next, query }), setError(undefined)),
           (e: Error) => live && setError(e.message),
         ),
@@ -96,7 +99,7 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
       live = false;
       clearTimeout(timer);
     };
-  }, [query, measured]);
+  }, [query, crateOrder, measured]);
 
   useEffect(() => onMeasured(() => setMeasured((n) => n + 1)), []);
 
@@ -115,7 +118,10 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
   const fz = frontZ(size);
   const depth = fz - backZ(size);
   const isPulled = pulledId !== undefined && pulledId === front?.persistent_id;
-  const label = data?.query.trim() ? `Matching “${data.query.trim()}”` : 'Recently added';
+  const label =
+    data?.order === 'relevance'
+      ? `Matching “${data.query.trim()}”`
+      : CRATE_ORDER_LABELS[data?.order ?? crateOrder];
 
   return (
     <section className="dig" aria-label="The crate">

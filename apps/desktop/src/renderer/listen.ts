@@ -6,10 +6,6 @@ import type { PlayerView } from '../shared/protocol.js';
 import type { EditQueue } from './edits.js';
 import type { Row } from './state.js';
 
-// AutoMix needs about this much of the outgoing track left to blend into the next.
-export const JOIN_LEAD = 60;
-
-/** Where "Hear the join" starts the outgoing track. */
 /**
  * Plays once the edits queued ahead have landed, on the revision they left, unless
  * `allowed` turned false meanwhile: Claude starting then would have its edits refused.
@@ -36,8 +32,8 @@ export function transportHeld(busy: boolean, linked: boolean, pending: unknown):
  * Where "Hear the join" starts; with no known length there is no end to count back from.
  * Music.app reports an unset length as 0, so that counts as unknown too.
  */
-export function joinStart(duration?: number): number | undefined {
-  return duration === undefined || duration <= 0 ? undefined : Math.max(0, duration - JOIN_LEAD);
+export function joinStart(duration: number | undefined, lead: number): number | undefined {
+  return duration === undefined || duration <= 0 ? undefined : Math.max(0, duration - lead);
 }
 
 /** The record the Listen screen centres on: what plays if it's in this draft, else the cued one. */

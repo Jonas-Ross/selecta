@@ -12,7 +12,16 @@ export const BRIEF_LIMIT = 4000;
 export const HEARD_LIMIT = 500;
 
 export type CrateTrack = ReturnType<typeof toInspectedTrack> & { genre?: string; year?: number };
-export type Crate = { tracks: CrateTrack[]; total: number; order: 'recently_added' | 'relevance' };
+/** What the crate holds with no search: the same neutral orderings the MCP search offers. */
+export const CRATE_ORDERS = [
+  'recently_added',
+  'most_played',
+  'recent_plays',
+  'least_played',
+  'random',
+] as const;
+export type CrateOrder = (typeof CRATE_ORDERS)[number];
+export type Crate = { tracks: CrateTrack[]; total: number; order: CrateOrder | 'relevance' };
 
 /** A cached thumbnail's file name, null when the track has no artwork, or why it couldn't be read. */
 export type ArtworkAnswer = ArtworkReadResult[string];
@@ -20,7 +29,7 @@ export type ArtworkAnswer = ArtworkReadResult[string];
 export type PlayerView = PlaybackView;
 
 export type Methods = {
-  'library.crate': (args: { query?: string }) => Crate;
+  'library.crate': (args: { query?: string; order?: CrateOrder }) => Crate;
   'artwork.get': (args: {
     track_ids: string[];
     refresh?: string[];
@@ -82,7 +91,9 @@ export type RunSnapshot = { events: AgentEvent[]; working: boolean };
 
 export type HostEvent =
   | { event: 'agent'; draft_id: string; seq: number; data: AgentEvent }
-  | { event: 'drafts.changed' };
+  | { event: 'drafts.changed' }
+  // From main's menu rather than the host.
+  | { event: 'settings.open' };
 
 export type SelectaApi = {
   call<M extends Method>(

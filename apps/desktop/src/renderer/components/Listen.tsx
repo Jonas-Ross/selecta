@@ -3,7 +3,7 @@
 // beside it: its facts, the join into the next record, and the set's route
 // round the key wheel.
 import { join } from '../joins.js';
-import { JOIN_LEAD } from '../listen.js';
+import { useSettings } from '../hooks/useSettings.js';
 import type { Row } from '../state.js';
 import { Term } from './Explain.js';
 import { FeatureFacts } from './FeatureFacts.js';
@@ -24,10 +24,11 @@ export function Listen({
   playing: boolean;
   // Music.app is on this record, playing or paused, rather than it being only cued.
   current: boolean;
-  status: string;
+  status?: string;
   joinDisabled: boolean;
   onJoin: () => void;
 }) {
+  const { joinLead } = useSettings().settings;
   const row = items[now];
   const next = items[now + 1];
 
@@ -58,7 +59,7 @@ export function Listen({
           </span>
           <h2>{row.title ?? 'Untitled'}</h2>
           <p>{row.artist ?? 'Unknown artist'}</p>
-          <p className="deck-status mono">{status}</p>
+          {status && <p className="deck-status mono">{status}</p>}
         </div>
       </div>
       <aside className="sleeve-back" aria-label="Sleeve back">
@@ -102,7 +103,7 @@ export function Listen({
               <button type="button" className="btn uv" disabled={joinDisabled} onClick={onJoin}>
                 Hear the join
               </button>
-              <p>Plays the last {JOIN_LEAD} seconds of this track into the next.</p>
+              <p>Plays the last {joinLead} seconds of this track into the next.</p>
             </div>
           </>
         ) : (

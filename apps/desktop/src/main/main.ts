@@ -110,12 +110,29 @@ async function serveArtwork(request: Request): Promise<Response> {
   }
 }
 
-// Electron's default menu, with Help pointing at Selecta rather than Electron.
+// Electron's default menu, with Settings in the app menu and Help pointing at Selecta.
 function menu() {
   const open = (url: string) => () => void shell.openExternal(url);
+  const settings = () =>
+    window?.webContents.send('selecta:event', { event: 'settings.open' } satisfies HostEvent);
 
   return Menu.buildFromTemplate([
-    { role: 'appMenu' },
+    {
+      role: 'appMenu',
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { id: 'settings', label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: settings },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
     { role: 'fileMenu' },
     { role: 'editMenu' },
     { role: 'viewMenu' },

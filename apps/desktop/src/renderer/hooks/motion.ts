@@ -1,10 +1,13 @@
 // The two pieces of motion every component shares: the user's reduced-motion
 // setting, and a frame loop that runs only while something is moving.
 import { useEffect, useRef, useState } from 'react';
+import { useSettings } from './useSettings.js';
 
 const query = '(prefers-reduced-motion: reduce)';
 
+/** macOS's Reduce motion, or Selecta's own Motion setting. */
 export function useReducedMotion(): boolean {
+  const { motion } = useSettings().settings;
   const [reduced, setReduced] = useState(() => matchMedia(query).matches);
 
   useEffect(() => {
@@ -16,7 +19,7 @@ export function useReducedMotion(): boolean {
     return () => media.removeEventListener('change', change);
   }, []);
 
-  return reduced;
+  return reduced || motion === 'reduce';
 }
 
 /**
