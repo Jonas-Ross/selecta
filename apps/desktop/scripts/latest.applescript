@@ -7,7 +7,7 @@ on run
 	set logFile to (POSIX path of (path to home folder)) & "Library/Logs/Selecta/launcher.log"
 	do shell script "mkdir -p \"$(dirname " & quoted form of logFile & ")\" && echo \"--- $(date)\" >> " & quoted form of logFile
 	set progress description to "Selecta"
-	set progress total steps to 6
+	set progress total steps to 7
 	set progress completed steps to 0
 
 	set facts to runStep("check", "Checking for updates")
@@ -47,6 +47,7 @@ on run
 	runStep("install", "Checking dependencies")
 	runStep("build", "Building Selecta")
 	runStep("open", "Opening Selecta")
+	runStep("refresh-app", "Updating Selecta Latest")
 end run
 
 -- Runs one step in the background, showing its latest output line until it exits.

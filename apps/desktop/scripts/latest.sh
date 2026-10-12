@@ -4,7 +4,7 @@
 #
 #   apps/desktop/scripts/latest.sh                 the whole run, asking on the terminal
 #   apps/desktop/scripts/latest.sh install-app     put "Selecta Latest" in ~/Applications
-#   apps/desktop/scripts/latest.sh <step>          check | pull | metrognome | install | build | stop | open
+#   apps/desktop/scripts/latest.sh <step>          check | pull | metrognome | install | build | stop | open | refresh-app
 #
 # The app in ~/Applications runs the steps one at a time, so it can show each one.
 set -euo pipefail
@@ -19,6 +19,7 @@ main() {
   log_dir=$HOME/Library/Logs/Selecta
   tap=jonas-ross/tap
   formula=$tap/metrognome
+  app_dest=$HOME/Applications/Selecta\ Latest.app
   cd "$repo"
 
   # A Finder launch has launchd's bare PATH; node, npm and brew live on the login shell's.
@@ -48,7 +49,8 @@ main() {
     stop) stop ;;
     open) open_app ;;
     install-app) install_app ;;
-    *) printf 'usage: %s [run|install-app|check|pull|metrognome|install|build|stop|open]\n' "$0" >&2; exit 2 ;;
+    refresh-app) refresh_app ;;
+    *) printf 'usage: %s [run|install-app|check|pull|metrognome|install|build|stop|open|refresh-app]\n' "$0" >&2; exit 2 ;;
   esac
 }
 
@@ -260,10 +262,27 @@ run() {
   install
   build
   open_app
+  refresh_app
+}
+
+# What the installed app was built from: this checkout's path, then a hash of its sources.
+app_stamp() {
+  printf '%s\n' "$desktop/scripts/latest.sh"
+  cat "$desktop/scripts/latest.applescript" "$desktop/scripts/icon.mjs" "$desktop/assets/icon.svg" | shasum | cut -d' ' -f1
+}
+
+# The applet is compiled, so a pull that changes its source rebuilds it for next time.
+refresh_app() {
+  local installed=$app_dest/Contents/Resources/selecta-latest.stamp
+  # Only the app this checkout installed; another checkout's stays as it is.
+  [ "$(head -n 1 "$installed" 2> /dev/null)" = "$desktop/scripts/latest.sh" ] || return 0
+  [ "$(cat "$installed")" != "$(app_stamp)" ] || return 0
+  say "Updating Selecta Latest"
+  install_app
 }
 
 install_app() {
-  local dest=$HOME/Applications/Selecta\ Latest.app tmp app
+  local dest=$app_dest tmp app
   tmp=$(mktemp -d)
   tmp_dir=$tmp
   # osacompile names the app after its file, so it's built under its real name.
@@ -280,6 +299,7 @@ install_app() {
   plutil -replace CFBundleIdentifier -string io.github.jonas-ross.selecta.latest "$app/Contents/Info.plist"
   # osacompile's asset catalog icon wins over applet.icns, so drop it.
   rm -f "$app/Contents/Resources/Assets.car"
+  app_stamp > "$app/Contents/Resources/selecta-latest.stamp"
   plutil -remove CFBundleIconName "$app/Contents/Info.plist" 2> /dev/null || true
   # Editing the bundle breaks osacompile's signature, which macOS then refuses to run.
   codesign --force --deep --sign - "$app"

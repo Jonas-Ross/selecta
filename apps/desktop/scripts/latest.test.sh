@@ -83,4 +83,13 @@ expect 'a live run holds the lock' refused "$("$latest" pull > /dev/null 2>&1 &&
 kill $holder && wait $holder 2> /dev/null || true
 expect 'a dead run leaves no lock behind' pulled "$("$latest" pull > /dev/null 2>&1 && echo pulled || echo refused)"
 
+fresh_clone
+export HOME=$dir/home
+expect 'refresh-app skips a missing app' 'ok ' "$("$latest" refresh-app && echo ok) $(ls "$HOME/Applications" 2> /dev/null)"
+stamp="$HOME/Applications/Selecta Latest.app/Contents/Resources/selecta-latest.stamp"
+mkdir -p "$(dirname "$stamp")"
+printf '/elsewhere/latest.sh\nold\n' > "$stamp"
+"$latest" refresh-app
+expect "refresh-app leaves another checkout's app alone" old "$(tail -n 1 "$stamp")"
+
 [ "$failures" -eq 0 ] || { printf '%d failed\n' "$failures"; exit 1; }
