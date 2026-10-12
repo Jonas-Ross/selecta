@@ -59,7 +59,7 @@ running_pid() {
   pgrep -f "^$literal( |\$)" | head -n 1 || true
 }
 
-install_stamp() { printf '%s %s' "$(shasum package-lock.json | cut -d' ' -f1)" "$(node -v)"; }
+install_stamp() { printf '%s %s' "$(shasum package-lock.json | cut -d' ' -f1)" "$(node -p 'process.version + " " + process.arch')"; }
 
 built_stamp() { printf '%s %s' "$(git rev-parse HEAD)" "$(install_stamp)"; }
 
