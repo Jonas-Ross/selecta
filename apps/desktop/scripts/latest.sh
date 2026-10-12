@@ -190,6 +190,17 @@ stop() {
   exit 1
 }
 
+# Waits for a process group to go, so the lock is never released under it.
+kill_group() {
+  kill -TERM -- "-$1" 2> /dev/null || return 0
+  (sleep 5 && kill -KILL -- "-$1" 2> /dev/null) &
+  local timer=$!
+  # The leader is this script's child, so the group looks alive until it is reaped.
+  wait "$1" 2> /dev/null || true
+  while kill -0 -- "-$1" 2> /dev/null; do sleep 0.2; done
+  kill "$timer" 2> /dev/null || true
+}
+
 open_app() {
   if [ -n "$(running_pid)" ]; then
     osascript -e 'tell application id "io.github.jonas-ross.selecta.dev" to activate' > /dev/null 2>&1 || true
@@ -203,7 +214,7 @@ open_app() {
     >> "$log_dir/desktop-output.log" 2>&1 < /dev/null &
   local launcher=$!
   # Stopping this step (the applet's Stop) stops the launch too.
-  trap "kill -TERM -- -$launcher 2> /dev/null; exit 143" TERM INT
+  trap "kill_group $launcher; exit 143" TERM INT
   # A first launch may download Electron and rebuild the dev bundle, so allow minutes.
   for _ in $(seq 1 900); do
     if [ -n "$(running_pid)" ]; then
@@ -213,7 +224,7 @@ open_app() {
     kill -0 "$launcher" 2> /dev/null || break
     sleep 0.2
   done
-  kill -TERM -- "-$launcher" 2> /dev/null || true
+  kill_group "$launcher"
   say "Selecta didn't start; see $log_dir/desktop-output.log" >&2
   exit 1
 }
