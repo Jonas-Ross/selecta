@@ -1,11 +1,5 @@
 import { expect, it } from 'vitest';
-import {
-  around,
-  auditionPlan,
-  stopAfter,
-  swapEntries,
-  swappedIn,
-} from '../src/renderer/replace.js';
+import { around, auditionPlan, stopAfter, swapEdit, swapEntries } from '../src/renderer/replace.js';
 import type { Row } from '../src/renderer/state.js';
 
 const row = (n: number, duration_seconds?: number): Row => ({
@@ -61,7 +55,7 @@ it('has no join to hear at either end of the set, or before a record of unknown 
   expect(auditionPlan({ prev: row(1), next: undefined }, pick, 'in', 60)).toBeUndefined();
 });
 
-it('swaps one entry for a new one in place, and finds it again after the edit', () => {
+it('swaps one entry for a new one in place', () => {
   const entries = items.map(({ entry_id, track_id }) => ({ entry_id, track_id }));
 
   expect(swapEntries(entries, 'E-2', 'P')).toEqual([
@@ -70,11 +64,22 @@ it('swaps one entry for a new one in place, and finds it again after the edit', 
     { entry_id: 'E-3', track_id: 'T-3' },
   ]);
   expect(swapEntries(entries, 'E-9', 'P')).toBeUndefined();
+});
 
-  const after = [entries[0]!, { entry_id: 'E-NEW', track_id: 'P' }, entries[2]!];
+it('finds the entry a swap added against the draft it applied to, not the rail before it', () => {
+  // Another front end added P after the rail was drawn and before the swap applied.
+  const base = [
+    { entry_id: 'E-THEIRS', track_id: 'P' },
+    ...items.map(({ entry_id, track_id }) => ({ entry_id, track_id })),
+  ];
+  const swapping = swapEdit('E-2', 'P');
 
-  expect(swappedIn(after, new Set(['E-1', 'E-2', 'E-3']), 'P')).toBe('E-NEW');
-  expect(swappedIn(entries, new Set(['E-1', 'E-2', 'E-3']), 'P')).toBeUndefined();
+  expect(swapping.added(base)).toBeUndefined();
+  expect(swapping.change(base)).toHaveLength(4);
+
+  const after = [base[0]!, base[1]!, { entry_id: 'E-NEW', track_id: 'P' }, base[3]!];
+
+  expect(swapping.added(after)).toBe('E-NEW');
 });
 
 it('starts a join the chosen lead before the end', () => {

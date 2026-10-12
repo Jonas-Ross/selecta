@@ -83,12 +83,21 @@ export function swapEntries(
   );
 }
 
-/** The entry a swap added: the one holding the track that wasn't on the rail before it. */
-export function swappedIn(
-  entries: { entry_id: string; track_id: string }[],
-  known: Set<string>,
-  trackId: string,
-): string | undefined {
-  return entries.find((entry) => entry.track_id === trackId && !known.has(entry.entry_id))
-    ?.entry_id;
+/**
+ * A swap as a draft change, and the entry it added once it lands: the one holding the track
+ * that wasn't in the draft the change applied to, which may be newer than the rail.
+ */
+export function swapEdit(entryId: string, trackId: string) {
+  let known: Set<string> | undefined;
+
+  return {
+    change(entries: { entry_id: string; track_id: string }[]) {
+      known = new Set(entries.map((entry) => entry.entry_id));
+
+      return swapEntries(entries, entryId, trackId);
+    },
+    added: (entries: { entry_id: string; track_id: string }[]) =>
+      entries.find((entry) => entry.track_id === trackId && known && !known.has(entry.entry_id))
+        ?.entry_id,
+  };
 }

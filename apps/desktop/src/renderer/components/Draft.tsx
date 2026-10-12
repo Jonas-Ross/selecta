@@ -15,7 +15,7 @@ import { onMeasured } from '../hooks/useMeasure.js';
 import { useReplace } from '../hooks/useReplace.js';
 import { transportHeld } from '../listen.js';
 import { withMoved } from '../reorder.js';
-import { around, swapEntries, swappedIn } from '../replace.js';
+import { around, swapEdit, swapEntries } from '../replace.js';
 import {
   bpmSpan,
   feedbackMessage,
@@ -315,14 +315,13 @@ export function Draft({
 
     if (!target) return;
 
-    const known = new Set(items.map((row) => row.entry_id));
-    const trackId = pick.track.persistent_id;
+    const swapping = swapEdit(target.entry_id, pick.track.persistent_id);
     let gone = false;
 
     replace.close();
     setSwapped(undefined);
     void edit((current) => {
-      const entries = swapEntries(current.entries, target.entry_id, trackId);
+      const entries = swapping.change(current.entries);
 
       gone = !entries;
 
@@ -332,7 +331,7 @@ export function Draft({
 
       if (gone) return setNotice('That record is no longer in the draft.');
 
-      const added = swappedIn(latest.current?.entries ?? [], known, trackId);
+      const added = swapping.added(latest.current?.entries ?? []);
       const text = `Swapped ${target.title ?? 'a record'} for ${pick.track.title ?? 'a new one'}`;
 
       setAdded(text);
