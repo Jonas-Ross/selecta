@@ -35,6 +35,13 @@ stored values carry that source's provenance. `successful` can drop after a
 re-score; `owns` drops only when a value is cleared. Keeping `ok` on a failed
 retry instead would hide a preview that has genuinely gone.
 
+A `no_match` retry still leaves the value, even though the source has just said
+it cannot identify the recording it was measured from. Before analysis
+discarded uncertain store matches it stored tempos measured from other songs'
+previews, and the 2026-10-12 key re-measure found 161 of them still on the row
+behind a `no_match`. Enrich never deletes, so clearing those goes through
+`supersede --unmatched` (below), which is dry-run by default and journals them.
+
 ## Neither pass overwrites the other
 
 `mergeFeatures` (`packages/core/src/cache/audio_features.ts`) gap-fills: a feature already on
@@ -193,7 +200,8 @@ have to be undone together.
 `node dist/index.js supersede` does that, in two steps so neither is a guess:
 
 - With no `--provenance`, it lists every algorithm string currently stored,
-  per field, with a track count. Nothing changes. This is also how a caller
+  per field, with a track count and how many of those tracks the producing
+  source's latest attempt could not identify (`unmatched`). Nothing changes. This is also how a caller
   learns the exact strings the flag takes — Selecta does not know metrognome's
   versioning and must not hardcode it.
 - With `--provenance <value...>`, it reports what clearing those values would
@@ -205,6 +213,11 @@ have to be undone together.
   either source is removed rather than kept claiming a row-level status nothing
   supports. The apply journals every row it touches first and prints the path;
   `docs/destructive-commands.md` covers that convention and `restore`.
+- `--unmatched` narrows either step to those unidentified tracks, for clearing
+  values the source no longer stands behind without re-measuring the rest. On
+  each such track it clears everything that source measured, named or not: it
+  all came from the disowned match, and once the attempt reopens, a value left
+  behind could no longer be told apart from a good one.
 
 Anything the other source supplied is untouched, as is anything a newer version
 of the same algorithm wrote. It runs under the enrichment lock, so it cannot

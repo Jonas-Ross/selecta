@@ -353,11 +353,121 @@ describe('superseding a stale algorithm', () => {
     try {
       expect(cache.featureProvenance()).toEqual(
         expect.arrayContaining([
-          { field: 'bpm', provenance: 'deezer', trackCount: 1 },
-          { field: 'musicalKey', provenance: 'acousticbrainz', trackCount: 1 },
-          { field: 'danceability', provenance: 'acousticbrainz', trackCount: 1 },
+          { field: 'bpm', provenance: 'deezer', trackCount: 1, unmatched: 0 },
+          { field: 'musicalKey', provenance: 'acousticbrainz', trackCount: 1, unmatched: 0 },
+          { field: 'danceability', provenance: 'acousticbrainz', trackCount: 1, unmatched: 0 },
         ]),
       );
+    } finally {
+      cache.close();
+    }
+  });
+
+  it("counts values whose source's latest attempt no longer identifies the track", () => {
+    // Analysis lost the match; the catalog did not, so its key is not counted.
+    const cache = loaded([
+      featuresRow({
+        sources: { bpm: ANALYSIS_BPM, musicalKey: 'acousticbrainz' },
+        catalogStatus: 'ok',
+        analysisStatus: 'no_match',
+      }),
+      featuresRow({ trackPersistentId: 'T-ANGEL', sources: { bpm: ANALYSIS_BPM } }),
+    ]);
+
+    try {
+      expect(cache.featureProvenance()).toEqual(
+        expect.arrayContaining([
+          { field: 'bpm', provenance: ANALYSIS_BPM, trackCount: 2, unmatched: 1 },
+          { field: 'musicalKey', provenance: 'acousticbrainz', trackCount: 1, unmatched: 0 },
+        ]),
+      );
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('clears everything an unmatched source measured, not only the named algorithm', () => {
+    const cache = loaded([
+      featuresRow({
+        sources: { bpm: ANALYSIS_BPM, musicalKey: ANALYSIS_KEY, danceability: 'acousticbrainz' },
+        analysisStatus: 'no_match',
+      }),
+    ]);
+
+    try {
+      const before = snapshotCache(cache.db);
+      const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_BPM], { unmatched: true });
+
+      expect(plan.summary.by_provenance).toEqual({
+        [ANALYSIS_BPM]: { bpm: 1 },
+        [ANALYSIS_KEY]: { musicalKey: 1 },
+      });
+
+      cache.applySupersedeFeatures(plan);
+
+      // A key left behind would turn findable-as-unmatched into ok on the retry.
+      expectOnlyChanged(before, snapshotCache(cache.db), [
+        {
+          table: 'audio_features',
+          key: 'T-TEARDROP',
+          change: 'changed',
+          fields: ['analysis_status', 'bpm', 'camelot', 'musical_key', 'sources'],
+        },
+      ]);
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('counts no unmatched tracks where every attempt was reopened', () => {
+    const cache = loaded([
+      featuresRow({ sources: { bpm: ANALYSIS_BPM }, catalogStatus: null, analysisStatus: null }),
+    ]);
+
+    try {
+      expect(cache.featureProvenance()).toContainEqual({
+        field: 'bpm',
+        provenance: ANALYSIS_BPM,
+        trackCount: 1,
+        unmatched: 0,
+      });
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('narrows to tracks whose latest attempt could not identify the recording', () => {
+    const cache = loaded([
+      featuresRow({
+        musicalKey: null,
+        camelot: null,
+        danceability: null,
+        sources: { bpm: ANALYSIS_BPM },
+        catalogStatus: null,
+        analysisStatus: 'no_match',
+      }),
+      featuresRow({
+        trackPersistentId: 'T-ANGEL',
+        sources: { bpm: ANALYSIS_BPM },
+        analysisStatus: 'ok',
+      }),
+    ]);
+
+    try {
+      const before = snapshotCache(cache.db);
+      const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_BPM], { unmatched: true });
+
+      expect(plan.summary).toMatchObject({
+        tracks: 1,
+        cleared_fields: { bpm: 1 },
+        rows_removed: 1,
+      });
+
+      cache.applySupersedeFeatures(plan);
+
+      expectOnlyChanged(before, snapshotCache(cache.db), [
+        { table: 'audio_features', key: 'T-TEARDROP', change: 'removed' },
+      ]);
     } finally {
       cache.close();
     }

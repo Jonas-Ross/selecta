@@ -311,15 +311,21 @@ export function createCliProgram(options: CliOptions = {}): Command {
       '-p, --provenance <value...>',
       'algorithm strings to treat as superseded, exactly as listed (e.g. metrognome/chroma-correlation-edm@1)',
     )
+    .option(
+      '--unmatched',
+      "only tracks whose latest attempt by that source could not identify the recording (the survey's unmatched count)",
+    )
     .option('--apply', APPLY_FLAG_DESCRIPTION)
     .action(
       async ({
         source,
         provenance,
+        unmatched = false,
         apply = false,
       }: {
         source: FeatureSource;
         provenance?: string[];
+        unmatched?: boolean;
         apply?: boolean;
       }) => {
         try {
@@ -336,14 +342,14 @@ export function createCliProgram(options: CliOptions = {}): Command {
             }
 
             const { plan, outcome } = await withOperation(cache, 'enrich', async () => {
-              const decided = cache.planSupersedeFeatures(source, provenance);
+              const decided = cache.planSupersedeFeatures(source, provenance, { unmatched });
 
               return {
                 plan: decided,
                 outcome: runDestructive(
                   {
                     command: 'supersede',
-                    arguments: { source, provenance },
+                    arguments: { source, provenance, unmatched },
                     summary: decided.summary,
                     empty: decided.changes.length === 0,
                     before: { audio_features: decided.changes.map((change) => change.before) },

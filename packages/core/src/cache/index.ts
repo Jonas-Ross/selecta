@@ -421,8 +421,16 @@ export class SelectaCache {
    * Scoped to exactly the named provenance values: anything the other source
    * supplied, or a newer version of this one, is left alone. Naming a
    * provenance the given source did not produce is refused outright.
+   * `unmatched` narrows it to tracks whose latest attempt by that source could
+   * not identify the recording, since enrich keeps what an earlier match measured.
+   * Everything that source holds on such a track goes, named or not: it all came
+   * from the disowned match, and a reopened attempt would leave the rest unfindable.
    */
-  planSupersedeFeatures(source: FeatureSource, provenances: readonly string[]): SupersedePlan {
+  planSupersedeFeatures(
+    source: FeatureSource,
+    provenances: readonly string[],
+    { unmatched = false }: { unmatched?: boolean } = {},
+  ): SupersedePlan {
     // Naming another source's provenance is a mistake worth refusing, not
     // silently skipping: only this source's attempt reopens, so its values
     // would be cleared with nothing left able to measure them again.
@@ -452,6 +460,7 @@ export class SelectaCache {
     }
 
     const wanted = new Set(provenances);
+    const statusField = statusFieldFor(source);
     const changes: SupersedePlan['changes'] = [];
 
     for (const id of this.queries.trackIdsWithProvenance(provenances)) {
@@ -459,7 +468,13 @@ export class SelectaCache {
 
       if (existing == null) continue;
 
-      const result = supersedeFeatures(existing, source, wanted);
+      if (unmatched && existing[statusField] !== 'no_match') continue;
+
+      const result = supersedeFeatures(
+        existing,
+        source,
+        unmatched ? new Set(Object.values(existing.sources ?? {})) : wanted,
+      );
 
       if (result.action === 'unchanged') continue;
 
@@ -468,7 +483,6 @@ export class SelectaCache {
 
     // Only a change whose attempt was still terminal puts its track back in the
     // backlog; one an earlier supersede already reopened is counted there.
-    const statusField = statusFieldFor(source);
     const reopened = changes.filter((change) => change.before[statusField] != null).length;
 
     return {
