@@ -644,7 +644,7 @@ describe('selecta setup CLI', () => {
     const { server: _, metrognomeCheck: __, ...rest } = deps;
     const binary = join(home, 'metrognome');
 
-    writeFileSync(binary, '#!/bin/sh\necho "metrognome 0.1.0"\n', { mode: 0o755 });
+    writeFileSync(binary, '#!/bin/sh\necho "metrognome 0.3.0"\n', { mode: 0o755 });
 
     const run = async (path: string) => {
       const stdout: string[] = [];

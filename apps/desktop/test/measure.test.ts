@@ -127,7 +127,7 @@ function apiWith(metrognome: object) {
   };
 }
 
-const installed = { binaryPath: 'metrognome', readVersion: async () => 'metrognome 0.1.0\n' };
+const installed = { binaryPath: 'metrognome', readVersion: async () => 'metrognome 0.3.0\n' };
 
 it('measures a track metrognome never tried, and stores what it hears', async () => {
   // Echoes the recorded M83 result for whichever track is asked about.

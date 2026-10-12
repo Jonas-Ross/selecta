@@ -18,7 +18,7 @@ concurrency:
 
 env:
   # The metrognome commit the try-it demo runs. Bump it to put a newer engine on the page.
-  METROGNOME_REF: 63e59ee7f23a1397ca5bcece94ddf188e03eae57
+  METROGNOME_REF: acdb7eca0db634e5e7708d2659036aa20c5e6ebf
 
 jobs:
   deploy:
