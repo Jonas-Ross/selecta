@@ -3,7 +3,7 @@
 import { createInterface } from 'node:readline';
 
 if (process.argv.includes('--version')) {
-  process.stdout.write('metrognome 0.2.0\n');
+  process.stdout.write('metrognome 0.3.0\n');
   process.exit(0);
 }
 

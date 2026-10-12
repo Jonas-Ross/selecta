@@ -255,8 +255,9 @@ The binary is found at the CLI's `--metrognome-path`, then
 `/opt/homebrew/bin` and `/usr/local/bin`. The Homebrew directories are searched
 by name because an MCP client launched from the Dock hands Selecta launchd's
 `PATH`, which has neither. Before a run Selecta asks the binary for
-`--version` and refuses anything older than `MIN_METROGNOME_VERSION` (0.1.0,
-the first release writing `schema_version` 2); each result line is still
+`--version` and refuses anything older than `MIN_METROGNOME_VERSION` (0.3.0,
+the first release with the band key scorer, so a re-measure after `supersede`
+never stores the older keys again); each result line is still
 checked against the schema version too, so a newer metrognome that changed
 the contract is refused per line. `doctor` reports which binary it found and
 its version, without failing on it. When it is missing or too old the run
@@ -278,8 +279,9 @@ unset, so any release works without them:
   stored from the wrong store stay, since which of them were wrong matches was
   never recorded; to re-measure them, `supersede -s analysis -p <provenance>...
   --apply` with the provenances `supersede` lists, then `enrich`.
-- `SELECTA_KEY_PROFILE` (`--key-profile`): `edm` (metrognome's default, fitted
-  to dance music) or `krumhansl` (fitted to classical and pop). Its key source
+- `SELECTA_KEY_PROFILE` (`--key-profile`): `bands` (metrognome's default,
+  learned from human-labelled dance music), `edm` (its older dance-music
+  profile) or `krumhansl` (fitted to classical and pop). Its key source
   label names the profile, so `supersede` can tell the two apart.
 
 A malformed value is refused before the run starts, with the reason in

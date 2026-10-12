@@ -22,10 +22,10 @@ import { resolveMetrognome, unreachable, type BinaryDeps } from './metrognome_bi
 // The iTunes store the library was bought in. metrognome searches the US store
 // without one, which misses regional releases and localized artist names.
 export const STORE_COUNTRY_ENV = 'SELECTA_STORE_COUNTRY';
-// metrognome's key profiles: `edm` (its default) or `krumhansl`, which is
-// fitted to classical and pop rather than dance music.
+// metrognome's key scorers: `bands` (its default, learned from labelled dance
+// music), `edm`, or `krumhansl`, which is fitted to classical and pop.
 export const KEY_PROFILE_ENV = 'SELECTA_KEY_PROFILE';
-const KEY_PROFILES = ['edm', 'krumhansl'];
+const KEY_PROFILES = ['bands', 'edm', 'krumhansl'];
 
 // The one schema_version this build understands. metrognome bumps it when a
 // field moves or changes meaning, so a mismatch is refused rather than read

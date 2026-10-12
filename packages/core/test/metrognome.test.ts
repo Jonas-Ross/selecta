@@ -100,7 +100,7 @@ function stubChild(
   };
 }
 
-const installed = { binaryPath: 'metrognome', readVersion: async () => 'metrognome 0.1.0\n' };
+const installed = { binaryPath: 'metrognome', readVersion: async () => 'metrognome 0.3.0\n' };
 
 const echoStub = (child: ChildLike) => () => child;
 
@@ -163,7 +163,7 @@ describe('finding metrognome', () => {
   });
 
   it('accepts the minimum version and newer, reporting where it ran', async () => {
-    for (const version of ['0.1.0', '0.1.7', '0.10.0', '1.0.0']) {
+    for (const version of ['0.3.0', '0.3.7', '0.10.0', '1.0.0']) {
       await expect(
         resolveMetrognome({ binaryPath: brew, readVersion: async () => `metrognome ${version}\n` }),
       ).resolves.toEqual({ path: brew, version });
@@ -172,8 +172,8 @@ describe('finding metrognome', () => {
 
   it('refuses a version older than the contract it reads', async () => {
     await expect(
-      resolveMetrognome({ binaryPath: brew, readVersion: async () => 'metrognome 0.0.9\n' }),
-    ).rejects.toThrow(/0\.0\.9 .* older than 0\.1\.0.*brew upgrade metrognome/);
+      resolveMetrognome({ binaryPath: brew, readVersion: async () => 'metrognome 0.2.0\n' }),
+    ).rejects.toThrow(/0\.2\.0 .* older than 0\.3\.0.*brew upgrade metrognome/);
   });
 
   it('refuses a binary that does not identify as metrognome', async () => {
@@ -347,7 +347,7 @@ describe('configuration from the environment', () => {
       /SELECTA_STORE_COUNTRY must be a two-letter country code/,
     );
     expect(() => configuredArgs({ [KEY_PROFILE_ENV]: 'pop' })).toThrow(
-      /SELECTA_KEY_PROFILE must be one of edm, krumhansl/,
+      /SELECTA_KEY_PROFILE must be one of bands, edm, krumhansl/,
     );
   });
 

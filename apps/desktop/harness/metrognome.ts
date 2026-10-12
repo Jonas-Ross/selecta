@@ -19,6 +19,6 @@ export const hears =
     track: { uncertain: false },
     features: {
       tempo: { bpm, ...feature(false, 'validated', 'metrognome/onset-autocorrelation-comb@1') },
-      key: { key, camelot, ...feature(keyUnsure, 'provisional', 'metrognome/chroma-edm@1') },
+      key: { key, camelot, ...feature(keyUnsure, 'provisional', 'metrognome/band-profiles@4') },
     },
   });

@@ -9,8 +9,9 @@ import { BridgeError } from '../types/errors.js';
 
 export const METROGNOME_PATH_ENV = 'SELECTA_METROGNOME_PATH';
 
-// The first release that writes schema_version 2, the one parseLine accepts.
-export const MIN_METROGNOME_VERSION = '0.1.0';
+// The first release with the band key scorer; an older one would re-store the
+// weaker keys a supersede just cleared. Every release since 0.1.0 writes schema_version 2.
+export const MIN_METROGNOME_VERSION = '0.3.0';
 
 // MCP clients spawn Selecta with launchd's PATH, which has neither Homebrew prefix.
 export const BREW_BIN_DIRS = ['/opt/homebrew/bin', '/usr/local/bin'];
