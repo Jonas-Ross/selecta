@@ -8,7 +8,8 @@ import type { PlayerAction, PlayerEntry, PlayerState } from '../types/bridge.js'
 import { BridgeError } from '../types/errors.js';
 import { withOperation } from './lock.js';
 import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
-import { syncDraftPreview } from './preview_playlist.js';
+import { replacePreview, syncDraftPreview } from './preview_playlist.js';
+import { missingTrackIdsError } from './resources.js';
 
 /**
  * Music.app's player as a draft sees it. `entry_id` is set only when Music.app
@@ -24,6 +25,15 @@ export type PlaybackView = {
   entry_id?: string;
   // How a play reached the entry (started, on from N, back from N, seek), for an action log.
   route?: string;
+};
+
+/** Music.app's player while it plays an audition: stopped once it has left the audition's playlist. */
+export type AuditionView = {
+  state: 'playing' | 'paused' | 'stopped';
+  track_id?: string;
+  position?: number;
+  duration?: number;
+  index?: number;
 };
 
 export type PlaybackDeps = Pick<ToolDeps, 'bridge' | 'cache'> & { drafts: () => DraftStore };
@@ -97,6 +107,27 @@ export function createPlayback(deps: PlaybackDeps) {
     return player;
   };
   const read = async () => watch(await bridge.readPlayer());
+  // The tracks an audition last wrote into the preview, and the playlist Music plays them from.
+  let auditioning: { playlistId: string; trackIds: string[] } | undefined;
+
+  const auditionView = (player: PlayerState): AuditionView => {
+    const on =
+      auditioning !== undefined &&
+      player.running &&
+      player.playlist?.persistentId === auditioning.playlistId &&
+      player.track !== undefined;
+
+    if (!on || !player.running || !player.track) return { state: 'stopped' };
+
+    return {
+      state:
+        player.state === 'paused' ? 'paused' : AUDIBLE.has(player.state) ? 'playing' : 'stopped',
+      track_id: player.track.persistentId,
+      position: player.position,
+      duration: player.track.duration,
+      ...(player.index !== undefined && { index: player.index - 1 }),
+    };
+  };
 
   // iCloud can rotate the slot's ID mid-session. A playlist of the reserved name is followed
   // only once the bridge confirms it is the only one and holds this draft's order.
@@ -208,6 +239,8 @@ export function createPlayback(deps: PlaybackDeps) {
       position?: number,
     ): Promise<PlaybackView> {
       let { draft, slot } = current(draftId);
+
+      auditioning = undefined;
 
       if (draft.revision !== revision)
         throw new Error('The draft changed since you pressed play. Try again.');
@@ -338,6 +371,65 @@ export function createPlayback(deps: PlaybackDeps) {
         }
 
         return show(draftId, player);
+      }),
+
+    // Plays tracks no draft holds through Selecta Preview, from entry `index`, so Music carries on
+    // through the rest and AutoMix blends each join. Like the raw preview tool, it unlinks any draft.
+    audition: (trackIds: string[], index: number, position?: number) =>
+      withOperation(cache(), 'music', async () => {
+        const missing = missingTrackIdsError(cache(), trackIds);
+
+        if (missing) throw new Error([missing.error, missing.hint].filter(Boolean).join(': '));
+
+        const live = await read();
+        // Already holding these tracks and on them in Music, so only the place changes.
+        const loaded =
+          auditioning !== undefined &&
+          JSON.stringify(auditioning.trackIds) === JSON.stringify(trackIds) &&
+          live.running &&
+          live.state !== 'stopped' &&
+          live.playlist?.persistentId === auditioning.playlistId;
+
+        if (!loaded) {
+          auditioning = undefined;
+          drafts().unlinkPreview();
+
+          const written = await replacePreview(trackIds, undefined, deps);
+
+          if (written.error)
+            throw new Error([written.error, written.hint].filter(Boolean).join(': '));
+
+          if (!written.order_matches_request)
+            throw new Error(
+              'Selecta Preview did not end up in the order asked for, so nothing was played.',
+            );
+        }
+
+        const result = await bridge.playPreview({
+          expectedTrackIds: trackIds,
+          index,
+          ...(position !== undefined && { position }),
+          ...(!loaded && { restart: true }),
+        });
+
+        auditioning = { playlistId: result.playlistId, trackIds };
+
+        return auditionView(result.player);
+      }),
+
+    auditionState: async () => auditionView(await read()),
+
+    // Pauses the audition if Music is still on it; anything the user moved on to keeps playing.
+    stopAudition: () =>
+      withOperation(cache(), 'music', async () => {
+        if (!auditioning) return;
+
+        const { playlistId, trackIds } = auditioning;
+
+        if (!(await pauseAfter(playlistId, await read(), trackIds)))
+          throw new Error('Music could not be paused. Pause it in Music.');
+
+        auditioning = undefined;
       }),
 
     // Releases the link so Claude can edit again; Music.app keeps the playlist as it is.
