@@ -54,8 +54,9 @@ async function render() {
       const { width, height } = frame.getSize();
       const centre = frame.crop({ x: width >> 1, y: height >> 1, width: 1, height: 1 }).toBitmap();
 
+      // A retry queued by an earlier frame can fire after the window is gone.
       if (width < 512 || centre[3] !== 255)
-        return void setTimeout(() => window.webContents.invalidate(), 50);
+        return void setTimeout(() => window.isDestroyed() || window.webContents.invalidate(), 50);
 
       clearTimeout(timer);
       window.webContents.off('paint', onPaint);
