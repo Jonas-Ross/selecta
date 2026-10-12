@@ -52,7 +52,12 @@ branch() { git symbolic-ref --quiet --short HEAD || echo detached; }
 # Untracked files don't count: a fast-forward refuses to overwrite one anyway.
 dirty() { [ -n "$(git status --porcelain --untracked-files=no)" ]; }
 
-running_pid() { pgrep -f "^$electron_app/Contents/MacOS/Electron( |$)" | head -n 1 || true; }
+# pgrep takes a regex, so the path's own metacharacters (a "selecta (1)" folder) are escaped.
+running_pid() {
+  local literal
+  literal=$(printf '%s' "$electron_app/Contents/MacOS/Electron" | sed 's/[][\\.*^$+?(){}|]/\\&/g')
+  pgrep -f "^$literal( |\$)" | head -n 1 || true
+}
 
 install_stamp() { printf '%s %s' "$(shasum package-lock.json | cut -d' ' -f1)" "$(node -v)"; }
 
@@ -195,6 +200,8 @@ run() {
     ask "Open it as it is?" || exit 1
     behind=0
   fi
+  # The app runs metrognome fresh for each measurement, so upgrading it needs no restart.
+  [ "$(value metrognome)" != outdated ] || metrognome
   if [ "$(value running)" = 1 ]; then
     if [ "$behind" = 0 ] && [ "$(value built)" = 1 ]; then
       open_app
@@ -207,7 +214,6 @@ run() {
     stop
   fi
   [ "$behind" = 0 ] || pull
-  [ "$(value metrognome)" != outdated ] || metrognome
   install
   build
   open_app
@@ -219,7 +225,9 @@ install_app() {
   install
   mkdir -p "$HOME/Applications"
   # The applet knows only where this checkout is; every step is this script.
-  sed "s|__SCRIPT__|$desktop/scripts/latest.sh|" "$desktop/scripts/latest.applescript" > "$tmp/latest.applescript"
+  # Escaped as an AppleScript string, then handed to perl as data so no character is special.
+  SCRIPT_PATH=$(printf '%s' "$desktop/scripts/latest.sh" | sed 's/[\\"]/\\&/g') \
+    perl -pe 's/__SCRIPT__/$ENV{SCRIPT_PATH}/g' "$desktop/scripts/latest.applescript" > "$tmp/latest.applescript"
   trap 'rm -rf "$tmp"' EXIT
   # Built beside, so a failed compile leaves the installed app alone.
   osacompile -o "$tmp/app.app" "$tmp/latest.applescript"

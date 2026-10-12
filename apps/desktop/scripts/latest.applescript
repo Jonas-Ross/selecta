@@ -25,6 +25,7 @@ on run
 		set behindCount to 0
 	end if
 
+	if valueOf("metrognome", facts) is "outdated" then runStep("metrognome", "Upgrading metrognome")
 	if valueOf("running", facts) is "1" then
 		if behindCount is 0 and valueOf("built", facts) is "1" then
 			runStep("open", "Opening Selecta")
@@ -43,7 +44,6 @@ on run
 	else if behindCount > 1 then
 		runStep("pull", "Pulling " & behindCount & " new commits")
 	end if
-	if valueOf("metrognome", facts) is "outdated" then runStep("metrognome", "Upgrading metrognome")
 	runStep("install", "Checking dependencies")
 	runStep("build", "Building")
 	runStep("open", "Opening Selecta")
