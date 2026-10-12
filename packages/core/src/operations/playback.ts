@@ -260,16 +260,16 @@ export function createPlayback(deps: PlaybackDeps) {
         // The audition's tracks are going, but Music plays them until this play takes over.
         if (auditioning) auditioning = { ...auditioning, trackIds: [] };
 
-        const { preview_result: result } = await syncDraftPreview(
+        const { preview, preview_result: result } = await syncDraftPreview(
           drafts(),
           deps,
           draft,
           true,
-        ).finally(() => {
-          // This play took the slot, so the audition stays ours to pause if it fails from here.
-          if (auditioning)
-            auditioning = { ...auditioning, generation: drafts().preview()?.generation };
-        });
+        );
+
+        // This play claimed the slot, so the audition stays ours to pause if it fails from here.
+        if (auditioning && preview)
+          auditioning = { ...auditioning, generation: preview.generation };
 
         if (result?.error) throw new Error([result.error, result.hint].filter(Boolean).join(': '));
 
@@ -420,6 +420,10 @@ export function createPlayback(deps: PlaybackDeps) {
             throw new Error(
               'Selecta Preview did not end up in the order asked for, so nothing was played.',
             );
+
+          // A start that fails can still leave Music on the new tracks, which are ours to pause.
+          if (written.playlist_id)
+            auditioning = { playlistId: written.playlist_id, trackIds, generation };
         }
 
         const result = await bridge.playPreview({

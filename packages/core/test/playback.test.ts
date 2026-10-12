@@ -896,3 +896,32 @@ it('leaves alone a draft another front end plays from the same playlist after th
   await player.stopAudition();
   expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
 });
+
+it('keeps the audition generation when the draft play loses the slot to another front end', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.audition([B, A], 0);
+  await withOperation(deps.cache(), 'music', async () => {
+    deps.drafts!().unlinkPreview();
+    await expect(player.play(draft_id, 1, entries[0]!.entry_id)).rejects.toThrow(/music/i);
+  });
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  vi.mocked(deps.bridge.controlPlayer).mockClear();
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});
+
+it('keeps a first audition to pause when Music fails to start it cleanly', async () => {
+  vi.mocked(deps.bridge.playPreview).mockRejectedValueOnce(
+    new BridgeError('jxa_error', 'Music.app would not pause after a failed start.'),
+  );
+  await expect(player.audition([B, A], 0)).rejects.toThrow(/would not pause/);
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+});
