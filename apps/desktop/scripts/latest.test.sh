@@ -76,12 +76,11 @@ expect 'diverged main is behind' 1 "$(fact behind)"
 expect 'pull refuses to merge a diverged main' refused "$("$latest" pull > /dev/null 2>&1 && echo pulled || echo refused)"
 
 fresh_clone
-mkdir "$dir/.git/selecta-latest.lock"
-sleep 30 &
-echo $! > "$dir/.git/selecta-latest.lock/pid"
+perl -MFcntl=:flock -e 'open(my $f, ">>", shift) or die; flock($f, LOCK_EX); sleep 30' "$dir/.git/selecta-latest.lock" &
+holder=$!
+sleep 0.5
 expect 'a live run holds the lock' refused "$("$latest" pull > /dev/null 2>&1 && echo pulled || echo refused)"
-kill $! && wait $! 2> /dev/null || true
+kill $holder && wait $holder 2> /dev/null || true
 expect 'a dead run leaves no lock behind' pulled "$("$latest" pull > /dev/null 2>&1 && echo pulled || echo refused)"
-expect 'the lock is released after a run' no "$([ -e "$dir/.git/selecta-latest.lock" ] && echo yes || echo no)"
 
 [ "$failures" -eq 0 ] || { printf '%d failed\n' "$failures"; exit 1; }

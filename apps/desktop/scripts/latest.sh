@@ -31,7 +31,7 @@ main() {
     export PATH
   fi
 
-  lock_dir= tmp_dir=
+  tmp_dir=
   trap cleanup EXIT
   case ${1:-run} in
     check | -h | --help) ;;
@@ -55,32 +55,16 @@ main() {
 say() { printf '%s\n' "$*"; }
 
 # One run at a time per checkout, so two launches never build or rebuild the dev bundle together.
+# A flock lasts until every process holding fd 9 (this run and its children) has exited.
 lock() {
-  local dir
-  dir="$(git rev-parse --absolute-git-dir)/selecta-latest.lock"
-  if ! mkdir "$dir" 2> /dev/null; then
-    # A holder that has just made the directory may not have written its pid yet.
-    local holder= _
-    for _ in 1 2 3 4 5; do
-      holder=$(cat "$dir/pid" 2> /dev/null || true)
-      [ -z "$holder" ] || break
-      sleep 0.2
-    done
-    if [ -n "$holder" ] && kill -0 "$holder" 2> /dev/null; then
-      say "Another Selecta Latest run is busy in this checkout; try again once it finishes." >&2
-      exit 1
-    fi
-    rm -rf "$dir"
-    mkdir "$dir"
-  fi
-  echo $$ > "$dir/pid"
-  lock_dir=$dir
+  exec 9>> "$(git rev-parse --absolute-git-dir)/selecta-latest.lock"
+  perl -MFcntl=:flock -e 'open(my $f, ">>&=9") or die "$!"; flock($f, LOCK_EX | LOCK_NB) or exit 1' || {
+    say "Another Selecta Latest run is busy in this checkout; try again once it finishes." >&2
+    exit 1
+  }
 }
 
-cleanup() {
-  [ -z "$tmp_dir" ] || rm -rf "$tmp_dir"
-  [ -z "$lock_dir" ] || rm -rf "$lock_dir"
-}
+cleanup() { [ -z "$tmp_dir" ] || rm -rf "$tmp_dir"; }
 
 branch() { git symbolic-ref --quiet --short HEAD || echo detached; }
 
@@ -190,7 +174,7 @@ stop() {
   exit 1
 }
 
-# Waits for a process group to go, so the lock is never released under it.
+# Waits for a process group to go, so a retry never races what it leaves behind.
 kill_group() {
   kill -TERM -- "-$1" 2> /dev/null || return 0
   (sleep 5 && kill -KILL -- "-$1" 2> /dev/null) &
@@ -210,8 +194,9 @@ open_app() {
   mkdir -p "$log_dir"
   # Detached, with its output in a log, so this script (and the launcher) can exit.
   # Its own process group, so a timeout can stop the cp or codesign start.mjs is waiting on.
+  # Without fd 9, so the running app doesn't hold the lock.
   nohup perl -e 'setpgrp(0, 0); exec @ARGV' node "$desktop/scripts/start.mjs" \
-    >> "$log_dir/desktop-output.log" 2>&1 < /dev/null &
+    >> "$log_dir/desktop-output.log" 2>&1 < /dev/null 9>&- &
   local launcher=$!
   # Stopping this step (the applet's Stop) stops the launch too.
   trap "kill_group $launcher; exit 143" TERM INT
