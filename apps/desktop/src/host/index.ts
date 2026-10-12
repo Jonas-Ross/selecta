@@ -1,6 +1,6 @@
-// The app's core process. It runs under the system Node rather than inside
-// Electron, so better-sqlite3 keeps the one native build that the MCP server and
-// tests already use. It speaks JSON lines on stdio with Electron main.
+// The app's core process. It runs under Node rather than inside Electron (the
+// system's in dev, its own when packaged), so better-sqlite3 keeps the one native
+// build that the MCP server and tests already use. It speaks JSON lines on stdio with Electron main.
 import { createInterface } from 'node:readline';
 import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -28,8 +28,10 @@ const paths = {
   codex: process.env.SELECTA_CODEX_PATH,
 };
 const agent = new AgentSessions({
-  // The root build keeps <repo>/dist/index.js pointing at the MCP server.
-  mcpEntry: fileURLToPath(new URL('../../../dist/index.js', import.meta.url)),
+  // The root build keeps <repo>/dist/index.js pointing at the MCP server; a packaged app names its own.
+  mcpEntry:
+    process.env.SELECTA_MCP_ENTRY ??
+    fileURLToPath(new URL('../../../dist/index.js', import.meta.url)),
   paths,
   // Outside any project, so no CLAUDE.md or project settings leak into the run.
   cwd: tmpdir(),

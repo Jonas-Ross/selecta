@@ -8,6 +8,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { ARTWORK_SCHEME, artworkDir, artworkFileFor } from '../shared/artwork.js';
 import type { HostEvent } from '../shared/protocol.js';
+import { packagedPath } from './env.js';
 
 // Named Selecta, Electron would put its profile in the folder core keeps library.db in;
 // this is where it lived before the rename.
@@ -22,9 +23,20 @@ let nextId = 1;
 let window: BrowserWindow | undefined;
 let quitting = false;
 
-const host = spawn(process.env.SELECTA_NODE ?? 'node', [here('./host.js')], {
-  stdio: ['pipe', 'pipe', 'inherit'],
-});
+// Packaged, the app carries its own Node, core and MCP server in Resources/core.
+const core = (file: string) => join(process.resourcesPath, 'core', file);
+const host = app.isPackaged
+  ? spawn(core('node'), [core('host.js')], {
+      stdio: ['pipe', 'pipe', 'inherit'],
+      env: {
+        ...process.env,
+        PATH: packagedPath(process.env, homedir(), core('')),
+        SELECTA_MCP_ENTRY: core('mcp.js'),
+      },
+    })
+  : spawn(process.env.SELECTA_NODE ?? 'node', [here('./host.js')], {
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
 
 createInterface({ input: host.stdout }).on('line', (line) => {
   const message = JSON.parse(line) as { id: number; result?: unknown; error?: string } | HostEvent;

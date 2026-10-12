@@ -10,7 +10,7 @@
 | Main | Electron | The window, and a pipe to the host. No logic. |
 | Host | System `node` | Every call into core (`src/host/api.ts`), agent runs, and the draft watcher. |
 
-The host runs outside Electron so `better-sqlite3` keeps the one native build that the MCP server, the CLI and the tests use. Rebuilding it for Electron's ABI would rewrite the shared `node_modules` copy and break the others. It talks to main over JSON lines on stdio, one request `{id, method, args}` per line, answered with `{id, result}` or `{id, error}`; events are `{event, ...}` lines. `SELECTA_NODE` picks the Node binary (default `node` on `PATH`).
+The host runs outside Electron so `better-sqlite3` keeps the one native build that the MCP server, the CLI and the tests use; a packaged app brings its own Node for it (Packaging, below). Rebuilding it for Electron's ABI would rewrite the shared `node_modules` copy and break the others. It talks to main over JSON lines on stdio, one request `{id, method, args}` per line, answered with `{id, result}` or `{id, error}`; events are `{event, ...}` lines. `SELECTA_NODE` picks the Node binary (default `node` on `PATH`).
 
 The method table in `src/host/api.ts` is the whole surface, typed in `src/shared/protocol.ts`. Add a method when a screen needs one, never speculatively.
 
@@ -96,6 +96,14 @@ A sleeve shows the track's first artwork from Music.app, read through the bridge
 The app is Selecta wherever macOS shows it: the menu bar, the Dock, the About panel and the prompt asking to control Music. Its name, version, bundle ID (`io.github.jonas-ross.selecta`), copyright, category and the reason that prompt gives live in `apps/desktop/package.json` (`productName`, `version`, `build`), in the shape electron-builder reads, so packaging can reuse them. Electron's own profile (local storage, caches) stays in `~/Library/Application Support/@selecta/desktop`, out of the `Selecta` folder that holds the library cache. The icon has one source, `assets/icon.svg`, the site's groove mark on a macOS tile; `scripts/icon.mjs` draws it into an `.icns` with the app's own Electron, so no image is checked in.
 
 Until the app is packaged, macOS takes the menu-bar name and Dock icon from the bundle that runs, which is Electron.app. So `npm start` (`scripts/start.mjs`) runs from `apps/desktop/.dev/Selecta.app`: a clone of Electron.app with that identity written into its `Info.plist`, the icon drawn in, and an ad-hoc signature, since editing the plist breaks Electron's. It is rebuilt when Electron, the identity or the icon changes. Its bundle ID ends in `.dev`, so a dev run never shares permissions with a release, and macOS asks once to let Selecta control Music. The harness launches plain Electron and checks the name, version and menu (`e2e/identity.spec.ts`).
+
+## Packaging
+
+`npm run package` builds `Selecta.app`, a DMG and a zip into `apps/desktop/.package/out`, for the Mac's own architecture or `-- --arch arm64|x64` (`scripts/package.mjs`). The app carries everything the host needs in `Contents/Resources/core`: a pinned Node (version and checksums in the script, downloaded once into `apps/desktop/.cache`), the host and the MCP server each bundled into one file by esbuild, the MCP widgets, and `better-sqlite3` with its prebuilt binary for that architecture. So a stranger needs no Node, no checkout and no build. Main starts `core/node core/host.js` when packaged, and points the agent's MCP server at `core/mcp.js` (`SELECTA_MCP_ENTRY`). It still needs a signed-in `claude` or `codex`, and metrognome for analysis.
+
+A Finder launch gets launchd's bare `PATH`, which has none of the places those CLIs install to, so main asks the login shell for its `PATH` once at startup (`src/main/env.ts`), falling back to Homebrew's and `~/.local/bin`, and adds the bundled Node last so a CLI that runs on `node` still finds one.
+
+The app is ad-hoc signed, with no Apple Developer ID yet: one you build yourself opens normally, but a downloaded copy is quarantined, and macOS says it can't check it for malware until you allow it under System Settings → Privacy & Security.
 
 ## Running it
 

@@ -22,3 +22,7 @@ apps/desktop/test-results/
 
 # The renamed Electron.app the desktop app runs from on macOS.
 apps/desktop/.dev/
+
+# What npm run package stages and builds, and the Node it downloads.
+apps/desktop/.package/
+apps/desktop/.cache/
