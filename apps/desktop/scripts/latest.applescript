@@ -29,11 +29,13 @@ on run
 	if valueOf("running", facts) is "1" then
 		if behindCount is 0 and valueOf("built", facts) is "1" then
 			runStep("open", "Opening Selecta")
+			runStep("refresh-app", "Updating Selecta Latest")
 			return
 		end if
 		set choice to button returned of (display dialog "Selecta is open and there's something newer. Close it and reopen on the latest?" buttons {"Keep Open", "Reopen"} default button 2 with title "Selecta Latest")
 		if choice is "Keep Open" then
 			runStep("open", "Opening Selecta")
+			runStep("refresh-app", "Updating Selecta Latest")
 			return
 		end if
 		runStep("stop", "Closing Selecta")

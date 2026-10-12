@@ -250,10 +250,12 @@ run() {
   if [ "$(value running)" = 1 ]; then
     if [ "$behind" = 0 ] && [ "$(value built)" = 1 ]; then
       open_app
+      refresh_app
       return
     fi
     ask "Selecta is open and there's something newer. Close it and reopen on the latest?" || {
       open_app
+      refresh_app
       return
     }
     stop
