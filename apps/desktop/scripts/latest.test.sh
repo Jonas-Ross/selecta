@@ -5,6 +5,12 @@ set -euo pipefail
 source_script=$(cd "$(dirname "$0")" && pwd)/latest.sh
 failures=0
 
+# A brew that knows no formula, so check never touches a real Homebrew tap.
+stub=$(mktemp -d)
+printf '#!/bin/sh\nexit 1\n' > "$stub/brew"
+chmod +x "$stub/brew"
+export PATH="$stub:$PATH"
+
 # A clone of a local origin whose main is one commit ahead of it.
 fresh_clone() {
   local origin
