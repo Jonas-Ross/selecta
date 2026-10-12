@@ -14,6 +14,7 @@ export type RailRecordProps = {
   locked: boolean;
   selected: boolean;
   playing: boolean;
+  replacing?: boolean;
   /** What Enter or a click does to a record, for its label. */
   pickVerb: string;
   /** How far the record in hand rides above or below the rail; set only on that record. */
@@ -26,6 +27,7 @@ export type RailRecordProps = {
   onFocus: () => void;
   onBlur: () => void;
   onRemove: () => void;
+  onMenu?: (e: React.MouseEvent<HTMLElement>) => void;
 };
 
 export function RailRecord({
@@ -38,6 +40,7 @@ export function RailRecord({
   locked,
   selected,
   playing,
+  replacing = false,
   pickVerb,
   heldDy,
   setNode,
@@ -48,6 +51,7 @@ export function RailRecord({
   onFocus,
   onBlur,
   onRemove,
+  onMenu,
 }: RailRecordProps) {
   const { row, pos, lift, squash, grow, leaving } = anim;
   const isHeld = heldDy !== undefined;
@@ -62,16 +66,17 @@ export function RailRecord({
     row.camelot ?? 'key not measured',
     ...(selected ? ['selected for feedback'] : []),
     ...(playing ? ['now playing'] : []),
+    ...(replacing ? ['being replaced'] : []),
   ].join(', ');
 
   return (
     <div
       ref={setNode}
-      className={`rec${selected ? ' sel' : ''}${playing ? ' now' : ''}${isHeld ? ' held' : ''}${leaving ? ' leaving' : ''}`}
+      className={`rec${selected ? ' sel' : ''}${playing ? ' now' : ''}${isHeld ? ' held' : ''}${leaving ? ' leaving' : ''}${replacing ? ' replacing' : ''}`}
       role="listitem"
       tabIndex={leaving ? -1 : 0}
       aria-current={playing ? 'true' : undefined}
-      aria-label={`${label}. Enter ${pickVerb}${locked ? '' : ', Alt and arrow keys move it, Delete removes it'}.`}
+      aria-label={`${label}. Enter ${pickVerb}${locked ? '' : ', Alt and arrow keys move it, Delete removes it'}${onMenu ? ', Shift F10 opens its menu' : ''}.`}
       style={{
         width: shelf.size,
         height: shelf.size,
@@ -83,6 +88,7 @@ export function RailRecord({
       onPointerUp={(e) => onRelease(e, false)}
       onPointerCancel={(e) => onRelease(e, true)}
       onKeyDown={onKeyDown}
+      onContextMenu={leaving ? undefined : onMenu}
       onFocus={onFocus}
       onBlur={onBlur}
     >
