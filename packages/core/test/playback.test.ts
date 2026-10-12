@@ -835,3 +835,22 @@ it('pauses its audition on stop, and leaves alone music the user moved on to', a
   await player.stopAudition();
   expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
 });
+
+it('keeps the audition to pause when playing the draft fails, and lets it go once the draft plays', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.audition([B, A], 0);
+  await expect(player.play(draft_id, 2, entries[0]!.entry_id)).rejects.toThrow(/changed/);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+
+  vi.mocked(deps.bridge.controlPlayer).mockClear();
+  await player.audition([B, A], 0);
+  await player.play(draft_id, 1, entries[0]!.entry_id);
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});

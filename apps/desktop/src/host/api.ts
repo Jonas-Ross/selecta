@@ -160,8 +160,9 @@ export function createApi(
       }),
       provider,
     );
-    // The agent is told the rules; these hold whatever it does.
-    const taken = new Set([...entries.map((entry) => entry.track_id), ...exclude]);
+    // The agent is told the rules; these hold whatever it does, against the draft as it is now.
+    const now = deps.drafts().get(draft_id).entries;
+    const taken = new Set([...now.map((entry) => entry.track_id), ...exclude]);
     const picks: Suggestion[] = [];
 
     for (const { track_id, reason } of parsePicks(reply)) {

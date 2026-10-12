@@ -240,8 +240,6 @@ export function createPlayback(deps: PlaybackDeps) {
     ): Promise<PlaybackView> {
       let { draft, slot } = current(draftId);
 
-      auditioning = undefined;
-
       if (draft.revision !== revision)
         throw new Error('The draft changed since you pressed play. Try again.');
 
@@ -254,6 +252,9 @@ export function createPlayback(deps: PlaybackDeps) {
       if (!inStep(draft, slot)) {
         // A queue Music.app took from the old contents is not this draft's.
         queued = undefined;
+
+        // The audition's tracks are going, but Music plays them until this play takes over.
+        if (auditioning) auditioning = { ...auditioning, trackIds: [] };
 
         const { preview_result: result } = await syncDraftPreview(drafts(), deps, draft, true);
 
@@ -333,6 +334,7 @@ export function createPlayback(deps: PlaybackDeps) {
       });
 
       queued = played.playlistId;
+      auditioning = undefined;
 
       return { ...show(draftId, played.player), ...(played.route && { route: played.route }) };
     },
