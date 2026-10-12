@@ -128,12 +128,16 @@ export function verdict(row: AudioFeaturesRow | undefined, failure?: string): Me
   };
 }
 
-/** Spawns metrognome and remembers it, so quitting the app can stop a measurement mid-run. */
+/** Spawns metrognome and remembers it, so quitting the app stops a measurement and starts no more. */
 export function trackedSpawn() {
   const children = new Set<ChildProcess>();
+  let closed = false;
 
   return {
     spawnLike: ((command, args) => {
+      // A run still checking the binary's version when the app quit must not start it after.
+      if (closed) throw new Error('The app is closing.');
+
       const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
 
       children.add(child);
@@ -142,6 +146,8 @@ export function trackedSpawn() {
       return child;
     }) satisfies SpawnLike,
     killAll(): void {
+      closed = true;
+
       for (const child of children) child.kill();
     },
   };

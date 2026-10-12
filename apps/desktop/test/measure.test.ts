@@ -173,6 +173,7 @@ it('stops a metrognome still running when the app quits', async () => {
 
   tracked.killAll();
   expect(await closed).toBe('SIGTERM');
+  expect(() => tracked.spawnLike(process.execPath, ['-e', ''])).toThrow('The app is closing');
 });
 
 it('drops measurements still waiting their turn when the app quits', async () => {
