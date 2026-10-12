@@ -214,7 +214,10 @@ have to be undone together.
   supports. The apply journals every row it touches first and prints the path;
   `docs/destructive-commands.md` covers that convention and `restore`.
 - `--unmatched` narrows either step to those unidentified tracks, for clearing
-  values the source no longer stands behind without re-measuring the rest.
+  values the source no longer stands behind without re-measuring the rest. On
+  each such track it clears everything that source measured, named or not: it
+  all came from the disowned match, and once the attempt reopens, a value left
+  behind could no longer be told apart from a good one.
 
 Anything the other source supplied is untouched, as is anything a newer version
 of the same algorithm wrote. It runs under the enrichment lock, so it cannot

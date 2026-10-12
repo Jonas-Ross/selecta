@@ -144,8 +144,9 @@ export function createMetadataQueries(db: Database) {
   // take it down.
   const provenanceStmt = db.prepare(`
     SELECT field, provenance, COUNT(*) AS trackCount,
-      SUM(catalog_status = 'no_match') AS catalogUnmatched,
-      SUM(analysis_status = 'no_match') AS analysisUnmatched
+      -- SUM over only NULL statuses is NULL, and this is a count.
+      COALESCE(SUM(catalog_status = 'no_match'), 0) AS catalogUnmatched,
+      COALESCE(SUM(analysis_status = 'no_match'), 0) AS analysisUnmatched
     FROM (
       SELECT 'bpm' AS field, json_extract(sources, '$.bpm') AS provenance,
           catalog_status, analysis_status

@@ -423,6 +423,8 @@ export class SelectaCache {
    * provenance the given source did not produce is refused outright.
    * `unmatched` narrows it to tracks whose latest attempt by that source could
    * not identify the recording, since enrich keeps what an earlier match measured.
+   * Everything that source holds on such a track goes, named or not: it all came
+   * from the disowned match, and a reopened attempt would leave the rest unfindable.
    */
   planSupersedeFeatures(
     source: FeatureSource,
@@ -468,7 +470,11 @@ export class SelectaCache {
 
       if (unmatched && existing[statusField] !== 'no_match') continue;
 
-      const result = supersedeFeatures(existing, source, wanted);
+      const result = supersedeFeatures(
+        existing,
+        source,
+        unmatched ? new Set(Object.values(existing.sources ?? {})) : wanted,
+      );
 
       if (result.action === 'unchanged') continue;
 

@@ -386,6 +386,56 @@ describe('superseding a stale algorithm', () => {
     }
   });
 
+  it('clears everything an unmatched source measured, not only the named algorithm', () => {
+    const cache = loaded([
+      featuresRow({
+        sources: { bpm: ANALYSIS_BPM, musicalKey: ANALYSIS_KEY, danceability: 'acousticbrainz' },
+        analysisStatus: 'no_match',
+      }),
+    ]);
+
+    try {
+      const before = snapshotCache(cache.db);
+      const plan = cache.planSupersedeFeatures('analysis', [ANALYSIS_BPM], { unmatched: true });
+
+      expect(plan.summary.by_provenance).toEqual({
+        [ANALYSIS_BPM]: { bpm: 1 },
+        [ANALYSIS_KEY]: { musicalKey: 1 },
+      });
+
+      cache.applySupersedeFeatures(plan);
+
+      // A key left behind would turn findable-as-unmatched into ok on the retry.
+      expectOnlyChanged(before, snapshotCache(cache.db), [
+        {
+          table: 'audio_features',
+          key: 'T-TEARDROP',
+          change: 'changed',
+          fields: ['analysis_status', 'bpm', 'camelot', 'musical_key', 'sources'],
+        },
+      ]);
+    } finally {
+      cache.close();
+    }
+  });
+
+  it('counts no unmatched tracks where every attempt was reopened', () => {
+    const cache = loaded([
+      featuresRow({ sources: { bpm: ANALYSIS_BPM }, catalogStatus: null, analysisStatus: null }),
+    ]);
+
+    try {
+      expect(cache.featureProvenance()).toContainEqual({
+        field: 'bpm',
+        provenance: ANALYSIS_BPM,
+        trackCount: 1,
+        unmatched: 0,
+      });
+    } finally {
+      cache.close();
+    }
+  });
+
   it('narrows to tracks whose latest attempt could not identify the recording', () => {
     const cache = loaded([
       featuresRow({
