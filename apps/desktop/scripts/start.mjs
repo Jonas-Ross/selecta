@@ -59,21 +59,24 @@ function bundle() {
 
   for (const [key, value] of Object.entries(mac.extendInfo)) set(key, value);
 
+  let drawn = true;
+
   try {
     execFileSync(
       electron,
       [join(root, 'scripts/icon.mjs'), join(app, 'Contents/Resources/electron.icns')],
-      {
-        stdio: 'inherit',
-      },
+      { stdio: 'inherit' },
     );
   } catch {
-    console.error('Could not draw the Selecta icon; the Dock keeps Electron’s.');
+    drawn = false;
+    console.error('Could not draw the Selecta icon; the Dock keeps Electron’s this time.');
   }
 
   // Editing Info.plist breaks Electron's signature, which macOS then refuses to run.
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'pipe' });
-  writeFileSync(stampFile, stamp);
+
+  // No stamp without the icon, so the next launch tries again.
+  if (drawn) writeFileSync(stampFile, stamp);
 
   return app;
 }
