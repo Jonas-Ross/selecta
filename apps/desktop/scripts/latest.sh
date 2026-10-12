@@ -31,8 +31,8 @@ main() {
     export PATH
   fi
 
-  cleanup=
-  trap 'eval "$cleanup"' EXIT
+  lock_dir= tmp_dir=
+  trap cleanup EXIT
   case ${1:-run} in
     check | -h | --help) ;;
     *) lock ;;
@@ -67,7 +67,12 @@ lock() {
     mkdir "$dir"
   fi
   echo $$ > "$dir/pid"
-  cleanup="$cleanup rm -rf '$dir';"
+  lock_dir=$dir
+}
+
+cleanup() {
+  [ -z "$tmp_dir" ] || rm -rf "$tmp_dir"
+  [ -z "$lock_dir" ] || rm -rf "$lock_dir"
 }
 
 branch() { git symbolic-ref --quiet --short HEAD || echo detached; }
@@ -255,8 +260,7 @@ run() {
 install_app() {
   local dest=$HOME/Applications/Selecta\ Latest.app tmp app
   tmp=$(mktemp -d)
-  # Expanded now: tmp is local, and the EXIT trap runs after this function returns.
-  cleanup="$cleanup rm -rf '$tmp';"
+  tmp_dir=$tmp
   # osacompile names the app after its file, so it's built under its real name.
   app="$tmp/Selecta Latest.app"
   install
