@@ -165,9 +165,14 @@ open_app() {
   nohup perl -e 'setpgrp(0, 0); exec @ARGV' node "$desktop/scripts/start.mjs" \
     >> "$log_dir/desktop-output.log" 2>&1 < /dev/null &
   local launcher=$!
+  # Stopping this step (the applet's Stop) stops the launch too.
+  trap "kill -TERM -- -$launcher 2> /dev/null; exit 143" TERM INT
   # A first launch may download Electron and rebuild the dev bundle, so allow minutes.
   for _ in $(seq 1 900); do
-    [ -z "$(running_pid)" ] || return 0
+    if [ -n "$(running_pid)" ]; then
+      trap - TERM INT
+      return 0
+    fi
     kill -0 "$launcher" 2> /dev/null || break
     sleep 0.2
   done
