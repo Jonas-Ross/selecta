@@ -1,0 +1,269 @@
+/* The settings sheet: a card over a dimmed app, one hairline section per concern. */
+.settings {
+  width: min(600px, calc(100vw - 80px));
+  max-height: calc(100vh - 96px);
+  padding: 0;
+  overflow: auto;
+  color: var(--ink);
+  background: radial-gradient(120% 60% at 100% 0%, var(--uv-soft), transparent 60%), var(--bg2);
+  border: 1px solid var(--line3);
+  border-radius: var(--r-xl);
+  box-shadow:
+    0 40px 90px -20px var(--shadow),
+    inset 0 1px 0 var(--sleeve-light);
+  opacity: 0;
+  transform: translateY(8px) scale(0.985);
+  transition:
+    opacity var(--t-mid) var(--ease-out),
+    transform var(--t-mid) var(--ease-out),
+    overlay var(--t-mid) allow-discrete,
+    display var(--t-mid) allow-discrete;
+}
+.settings[open] {
+  opacity: 1;
+  transform: none;
+}
+@starting-style {
+  .settings[open] {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+.settings::backdrop {
+  background: var(--overlay);
+  backdrop-filter: blur(6px);
+}
+.settings header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s5) var(--s5) var(--s3) var(--s6);
+}
+.settings h2 {
+  font: 800 var(--fs-head)/1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.01em;
+}
+.settings .ib svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.settings section {
+  padding: var(--s4) var(--s6) var(--s5);
+  border-top: 1px solid var(--line2);
+}
+.set-head {
+  margin-bottom: var(--s3);
+  font: 400 var(--fs-micro) var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.set-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s3) var(--s4);
+  align-items: end;
+}
+.set-copy b {
+  display: block;
+  font: 600 var(--fs-title)/1.2 var(--body);
+}
+.set-copy p {
+  margin-top: 4px;
+  font-size: var(--fs-ui);
+  color: var(--ink2);
+}
+.set-control {
+  grid-column: 1 / -1;
+}
+.set-led {
+  font: 400 40px/1 var(--led);
+  color: var(--uv-text);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px var(--rim-glow);
+}
+.set-led span {
+  margin-left: 2px;
+  font: 400 var(--fs-ui) var(--mono);
+  color: var(--ink3);
+  text-shadow: none;
+}
+.set-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-top: var(--s3);
+  font-size: var(--fs-small);
+  color: var(--ink3);
+}
+.set-foot .tight {
+  color: var(--danger);
+}
+.link {
+  color: var(--uv-text);
+  font-size: var(--fs-small);
+}
+.link:hover {
+  color: var(--white);
+}
+.settings footer {
+  padding: var(--s3) var(--s6) var(--s4);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-meta);
+  color: var(--ink4);
+}
+
+/* Hear the join: the outgoing record's last two minutes, the lit tail is what plays,
+   then the next record. The slider sits over the tail so the thumb is the cue. */
+.jl {
+  --thumb: 14px;
+  position: relative;
+  margin-top: var(--s2);
+  padding-bottom: 22px;
+}
+.jl-bars {
+  position: relative;
+  display: flex;
+  height: 64px;
+}
+.jl-out,
+.jl-in {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.jl-out {
+  width: calc(var(--out) * 100%);
+}
+/* The next record starts at the out's end, behind a hairline. */
+.jl-in {
+  flex: 1;
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid var(--ink3);
+}
+.jl-bars i {
+  flex: 1;
+  min-height: 3px;
+  border-radius: 1px;
+  background: var(--line3);
+  transition: background var(--t-fast);
+}
+.jl-out i.on {
+  background: var(--uv);
+  box-shadow: 0 0 10px -2px var(--rim-glow);
+}
+.jl-in i {
+  background: var(--ink4);
+}
+/* The cue line at the slider's value, over the bars. */
+.jl-cue {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: calc(var(--at) * var(--out) * 100%);
+  width: 2px;
+  margin-left: -1px;
+  background: var(--uv-text);
+  box-shadow: 0 0 12px var(--uv);
+  pointer-events: none;
+}
+.jl-ticks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 14px;
+  font-size: var(--fs-tiny);
+  color: var(--ink4);
+}
+.jl-ticks span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.jl-ticks span:first-child {
+  transform: none;
+}
+/* Covers the outgoing record from two minutes out to the shortest lead, widened by
+   half a thumb each side so the thumb's centre lines up with the cue. */
+.jl-range {
+  position: absolute;
+  top: 0;
+  height: 64px;
+  left: calc(var(--thumb) / -2);
+  width: calc(var(--out) * 100% * 105 / 120 + var(--thumb));
+  margin: 0;
+  background: none;
+  cursor: ew-resize;
+  appearance: none;
+}
+.jl-range::-webkit-slider-runnable-track {
+  height: 64px;
+  background: none;
+}
+.jl-range::-webkit-slider-thumb {
+  appearance: none;
+  width: var(--thumb);
+  height: var(--thumb);
+  margin-top: -21px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow:
+    0 0 0 3px var(--uv),
+    0 4px 12px var(--shadow);
+  transition: transform var(--t-fast);
+}
+.jl-range:hover::-webkit-slider-thumb,
+.jl-range:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.jl-range:focus-visible {
+  outline: none;
+}
+.jl-range:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 3px var(--uv),
+    0 0 0 6px var(--uv-soft);
+}
+
+/* A row of options, one lit. */
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.seg label {
+  position: relative;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: var(--fs-ui);
+  color: var(--ink2);
+  box-shadow: inset 0 0 0 1px var(--line3);
+  cursor: pointer;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast),
+    box-shadow var(--t-fast);
+}
+.seg label:hover {
+  color: var(--ink);
+  background: var(--bg3);
+}
+.seg label.on {
+  color: var(--white);
+  background: var(--uv-soft);
+  box-shadow: inset 0 0 0 1px var(--uv-line);
+}
+.seg input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.seg label:has(input:focus-visible) {
+  outline: 1.5px solid var(--uv);
+  outline-offset: 2px;
+}

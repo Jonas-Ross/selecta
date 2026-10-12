@@ -7,6 +7,8 @@ import { Brief } from './components/Brief.js';
 import { Draft } from './components/Draft.js';
 import { ExplainProvider } from './components/Explain.js';
 import { Home } from './components/Home.js';
+import { Settings } from './components/Settings.js';
+import { SettingsProvider } from './hooks/useSettings.js';
 import type { ProviderId } from '../shared/protocol.js';
 import { rememberedProvider } from './providers.js';
 import { recoverRuns, rejectRun, runEvent, type Run } from './state.js';
@@ -109,7 +111,10 @@ function App() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <ExplainProvider>
-    <App />
-  </ExplainProvider>,
+  <SettingsProvider>
+    <ExplainProvider>
+      <App />
+      <Settings />
+    </ExplainProvider>
+  </SettingsProvider>,
 );
