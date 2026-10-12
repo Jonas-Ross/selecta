@@ -14,10 +14,10 @@
     "build": "tsc -p tsconfig.build.json && tsc && node scripts/build-ui.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "2.2.0",
-    "@modelcontextprotocol/core": "2.2.0",
+    "@modelcontextprotocol/client": "2.3.1",
+    "@modelcontextprotocol/core": "2.3.1",
     "@modelcontextprotocol/ext-apps": "2.0.3",
-    "@modelcontextprotocol/server": "2.2.0",
+    "@modelcontextprotocol/server": "2.3.1",
     "@selecta/core": "0.1.0",
     "commander": "^15.0.0",
     "zod": "^4.6.5"
