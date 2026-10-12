@@ -757,3 +757,304 @@ it('leaves a same-named playlist alone when the bridge cannot confirm it, and as
   expect(deps.drafts!().preview()?.playlist_id).toBe('P-SLOT');
   await expect(player.control(draft_id, { action: 'pause' })).rejects.toThrow(/isn't playing/);
 });
+
+it('auditions tracks through the preview, unlinking the draft that held it', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.play(draft_id, 1, entries[0]!.entry_id);
+  expect(deps.drafts!().preview()?.owner).toBe(draft_id);
+
+  expect(await player.audition([B, A], 1, 100)).toMatchObject({
+    state: 'playing',
+    track_id: A,
+    index: 1,
+  });
+  expect(deps.bridge.replacePlaylist).toHaveBeenLastCalledWith({
+    name: 'Selecta Preview',
+    trackIds: [B, A],
+  });
+  expect(deps.bridge.playPreview).toHaveBeenLastCalledWith({
+    expectedTrackIds: [B, A],
+    index: 1,
+    position: 100,
+    restart: true,
+  });
+  expect(deps.drafts!().preview()?.status).toBe('inactive');
+  expect((await player.state(draft_id)).entry_id).toBeUndefined();
+});
+
+it('moves within an audition Music is still on without writing it again', async () => {
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(playing(1, B));
+  await player.audition([B, A], 1, 40);
+
+  expect(deps.bridge.replacePlaylist).toHaveBeenCalledOnce();
+  expect(deps.bridge.playPreview).toHaveBeenLastCalledWith({
+    expectedTrackIds: [B, A],
+    index: 1,
+    position: 40,
+  });
+
+  await player.audition([A, B], 0);
+  expect(deps.bridge.replacePlaylist).toHaveBeenCalledTimes(2);
+});
+
+it('writes nothing for a track the cache does not hold', async () => {
+  await expect(player.audition(['T-NOPE'], 0)).rejects.toThrow(/track_not_found/);
+  expect(deps.bridge.replacePlaylist).not.toHaveBeenCalled();
+  expect(deps.bridge.playPreview).not.toHaveBeenCalled();
+});
+
+it('reads an audition as stopped once Music leaves its playlist', async () => {
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  expect(await player.auditionState()).toMatchObject({ state: 'playing', track_id: B, index: 0 });
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce({
+    ...playing(1, B),
+    playlist: { persistentId: 'P-OTHER', name: 'Mine' },
+  });
+  expect(await player.auditionState()).toEqual({ state: 'stopped' });
+});
+
+it('pauses its audition on stop, and leaves alone music the user moved on to', async () => {
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+
+  vi.mocked(deps.bridge.controlPlayer).mockClear();
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce({
+    ...playing(4, A),
+    playlist: { persistentId: 'P-OTHER', name: 'Mine' },
+  });
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});
+
+it('keeps the audition to pause when playing the draft fails, and lets it go once the draft plays', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.audition([B, A], 0);
+  await expect(player.play(draft_id, 2, entries[0]!.entry_id)).rejects.toThrow(/changed/);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+
+  vi.mocked(deps.bridge.controlPlayer).mockClear();
+  await player.audition([B, A], 0);
+  await player.play(draft_id, 1, entries[0]!.entry_id);
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});
+
+it('keeps the audition to pause when the draft play fails after taking the slot', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.replacePlaylist).mockRejectedValueOnce(new Error('Music went away'));
+  await expect(player.play(draft_id, 1, entries[0]!.entry_id)).rejects.toThrow();
+  expect(deps.drafts!().preview()?.owner).toBe(draft_id);
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+});
+
+it('keeps the last audition to pause when switching to another pick fails', async () => {
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.replacePlaylist).mockRejectedValueOnce(new Error('Music went away'));
+  await expect(player.audition([A, B], 0)).rejects.toThrow();
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+});
+
+it('leaves alone a draft another front end plays from the same playlist after the audition', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.audition([B, A], 0);
+  await createPlayback({ ...deps, drafts: deps.drafts! }).play(draft_id, 1, entries[0]!.entry_id);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(playing(1, A));
+  vi.mocked(deps.bridge.controlPlayer).mockClear();
+
+  expect(await player.auditionState()).toEqual({ state: 'stopped' });
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});
+
+it('keeps the audition generation when the draft play loses the slot to another front end', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.audition([B, A], 0);
+  await withOperation(deps.cache(), 'music', async () => {
+    deps.drafts!().unlinkPreview();
+    await expect(player.play(draft_id, 1, entries[0]!.entry_id)).rejects.toThrow(/music/i);
+  });
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  vi.mocked(deps.bridge.controlPlayer).mockClear();
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});
+
+it('leaves the draft its own playback after a Play that took the slot failed to start', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.playPreview).mockRejectedValueOnce(new Error('Music went away'));
+  await expect(player.play(draft_id, 1, entries[0]!.entry_id)).rejects.toThrow();
+  vi.mocked(deps.bridge.controlPlayer).mockClear();
+
+  // Another front end now plays the draft's first entry from the same playlist.
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(playing(1, A));
+  expect(await player.auditionState()).toEqual({ state: 'stopped' });
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});
+
+it('still pauses the audition Music plays on after a Play that took the slot failed', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.playPreview).mockRejectedValueOnce(new Error('Music went away'));
+  await expect(player.play(draft_id, 1, entries[0]!.entry_id)).rejects.toThrow();
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(2, A));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 2, trackId: A },
+  });
+});
+
+it('leaves the draft its playback after iCloud rekeys the slot it took, even in the audition order', async () => {
+  const { draft_id, entries } = draft([A, B]);
+
+  await player.audition([A, B], 0);
+  vi.mocked(deps.bridge.playPreview).mockRejectedValueOnce(new Error('Music went away'));
+  await expect(player.play(draft_id, 1, entries[0]!.entry_id)).rejects.toThrow();
+  vi.mocked(deps.bridge.controlPlayer).mockClear();
+
+  // Another front end plays the draft, and iCloud moves the slot to a new ID.
+  vi.mocked(deps.bridge.readPreview).mockImplementation(holding([A, B]));
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(rotated(1, A));
+  expect(await player.auditionState()).toEqual({ state: 'stopped' });
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});
+
+it('keeps a first audition to pause when Music fails to start it cleanly', async () => {
+  vi.mocked(deps.bridge.playPreview).mockRejectedValueOnce(
+    new BridgeError('jxa_error', 'Music.app would not pause after a failed start.'),
+  );
+  await expect(player.audition([B, A], 0)).rejects.toThrow(/would not pause/);
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+});
+
+const rotated = (index: number, persistentId: string) => ({
+  ...playing(index, persistentId),
+  playlist: { persistentId: 'P-NEW', name: 'Selecta Preview' },
+});
+// The bridge confirms the rekeyed slot only when it holds the order asked about.
+const holding = (order: string[]) =>
+  vi.fn(async ({ expectedTrackIds }: { expectedTrackIds: string[] }) => {
+    if (JSON.stringify(expectedTrackIds) !== JSON.stringify(order))
+      throw new BridgeError('preview_conflict', 'Not that order.');
+
+    return { persistentId: 'P-NEW', trackCount: order.length, trackPersistentIds: order };
+  });
+
+it('follows an audition iCloud rekeys, and pauses it there', async () => {
+  await player.audition([B, A], 0);
+  deps.bridge.readPreview = holding([B, A]);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(rotated(1, B));
+
+  expect(await player.auditionState()).toMatchObject({ state: 'playing', track_id: B });
+  vi.mocked(deps.bridge.playPreview).mockResolvedValueOnce({
+    playlistId: 'P-NEW',
+    player: rotated(2, A),
+  });
+  await player.audition([B, A], 1);
+  expect(deps.bridge.replacePlaylist).toHaveBeenCalledOnce();
+
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-NEW', index: 1, trackId: B },
+  });
+});
+
+it('keeps the order of a rekeyed audition to pause when switching to another pick fails', async () => {
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.replacePlaylist).mockRejectedValueOnce(new Error('Music went away'));
+  await expect(player.audition([A, B], 0)).rejects.toThrow();
+
+  deps.bridge.readPreview = holding([B, A]);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(rotated(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-NEW', index: 1, trackId: B, slot: 'Selecta Preview' },
+  });
+});
+
+it('surfaces a rekey it cannot check instead of rewriting the audition', async () => {
+  await player.audition([B, A], 0);
+  deps.bridge.readPreview = vi.fn().mockRejectedValue(new Error('Automation timed out'));
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(rotated(1, B));
+
+  await expect(player.audition([B, A], 1)).rejects.toThrow('Automation timed out');
+  expect(deps.bridge.replacePlaylist).toHaveBeenCalledOnce();
+});
+
+it('keeps a first audition to pause when its write reached Music but could not be recorded', async () => {
+  vi.spyOn(deps.cacheInstance, 'upsertPlaylistAfterWrite').mockImplementationOnce(() => {
+    throw new Error('disk full');
+  });
+  await expect(player.audition([B, A], 0)).rejects.toThrow(/cache_unavailable/);
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+});
+
+it('keeps a first audition to pause when Music reports its write only partly landed', async () => {
+  vi.mocked(deps.bridge.replacePlaylist).mockRejectedValueOnce(
+    new BridgeError('jxa_error', 'Write stopped midway.', undefined, {
+      playlist_id: 'P-SLOT',
+      observed_track_ids: [B],
+    }),
+  );
+  await expect(player.audition([B, A], 0)).rejects.toThrow(/jxa_error/);
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+});

@@ -5,7 +5,7 @@ import { PROVIDER_LABELS, type AgentEvent, type ProviderId } from '../shared/pro
 import { parseCodexLine } from './codex_stream.js';
 import { parseStreamLine } from './stream.js';
 
-const READ_TOOLS = [
+export const READ_TOOLS = [
   'search',
   'library_overview',
   'get_track_context',
@@ -36,6 +36,14 @@ export const DENIED_TOOLS = [
 ];
 export const ALLOWED_TOOLS = [...READ_TOOLS, ...DRAFT_TOOLS];
 
+/** A turn's allowlist, and everything else denied by name. */
+function toolLists(tools = ALLOWED_TOOLS) {
+  return {
+    allowed: tools,
+    denied: [...DENIED_TOOLS, ...ALLOWED_TOOLS.filter((name) => !tools.includes(name))],
+  };
+}
+
 /** The selecta MCP server a run talks to. */
 export type McpServer = { command: string; args: string[]; env: Record<string, string> };
 
@@ -46,6 +54,8 @@ export type Turn = {
   /** The session to continue, from this provider's previous `done`. */
   resume?: string;
   newSessionId: string;
+  /** A narrower allowlist than ALLOWED_TOOLS; the rest of it is denied too. */
+  tools?: string[];
 };
 
 export type AgentProvider = {
@@ -72,28 +82,32 @@ export const claude: AgentProvider = {
   bin: 'claude',
   binEnv: 'SELECTA_CLAUDE_PATH',
   missing: 'Could not find the claude CLI. Install Claude Code, or set SELECTA_CLAUDE_PATH.',
-  args: (turn) => [
-    '-p',
-    turn.prompt,
-    '--output-format',
-    'stream-json',
-    '--verbose',
-    // No built-in tools: no shell, no file access, only selecta.
-    '--tools',
-    '',
-    '--strict-mcp-config',
-    '--mcp-config',
-    JSON.stringify({ mcpServers: { selecta: turn.mcp } }),
-    '--permission-mode',
-    'dontAsk',
-    '--allowedTools',
-    ...ALLOWED_TOOLS.map((name) => `mcp__selecta__${name}`),
-    '--disallowedTools',
-    ...DENIED_TOOLS.map((name) => `mcp__selecta__${name}`),
-    '--append-system-prompt',
-    turn.instructions,
-    ...(turn.resume ? ['--resume', turn.resume] : ['--session-id', turn.newSessionId]),
-  ],
+  args: (turn) => {
+    const { allowed, denied } = toolLists(turn.tools);
+
+    return [
+      '-p',
+      turn.prompt,
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      // No built-in tools: no shell, no file access, only selecta.
+      '--tools',
+      '',
+      '--strict-mcp-config',
+      '--mcp-config',
+      JSON.stringify({ mcpServers: { selecta: turn.mcp } }),
+      '--permission-mode',
+      'dontAsk',
+      '--allowedTools',
+      ...allowed.map((name) => `mcp__selecta__${name}`),
+      '--disallowedTools',
+      ...denied.map((name) => `mcp__selecta__${name}`),
+      '--append-system-prompt',
+      turn.instructions,
+      ...(turn.resume ? ['--resume', turn.resume] : ['--session-id', turn.newSessionId]),
+    ];
+  },
   parser: () => parseStreamLine,
   loginCheck: ['auth', 'status'],
   login: 'claude auth login',
@@ -122,15 +136,16 @@ const CODEX_TOOL_FEATURES = [
 
 const toml = (value: unknown) => JSON.stringify(value);
 
-function codexServer({ command, args, env }: McpServer): string {
+function codexServer({ command, args, env }: McpServer, tools?: string[]): string {
+  const { allowed, denied } = toolLists(tools);
   const vars = Object.entries(env).map(([key, value]) => `${key}=${toml(value)}`);
 
   return [
     `command=${toml(command)}`,
     `args=${toml(args)}`,
     `env={${vars.join(',')}}`,
-    `enabled_tools=${toml(ALLOWED_TOOLS)}`,
-    `disabled_tools=${toml(DENIED_TOOLS)}`,
+    `enabled_tools=${toml(allowed)}`,
+    `disabled_tools=${toml(denied)}`,
     // exec never prompts, so an MCP call needing approval just fails.
     `default_tools_approval_mode="approve"`,
   ].join(',');
@@ -158,7 +173,7 @@ export const codex: AgentProvider = {
     '-c',
     'web_search="disabled"',
     '-c',
-    `mcp_servers.selecta={${codexServer(turn.mcp)}}`,
+    `mcp_servers.selecta={${codexServer(turn.mcp, turn.tools)}}`,
     '-c',
     `developer_instructions=${toml(turn.instructions)}`,
     ...(turn.resume ? ['resume', turn.resume] : []),

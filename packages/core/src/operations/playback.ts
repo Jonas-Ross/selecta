@@ -8,7 +8,8 @@ import type { PlayerAction, PlayerEntry, PlayerState } from '../types/bridge.js'
 import { BridgeError } from '../types/errors.js';
 import { withOperation } from './lock.js';
 import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
-import { syncDraftPreview } from './preview_playlist.js';
+import { replacePreview, syncDraftPreview } from './preview_playlist.js';
+import { missingTrackIdsError } from './resources.js';
 
 /**
  * Music.app's player as a draft sees it. `entry_id` is set only when Music.app
@@ -24,6 +25,15 @@ export type PlaybackView = {
   entry_id?: string;
   // How a play reached the entry (started, on from N, back from N, seek), for an action log.
   route?: string;
+};
+
+/** Music.app's player while it plays an audition: stopped once it has left the audition's playlist. */
+export type AuditionView = {
+  state: 'playing' | 'paused' | 'stopped';
+  track_id?: string;
+  position?: number;
+  duration?: number;
+  index?: number;
 };
 
 export type PlaybackDeps = Pick<ToolDeps, 'bridge' | 'cache'> & { drafts: () => DraftStore };
@@ -97,6 +107,35 @@ export function createPlayback(deps: PlaybackDeps) {
     return player;
   };
   const read = async () => watch(await bridge.readPlayer());
+  // The tracks an audition last wrote into the preview, the playlist Music plays them from, and
+  // the slot generation it left; another front end linking a draft moves the generation on.
+  // `settled` once Music has started them, so moving within them needs no rewrite.
+  let auditioning:
+    | { playlistId: string; trackIds: string[]; generation?: string; settled: boolean }
+    | undefined;
+  const ours = () =>
+    auditioning !== undefined && drafts().preview()?.generation === auditioning.generation;
+
+  const auditionView = (player: PlayerState): AuditionView => {
+    const on =
+      auditioning !== undefined &&
+      ours() &&
+      !draftPlaying(player) &&
+      player.running &&
+      player.playlist?.persistentId === auditioning.playlistId &&
+      player.track !== undefined;
+
+    if (!on || !player.running || !player.track) return { state: 'stopped' };
+
+    return {
+      state:
+        player.state === 'paused' ? 'paused' : AUDIBLE.has(player.state) ? 'playing' : 'stopped',
+      track_id: player.track.persistentId,
+      position: player.position,
+      duration: player.track.duration,
+      ...(player.index !== undefined && { index: player.index - 1 }),
+    };
+  };
 
   // iCloud can rotate the slot's ID mid-session. A playlist of the reserved name is followed
   // only once the bridge confirms it is the only one and holds this draft's order.
@@ -155,6 +194,33 @@ export function createPlayback(deps: PlaybackDeps) {
     const { draft, slot } = current(draftId);
 
     return playbackView(player, draft, slot);
+  };
+
+  // Music on an entry of the draft the slot holds is that draft's playback, even under the
+  // audition's generation after a Play that took the slot and then failed to start.
+  const draftPlaying = (player: PlayerState) => {
+    const owner = drafts().preview()?.owner;
+
+    try {
+      return owner !== undefined && show(owner, player).entry_id !== undefined;
+    } catch (e) {
+      if (e instanceof BridgeError && e.errorCode === 'draft_not_found') return false;
+
+      throw e;
+    }
+  };
+
+  // The slot's draft follows a rotated ID first, so its playback is never taken for the audition's.
+  const followOwner = async (player: PlayerState, locked: boolean) => {
+    const owner = drafts().preview()?.owner;
+
+    if (owner === undefined) return;
+
+    try {
+      await follow(owner, player, locked);
+    } catch (e) {
+      if (!(e instanceof BridgeError && e.errorCode === 'draft_not_found')) throw e;
+    }
   };
 
   // The entry Music.app is on, read fresh, when it belongs to this draft; the bridge
@@ -222,7 +288,19 @@ export function createPlayback(deps: PlaybackDeps) {
         // A queue Music.app took from the old contents is not this draft's.
         queued = undefined;
 
-        const { preview_result: result } = await syncDraftPreview(drafts(), deps, draft, true);
+        // The audition's tracks are going, but Music plays them until this play takes over.
+        if (auditioning) auditioning = { ...auditioning, settled: false };
+
+        const { preview, preview_result: result } = await syncDraftPreview(
+          drafts(),
+          deps,
+          draft,
+          true,
+        );
+
+        // This play claimed the slot, so the audition stays ours to pause if it fails from here.
+        if (auditioning && preview)
+          auditioning = { ...auditioning, generation: preview.generation };
 
         if (result?.error) throw new Error([result.error, result.hint].filter(Boolean).join(': '));
 
@@ -300,6 +378,7 @@ export function createPlayback(deps: PlaybackDeps) {
       });
 
       queued = played.playlistId;
+      auditioning = undefined;
 
       return { ...show(draftId, played.player), ...(played.route && { route: played.route }) };
     },
@@ -340,6 +419,106 @@ export function createPlayback(deps: PlaybackDeps) {
         return show(draftId, player);
       }),
 
+    // Plays tracks no draft holds through Selecta Preview, from entry `index`, so Music carries on
+    // through the rest and AutoMix blends each join. Like the raw preview tool, it unlinks any draft.
+    audition: (trackIds: string[], index: number, position?: number) =>
+      withOperation(cache(), 'music', async () => {
+        const missing = missingTrackIdsError(cache(), trackIds);
+
+        if (missing) throw new Error([missing.error, missing.hint].filter(Boolean).join(': '));
+
+        const live = await read();
+
+        // A rekey check that fails surfaces rather than rewriting what may still be playing.
+        await followAudition(live);
+
+        const owned = ours() ? auditioning : undefined;
+        // Already holding these tracks and on them in Music, so only the place changes.
+        const loaded =
+          owned !== undefined &&
+          owned.settled &&
+          JSON.stringify(owned.trackIds) === JSON.stringify(trackIds) &&
+          live.running &&
+          live.state !== 'stopped' &&
+          live.playlist?.persistentId === owned.playlistId;
+        const generation = loaded ? owned.generation : drafts().unlinkPreview();
+
+        if (!loaded) {
+          // Music plays the last audition until the new one takes over, so it stays ours to pause.
+          auditioning = owned && { ...owned, settled: false, generation };
+
+          const written = await replacePreview(trackIds, undefined, deps);
+
+          // A write that reached Music, even one that then failed, may leave it playing these tracks.
+          const reached = written.playlist_id ?? written.partial_write?.playlist_id;
+
+          if (reached)
+            auditioning = {
+              playlistId: reached,
+              trackIds:
+                written.observed_track_ids ?? written.partial_write?.observed_track_ids ?? trackIds,
+              generation,
+              settled: false,
+            };
+
+          if (written.error)
+            throw new Error([written.error, written.hint].filter(Boolean).join(': '));
+
+          if (!written.order_matches_request)
+            throw new Error(
+              'Selecta Preview did not end up in the order asked for, so nothing was played.',
+            );
+        }
+
+        const result = await bridge.playPreview({
+          expectedTrackIds: trackIds,
+          index,
+          ...(position !== undefined && { position }),
+          ...(!loaded && { restart: true }),
+        });
+
+        auditioning = { playlistId: result.playlistId, trackIds, generation, settled: true };
+
+        return auditionView(result.player);
+      }),
+
+    async auditionState() {
+      const player = await read();
+
+      await followOwner(player, false);
+
+      await followAudition(player);
+
+      return auditionView(player);
+    },
+
+    // Pauses the audition if Music is still on it; anything the user moved on to keeps playing.
+    stopAudition: () =>
+      withOperation(cache(), 'music', async () => {
+        // A draft another front end plays from the same playlist is not the audition's to pause.
+        if (!auditioning || !ours()) {
+          auditioning = undefined;
+
+          return;
+        }
+
+        const { playlistId, trackIds } = auditioning;
+        const live = await read();
+
+        await followOwner(live, true);
+
+        if (draftPlaying(live)) {
+          auditioning = undefined;
+
+          return;
+        }
+
+        if (!(await pauseAfter(playlistId, live, trackIds)))
+          throw new Error('Music could not be paused. Pause it in Music.');
+
+        auditioning = undefined;
+      }),
+
     // Releases the link so Claude can edit again; Music.app keeps the playlist as it is.
     // Pauses first only if Music is playing this draft, never something the user moved on to.
     detach: (draftId: string, revision: number) =>
@@ -348,6 +527,25 @@ export function createPlayback(deps: PlaybackDeps) {
         drafts().detachPreview(draftId, revision);
       }),
   };
+
+  // iCloud can rekey the preview mid-audition; a playlist of the same name holding the
+  // audition's order, confirmed by the bridge, is still the audition.
+  async function followAudition(player: PlayerState) {
+    const mine = auditioning;
+    const playlist = player.running ? player.playlist : undefined;
+
+    if (
+      !mine ||
+      !playlist ||
+      playlist.name !== PREVIEW_PLAYLIST_NAME ||
+      playlist.persistentId === mine.playlistId ||
+      !ours()
+    )
+      return;
+
+    if ((await isRotatedSlot(playlist.persistentId, mine.trackIds)) && auditioning === mine)
+      auditioning = { ...mine, playlistId: playlist.persistentId };
+  }
 
   // Pauses what an action just left playing, naming the reported entry first and then re-reading,
   // following a rotated ID by name for the bridge to confirm it is the only such playlist.

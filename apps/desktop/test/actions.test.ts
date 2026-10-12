@@ -71,6 +71,29 @@ it('leaves out polled reads unless they fail or the player changes', async () =>
   ]);
 });
 
+it('logs an audition only when what it plays changes, apart from the draft player', async () => {
+  const { log, lines } = setup();
+  const heard = (track_id: string, position: number) =>
+    log.record('player.auditionState', undefined, async () => ({
+      state: 'playing',
+      track_id,
+      position,
+    }));
+
+  await log.record('player.state', { draft_id: 'D' }, async () => ({ state: 'stopped' }));
+  await heard('T1', 1);
+  await heard('T1', 2);
+  await heard('T2', 0);
+  await log.record('agent.suggest', { draft_id: 'D', ask: 'more vocal' }, async () => []);
+
+  expect(lines().map((line) => [line.method, line.result?.track_id ?? line.args?.ask])).toEqual([
+    ['player.state', undefined],
+    ['player.auditionState', 'T1'],
+    ['player.auditionState', 'T2'],
+    ['agent.suggest', '<10 chars>'],
+  ]);
+});
+
 it('keeps one previous file once the log grows past its limit', async () => {
   const { path, log, lines } = setup(10);
 
