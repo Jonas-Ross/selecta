@@ -159,6 +159,8 @@ install() {
 }
 
 build() {
+  # Under the same lock as the build, so dist never pairs with another commit's node_modules.
+  install
   if is_built; then return; fi
   say "Building Selecta"
   rm -f "$state/built"
