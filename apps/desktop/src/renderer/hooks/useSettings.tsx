@@ -1,6 +1,13 @@
 // The settings every screen reads, and whether the panel is open. Changes save
 // as they're made; main's menu opens the panel (Cmd+,).
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import { selecta } from '../api.js';
 import { loadSettings, storeSettings, type Settings } from '../settings.js';
 
@@ -25,8 +32,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  // The stylesheets' reduced-motion rules key off this as well as the system's.
-  useEffect(() => {
+  // The stylesheets' reduced-motion rules key off this as well as the system's; set
+  // before the first paint so a saved Reduce never shows the entrance animations.
+  useLayoutEffect(() => {
     document.documentElement.dataset.motion = settings.motion;
   }, [settings.motion]);
 
