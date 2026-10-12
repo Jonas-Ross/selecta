@@ -135,6 +135,16 @@ it('records a refused request like any other outcome', () => {
   expect(agent.history()[DRAFT]!.working).toBe(false);
 });
 
+it('gives suggestion runs the latest brief, not a refused first try', () => {
+  const { spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+
+  agent.refuse(DRAFT, 'go', 'Linked.', true);
+  agent.start(DRAFT, 'warmup, nothing loud');
+
+  expect(agent.brief(DRAFT)).toBe('warmup, nothing loud');
+});
+
 it('reports a stop, a crash and a missing CLI as one error each', async () => {
   const { runs, spawn } = fakeClaude();
   const { agent, events } = sessions(spawn);

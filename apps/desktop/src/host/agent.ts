@@ -103,9 +103,12 @@ export class AgentSessions {
     for (const stop of [...this.running.values(), ...this.suggesting.values()]) stop();
   }
 
-  /** The draft's brief, as the user wrote it, for runs that start without its session. */
+  /** The draft's latest brief, as the user wrote it, for runs that start without its session. */
   brief(draftId: string): string | undefined {
-    const asked = this.events.get(draftId)?.find((event) => event.kind === 'asked' && event.brief);
+    const asked = this.events
+      .get(draftId)
+      ?.filter((event) => event.kind === 'asked' && event.brief)
+      .at(-1);
 
     return asked?.kind === 'asked' ? asked.text : undefined;
   }
