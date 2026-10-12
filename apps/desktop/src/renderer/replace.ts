@@ -29,12 +29,13 @@ export type AuditionPlan = { track_ids: string[]; index: number; position?: numb
 
 /**
  * Selecta Preview gets the neighbours either side of the candidate, so Music plays on
- * through the join and AutoMix blends it. Undefined when there is no such join to hear.
+ * through the join and AutoMix blends it; a join starts `lead` seconds before it. Undefined when there is no such join to hear.
  */
 export function auditionPlan(
   { prev, next }: Pick<Around, 'prev' | 'next'>,
   candidate: { track_id: string; duration_seconds?: number },
   listening: Listening,
+  lead: number,
 ): AuditionPlan | undefined {
   const track_ids = [prev?.track_id, candidate.track_id, next?.track_id].filter(
     (id): id is string => id !== undefined,
@@ -53,7 +54,10 @@ export function auditionPlan(
     );
 
   // With no known length there is no end to count back from, so no join to hear.
-  const from = joinStart(listening === 'in' ? prev?.duration_seconds : candidate.duration_seconds);
+  const from = joinStart(
+    listening === 'in' ? prev?.duration_seconds : candidate.duration_seconds,
+    lead,
+  );
 
   if (from === undefined) return undefined;
 

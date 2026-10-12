@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import type { Suggestion } from '../../shared/protocol.js';
 import type { Rect } from '../flight.js';
 import type { Replace } from '../hooks/useReplace.js';
+import { useSettings } from '../hooks/useSettings.js';
 import { auditionPlan, pickTrack, type Around } from '../replace.js';
 import { Eq, Fit, PlayIcon, Steer, factsText } from './ReplaceParts.js';
 import { Sleeve } from './Sleeve.js';
@@ -30,6 +31,7 @@ export function Shortlist({
   onSwap: (pick: Suggestion) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
+  const { joinLead } = useSettings().settings;
   const { state, heard, busy, trouble } = replace;
   const { prev, row, next } = around;
   const active = state?.active ?? state?.picks[0]?.track.persistent_id;
@@ -116,8 +118,8 @@ export function Shortlist({
           const id = pick.track.persistent_id;
           const track = pickTrack(pick);
           const on = id === active;
-          const hear = auditionPlan(around, track, 'hear');
-          const wayIn = auditionPlan(around, track, 'in');
+          const hear = auditionPlan(around, track, 'hear', joinLead);
+          const wayIn = auditionPlan(around, track, 'in', joinLead);
 
           return (
             <div

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { EditQueue } from '../edits.js';
 import { elsewhere, joinStart, livePosition, nowIndex, queuePlay, setClock } from '../listen.js';
 import type { DraftView, Row } from '../state.js';
+import { useSettings } from './useSettings.js';
 import { usePlayer } from './usePlayer.js';
 
 // Back past this many seconds restarts the record, as a player's previous button does.
@@ -30,6 +31,7 @@ export function useListen({
   canPlay: boolean;
 }) {
   const player = usePlayer(draftId, watching);
+  const { joinLead } = useSettings().settings;
   const [cued, setCued] = useState<string>();
   const [clock, setClockNow] = useState(() => performance.now());
   // A play or stop waiting on the edit queue counts as busy, holding Claude and the transport
@@ -46,9 +48,9 @@ export function useListen({
   const playing = current && live?.state === 'playing';
   const position = current ? livePosition(live, player.readAt, clock) : 0;
   // Music's own length for the record it's on, else the cached one.
-  // Music's own length for the record it's on, else the cached one.
   const joinAt =
-    joinStart(current ? live?.duration : undefined) ?? joinStart(nowRow?.duration_seconds);
+    joinStart(current ? live?.duration : undefined, joinLead) ??
+    joinStart(nowRow?.duration_seconds, joinLead);
 
   // Music.app is read about once a second; the bar moves smoothly in between.
   useEffect(() => {
@@ -95,9 +97,7 @@ export function useListen({
     if (current) playAt(row.entry_id);
   }
 
-  const status =
-    elsewhere(live) ??
-    (current || linked ? 'The agent waits until you stop listening.' : 'Plays in Music.');
+  const status = elsewhere(live) ?? (current || linked ? undefined : 'Plays in Music.');
 
   return {
     player,

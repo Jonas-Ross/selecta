@@ -16,20 +16,20 @@ it('finds a record and its neighbours, and nothing once it has left', () => {
   expect(around(items, 'E-9')).toBeUndefined();
 });
 
-it('auditions a pick between its neighbours: a third in, or a minute before each join', () => {
+it('auditions a pick between its neighbours: a third in, or the lead before each join', () => {
   const middle = around(items, 'E-2')!;
 
-  expect(auditionPlan(middle, pick, 'hear')).toEqual({
+  expect(auditionPlan(middle, pick, 'hear', 60)).toEqual({
     track_ids: ['T-1', 'P', 'T-3'],
     index: 1,
     position: 120,
   });
-  expect(auditionPlan(middle, pick, 'in')).toEqual({
+  expect(auditionPlan(middle, pick, 'in', 60)).toEqual({
     track_ids: ['T-1', 'P', 'T-3'],
     index: 0,
     position: 240,
   });
-  expect(auditionPlan(middle, pick, 'out')).toEqual({
+  expect(auditionPlan(middle, pick, 'out', 60)).toEqual({
     track_ids: ['T-1', 'P', 'T-3'],
     index: 1,
     position: 300,
@@ -40,19 +40,19 @@ it('has no join to hear at either end of the set, or before a record of unknown 
   const first = around(items, 'E-1')!;
   const last = around(items, 'E-3')!;
 
-  expect(auditionPlan(first, pick, 'hear')).toEqual({
+  expect(auditionPlan(first, pick, 'hear', 60)).toEqual({
     track_ids: ['P', 'T-2'],
     index: 0,
     position: 120,
   });
-  expect(auditionPlan(first, pick, 'in')).toBeUndefined();
-  expect(auditionPlan(last, pick, 'out')).toBeUndefined();
-  expect(auditionPlan(around(items, 'E-2')!, { track_id: 'P' }, 'out')).toBeUndefined();
-  expect(auditionPlan(around(items, 'E-2')!, { track_id: 'P' }, 'hear')).toEqual({
+  expect(auditionPlan(first, pick, 'in', 60)).toBeUndefined();
+  expect(auditionPlan(last, pick, 'out', 60)).toBeUndefined();
+  expect(auditionPlan(around(items, 'E-2')!, { track_id: 'P' }, 'out', 60)).toBeUndefined();
+  expect(auditionPlan(around(items, 'E-2')!, { track_id: 'P' }, 'hear', 60)).toEqual({
     track_ids: ['T-1', 'P', 'T-3'],
     index: 1,
   });
-  expect(auditionPlan({ prev: row(1), next: undefined }, pick, 'in')).toBeUndefined();
+  expect(auditionPlan({ prev: row(1), next: undefined }, pick, 'in', 60)).toBeUndefined();
 });
 
 it('swaps one entry for a new one in place, and finds it again after the edit', () => {
@@ -69,4 +69,11 @@ it('swaps one entry for a new one in place, and finds it again after the edit', 
 
   expect(swappedIn(after, new Set(['E-1', 'E-2', 'E-3']), 'P')).toBe('E-NEW');
   expect(swappedIn(entries, new Set(['E-1', 'E-2', 'E-3']), 'P')).toBeUndefined();
+});
+
+it('starts a join the chosen lead before the end', () => {
+  expect(auditionPlan(around(items, 'E-2')!, pick, 'in', 30)).toMatchObject({
+    index: 0,
+    position: 270,
+  });
 });

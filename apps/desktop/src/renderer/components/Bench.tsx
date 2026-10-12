@@ -3,6 +3,7 @@
 // the picks along the bottom to try in turn.
 import type { Suggestion } from '../../shared/protocol.js';
 import type { Replace } from '../hooks/useReplace.js';
+import { useSettings } from '../hooks/useSettings.js';
 import { join } from '../joins.js';
 import { auditionPlan, pickTrack, type Around, type Listening } from '../replace.js';
 import type { Track } from '../state.js';
@@ -90,6 +91,7 @@ export function Bench({
   agent: string;
   onSwap: (pick: Suggestion) => void;
 }) {
+  const { joinLead } = useSettings().settings;
   const { state, heard, busy, trouble } = replace;
 
   if (!state) return null;
@@ -100,7 +102,7 @@ export function Bench({
   const playing = heard?.state === 'playing' && heard.track_id === shown.track_id;
 
   const listen = (listening: Listening) => {
-    const plan = auditionPlan(around, shown, listening);
+    const plan = auditionPlan(around, shown, listening, joinLead);
 
     if (plan) replace.audition(plan);
   };
@@ -113,7 +115,7 @@ export function Bench({
           from={prev}
           to={shown}
           side="in"
-          disabled={busy || !auditionPlan(around, shown, 'in')}
+          disabled={busy || !auditionPlan(around, shown, 'in', joinLead)}
           onListen={() => listen('in')}
         />
         <div className="bench-mid">
@@ -145,7 +147,7 @@ export function Bench({
           from={shown}
           to={next}
           side="out"
-          disabled={busy || !auditionPlan(around, shown, 'out')}
+          disabled={busy || !auditionPlan(around, shown, 'out', joinLead)}
           onListen={() => listen('out')}
         />
         <Neighbour track={next} edge="End of the set" />

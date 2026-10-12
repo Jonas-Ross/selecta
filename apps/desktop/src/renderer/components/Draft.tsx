@@ -11,6 +11,7 @@ import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
 import { useReducedMotion } from '../hooks/motion.js';
 import { useListen } from '../hooks/useListen.js';
+import { onMeasured } from '../hooks/useMeasure.js';
 import { useReplace } from '../hooks/useReplace.js';
 import { transportHeld } from '../listen.js';
 import { withMoved } from '../reorder.js';
@@ -110,9 +111,15 @@ export function Draft({
   useEffect(() => {
     void load();
 
-    return selecta.on((event) => {
+    const stopMeasured = onMeasured(() => void load());
+    const stopEvents = selecta.on((event) => {
       if (event.event === 'drafts.changed') void load();
     });
+
+    return () => {
+      stopMeasured();
+      stopEvents();
+    };
   }, [load]);
 
   useEffect(() => onArtworkFailure(setArtProblem), []);

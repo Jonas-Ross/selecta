@@ -9,9 +9,19 @@ import type { ArtworkReadResult } from '@selecta/core/types/bridge.js';
 export type { DraftSummary };
 
 export const BRIEF_LIMIT = 4000;
+export const HEARD_LIMIT = 500;
 
 export type CrateTrack = ReturnType<typeof toInspectedTrack> & { genre?: string; year?: number };
-export type Crate = { tracks: CrateTrack[]; total: number; order: 'recently_added' | 'relevance' };
+/** What the crate holds with no search: the same neutral orderings the MCP search offers. */
+export const CRATE_ORDERS = [
+  'recently_added',
+  'most_played',
+  'recent_plays',
+  'least_played',
+  'random',
+] as const;
+export type CrateOrder = (typeof CRATE_ORDERS)[number];
+export type Crate = { tracks: CrateTrack[]; total: number; order: CrateOrder | 'relevance' };
 
 /** A cached thumbnail's file name, null when the track has no artwork, or why it couldn't be read. */
 export type ArtworkAnswer = ArtworkReadResult[string];
@@ -25,7 +35,7 @@ export type Suggestion = { track: CrateTrack; reason: string };
 export const ASK_LIMIT = 500;
 
 export type Methods = {
-  'library.crate': (args: { query?: string }) => Crate;
+  'library.crate': (args: { query?: string; order?: CrateOrder }) => Crate;
   'artwork.get': (args: {
     track_ids: string[];
     refresh?: string[];
@@ -52,6 +62,8 @@ export type Methods = {
     provider?: ProviderId;
   }) => Suggestion[];
   'agent.stopSuggest': (args: { draft_id: string }) => void;
+  'features.measure': (args: { track_id: string }) => Measured;
+  'features.heard': (args: { track_ids: string[] }) => Record<string, Measured>;
   'player.state': (args: { draft_id: string }) => PlayerView;
   'player.play': (args: {
     draft_id: string;
@@ -74,6 +86,12 @@ export type Methods = {
 
 export type Method = keyof Methods;
 
+/** Why a feature is still blank after metrognome tried it. */
+export type MissReason = 'unsure' | 'no_reading' | 'not_found' | 'failed';
+
+/** A measurement's outcome: each feature still blank, and why; `error` when the run itself failed. */
+export type Measured = { tempo?: MissReason; key?: MissReason; error?: string };
+
 export const PROVIDER_IDS = ['claude', 'codex'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 export const PROVIDER_LABELS: Record<ProviderId, string> = { claude: 'Claude', codex: 'Codex' };
@@ -94,7 +112,9 @@ export type RunSnapshot = { events: AgentEvent[]; working: boolean };
 
 export type HostEvent =
   | { event: 'agent'; draft_id: string; seq: number; data: AgentEvent }
-  | { event: 'drafts.changed' };
+  | { event: 'drafts.changed' }
+  // From main's menu rather than the host.
+  | { event: 'settings.open' };
 
 export type SelectaApi = {
   call<M extends Method>(
