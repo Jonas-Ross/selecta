@@ -235,6 +235,24 @@ it('leaves out a pick the draft gained while the agent was looking', async () =>
   expect(picks.map((pick) => pick.track.persistent_id)).toEqual(['T-BARE']);
 });
 
+it('refuses picks for a record whose neighbours changed while the agent was looking', async () => {
+  const draftId = randomUUID();
+  const draft = deps.drafts().create(draftId, 'Night', ['T-TEARDROP', 'T-ROADS', 'T-ANGEL']);
+
+  agent.suggest.mockImplementationOnce(async () => {
+    deps.drafts().update(draftId, 1, (current) => ({
+      ...current,
+      entries: current.entries.filter((entry) => entry.track_id !== 'T-ROADS'),
+    }));
+
+    return JSON.stringify({ picks: [{ track_id: 'T-BARE', reason: 'Fits.' }] });
+  });
+
+  await expect(
+    call('agent.suggest', { draft_id: draftId, entry_id: draft.entries[0]!.entry_id }),
+  ).rejects.toThrow('The draft changed around that record while Codex was looking.');
+});
+
 it('says so when the agent offers nothing usable, or the record has gone', async () => {
   const draftId = randomUUID();
   const draft = deps.drafts().create(draftId, 'Night', ['T-TEARDROP']);

@@ -141,6 +141,13 @@ export function createApi(
     const { entries } = deps.drafts().get(draft_id);
     const at = entries.findIndex((entry) => entry.entry_id === entry_id);
     const record = entries[at];
+    // The record and its neighbours, which the picks are chosen to sit between.
+    const site = (now: typeof entries) => {
+      const i = now.findIndex((entry) => entry.entry_id === entry_id);
+
+      return i < 0 ? undefined : JSON.stringify([-1, 0, 1].map((d) => now[i + d]?.track_id));
+    };
+    const before = site(entries);
 
     if (!record) throw new Error('That record is no longer in the draft.');
 
@@ -162,6 +169,12 @@ export function createApi(
     );
     // The agent is told the rules; these hold whatever it does, against the draft as it is now.
     const now = deps.drafts().get(draft_id).entries;
+
+    if (site(now) !== before)
+      throw new Error(
+        `The draft changed around that record while ${agent.provider(draft_id).label} was looking. Try again.`,
+      );
+
     const taken = new Set([...now.map((entry) => entry.track_id), ...exclude]);
     const picks: Suggestion[] = [];
 

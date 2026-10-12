@@ -925,3 +925,50 @@ it('keeps a first audition to pause when Music fails to start it cleanly', async
     on: { playlistId: 'P-SLOT', index: 1, trackId: B },
   });
 });
+
+const rotated = (index: number, persistentId: string) => ({
+  ...playing(index, persistentId),
+  playlist: { persistentId: 'P-NEW', name: 'Selecta Preview' },
+});
+// The bridge confirms the rekeyed slot only when it holds the order asked about.
+const holding = (order: string[]) =>
+  vi.fn(async ({ expectedTrackIds }: { expectedTrackIds: string[] }) => {
+    if (JSON.stringify(expectedTrackIds) !== JSON.stringify(order))
+      throw new BridgeError('preview_conflict', 'Not that order.');
+
+    return { persistentId: 'P-NEW', trackCount: order.length, trackPersistentIds: order };
+  });
+
+it('follows an audition iCloud rekeys, and pauses it there', async () => {
+  await player.audition([B, A], 0);
+  deps.bridge.readPreview = holding([B, A]);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(rotated(1, B));
+
+  expect(await player.auditionState()).toMatchObject({ state: 'playing', track_id: B });
+  vi.mocked(deps.bridge.playPreview).mockResolvedValueOnce({
+    playlistId: 'P-NEW',
+    player: rotated(2, A),
+  });
+  await player.audition([B, A], 1);
+  expect(deps.bridge.replacePlaylist).toHaveBeenCalledOnce();
+
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-NEW', index: 1, trackId: B },
+  });
+});
+
+it('keeps the order of a rekeyed audition to pause when switching to another pick fails', async () => {
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.replacePlaylist).mockRejectedValueOnce(new Error('Music went away'));
+  await expect(player.audition([A, B], 0)).rejects.toThrow();
+
+  deps.bridge.readPreview = holding([B, A]);
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(rotated(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenLastCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-NEW', index: 1, trackId: B, slot: 'Selecta Preview' },
+  });
+});

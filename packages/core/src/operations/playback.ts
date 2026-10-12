@@ -109,7 +109,10 @@ export function createPlayback(deps: PlaybackDeps) {
   const read = async () => watch(await bridge.readPlayer());
   // The tracks an audition last wrote into the preview, the playlist Music plays them from, and
   // the slot generation it left; another front end linking a draft moves the generation on.
-  let auditioning: { playlistId: string; trackIds: string[]; generation?: string } | undefined;
+  // `settled` once Music has started them, so moving within them needs no rewrite.
+  let auditioning:
+    | { playlistId: string; trackIds: string[]; generation?: string; settled: boolean }
+    | undefined;
   const ours = () =>
     auditioning !== undefined && drafts().preview()?.generation === auditioning.generation;
 
@@ -258,7 +261,7 @@ export function createPlayback(deps: PlaybackDeps) {
         queued = undefined;
 
         // The audition's tracks are going, but Music plays them until this play takes over.
-        if (auditioning) auditioning = { ...auditioning, trackIds: [] };
+        if (auditioning) auditioning = { ...auditioning, settled: false };
 
         const { preview, preview_result: result } = await syncDraftPreview(
           drafts(),
@@ -397,10 +400,15 @@ export function createPlayback(deps: PlaybackDeps) {
         if (missing) throw new Error([missing.error, missing.hint].filter(Boolean).join(': '));
 
         const live = await read();
+
+        // A rekey the bridge cannot confirm leaves the audition unloaded, so it is written again.
+        await followAudition(live).catch(() => undefined);
+
         const owned = ours() ? auditioning : undefined;
         // Already holding these tracks and on them in Music, so only the place changes.
         const loaded =
           owned !== undefined &&
+          owned.settled &&
           JSON.stringify(owned.trackIds) === JSON.stringify(trackIds) &&
           live.running &&
           live.state !== 'stopped' &&
@@ -409,7 +417,7 @@ export function createPlayback(deps: PlaybackDeps) {
 
         if (!loaded) {
           // Music plays the last audition until the new one takes over, so it stays ours to pause.
-          auditioning = owned && { ...owned, trackIds: [], generation };
+          auditioning = owned && { ...owned, settled: false, generation };
 
           const written = await replacePreview(trackIds, undefined, deps);
 
@@ -423,7 +431,7 @@ export function createPlayback(deps: PlaybackDeps) {
 
           // A start that fails can still leave Music on the new tracks, which are ours to pause.
           if (written.playlist_id)
-            auditioning = { playlistId: written.playlist_id, trackIds, generation };
+            auditioning = { playlistId: written.playlist_id, trackIds, generation, settled: false };
         }
 
         const result = await bridge.playPreview({
@@ -433,12 +441,18 @@ export function createPlayback(deps: PlaybackDeps) {
           ...(!loaded && { restart: true }),
         });
 
-        auditioning = { playlistId: result.playlistId, trackIds, generation };
+        auditioning = { playlistId: result.playlistId, trackIds, generation, settled: true };
 
         return auditionView(result.player);
       }),
 
-    auditionState: async () => auditionView(await read()),
+    async auditionState() {
+      const player = await read();
+
+      await followAudition(player);
+
+      return auditionView(player);
+    },
 
     // Pauses the audition if Music is still on it; anything the user moved on to keeps playing.
     stopAudition: () =>
@@ -466,6 +480,25 @@ export function createPlayback(deps: PlaybackDeps) {
         drafts().detachPreview(draftId, revision);
       }),
   };
+
+  // iCloud can rekey the preview mid-audition; a playlist of the same name holding the
+  // audition's order, confirmed by the bridge, is still the audition.
+  async function followAudition(player: PlayerState) {
+    const mine = auditioning;
+    const playlist = player.running ? player.playlist : undefined;
+
+    if (
+      !mine ||
+      !playlist ||
+      playlist.name !== PREVIEW_PLAYLIST_NAME ||
+      playlist.persistentId === mine.playlistId ||
+      !ours()
+    )
+      return;
+
+    if ((await isRotatedSlot(playlist.persistentId, mine.trackIds)) && auditioning === mine)
+      auditioning = { ...mine, playlistId: playlist.persistentId };
+  }
 
   // Pauses what an action just left playing, naming the reported entry first and then re-reading,
   // following a rotated ID by name for the bridge to confirm it is the only such playlist.
