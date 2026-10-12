@@ -1,7 +1,8 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import {
   around,
   auditionPlan,
+  poll,
   site,
   stopAfter,
   swapEdit,
@@ -129,4 +130,40 @@ it('stops an audition only once one still starting has landed, however it lands'
       throw new Error('Music could not be paused. Pause it in Music.');
     }),
   ).rejects.toThrow('Music could not be paused');
+});
+
+it('polls until a read fails, then says so and stops rather than retrying', async () => {
+  vi.useFakeTimers();
+
+  const heard: number[] = [];
+  const failed: string[] = [];
+  let reads = 0;
+  const read = () =>
+    ++reads === 3 ? Promise.reject(new Error('Music went away.')) : Promise.resolve(reads);
+
+  poll(
+    read,
+    1000,
+    (n) => heard.push(n),
+    (e) => failed.push(e.message),
+  );
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(heard).toEqual([1, 2]);
+  expect(failed).toEqual(['Music went away.']);
+  expect(reads).toBe(3);
+
+  // Stopped, a read already under way lands nowhere and none follows.
+  const late: number[] = [];
+  const stop = poll(
+    () => Promise.resolve(7),
+    1000,
+    (n) => late.push(n),
+    () => undefined,
+  );
+
+  await vi.advanceTimersByTimeAsync(500);
+  stop();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(late).toEqual([]);
+  vi.useRealTimers();
 });

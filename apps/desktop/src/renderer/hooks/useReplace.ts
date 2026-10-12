@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AuditionView, ProviderId, Suggestion } from '../../shared/protocol.js';
 import { selecta } from '../api.js';
-import { stopAfter, type AuditionPlan } from '../replace.js';
+import { poll, stopAfter, type AuditionPlan } from '../replace.js';
 
 const READ_EVERY_MS = 1000;
 
@@ -94,29 +94,20 @@ export function useReplace(
   // Leaving the draft leaves Music where it was, minus the audition.
   useEffect(() => close, [close]);
 
-  // Music.app is read about once a second while an audition may be playing.
+  // Music.app is read about once a second while an audition may be playing. A failed read is
+  // said and stops the poll; the next audition starts it again.
   useEffect(() => {
     if (!polling) return;
 
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const read = () => {
-      void selecta
-        .call('player.auditionState')
-        .then((next) => alive && setHeard(next))
-        .catch(() => undefined)
-        .finally(() => {
-          if (alive) timer = setTimeout(read, READ_EVERY_MS);
-        });
-    };
-
-    timer = setTimeout(read, READ_EVERY_MS);
-
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
+    return poll(
+      () => selecta.call('player.auditionState'),
+      READ_EVERY_MS,
+      setHeard,
+      (e) => {
+        setTrouble(e.message);
+        setPolling(false);
+      },
+    );
   }, [polling]);
 
   function act(call: () => Promise<AuditionView | void>) {

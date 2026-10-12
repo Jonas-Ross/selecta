@@ -35,6 +35,37 @@ export type AuditionPlan = { track_ids: string[]; index: number; position?: numb
 export const stopAfter = (starting: Promise<unknown> | undefined, stop: () => Promise<unknown>) =>
   (starting ?? Promise.resolve()).then(stop, stop);
 
+/** Reads every `every` ms until stopped. A failed read is handed on and ends the poll, never retried. */
+export function poll<T>(
+  read: () => Promise<T>,
+  every: number,
+  heard: (next: T) => void,
+  failed: (e: Error) => void,
+): () => void {
+  let alive = true;
+  let timer: ReturnType<typeof setTimeout>;
+  const later = () => {
+    timer = setTimeout(() => {
+      void read().then(
+        (next) => {
+          if (!alive) return;
+
+          heard(next);
+          later();
+        },
+        (e: Error) => alive && failed(e),
+      );
+    }, every);
+  };
+
+  later();
+
+  return () => {
+    alive = false;
+    clearTimeout(timer);
+  };
+}
+
 /**
  * Selecta Preview gets the neighbours either side of the candidate, so Music plays on
  * through the join and AutoMix blends it; a join starts `lead` seconds before it. Undefined when there is no such join to hear.
