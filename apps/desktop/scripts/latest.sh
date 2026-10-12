@@ -162,11 +162,14 @@ open_app() {
   mkdir -p "$log_dir"
   # Detached, with its output in a log, so this script (and the launcher) can exit.
   nohup node "$desktop/scripts/start.mjs" >> "$log_dir/desktop-output.log" 2>&1 < /dev/null &
-  for _ in $(seq 1 100); do
+  local launcher=$!
+  # A first launch may download Electron and rebuild the dev bundle, so allow minutes.
+  for _ in $(seq 1 900); do
     [ -z "$(running_pid)" ] || return 0
-    kill -0 $! 2> /dev/null || break
+    kill -0 "$launcher" 2> /dev/null || break
     sleep 0.2
   done
+  kill "$launcher" 2> /dev/null || true
   say "Selecta didn't start; see $log_dir/desktop-output.log" >&2
   exit 1
 }
