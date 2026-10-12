@@ -422,10 +422,13 @@ export function createPlayback(deps: PlaybackDeps) {
           const written = await replacePreview(trackIds, undefined, deps);
 
           // A write that reached Music, even one that then failed, may leave it playing these tracks.
-          if (written.playlist_id)
+          const reached = written.playlist_id ?? written.partial_write?.playlist_id;
+
+          if (reached)
             auditioning = {
-              playlistId: written.playlist_id,
-              trackIds: written.observed_track_ids ?? trackIds,
+              playlistId: reached,
+              trackIds:
+                written.observed_track_ids ?? written.partial_write?.observed_track_ids ?? trackIds,
               generation,
               settled: false,
             };

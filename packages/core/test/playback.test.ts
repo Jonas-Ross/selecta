@@ -995,3 +995,20 @@ it('keeps a first audition to pause when its write reached Music but could not b
     on: { playlistId: 'P-SLOT', index: 1, trackId: B },
   });
 });
+
+it('keeps a first audition to pause when Music reports its write only partly landed', async () => {
+  vi.mocked(deps.bridge.replacePlaylist).mockRejectedValueOnce(
+    new BridgeError('jxa_error', 'Write stopped midway.', undefined, {
+      playlist_id: 'P-SLOT',
+      observed_track_ids: [B],
+    }),
+  );
+  await expect(player.audition([B, A], 0)).rejects.toThrow(/jxa_error/);
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+});
