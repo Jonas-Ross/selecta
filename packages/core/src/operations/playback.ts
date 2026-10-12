@@ -421,6 +421,15 @@ export function createPlayback(deps: PlaybackDeps) {
 
           const written = await replacePreview(trackIds, undefined, deps);
 
+          // A write that reached Music, even one that then failed, may leave it playing these tracks.
+          if (written.playlist_id)
+            auditioning = {
+              playlistId: written.playlist_id,
+              trackIds: written.observed_track_ids ?? trackIds,
+              generation,
+              settled: false,
+            };
+
           if (written.error)
             throw new Error([written.error, written.hint].filter(Boolean).join(': '));
 
@@ -428,10 +437,6 @@ export function createPlayback(deps: PlaybackDeps) {
             throw new Error(
               'Selecta Preview did not end up in the order asked for, so nothing was played.',
             );
-
-          // A start that fails can still leave Music on the new tracks, which are ours to pause.
-          if (written.playlist_id)
-            auditioning = { playlistId: written.playlist_id, trackIds, generation, settled: false };
         }
 
         const result = await bridge.playPreview({

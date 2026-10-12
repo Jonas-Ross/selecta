@@ -17,6 +17,10 @@ export function around(items: Row[], entryId: string): Around | undefined {
   return row && { at, prev: items[at - 1], row, next: items[at + 1] };
 }
 
+/** What the picks were chosen for: the record and the tracks either side of it. */
+export const site = ({ prev, row, next }: Around) =>
+  [prev?.track_id, row.track_id, next?.track_id].join(' ');
+
 /** A pick as a track the joins can read. */
 export const pickTrack = ({ track }: Suggestion): Track & { track_id: string } => ({
   ...track,

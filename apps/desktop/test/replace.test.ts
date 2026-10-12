@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest';
-import { around, auditionPlan, stopAfter, swapEdit, swapEntries } from '../src/renderer/replace.js';
+import {
+  around,
+  auditionPlan,
+  site,
+  stopAfter,
+  swapEdit,
+  swapEntries,
+} from '../src/renderer/replace.js';
 import type { Row } from '../src/renderer/state.js';
 
 const row = (n: number, duration_seconds?: number): Row => ({
@@ -14,6 +21,14 @@ it('finds a record and its neighbours, and nothing once it has left', () => {
   expect(around(items, 'E-2')).toEqual({ at: 1, prev: items[0], row: items[1], next: items[2] });
   expect(around(items, 'E-1')).toMatchObject({ at: 0, prev: undefined, next: items[1] });
   expect(around(items, 'E-9')).toBeUndefined();
+});
+
+it('names the spot picks were chosen for by the record and the tracks either side', () => {
+  const before = site(around(items, 'E-2')!);
+
+  expect(site(around([...items, row(4)], 'E-2')!)).toBe(before);
+  expect(site(around([items[0]!, items[1]!, row(4)], 'E-2')!)).not.toBe(before);
+  expect(site(around([items[0]!, row(5), items[1]!, items[2]!], 'E-2')!)).not.toBe(before);
 });
 
 it('auditions a pick between its neighbours: a third in, or the lead before each join', () => {

@@ -15,7 +15,7 @@ import { onMeasured } from '../hooks/useMeasure.js';
 import { useReplace } from '../hooks/useReplace.js';
 import { transportHeld } from '../listen.js';
 import { withMoved } from '../reorder.js';
-import { around, swapEdit, swapEntries } from '../replace.js';
+import { around, site, swapEdit, swapEntries } from '../replace.js';
 import {
   bpmSpan,
   feedbackMessage,
@@ -166,9 +166,21 @@ export function Draft({
   );
   const outOfStep = linked && OUT_OF_STEP.has(view?.preview?.status ?? '');
 
-  // A record that left the draft has nothing left to replace.
+  // A record that left the draft has nothing left to replace, and picks for neighbours another
+  // front end has since changed no longer fit where they would go.
+  const pickedFor = useRef<string>(undefined);
+
   useEffect(() => {
-    if (replacing && !sides) replace.close();
+    if (!replacing) return void (pickedFor.current = undefined);
+
+    if (!sides) return replace.close();
+
+    pickedFor.current ??= site(sides);
+
+    if (pickedFor.current !== site(sides)) {
+      replace.close();
+      setNotice('The records around it changed, so Replace closed.');
+    }
   });
 
   useEffect(() => {

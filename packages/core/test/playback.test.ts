@@ -981,3 +981,17 @@ it('surfaces a rekey it cannot check instead of rewriting the audition', async (
   await expect(player.audition([B, A], 1)).rejects.toThrow('Automation timed out');
   expect(deps.bridge.replacePlaylist).toHaveBeenCalledOnce();
 });
+
+it('keeps a first audition to pause when its write reached Music but could not be recorded', async () => {
+  vi.spyOn(deps.cacheInstance, 'upsertPlaylistAfterWrite').mockImplementationOnce(() => {
+    throw new Error('disk full');
+  });
+  await expect(player.audition([B, A], 0)).rejects.toThrow(/cache_unavailable/);
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(1, B));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 1, trackId: B },
+  });
+});
