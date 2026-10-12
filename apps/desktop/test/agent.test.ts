@@ -243,6 +243,51 @@ it('hands a swapped-in agent the earlier requests as sent, and not one that is r
   expect(runs[2]!.args.at(-1)).not.toContain('linked');
 });
 
+it('hands a resumed session only the requests another agent took since its last turn', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+
+  agent.start(DRAFT, 'deep house');
+  runs[0]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+  await settle();
+  agent.send(DRAFT, 'darker', 'darker', 'codex');
+  // Codex stops before finishing, so Claude's session is still the one to resume.
+  agent.cancel(DRAFT);
+  await settle();
+  agent.send(DRAFT, 'shorter', 'shorter', 'claude');
+
+  const prompt = runs[2]!.args[runs[2]!.args.indexOf('-p') + 1]!;
+
+  expect(flag(runs[2]!.args, '--resume')).toBe('S-1');
+  expect(prompt).toContain('- darker\n\nFeedback:\nshorter');
+  expect(prompt).not.toContain('deep house');
+});
+
+it('keeps the newest requests when the handoff would run long', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+
+  agent.start(DRAFT, 'brief');
+  runs[0]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+  await settle();
+
+  for (const [index, letter] of ['a', 'b', 'c'].entries()) {
+    agent.send(DRAFT, letter.repeat(7_000));
+    runs[index + 1]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+    await settle();
+  }
+
+  agent.send(DRAFT, 'swap', 'swap', 'codex');
+
+  const prompt = runs[4]!.args.at(-1)!;
+
+  expect(prompt).toContain(
+    `- (1 older left out)\n- ${'a'.repeat(2_000)}…\n- ${'b'.repeat(7_000)}\n`,
+  );
+  expect(prompt).not.toContain('brief');
+  expect(prompt.length).toBeLessThan(17_000);
+});
+
 it('names the missing CLI for the provider that was asked for', async () => {
   const { runs, spawn } = fakeClaude();
   const { agent, events } = sessions(spawn);

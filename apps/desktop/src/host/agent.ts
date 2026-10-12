@@ -7,6 +7,9 @@ import { LOCAL_DRAFTS_ENV } from '@selecta/core/drafts/store.js';
 import type { AgentEvent, ProviderId, RunSnapshot } from '../shared/protocol.js';
 import { PROVIDERS, type AgentProvider } from './providers.js';
 
+// Enough for several long requests, well under the argument size a spawn allows.
+const HANDOFF_LIMIT = 16_000;
+
 const SYSTEM_PROMPT = `You build playlist drafts in the Selecta desktop app, where the user watches the draft update live. Find tracks with the selecta tools and use only track IDs they return. Create the draft once with show_playlist_draft using the draft ID you are given; after that, read it with get_playlist_draft and revise it with edit_playlist_draft, preserving entry_ids. You cannot save or write to Music.app: the user saves from the app. Keep replies to a few sentences.`;
 
 type Spawn = typeof nodeSpawn;
@@ -24,7 +27,8 @@ export type AgentOptions = {
 export class AgentSessions {
   // A session only resumes on the provider that started it; switching starts
   // fresh, and the draft itself carries what the new one needs.
-  private sessions = new Map<string, { provider: ProviderId; id: string }>();
+  // `seen` counts the asks the session has been sent, so a resume hands over only newer ones.
+  private sessions = new Map<string, { provider: ProviderId; id: string; seen: number }>();
   private chosen = new Map<string, ProviderId>();
   private running = new Map<string, () => void>();
   // The host outlives any renderer, so it keeps the record a reload replays.
@@ -77,16 +81,29 @@ export class AgentSessions {
   }
 
   // A swapped-in agent starts with no conversation, so it gets the user's own
-  // earlier requests; the draft already holds what came of them.
+  // earlier requests it never saw; the draft already holds what came of them.
   private handoff(draftId: string, by: ProviderId): string {
-    if (this.sessions.get(draftId)?.provider === by) return '';
-
-    const asked = (this.asks.get(draftId) ?? []).map(
-      (message) => `- ${message.replaceAll('\n', '\n  ')}`,
+    const session = this.sessions.get(draftId);
+    const unseen = (this.asks.get(draftId) ?? []).slice(
+      session?.provider === by ? session.seen : 0,
     );
+    const kept: string[] = [];
+    let room = HANDOFF_LIMIT;
 
-    return asked.length
-      ? `\n\nEarlier requests on this draft, oldest first:\n${asked.join('\n')}`
+    // Newest first, so a long history loses its oldest requests rather than overflowing argv.
+    for (const message of [...unseen].reverse()) {
+      if (room <= 0) break;
+
+      const cut = message.length > room ? `${message.slice(0, room)}…` : message;
+
+      kept.unshift(`- ${cut.replaceAll('\n', '\n  ')}`);
+      room -= message.length;
+    }
+
+    const dropped = unseen.length - kept.length;
+
+    return kept.length
+      ? `\n\nEarlier requests on this draft, oldest first:\n${dropped ? `- (${dropped} older left out)\n` : ''}${kept.join('\n')}`
       : '';
   }
 
@@ -130,6 +147,7 @@ export class AgentSessions {
     const emit = (id: string, event: AgentEvent) => this.record(id, event);
     const provider = this.provider(draftId);
     const session = this.sessions.get(draftId);
+    const seen = this.asks.get(draftId)?.length ?? 0;
     const args = provider.args({
       prompt,
       instructions: SYSTEM_PROMPT,
@@ -173,7 +191,7 @@ export class AgentSessions {
       for (const event of parse(line)) {
         if (event.kind === 'done') {
           if (event.session_id)
-            this.sessions.set(draftId, { provider: provider.id, id: event.session_id });
+            this.sessions.set(draftId, { provider: provider.id, id: event.session_id, seen });
 
           finish(event);
         } else if (event.kind === 'error') finish(event);
