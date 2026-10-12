@@ -120,6 +120,7 @@ export function createPlayback(deps: PlaybackDeps) {
     const on =
       auditioning !== undefined &&
       ours() &&
+      !draftPlaying(player) &&
       player.running &&
       player.playlist?.persistentId === auditioning.playlistId &&
       player.track !== undefined;
@@ -193,6 +194,20 @@ export function createPlayback(deps: PlaybackDeps) {
     const { draft, slot } = current(draftId);
 
     return playbackView(player, draft, slot);
+  };
+
+  // Music on an entry of the draft the slot holds is that draft's playback, even under the
+  // audition's generation after a Play that took the slot and then failed to start.
+  const draftPlaying = (player: PlayerState) => {
+    const owner = drafts().preview()?.owner;
+
+    try {
+      return owner !== undefined && show(owner, player).entry_id !== undefined;
+    } catch (e) {
+      if (e instanceof BridgeError && e.errorCode === 'draft_not_found') return false;
+
+      throw e;
+    }
   };
 
   // The entry Music.app is on, read fresh, when it belongs to this draft; the bridge
@@ -473,8 +488,15 @@ export function createPlayback(deps: PlaybackDeps) {
         }
 
         const { playlistId, trackIds } = auditioning;
+        const live = await read();
 
-        if (!(await pauseAfter(playlistId, await read(), trackIds)))
+        if (draftPlaying(live)) {
+          auditioning = undefined;
+
+          return;
+        }
+
+        if (!(await pauseAfter(playlistId, live, trackIds)))
           throw new Error('Music could not be paused. Pause it in Music.');
 
         auditioning = undefined;

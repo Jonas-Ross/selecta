@@ -912,6 +912,36 @@ it('keeps the audition generation when the draft play loses the slot to another 
   expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
 });
 
+it('leaves the draft its own playback after a Play that took the slot failed to start', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.playPreview).mockRejectedValueOnce(new Error('Music went away'));
+  await expect(player.play(draft_id, 1, entries[0]!.entry_id)).rejects.toThrow();
+  vi.mocked(deps.bridge.controlPlayer).mockClear();
+
+  // Another front end now plays the draft's first entry from the same playlist.
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(playing(1, A));
+  expect(await player.auditionState()).toEqual({ state: 'stopped' });
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).not.toHaveBeenCalled();
+});
+
+it('still pauses the audition Music plays on after a Play that took the slot failed', async () => {
+  const { draft_id, entries } = draft();
+
+  await player.audition([B, A], 0);
+  vi.mocked(deps.bridge.playPreview).mockRejectedValueOnce(new Error('Music went away'));
+  await expect(player.play(draft_id, 1, entries[0]!.entry_id)).rejects.toThrow();
+
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValueOnce(playing(2, A));
+  await player.stopAudition();
+  expect(deps.bridge.controlPlayer).toHaveBeenCalledWith({
+    action: 'pause',
+    on: { playlistId: 'P-SLOT', index: 2, trackId: A },
+  });
+});
+
 it('keeps a first audition to pause when Music fails to start it cleanly', async () => {
   vi.mocked(deps.bridge.playPreview).mockRejectedValueOnce(
     new BridgeError('jxa_error', 'Music.app would not pause after a failed start.'),
