@@ -575,3 +575,45 @@
   background: var(--acid);
   box-shadow: 0 0 10px rgba(214, 255, 58, 0.5);
 }
+
+/* A blank tempo or key: measure it, watch it measuring, or read why it stayed blank. */
+.measure {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 7px;
+  border: 1px dashed var(--ink4);
+  border-radius: 9px;
+  font: 400 var(--fs-tiny) var(--mono);
+  color: var(--ink2);
+  white-space: nowrap;
+}
+button.measure:hover,
+button.measure:focus-visible {
+  border-style: solid;
+  border-color: var(--uv-line);
+  color: var(--uv-text);
+}
+.measure.busy {
+  border-color: var(--uv-line);
+  color: var(--uv-text);
+}
+.measure.busy::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--uv);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+.measure-miss {
+  font: 400 var(--fs-tiny) var(--mono);
+  color: var(--ink3);
+}
+.fact .measure,
+.fact .measure-miss {
+  display: flex;
+  width: fit-content;
+  margin-top: 5px;
+}

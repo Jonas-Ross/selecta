@@ -27,6 +27,7 @@ test('plays the draft through Selecta Preview, follows Music on, and keeps it in
   const records = page.getByRole('list', { name: 'Draft order' }).getByRole('listitem');
 
   await expect(playing).toHaveCount(1);
+  await expect(page.getByText(/agent waits/i)).toHaveCount(0);
   await expect(records.first()).toHaveAttribute('aria-current', 'true');
   expect(music.snapshot().player).toMatchObject({
     state: 'playing',

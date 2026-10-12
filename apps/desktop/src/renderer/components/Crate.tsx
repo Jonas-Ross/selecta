@@ -8,6 +8,7 @@ import { backZ, counterText, frontZ, pose, visibleRange } from '../crate.js';
 import type { Rect } from '../flight.js';
 import { useReducedMotion } from '../hooks/motion.js';
 import { useCrateFlip } from '../hooks/useCrateFlip.js';
+import { onMeasured } from '../hooks/useMeasure.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { CRATE_ORDER_LABELS } from '../settings.js';
 import type { Crate as CrateData, CrateTrack } from '../../shared/protocol.js';
@@ -53,6 +54,8 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
   const [query, setQuery] = useState('');
   const [data, setData] = useState<CrateData & { query: string }>();
   const [error, setError] = useState<string>();
+  // Bumped when a measurement lands, so the card shows the new tempo or key.
+  const [measured, setMeasured] = useState(0);
   const flip = useCrateFlip({
     data,
     size,
@@ -96,7 +99,9 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
       live = false;
       clearTimeout(timer);
     };
-  }, [query, crateOrder]);
+  }, [query, crateOrder, measured]);
+
+  useEffect(() => onMeasured(() => setMeasured((n) => n + 1)), []);
 
   const c = flip.crate;
   const pos = c.pos.x;
