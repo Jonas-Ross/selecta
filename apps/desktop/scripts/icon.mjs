@@ -42,14 +42,30 @@ async function render() {
     useContentSize: true,
     webPreferences: { offscreen: true },
   });
-  // Offscreen pages hand over each frame; capturePage has nothing to read.
-  const painted = new Promise((resolve) =>
-    window.webContents.once('paint', (_event, _dirty, image) => resolve(image)),
-  );
   const html = `<style>html,body{margin:0;background:transparent}svg{display:block;width:512px;height:512px}</style>${await readFile(svg, 'utf8')}`;
 
   await window.loadURL(`data:text/html;base64,${Buffer.from(html).toString('base64')}`);
-  const image = await painted;
+
+  // Offscreen pages hand over frames, not capturePage. Early ones can be blank, so
+  // take the first whose centre (inside the tile) is drawn.
+  const image = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('the icon never painted')), 10_000);
+    const onPaint = (_event, _dirty, frame) => {
+      const { width, height } = frame.getSize();
+      const centre = frame.crop({ x: width >> 1, y: height >> 1, width: 1, height: 1 }).toBitmap();
+
+      if (width < 512 || centre[3] !== 255)
+        return void setTimeout(() => window.webContents.invalidate(), 50);
+
+      clearTimeout(timer);
+      window.webContents.off('paint', onPaint);
+      resolve(frame);
+    };
+
+    window.webContents.on('paint', onPaint);
+    window.webContents.invalidate();
+  });
+
   const pngs = new Map();
 
   for (const [, size] of entries)
