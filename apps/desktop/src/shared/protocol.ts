@@ -9,6 +9,7 @@ import type { ArtworkReadResult } from '@selecta/core/types/bridge.js';
 export type { DraftSummary };
 
 export const BRIEF_LIMIT = 4000;
+export const HEARD_LIMIT = 500;
 
 export type CrateTrack = ReturnType<typeof toInspectedTrack> & { genre?: string; year?: number };
 export type Crate = { tracks: CrateTrack[]; total: number; order: 'recently_added' | 'relevance' };
@@ -39,6 +40,7 @@ export type Methods = {
   'agent.cancel': (args: { draft_id: string }) => void;
   'agent.history': () => Record<string, RunSnapshot>;
   'features.measure': (args: { track_id: string }) => Measured;
+  'features.heard': (args: { track_ids: string[] }) => Record<string, Measured>;
   'player.state': (args: { draft_id: string }) => PlayerView;
   'player.play': (args: {
     draft_id: string;

@@ -104,7 +104,7 @@ function apiWith(metrognome: object) {
 
 const installed = { binaryPath: 'metrognome', readVersion: async () => 'metrognome 0.1.0\n' };
 
-it('measures a track metrognome already gave up on, and stores what it hears', async () => {
+it('measures a track metrognome never tried, and stores what it hears', async () => {
   // Echoes the recorded M83 result for whichever track is asked about.
   const answer = recorded.find((l) => l.includes('"client_ref":"T-MIDNIGHT"'))!;
   const script = `require('readline').createInterface({ input: process.stdin }).on('line', (l) => {
@@ -124,11 +124,12 @@ it('measures a track metrognome already gave up on, and stores what it hears', a
       camelot: null,
       sources: null,
       status: 'no_data',
-      catalogStatus: null,
-      analysisStatus: 'no_data',
+      catalogStatus: 'no_data',
+      analysisStatus: null,
     }),
   ]);
 
+  expect(await call('features.heard', { track_ids: ['T-ROADS'] })).toEqual({});
   expect(await call('features.measure', { track_id: 'T-ROADS' })).toEqual({});
   expect(cache.getAudioFeatures('T-ROADS')).toMatchObject({
     camelot: '8A',
@@ -138,6 +139,29 @@ it('measures a track metrognome already gave up on, and stores what it hears', a
   expect(cache.getAudioFeatures('T-ROADS')!.sources).toMatchObject({
     bpm: 'metrognome/onset-autocorrelation-comb@1',
   });
+});
+
+it('says why up front where metrognome already listened, and never listens again', async () => {
+  const spawnLike = vi.fn(() => {
+    throw new Error('should not run');
+  });
+  const { cache, call } = apiWith({ ...installed, spawnLike });
+
+  cache.saveAudioFeatures([
+    featuresRow({
+      trackPersistentId: 'T-ROADS',
+      musicalKey: null,
+      camelot: null,
+      catalogStatus: null,
+      analysisStatus: 'ok',
+    }),
+  ]);
+
+  expect(await call('features.heard', { track_ids: ['T-ROADS', 'T-MIDNIGHT'] })).toEqual({
+    'T-ROADS': { key: 'unsure' },
+  });
+  expect(await call('features.measure', { track_id: 'T-ROADS' })).toEqual({ key: 'unsure' });
+  expect(spawnLike).not.toHaveBeenCalled();
 });
 
 it('says plainly when metrognome cannot run', async () => {

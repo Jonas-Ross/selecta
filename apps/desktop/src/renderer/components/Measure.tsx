@@ -1,5 +1,5 @@
-// What stands in for a blank tempo or key: a button that measures the track
-// from its store preview, then either the value (once the view re-reads) or why not.
+// What stands in for a blank tempo or key: why it is blank where metrognome
+// already listened, otherwise a button that measures the track's store preview.
 import { missWords } from '../facts.js';
 import { measureTrack, useMeasure } from '../hooks/useMeasure.js';
 import { useExplain } from './Explain.js';
@@ -14,12 +14,16 @@ export function Measure({
   title?: string;
 }) {
   const state = useMeasure(trackId);
-  const reason = state?.phase === 'done' ? state.result[kind] : undefined;
-  const words =
-    reason && missWords(reason, state?.phase === 'done' ? state.result.error : undefined);
+  const result = state?.phase === 'measuring' ? undefined : state?.result;
+  const reason = result?.[kind];
+  const words = reason && missWords(reason, result?.error);
   const explain = useExplain(() =>
     words
-      ? { title: 'Still not measured', side: title, body: <p>{words.text}</p> }
+      ? {
+          title: state?.phase === 'done' ? 'Still not measured' : 'Not measured',
+          side: title,
+          body: <p>{words.text}</p>,
+        }
       : {
           title: 'Not measured',
           side: title,

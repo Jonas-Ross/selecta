@@ -128,6 +128,25 @@ export function verdict(row: AudioFeaturesRow | undefined, failure?: string): Me
   };
 }
 
+/**
+ * Why blank features stay blank on tracks the analysis pass already settled.
+ * A track it never tried is left out, since measuring it could still help.
+ */
+export function heard(
+  trackIds: string[],
+  features: (trackId: string) => AudioFeaturesRow | undefined,
+): Record<string, Measured> {
+  const out: Record<string, Measured> = {};
+
+  for (const id of trackIds) {
+    const row = features(id);
+
+    if (row?.analysisStatus != null) out[id] = verdict(row);
+  }
+
+  return out;
+}
+
 /** Spawns metrognome and remembers it, so quitting the app stops a measurement and starts no more. */
 export function trackedSpawn() {
   const children = new Set<ChildProcess>();
