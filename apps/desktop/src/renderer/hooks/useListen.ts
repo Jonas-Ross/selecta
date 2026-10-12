@@ -95,9 +95,7 @@ export function useListen({
     if (current) playAt(row.entry_id);
   }
 
-  const status =
-    elsewhere(live) ??
-    (current || linked ? 'The agent waits until you stop listening.' : 'Plays in Music.');
+  const status = elsewhere(live) ?? (current || linked ? undefined : 'Plays in Music.');
 
   return {
     player,
