@@ -133,6 +133,21 @@ it('fills the crate newest first, or by relevance to a search, with provenance',
   expect(found).toMatchObject({ order: 'relevance', tracks: [{ title: 'Teardrop' }] });
   await expect(call('library.crate', { query: 'x'.repeat(201) })).rejects.toThrow();
   await expect(call('library.crate', { sort: 'random' })).rejects.toThrow();
+  await expect(call('library.crate', { order: 'best' })).rejects.toThrow();
+});
+
+it('fills the crate in the order Settings picked, unless there is a search', async () => {
+  const played = (await call('library.crate', { order: 'most_played' })) as {
+    tracks: { signal: { play_count: number } }[];
+    order: string;
+  };
+  const counts = played.tracks.map((track) => track.signal.play_count);
+
+  expect(played.order).toBe('most_played');
+  expect(counts).toEqual([...counts].sort((a, b) => b - a));
+  await expect(
+    call('library.crate', { query: 'teardrop', order: 'random' }),
+  ).resolves.toMatchObject({ order: 'relevance' });
 });
 
 it('hands artwork lookups to the cache only within the request limit', async () => {
