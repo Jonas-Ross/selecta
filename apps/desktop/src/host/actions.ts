@@ -13,11 +13,12 @@ const QUIET = new Set([
   'agent.history',
   'artwork.get',
   'player.state',
+  'player.auditionState',
 ]);
 // One previous file is kept, so a long session costs at most twice this.
 const MAX_BYTES = 5 * 1024 * 1024;
 // What you and Claude say stays out of the file; only its length is kept.
-const WORDS = new Set(['brief', 'message', 'text', 'content', 'thinking']);
+const WORDS = new Set(['brief', 'message', 'text', 'content', 'thinking', 'ask']);
 const redact = (key: string, value: unknown) =>
   WORDS.has(key) && typeof value === 'string' ? `<${value.length} chars>` : value;
 
@@ -61,8 +62,8 @@ export function createActionLog({
       try {
         const result = await call();
 
-        if (method === 'player.state') {
-          const key = (args as { draft_id?: string } | undefined)?.draft_id ?? '';
+        if (method === 'player.state' || method === 'player.auditionState') {
+          const key = `${method} ${(args as { draft_id?: string } | undefined)?.draft_id ?? ''}`;
           const seen = JSON.stringify(result, (field, value) =>
             field === 'position' ? undefined : value,
           );

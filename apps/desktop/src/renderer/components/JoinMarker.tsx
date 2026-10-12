@@ -18,7 +18,7 @@ function clock(camelot: string | undefined): [number, number] | undefined {
   return [12 + Math.cos(angle) * r, 12 + Math.sin(angle) * r];
 }
 
-function Glyph({ from, to }: { from?: string; to?: string }) {
+export function Glyph({ from, to }: { from?: string; to?: string }) {
   const a = clock(from);
   const b = clock(to);
 

@@ -33,6 +33,8 @@ export type RailHandle = {
   landing: (x: number, y: number, current?: number) => { at: number; size: number } | undefined;
   /** The box a record standing in slot `at` occupies on screen, scrolled into view first. */
   slotRect: (at: number) => Rect | undefined;
+  /** Where a record stands on screen now, scrolled into view first. */
+  recordRect: (entryId: string) => Rect | undefined;
 };
 
 export type RailProps = {
@@ -50,6 +52,10 @@ export type RailProps = {
   empty?: ReactNode;
   opening?: Opening;
   handle?: Ref<RailHandle>;
+  // The record being replaced, marked on the rail.
+  replacing?: string;
+  /** A record's menu, opened at a point on screen. */
+  onMenu?: (entryId: string, x: number, y: number) => void;
 };
 
 export function Rail({
@@ -65,6 +71,8 @@ export function Rail({
   empty,
   opening,
   handle,
+  replacing,
+  onMenu,
 }: RailProps) {
   const reduced = useReducedMotion();
   const box = useRef<HTMLDivElement>(null);
@@ -139,6 +147,17 @@ export function Rail({
         width: shelf.size,
       };
     },
+    recordRect(entryId) {
+      const index = ids.indexOf(entryId);
+
+      if (index < 0) return;
+
+      reveal(index, true);
+
+      const box = recs.current.get(entryId)?.getBoundingClientRect();
+
+      return box && { left: box.left, top: box.top, width: box.width };
+    },
   }));
 
   function move(id: string, to: number) {
@@ -200,6 +219,13 @@ export function Rail({
       recs.current.get(focused.current!)?.focus({ preventScroll: true });
       onRemove(id);
     } else if (e.key === 'Escape') onClear();
+    else if (onMenu && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+      e.preventDefault();
+
+      const box = e.currentTarget.getBoundingClientRect();
+
+      onMenu(id, box.left + box.width / 2, box.bottom);
+    }
   }
 
   // What is on the rail now, in the order it stands this frame.
@@ -261,6 +287,7 @@ export function Rail({
                       locked={locked}
                       selected={selected.has(id)}
                       playing={id === now}
+                      replacing={id === replacing}
                       pickVerb={pickVerb}
                       heldDy={held?.id === id ? held.dy : undefined}
                       setNode={(node) => {
@@ -277,6 +304,13 @@ export function Rail({
                       }}
                       onBlur={() => (focused.current = undefined)}
                       onRemove={() => onRemove(id)}
+                      onMenu={
+                        onMenu &&
+                        ((e) => {
+                          e.preventDefault();
+                          onMenu(id, e.clientX, e.clientY);
+                        })
+                      }
                     />
                   );
                 })}

@@ -135,6 +135,16 @@ it('records a refused request like any other outcome', () => {
   expect(agent.history()[DRAFT]!.working).toBe(false);
 });
 
+it('gives suggestion runs the latest brief, not a refused first try', () => {
+  const { spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+
+  agent.refuse(DRAFT, 'go', 'Linked.', true);
+  agent.start(DRAFT, 'warmup, nothing loud');
+
+  expect(agent.brief(DRAFT)).toBe('warmup, nothing loud');
+});
+
 it('reports a stop, a crash and a missing CLI as one error each', async () => {
   const { runs, spawn } = fakeClaude();
   const { agent, events } = sessions(spawn);
@@ -234,4 +244,65 @@ it('names the missing CLI for the provider that was asked for', async () => {
     kind: 'error',
     message: 'Could not find the codex CLI. Install Codex, or set SELECTA_CODEX_PATH.',
   });
+});
+
+it('suggests in a fresh read-only run beside the draft, never touching its log or session', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent, events } = sessions(spawn);
+
+  agent.start(DRAFT, 'warmup');
+  runs[0]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+  await settle();
+
+  const reply = agent.suggest(DRAFT, 'Draft ID: x\n\nSuggest up to 4 tracks');
+  const { args } = runs[1]!;
+  const allowed = args.slice(args.indexOf('--allowedTools') + 1, args.indexOf('--disallowedTools'));
+
+  expect(args).toContain('--session-id');
+  expect(args).not.toContain('--resume');
+  expect(allowed).toContain('mcp__selecta__get_playlist_draft');
+  expect(allowed).not.toContain('mcp__selecta__edit_playlist_draft');
+  expect(args.slice(args.indexOf('--disallowedTools'))).toContain(
+    'mcp__selecta__edit_playlist_draft',
+  );
+  expect(agent.history()[DRAFT]!.working).toBe(false);
+
+  runs[1]!.child.finish([
+    { type: 'assistant', message: { content: [{ type: 'text', text: 'Two.' }] } },
+    { type: 'assistant', message: { content: [{ type: 'text', text: '{"picks":[]}' }] } },
+    { type: 'result', subtype: 'success', session_id: 'S-2' },
+  ]);
+
+  await expect(reply).resolves.toBe('Two.\n{"picks":[]}');
+  expect(events.map((event) => event.kind)).toEqual(['asked', 'done']);
+  agent.send(DRAFT, 'more');
+  expect(flag(runs[2]!.args, '--resume')).toBe('S-1');
+  expect(agent.brief(DRAFT)).toBe('warmup');
+});
+
+it('replaces a suggestion still running, and refuses one while the agent edits the draft', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+
+  const first = agent.suggest(DRAFT, 'one');
+  const second = agent.suggest(DRAFT, 'two');
+
+  await expect(first).rejects.toThrow('Stopped.');
+  expect(runs[0]!.child.kill).toHaveBeenCalled();
+  agent.stopSuggest(DRAFT);
+  await expect(second).rejects.toThrow('Stopped.');
+
+  agent.start(DRAFT, 'warmup');
+  expect(() => agent.suggest(DRAFT, 'three')).toThrow('Claude is already working on this draft.');
+});
+
+it('stops suggestions along with every run', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+  const reply = agent.suggest(DRAFT, 'one');
+
+  agent.cancelAll();
+
+  await expect(reply).rejects.toThrow('Stopped.');
+  expect(runs[0]!.child.kill).toHaveBeenCalled();
 });

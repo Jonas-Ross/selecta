@@ -16,6 +16,11 @@ const agent = {
   cancel: vi.fn(),
   history: vi.fn(() => ({})),
   provider: vi.fn(() => ({ label: 'Codex' })),
+  suggest: vi.fn<(draftId: string, prompt: string, provider?: string) => Promise<string>>(
+    async () => '',
+  ),
+  stopSuggest: vi.fn(),
+  brief: vi.fn((): string | undefined => 'Late night, slow'),
 };
 const artwork = {
   get: vi.fn(async (ids: string[]) => Object.fromEntries(ids.map((id) => [id, null]))),
@@ -161,4 +166,127 @@ it('hands artwork lookups to the cache only within the request limit', async () 
   await expect(call('artwork.get', { track_ids: [id], size: 'large' })).rejects.toThrow();
   await expect(call('artwork.get', { track_ids: 'all' })).rejects.toThrow();
   expect(artwork.get).toHaveBeenCalledTimes(2);
+});
+
+it('asks the agent for stand-ins and keeps only library tracks the draft and the ask leave out', async () => {
+  const draftId = randomUUID();
+  const draft = deps.drafts().create(draftId, 'Night', ['T-TEARDROP', 'T-ROADS', 'T-ANGEL']);
+  const roads = draft.entries[1]!.entry_id;
+
+  agent.suggest.mockResolvedValueOnce(
+    `Some picks.\n${JSON.stringify({
+      picks: [
+        { track_id: 'T-ANGEL', reason: 'Already in the draft' },
+        { track_id: 'T-GLORYBOX', reason: 'Slow and smoky.' },
+        { track_id: 'T-NOWHERE', reason: 'Not in the library' },
+        { track_id: 'T-GLORYBOX', reason: 'Twice' },
+        { track_id: 'T-BARE', reason: 'Asked to leave out' },
+        { track_id: 'T-MIDNIGHT', reason: 'Close in tempo.' },
+      ],
+    })}`,
+  );
+
+  const picks = (await call('agent.suggest', {
+    draft_id: draftId,
+    entry_id: roads,
+    ask: 'more vocal',
+    exclude: ['T-BARE'],
+    provider: 'codex',
+  })) as { track: { persistent_id: string; title: string }; reason: string }[];
+
+  expect(picks.map((pick) => [pick.track.persistent_id, pick.reason])).toEqual([
+    ['T-GLORYBOX', 'Slow and smoky.'],
+    ['T-MIDNIGHT', 'Close in tempo.'],
+  ]);
+
+  const [id, prompt, provider] = agent.suggest.mock.calls[0]!;
+
+  expect(id).toBe(draftId);
+  expect(provider).toBe('codex');
+  expect(prompt).toContain('record 2 of 3: "Roads" by Portishead (track ID T-ROADS)');
+  expect(prompt).toContain('Late night, slow');
+  expect(prompt).toContain('leave these out: T-BARE');
+  expect(prompt).toContain('more vocal');
+});
+
+it('leaves out a pick the draft gained while the agent was looking', async () => {
+  const draftId = randomUUID();
+  const draft = deps.drafts().create(draftId, 'Night', ['T-TEARDROP', 'T-ROADS']);
+
+  agent.suggest.mockImplementationOnce(async () => {
+    deps.drafts().update(draftId, 1, (current) => ({
+      ...current,
+      entries: [...current.entries, { entry_id: randomUUID(), track_id: 'T-ANGEL' }],
+    }));
+
+    return JSON.stringify({
+      picks: [
+        { track_id: 'T-ANGEL', reason: 'Added meanwhile' },
+        { track_id: 'T-BARE', reason: 'Still free.' },
+      ],
+    });
+  });
+
+  const picks = (await call('agent.suggest', {
+    draft_id: draftId,
+    entry_id: draft.entries[0]!.entry_id,
+  })) as { track: { persistent_id: string } }[];
+
+  expect(picks.map((pick) => pick.track.persistent_id)).toEqual(['T-BARE']);
+});
+
+it('refuses picks for a record whose neighbours changed while the agent was looking', async () => {
+  const draftId = randomUUID();
+  const draft = deps.drafts().create(draftId, 'Night', ['T-TEARDROP', 'T-ROADS', 'T-ANGEL']);
+
+  agent.suggest.mockImplementationOnce(async () => {
+    deps.drafts().update(draftId, 1, (current) => ({
+      ...current,
+      entries: current.entries.filter((entry) => entry.track_id !== 'T-ROADS'),
+    }));
+
+    return JSON.stringify({ picks: [{ track_id: 'T-BARE', reason: 'Fits.' }] });
+  });
+
+  await expect(
+    call('agent.suggest', { draft_id: draftId, entry_id: draft.entries[0]!.entry_id }),
+  ).rejects.toThrow('The draft changed around that record while Codex was looking.');
+});
+
+it('says so when the agent offers nothing usable, or the record has gone', async () => {
+  const draftId = randomUUID();
+  const draft = deps.drafts().create(draftId, 'Night', ['T-TEARDROP']);
+
+  agent.suggest.mockResolvedValueOnce('No luck, sorry.');
+  await expect(
+    call('agent.suggest', { draft_id: draftId, entry_id: draft.entries[0]!.entry_id }),
+  ).rejects.toThrow("Codex didn't find a stand-in.");
+  await expect(
+    call('agent.suggest', { draft_id: draftId, entry_id: randomUUID() }),
+  ).rejects.toThrow('That record is no longer in the draft.');
+  await expect(
+    call('agent.suggest', {
+      draft_id: draftId,
+      entry_id: draft.entries[0]!.entry_id,
+      ask: 'x'.repeat(501),
+    }),
+  ).rejects.toThrow();
+  expect(agent.suggest).toHaveBeenCalledTimes(1);
+
+  await call('agent.stopSuggest', { draft_id: draftId });
+  expect(agent.stopSuggest).toHaveBeenCalledWith(draftId);
+});
+
+it('auditions at most a record and its two neighbours, from a place among them', async () => {
+  await expect(call('player.audition', { track_ids: [], index: 0 })).rejects.toThrow();
+  await expect(
+    call('player.audition', { track_ids: ['A', 'B', 'C', 'D'], index: 1 }),
+  ).rejects.toThrow();
+  await expect(call('player.audition', { track_ids: ['A', 'B'], index: 2 })).rejects.toThrow(
+    'Nothing to play at that place.',
+  );
+  // Unknown to the cache, so nothing reaches Music.app.
+  await expect(call('player.audition', { track_ids: ['T-NOWHERE'], index: 0 })).rejects.toThrow(
+    /track_not_found/,
+  );
 });

@@ -5,7 +5,8 @@ import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { LOCAL_DRAFTS_ENV } from '@selecta/core/drafts/store.js';
 import type { AgentEvent, ProviderId, RunSnapshot } from '../shared/protocol.js';
-import { PROVIDERS, type AgentProvider } from './providers.js';
+import { PROVIDERS, type AgentProvider, type Turn } from './providers.js';
+import { SUGGEST_INSTRUCTIONS, SUGGEST_TOOLS } from './suggest.js';
 
 const SYSTEM_PROMPT = `You build playlist drafts in the Selecta desktop app, where the user watches the draft update live. Find tracks with the selecta tools and use only track IDs they return. Create the draft once with show_playlist_draft using the draft ID you are given; after that, read it with get_playlist_draft and revise it with edit_playlist_draft, preserving entry_ids. You cannot save or write to Music.app: the user saves from the app. Keep replies to a few sentences.`;
 
@@ -27,6 +28,7 @@ export class AgentSessions {
   private sessions = new Map<string, { provider: ProviderId; id: string }>();
   private chosen = new Map<string, ProviderId>();
   private running = new Map<string, () => void>();
+  private suggesting = new Map<string, () => void>();
   // The host outlives any renderer, so it keeps the record a reload replays.
   private events = new Map<string, AgentEvent[]>();
 
@@ -98,23 +100,91 @@ export class AgentSessions {
   }
 
   cancelAll(): void {
-    for (const stop of this.running.values()) stop();
+    for (const stop of [...this.running.values(), ...this.suggesting.values()]) stop();
+  }
+
+  /** The draft's latest brief, as the user wrote it, for runs that start without its session. */
+  brief(draftId: string): string | undefined {
+    const asked = this.events
+      .get(draftId)
+      ?.filter((event) => event.kind === 'asked' && event.brief)
+      .at(-1);
+
+    return asked?.kind === 'asked' ? asked.text : undefined;
+  }
+
+  // A suggestion is its own read-only run beside the draft's conversation, so it
+  // never resumes or extends it. One per draft: a new ask replaces the last.
+  suggest(draftId: string, prompt: string, provider?: ProviderId): Promise<string> {
+    this.idle(draftId);
+    this.suggesting.get(draftId)?.();
+
+    const agent = provider ? this.providers[provider] : this.provider(draftId);
+
+    return new Promise((resolve, reject) => {
+      const text: string[] = [];
+      const stop = this.spawnTurn(
+        agent,
+        { prompt, instructions: SUGGEST_INSTRUCTIONS, tools: SUGGEST_TOOLS },
+        (event) => {
+          if (event.kind === 'text') text.push(event.text);
+          else if (event.kind === 'done' || event.kind === 'error') {
+            if (this.suggesting.get(draftId) === stop) this.suggesting.delete(draftId);
+
+            if (event.kind === 'done') resolve(text.join('\n'));
+            else reject(new Error(event.message));
+          }
+        },
+      );
+
+      this.suggesting.set(draftId, stop);
+    });
+  }
+
+  stopSuggest(draftId: string): void {
+    this.suggesting.get(draftId)?.();
   }
 
   private run(draftId: string, prompt: string): void {
-    const emit = (id: string, event: AgentEvent) => this.record(id, event);
     const provider = this.provider(draftId);
     const session = this.sessions.get(draftId);
+
+    const stop = this.spawnTurn(
+      provider,
+      {
+        prompt,
+        instructions: SYSTEM_PROMPT,
+        resume: session?.provider === provider.id ? session.id : undefined,
+      },
+      (event) => {
+        if (event.kind === 'done' || event.kind === 'error') {
+          if (event.kind === 'done' && event.session_id)
+            this.sessions.set(draftId, { provider: provider.id, id: event.session_id });
+
+          this.running.delete(draftId);
+        }
+
+        this.record(draftId, event);
+      },
+    );
+
+    this.running.set(draftId, stop);
+  }
+
+  /** Runs one turn, reporting every event and then exactly one `done` or `error`; returns its stop. */
+  private spawnTurn(
+    provider: AgentProvider,
+    turn: Pick<Turn, 'prompt' | 'instructions' | 'resume' | 'tools'>,
+    on: (event: AgentEvent) => void,
+  ): () => void {
     const args = provider.args({
-      prompt,
-      instructions: SYSTEM_PROMPT,
+      ...turn,
       mcp: {
         command: process.execPath,
         args: [this.options.mcpEntry],
         // A draft linked to a preview mid-run stays untouched, not synced to Music.
         env: { [LOCAL_DRAFTS_ENV]: '1' },
       },
-      resume: session?.provider === provider.id ? session.id : undefined,
       newSessionId: randomUUID(),
     });
     const parse = provider.parser();
@@ -131,14 +201,8 @@ export class AgentSessions {
       if (finished) return;
 
       finished = true;
-      this.running.delete(draftId);
-      emit(draftId, event);
+      on(event);
     };
-
-    this.running.set(draftId, () => {
-      stopped = true;
-      child.kill('SIGTERM');
-    });
 
     child.stderr?.on('data', (chunk: Buffer) => {
       stderr = (stderr + chunk.toString()).slice(-2000);
@@ -146,13 +210,8 @@ export class AgentSessions {
 
     createInterface({ input: child.stdout }).on('line', (line) => {
       for (const event of parse(line)) {
-        if (event.kind === 'done') {
-          if (event.session_id)
-            this.sessions.set(draftId, { provider: provider.id, id: event.session_id });
-
-          finish(event);
-        } else if (event.kind === 'error') finish(event);
-        else emit(draftId, event);
+        if (event.kind === 'done' || event.kind === 'error') finish(event);
+        else if (!finished) on(event);
       }
     });
 
@@ -171,5 +230,10 @@ export class AgentSessions {
           : stderr.trim() || `${provider.bin} exited with code ${code} before finishing.`,
       }),
     );
+
+    return () => {
+      stopped = true;
+      child.kill('SIGTERM');
+    };
   }
 }
