@@ -220,26 +220,29 @@ run() {
 }
 
 install_app() {
-  local dest=$HOME/Applications/Selecta\ Latest.app tmp
+  local dest=$HOME/Applications/Selecta\ Latest.app tmp app
   tmp=$(mktemp -d)
+  # Expanded now: tmp is local, and the trap fires after this function returns.
+  trap "rm -rf '$tmp'" EXIT
+  # osacompile names the app after its file, so it's built under its real name.
+  app="$tmp/Selecta Latest.app"
   install
   mkdir -p "$HOME/Applications"
   # The applet knows only where this checkout is; every step is this script.
   # Escaped as an AppleScript string, then handed to perl as data so no character is special.
   SCRIPT_PATH=$(printf '%s' "$desktop/scripts/latest.sh" | sed 's/[\\"]/\\&/g') \
     perl -pe 's/__SCRIPT__/$ENV{SCRIPT_PATH}/g' "$desktop/scripts/latest.applescript" > "$tmp/latest.applescript"
-  trap 'rm -rf "$tmp"' EXIT
   # Built beside, so a failed compile leaves the installed app alone.
-  osacompile -o "$tmp/app.app" "$tmp/latest.applescript"
-  "$(cd "$desktop" && node -p "require('electron')")" "$desktop/scripts/icon.mjs" "$tmp/app.app/Contents/Resources/applet.icns"
-  plutil -replace CFBundleIdentifier -string io.github.jonas-ross.selecta.latest "$tmp/app.app/Contents/Info.plist"
+  osacompile -o "$app" "$tmp/latest.applescript"
+  "$(cd "$desktop" && node -p "require('electron')" | tail -n 1)" "$desktop/scripts/icon.mjs" "$app/Contents/Resources/applet.icns"
+  plutil -replace CFBundleIdentifier -string io.github.jonas-ross.selecta.latest "$app/Contents/Info.plist"
   # osacompile's asset catalog icon wins over applet.icns, so drop it.
-  rm -f "$tmp/app.app/Contents/Resources/Assets.car"
-  plutil -remove CFBundleIconName "$tmp/app.app/Contents/Info.plist" 2> /dev/null || true
+  rm -f "$app/Contents/Resources/Assets.car"
+  plutil -remove CFBundleIconName "$app/Contents/Info.plist" 2> /dev/null || true
   # Editing the bundle breaks osacompile's signature, which macOS then refuses to run.
-  codesign --force --deep --sign - "$tmp/app.app"
+  codesign --force --deep --sign - "$app"
   rm -rf "$dest"
-  mv "$tmp/app.app" "$dest"
+  mv "$app" "$dest"
   say "Installed $dest"
 }
 

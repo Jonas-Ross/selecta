@@ -45,7 +45,7 @@ on run
 		runStep("pull", "Pulling " & behindCount & " new commits")
 	end if
 	runStep("install", "Checking dependencies")
-	runStep("build", "Building")
+	runStep("build", "Building Selecta")
 	runStep("open", "Opening Selecta")
 end run
 
@@ -59,7 +59,7 @@ on runStep(stepName, label)
 		repeat until (do shell script "test -f " & quoted form of codeFile & " && echo y || echo n") is "y"
 			set lastLine to do shell script "tail -n 1 " & quoted form of outFile & " | cut -c 1-90"
 			-- check prints facts, not progress.
-			if lastLine is not "" and stepName is not "check" then set progress additional description to label & "…" & return & lastLine
+			if lastLine is not "" and lastLine is not label and stepName is not "check" then set progress additional description to label & "…" & return & lastLine
 			delay 0.3
 		end repeat
 	on error number -128
