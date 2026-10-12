@@ -1,0 +1,184 @@
+// Measuring one track on request: metrognome over that track's store preview,
+// through the same analysis pass `enrich --source analysis` runs. Requests
+// share one queue so a run of clicks never outpaces the iTunes rate limit.
+import { spawn, type ChildProcess } from 'node:child_process';
+import type { SpawnLike } from '@selecta/core/enrich/metrognome.js';
+import type { AudioFeaturesRow } from '@selecta/core/types/cache.js';
+import type { Measured, MissReason } from '../shared/protocol.js';
+
+/**
+ * One metrognome run over these tracks; resolves once their results are stored.
+ * `started` says whether metrognome ran at all, and so searched the store.
+ */
+export type MeasureRun = (
+  trackIds: string[],
+) => Promise<{ skipped: string[]; errors: string[]; started: boolean }>;
+
+export type MeasurerDeps = {
+  run: MeasureRun;
+  features: (trackId: string) => AudioFeaturesRow | undefined;
+  now?: () => number;
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+};
+
+const STOPPED = 'The app is closing, so this measurement was dropped.';
+
+export function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const abort = () => (clearTimeout(timer), resolve());
+    // The signal lives as long as the app, so a finished sleep takes its listener with it.
+    const timer = setTimeout(() => (signal.removeEventListener('abort', abort), resolve()), ms);
+
+    signal.addEventListener('abort', abort, { once: true });
+  });
+}
+
+// metrognome's own limiter allows 18 store searches a minute, but each process
+// starts with a fresh burst, so the host paces the runs it starts as well.
+export const SEARCH_SPACING_MS = 60_000 / 18;
+
+export function createMeasurer({
+  run,
+  features,
+  now = Date.now,
+  sleep = abortableSleep,
+}: MeasurerDeps) {
+  type Waiter = { resolve: (value: Measured) => void; reject: (error: Error) => void };
+  const queued = new Map<string, Waiter>();
+  const inFlight = new Map<string, Promise<Measured>>();
+  let working = false;
+  let nextStart = 0;
+  const stopping = new AbortController();
+
+  async function drain(): Promise<void> {
+    working = true;
+
+    while (queued.size > 0) {
+      await sleep(Math.max(0, nextStart - now()), stopping.signal);
+
+      if (stopping.signal.aborted) break;
+
+      const batch = [...queued];
+
+      queued.clear();
+
+      const started = now();
+
+      try {
+        const { skipped, errors, started: ran } = await run(batch.map(([id]) => id));
+
+        // A run that never started metrognome spent none of the store's search budget.
+        if (ran) nextStart = started + batch.length * SEARCH_SPACING_MS;
+
+        for (const [id, waiter] of batch)
+          waiter.resolve(verdict(features(id), skipped.includes(id) ? errors[0] : undefined));
+      } catch (error) {
+        for (const [, waiter] of batch) waiter.reject(error as Error);
+      }
+    }
+
+    working = false;
+  }
+
+  return {
+    /** Measure a track, or join the measurement of it already waiting or running. */
+    measure(trackId: string): Promise<Measured> {
+      if (stopping.signal.aborted) return Promise.reject(new Error(STOPPED));
+
+      const existing = inFlight.get(trackId);
+
+      if (existing) return existing;
+
+      const promise = new Promise<Measured>((resolve, reject) => {
+        queued.set(trackId, { resolve, reject });
+      }).finally(() => inFlight.delete(trackId));
+
+      inFlight.set(trackId, promise);
+
+      if (!working) void drain();
+
+      return promise;
+    },
+
+    /** Drop what is waiting its turn, so quitting never runs it against a closed cache. */
+    stop(): void {
+      stopping.abort();
+
+      for (const waiter of queued.values()) waiter.reject(new Error(STOPPED));
+
+      queued.clear();
+    },
+  };
+}
+
+/**
+ * Why each feature is still blank after a run, or nothing where it has a
+ * value. `failure` is the run's reason when it left this track unsettled.
+ */
+export function verdict(row: AudioFeaturesRow | undefined, failure?: string): Measured {
+  const why = ((): MissReason => {
+    if (failure !== undefined) return 'failed';
+
+    switch (row?.analysisStatus) {
+      // It listened and kept the other feature, so this one was too unsure to store.
+      case 'ok':
+        return 'unsure';
+      case 'no_data':
+        return 'no_reading';
+      case 'no_match':
+        return 'not_found';
+      default:
+        return 'failed';
+    }
+  })();
+
+  return {
+    ...(row?.bpm == null && { tempo: why }),
+    ...(row?.musicalKey == null && { key: why }),
+    ...(failure !== undefined && { error: failure }),
+  };
+}
+
+/**
+ * Why blank features stay blank on tracks the analysis pass already settled.
+ * A track it never tried is left out, since measuring it could still help.
+ */
+export function heard(
+  trackIds: string[],
+  features: (trackId: string) => AudioFeaturesRow | undefined,
+): Record<string, Measured> {
+  const out: Record<string, Measured> = {};
+
+  for (const id of trackIds) {
+    const row = features(id);
+
+    if (row?.analysisStatus != null) out[id] = verdict(row);
+  }
+
+  return out;
+}
+
+/** Spawns metrognome and remembers it, so quitting the app stops a measurement and starts no more. */
+export function trackedSpawn() {
+  const children = new Set<ChildProcess>();
+  let closed = false;
+
+  return {
+    spawnLike: ((command, args) => {
+      // A run still checking the binary's version when the app quit must not start it after.
+      if (closed) throw new Error('The app is closing.');
+
+      const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+
+      children.add(child);
+      child.on('close', () => children.delete(child));
+
+      return child;
+    }) satisfies SpawnLike,
+    killAll(): void {
+      closed = true;
+
+      for (const child of children) child.kill();
+    },
+  };
+}

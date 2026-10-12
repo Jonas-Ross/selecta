@@ -11,8 +11,11 @@ import {
 } from '@selecta/core/tools/playlist_draft.js';
 import type { DraftStore } from '@selecta/core/drafts/store.js';
 import { createPlayback } from '@selecta/core/operations/playback.js';
+import { enrichPendingTracks } from '@selecta/core/enrich/engine.js';
+import { BridgeError } from '@selecta/core/types/errors.js';
 import {
   BRIEF_LIMIT,
+  HEARD_LIMIT,
   PROVIDER_IDS,
   PROVIDER_LABELS,
   type Method,
@@ -23,6 +26,7 @@ import { ARTWORK_GET_LIMIT } from '../shared/artwork.js';
 import type { AgentSessions } from './agent.js';
 import type { ArtworkCache } from './artwork.js';
 import { crate } from './library.js';
+import { createMeasurer, heard } from './measure.js';
 
 const DraftId = z.strictObject(getDraftInputShape);
 const Provider = z.enum(PROVIDER_IDS).optional();
@@ -46,6 +50,10 @@ const Play = z.strictObject({
   position: z.number().nonnegative().optional(),
 });
 const Seek = z.strictObject({ ...getDraftInputShape, position: z.number().nonnegative() });
+const TrackId = z.strictObject({ track_id: z.string().min(1).max(64) });
+const TrackIds = z.strictObject({
+  track_ids: z.array(z.string().min(1).max(64)).max(HEARD_LIMIT),
+});
 const Artwork = z.strictObject({
   track_ids: z.array(z.string().max(64)).max(ARTWORK_GET_LIMIT),
   refresh: z.array(z.string().max(64)).max(ARTWORK_GET_LIMIT).optional(),
@@ -59,6 +67,46 @@ export function createApi(
 ) {
   const drafts = new PlaylistDraftTools(deps);
   const player = createPlayback(deps);
+  const features = (trackId: string) => deps.cache().getAudioFeatures(trackId) ?? undefined;
+  const measurer = createMeasurer({
+    run: async (trackIds) => {
+      const spawnLike = deps.enrich?.metrognome?.spawnLike;
+      // Without a spawner to watch, assume the run reached the store.
+      let started = spawnLike === undefined;
+      const enrich = spawnLike && {
+        ...deps.enrich,
+        metrognome: {
+          ...deps.enrich?.metrognome,
+          spawnLike: ((command, args) => {
+            const child = spawnLike(command, args);
+
+            started = true;
+
+            return child;
+          }) satisfies typeof spawnLike,
+        },
+      };
+      const summary = await enrichPendingTracks(
+        deps.cache(),
+        { trackIds, source: 'analysis' },
+        enrich || deps.enrich,
+      ).catch((error: unknown) => {
+        if (error instanceof BridgeError && error.errorCode === 'operation_busy')
+          throw new Error('Another measuring run is going. Try again once it finishes.');
+
+        throw error;
+      });
+
+      return {
+        skipped: (summary.outcomes ?? []).flatMap((o) =>
+          o.outcome === 'skipped' ? [o.trackPersistentId] : [],
+        ),
+        errors: summary.errors,
+        started,
+      };
+    },
+    features,
+  });
 
   // The store refuses linked drafts atomically; this only fails a run before
   // it starts rather than partway through.
@@ -99,6 +147,8 @@ export function createApi(
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),
     'agent.history': () => agent.history(),
+    'features.measure': (args) => measurer.measure(TrackId.parse(args).track_id),
+    'features.heard': (args) => heard(TrackIds.parse(args).track_ids, features),
     'player.state': (args) => player.state(DraftId.parse(args).draft_id),
     'player.play': (args) => {
       const { draft_id, revision, entry_id, position } = Play.parse(args);
@@ -119,9 +169,11 @@ export function createApi(
     },
   };
 
-  return async (method: string, args: unknown): Promise<unknown> => {
+  const call = async (method: string, args: unknown): Promise<unknown> => {
     if (!Object.hasOwn(handlers, method)) throw new Error(`Unknown method: ${method}`);
 
     return handlers[method as Method](args);
   };
+
+  return Object.assign(call, { stopMeasuring: () => measurer.stop() });
 }

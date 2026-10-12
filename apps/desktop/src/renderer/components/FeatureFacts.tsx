@@ -3,6 +3,7 @@
 import { keyFacts, sourceShort, tempoFacts } from '../facts.js';
 import type { Track } from '../state.js';
 import { Term, useExplain } from './Explain.js';
+import { Measure } from './Measure.js';
 
 function Source({ kind, track }: { kind: 'tempo' | 'key'; track: Track }) {
   const tempo = kind === 'tempo';
@@ -31,7 +32,7 @@ function Source({ kind, track }: { kind: 'tempo' | 'key'; track: Track }) {
   );
 }
 
-export function FeatureFacts({ track }: { track: Track }) {
+export function FeatureFacts({ track, trackId }: { track: Track; trackId: string }) {
   const camelot = track.camelot;
 
   return (
@@ -45,6 +46,7 @@ export function FeatureFacts({ track }: { track: Track }) {
             <Term name="missing">
               <span className="miss">Not measured</span>
             </Term>
+            <Measure trackId={trackId} kind="tempo" title={track.title} />
           </dd>
         ) : (
           <>
@@ -67,6 +69,7 @@ export function FeatureFacts({ track }: { track: Track }) {
             <Term name="missing">
               <span className="miss">Not measured</span>
             </Term>
+            <Measure trackId={trackId} kind="key" title={track.title} />
           </dd>
         ) : (
           <>
