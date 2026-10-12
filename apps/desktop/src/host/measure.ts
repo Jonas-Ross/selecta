@@ -6,8 +6,13 @@ import type { SpawnLike } from '@selecta/core/enrich/metrognome.js';
 import type { AudioFeaturesRow } from '@selecta/core/types/cache.js';
 import type { Measured, MissReason } from '../shared/protocol.js';
 
-/** One metrognome run over these tracks; resolves once their results are stored. */
-export type MeasureRun = (trackIds: string[]) => Promise<{ skipped: string[]; errors: string[] }>;
+/**
+ * One metrognome run over these tracks; resolves once their results are stored.
+ * `started` says whether metrognome ran at all, and so searched the store.
+ */
+export type MeasureRun = (
+  trackIds: string[],
+) => Promise<{ skipped: string[]; errors: string[]; started: boolean }>;
 
 export type MeasurerDeps = {
   run: MeasureRun;
@@ -60,10 +65,10 @@ export function createMeasurer({
       const started = now();
 
       try {
-        const { skipped, errors } = await run(batch.map(([id]) => id));
+        const { skipped, errors, started: ran } = await run(batch.map(([id]) => id));
 
-        // A run that never reached the store (metrognome missing) spent none of its budget.
-        nextStart = started + (batch.length - skipped.length) * SEARCH_SPACING_MS;
+        // A run that never started metrognome spent none of the store's search budget.
+        if (ran) nextStart = started + batch.length * SEARCH_SPACING_MS;
 
         for (const [id, waiter] of batch)
           waiter.resolve(verdict(features(id), skipped.includes(id) ? errors[0] : undefined));

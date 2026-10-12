@@ -45,8 +45,10 @@ it('joins a second request for the same track and batches the ones that queue me
       runs.push(ids);
 
       return runs.length === 1
-        ? new Promise((resolve) => (finish = () => resolve({ skipped: [], errors: [] })))
-        : Promise.resolve({ skipped: [], errors: [] });
+        ? new Promise(
+            (resolve) => (finish = () => resolve({ skipped: [], errors: [], started: true })),
+          )
+        : Promise.resolve({ skipped: [], errors: [], started: true });
     },
     features: (id) => featuresRow({ trackPersistentId: id, analysisStatus: 'ok' }),
     ...time,
@@ -84,20 +86,21 @@ it('says why each blank feature is still blank', () => {
   });
 });
 
-it('charges the search budget only for tracks a run got to', async () => {
+it('charges the search budget only when metrognome ran', async () => {
   const time = clock();
   let runs = 0;
   const measurer = createMeasurer({
-    // The first run can't start metrognome, so it skips everything it was given.
-    run: async (ids) => ({ skipped: runs++ === 0 ? ids : [], errors: ['spawn metrognome ENOENT'] }),
+    // The first run can't start metrognome; the second does, and its search fails after.
+    run: async (ids) => ({ skipped: ids, errors: ['metrognome failed'], started: runs++ > 0 }),
     features: () => undefined,
     ...time,
   });
 
   await Promise.all([measurer.measure('A'), measurer.measure('B')]);
+  await Promise.all([measurer.measure('A'), measurer.measure('B')]);
   await measurer.measure('A');
 
-  expect(time.waits).toEqual([0, 0]);
+  expect(time.waits).toEqual([0, 0, 2 * SEARCH_SPACING_MS]);
 });
 
 it('hands a run failure to every waiting request', async () => {
@@ -228,7 +231,7 @@ it('drops measurements still waiting their turn when the app quits', async () =>
     run: async (ids) => {
       runs.push(ids);
 
-      return { skipped: [], errors: [] };
+      return { skipped: [], errors: [], started: true };
     },
     features: () => undefined,
   });

@@ -70,10 +70,26 @@ export function createApi(
   const features = (trackId: string) => deps.cache().getAudioFeatures(trackId) ?? undefined;
   const measurer = createMeasurer({
     run: async (trackIds) => {
+      const spawnLike = deps.enrich?.metrognome?.spawnLike;
+      // Without a spawner to watch, assume the run reached the store.
+      let started = spawnLike === undefined;
+      const enrich = spawnLike && {
+        ...deps.enrich,
+        metrognome: {
+          ...deps.enrich?.metrognome,
+          spawnLike: ((command, args) => {
+            const child = spawnLike(command, args);
+
+            started = true;
+
+            return child;
+          }) satisfies typeof spawnLike,
+        },
+      };
       const summary = await enrichPendingTracks(
         deps.cache(),
         { trackIds, source: 'analysis' },
-        deps.enrich,
+        enrich || deps.enrich,
       ).catch((error: unknown) => {
         if (error instanceof BridgeError && error.errorCode === 'operation_busy')
           throw new Error('Another measuring run is going. Try again once it finishes.');
@@ -86,6 +102,7 @@ export function createApi(
           o.outcome === 'skipped' ? [o.trackPersistentId] : [],
         ),
         errors: summary.errors,
+        started,
       };
     },
     features,
