@@ -972,3 +972,12 @@ it('keeps the order of a rekeyed audition to pause when switching to another pic
     on: { playlistId: 'P-NEW', index: 1, trackId: B, slot: 'Selecta Preview' },
   });
 });
+
+it('surfaces a rekey it cannot check instead of rewriting the audition', async () => {
+  await player.audition([B, A], 0);
+  deps.bridge.readPreview = vi.fn().mockRejectedValue(new Error('Automation timed out'));
+  vi.mocked(deps.bridge.readPlayer).mockResolvedValue(rotated(1, B));
+
+  await expect(player.audition([B, A], 1)).rejects.toThrow('Automation timed out');
+  expect(deps.bridge.replacePlaylist).toHaveBeenCalledOnce();
+});

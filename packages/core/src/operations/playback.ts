@@ -401,8 +401,8 @@ export function createPlayback(deps: PlaybackDeps) {
 
         const live = await read();
 
-        // A rekey the bridge cannot confirm leaves the audition unloaded, so it is written again.
-        await followAudition(live).catch(() => undefined);
+        // A rekey check that fails surfaces rather than rewriting what may still be playing.
+        await followAudition(live);
 
         const owned = ours() ? auditioning : undefined;
         // Already holding these tracks and on them in Music, so only the place changes.
