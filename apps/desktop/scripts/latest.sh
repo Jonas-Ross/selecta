@@ -59,7 +59,14 @@ lock() {
   local dir
   dir="$(git rev-parse --absolute-git-dir)/selecta-latest.lock"
   if ! mkdir "$dir" 2> /dev/null; then
-    if kill -0 "$(cat "$dir/pid" 2> /dev/null)" 2> /dev/null; then
+    # A holder that has just made the directory may not have written its pid yet.
+    local holder= _
+    for _ in 1 2 3 4 5; do
+      holder=$(cat "$dir/pid" 2> /dev/null || true)
+      [ -z "$holder" ] || break
+      sleep 0.2
+    done
+    if [ -n "$holder" ] && kill -0 "$holder" 2> /dev/null; then
       say "Another Selecta Latest run is busy in this checkout; try again once it finishes." >&2
       exit 1
     fi
