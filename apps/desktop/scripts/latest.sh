@@ -31,6 +31,13 @@ main() {
     export PATH
   fi
 
+  cleanup=
+  trap 'eval "$cleanup"' EXIT
+  case ${1:-run} in
+    check | -h | --help) ;;
+    *) lock ;;
+  esac
+
   case ${1:-run} in
     run) run ;;
     check) check ;;
@@ -46,6 +53,22 @@ main() {
 }
 
 say() { printf '%s\n' "$*"; }
+
+# One run at a time per checkout, so two launches never build or rebuild the dev bundle together.
+lock() {
+  local dir
+  dir="$(git rev-parse --absolute-git-dir)/selecta-latest.lock"
+  if ! mkdir "$dir" 2> /dev/null; then
+    if kill -0 "$(cat "$dir/pid" 2> /dev/null)" 2> /dev/null; then
+      say "Another Selecta Latest run is busy in this checkout; try again once it finishes." >&2
+      exit 1
+    fi
+    rm -rf "$dir"
+    mkdir "$dir"
+  fi
+  echo $$ > "$dir/pid"
+  cleanup="$cleanup rm -rf '$dir';"
+}
 
 branch() { git symbolic-ref --quiet --short HEAD || echo detached; }
 
@@ -232,8 +255,8 @@ run() {
 install_app() {
   local dest=$HOME/Applications/Selecta\ Latest.app tmp app
   tmp=$(mktemp -d)
-  # Expanded now: tmp is local, and the trap fires after this function returns.
-  trap "rm -rf '$tmp'" EXIT
+  # Expanded now: tmp is local, and the EXIT trap runs after this function returns.
+  cleanup="$cleanup rm -rf '$tmp';"
   # osacompile names the app after its file, so it's built under its real name.
   app="$tmp/Selecta Latest.app"
   install
