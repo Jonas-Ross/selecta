@@ -10,6 +10,7 @@ Selecta never touches audio: Music.app plays, and the app only reads and moves M
 |---|---|---|
 | `osascript` | `harness/bin/osascript` | Sends the JXA script to `MusicSim`, which runs it in a VM against a model of Music's scripting objects |
 | `claude` | `harness/bin/claude` (via `SELECTA_CLAUDE_PATH`) | Runs the test's turn script, which calls the real MCP server the app configured, under the app's own allow and deny lists |
+| `codex` | `harness/bin/codex` (via `SELECTA_CODEX_PATH`) | The same turn script, told which agent it is, answering in Codex's own event stream |
 | `sips` | `harness/bin/sips` | Copies the sleeve, which is already thumbnail-sized |
 | `metrognome` | `harness/bin/metrognome` | Answers each query from the test's metrognome script (`harness/metrognome.ts`), so Measure runs with no network or audio |
 

@@ -28,8 +28,14 @@ export type DraftView = {
   hint?: string;
 };
 export type Row = Draft['entries'][number] & Track;
-// `brief` marks the request that started a draft, as opposed to feedback on one.
-export type LogItem = { kind: 'you' | 'claude' | 'tool' | 'error'; text: string; brief?: true };
+// `brief` marks the request that started a draft, as opposed to feedback on one;
+// `by` names which agent wrote a reply, since a draft can change hands.
+export type LogItem = {
+  kind: 'you' | 'claude' | 'tool' | 'error';
+  text: string;
+  brief?: true;
+  by?: ProviderId;
+};
 
 /** Inspection tracks line up one to one with entries, repeats included. */
 export function rows(view: DraftView): Row[] {
@@ -115,12 +121,12 @@ export function feedbackMessage(text: string, selected: Row[]): string {
   return `About these tracks:\n${about}\n\n${text}`;
 }
 
-export function logAgentEvent(log: LogItem[], event: AgentEvent): LogItem[] {
+export function logAgentEvent(log: LogItem[], event: AgentEvent, by?: ProviderId): LogItem[] {
   switch (event.kind) {
     case 'asked':
       return [...log, { kind: 'you', text: event.text, ...(event.brief && { brief: true }) }];
     case 'text':
-      return [...log, { kind: 'claude', text: event.text }];
+      return [...log, { kind: 'claude', text: event.text, ...(by && { by }) }];
     case 'tool':
       return [...log, { kind: 'tool', text: event.name.replaceAll('_', ' ') }];
     case 'denied':
@@ -147,11 +153,13 @@ export function runEvent(run: Run | undefined, event: AgentEvent, seq: number): 
 
   if (seq > seen) return;
 
+  const by = askedBy(run?.by, event);
+
   return {
-    log: logAgentEvent(run?.log ?? [], event),
+    log: logAgentEvent(run?.log ?? [], event, by),
     working: event.kind !== 'done' && event.kind !== 'error',
     seen: seen + 1,
-    by: askedBy(run?.by, event),
+    by,
   };
 }
 
@@ -165,10 +173,16 @@ export function recoverRuns(
   for (const [id, { events, working }] of Object.entries(history))
     if (events.length > (runs[id]?.seen ?? 0))
       next[id] = {
-        log: events.reduce(logAgentEvent, []),
+        ...events.reduce<Pick<Run, 'log' | 'by'>>(
+          ({ log, by }, event) => {
+            const now = askedBy(by, event);
+
+            return { log: logAgentEvent(log, event, now), by: now };
+          },
+          { log: [] },
+        ),
         working,
         seen: events.length,
-        by: events.reduce(askedBy, undefined),
       };
 
   return next;

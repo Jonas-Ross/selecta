@@ -232,6 +232,72 @@ it('resumes a codex thread, and starts fresh when the draft switches provider', 
   expect(() => agent.send(DRAFT, 'again')).toThrow('Claude is already working on this draft.');
 });
 
+it('hands a swapped-in agent the earlier requests as sent, and not one that is resuming', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+
+  agent.start(DRAFT, 'deep house\nLength: about 10 tracks.');
+  runs[0]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+  await settle();
+  agent.send(DRAFT, 'About these tracks:\n- Halo\n\nless vocal', 'less vocal');
+  runs[1]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+  await settle();
+  // Refused before running, so never part of the conversation.
+  agent.refuse(DRAFT, 'linked', 'Stop listening first.');
+  agent.send(DRAFT, 'darker', 'darker', 'codex');
+
+  expect(flag(runs[1]!.args, '-p')).not.toContain('Earlier requests');
+  expect(runs[2]!.args.at(-1)).toContain(
+    'Earlier requests on this draft, oldest first:\n- deep house\n  Length: about 10 tracks.\n- About these tracks:\n  - Halo\n  \n  less vocal\n\nFeedback:\ndarker',
+  );
+  expect(runs[2]!.args.at(-1)).not.toContain('linked');
+});
+
+it('hands a resumed session only the requests another agent took since its last turn', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+
+  agent.start(DRAFT, 'deep house');
+  runs[0]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+  await settle();
+  agent.send(DRAFT, 'darker', 'darker', 'codex');
+  // Codex stops before finishing, so Claude's session is still the one to resume.
+  agent.cancel(DRAFT);
+  await settle();
+  agent.send(DRAFT, 'shorter', 'shorter', 'claude');
+
+  const prompt = runs[2]!.args[runs[2]!.args.indexOf('-p') + 1]!;
+
+  expect(flag(runs[2]!.args, '--resume')).toBe('S-1');
+  expect(prompt).toContain('- darker\n\nFeedback:\nshorter');
+  expect(prompt).not.toContain('deep house');
+});
+
+it('keeps the newest requests, and the end of a cut one, when the handoff would run long', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+
+  agent.start(DRAFT, 'brief');
+  runs[0]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+  await settle();
+
+  for (const [index, letter] of ['a', 'b', 'c'].entries()) {
+    agent.send(DRAFT, `${'-'.repeat(5_000)}${letter.repeat(2_000)}`);
+    runs[index + 1]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+    await settle();
+  }
+
+  agent.send(DRAFT, 'swap', 'swap', 'codex');
+
+  const prompt = runs[4]!.args.at(-1)!;
+
+  expect(prompt).toContain(
+    `- (1 older left out)\n- …${'a'.repeat(2_000)}\n- ${'-'.repeat(5_000)}${'b'.repeat(2_000)}\n`,
+  );
+  expect(prompt).not.toContain('brief');
+  expect(prompt.length).toBeLessThan(17_000);
+});
+
 it('names the missing CLI for the provider that was asked for', async () => {
   const { runs, spawn } = fakeClaude();
   const { agent, events } = sessions(spawn);

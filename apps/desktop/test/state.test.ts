@@ -18,6 +18,7 @@ import {
   type Run,
   type Row,
 } from '../src/renderer/state.js';
+import type { AgentEvent } from '../src/shared/protocol.js';
 
 const entry = (id: string) => ({ entry_id: id, track_id: `T-${id}` });
 
@@ -267,4 +268,25 @@ it('names the agent that took the latest request, live or recovered', () => {
   );
 
   expect(recovered.b!.by).toBe('codex');
+});
+
+it('keeps the name of the agent that wrote each reply after a swap', () => {
+  const events: AgentEvent[] = [
+    { kind: 'asked', text: 'x', brief: true, by: 'claude' },
+    { kind: 'text', text: 'Built it.' },
+    { kind: 'done' },
+    { kind: 'asked', text: 'y', by: 'codex' },
+    { kind: 'text', text: 'Darker now.' },
+  ];
+  const live = events.reduce<Run | undefined>(
+    (run, event, seq) => runEvent(run, event, seq),
+    undefined,
+  )!;
+  const recovered = recoverRuns({}, { d: { events, working: true } }).d!;
+
+  for (const run of [live, recovered])
+    expect(run.log.filter((item) => item.kind === 'claude').map((item) => item.by)).toEqual([
+      'claude',
+      'codex',
+    ]);
 });

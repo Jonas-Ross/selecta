@@ -226,3 +226,11 @@
   font-size: var(--fs-label);
   color: var(--ink4);
 }
+/* The agent swap, sized to sit where the panel's name does. */
+.agent-choice.small {
+  gap: var(--s1);
+}
+.agent-choice.small span {
+  padding: 3px var(--s2);
+  font-size: var(--fs-label);
+}

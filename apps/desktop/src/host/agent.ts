@@ -8,6 +8,9 @@ import type { AgentEvent, ProviderId, RunSnapshot } from '../shared/protocol.js'
 import { PROVIDERS, type AgentProvider, type Turn } from './providers.js';
 import { SUGGEST_INSTRUCTIONS, SUGGEST_TOOLS } from './suggest.js';
 
+// Enough for several long requests, well under the argument size a spawn allows.
+const HANDOFF_LIMIT = 16_000;
+
 const SYSTEM_PROMPT = `You build playlist drafts in the Selecta desktop app, where the user watches the draft update live. Find tracks with the selecta tools and use only track IDs they return. Create the draft once with show_playlist_draft using the draft ID you are given; after that, read it with get_playlist_draft and revise it with edit_playlist_draft, preserving entry_ids. You cannot save or write to Music.app: the user saves from the app. Keep replies to a few sentences.`;
 
 type Spawn = typeof nodeSpawn;
@@ -25,12 +28,15 @@ export type AgentOptions = {
 export class AgentSessions {
   // A session only resumes on the provider that started it; switching starts
   // fresh, and the draft itself carries what the new one needs.
-  private sessions = new Map<string, { provider: ProviderId; id: string }>();
+  // `seen` counts the asks the session has been sent, so a resume hands over only newer ones.
+  private sessions = new Map<string, { provider: ProviderId; id: string; seen: number }>();
   private chosen = new Map<string, ProviderId>();
   private running = new Map<string, () => void>();
   private suggesting = new Map<string, () => void>();
   // The host outlives any renderer, so it keeps the record a reload replays.
   private events = new Map<string, AgentEvent[]>();
+  // What each agent was actually sent, selection included, for a handoff.
+  private asks = new Map<string, string[]>();
 
   constructor(private options: AgentOptions) {}
 
@@ -53,6 +59,7 @@ export class AgentSessions {
       brief: true,
       by: this.provider(draftId).id,
     });
+    this.asked(draftId, brief);
     this.run(draftId, `Draft ID: ${draftId}\n\nBrief:\n${brief}`);
   }
 
@@ -64,11 +71,47 @@ export class AgentSessions {
 
     if (provider) this.chosen.set(draftId, provider);
 
-    this.record(draftId, { kind: 'asked', text, by: this.provider(draftId).id });
+    const by = this.provider(draftId).id;
+    const earlier = this.handoff(draftId, by);
+
+    this.record(draftId, { kind: 'asked', text, by });
+    this.asked(draftId, message);
     this.run(
       draftId,
-      `Draft ID: ${draftId}\n\nRead the current draft with get_playlist_draft before changing it; the user may have edited it.\n\nFeedback:\n${message}`,
+      `Draft ID: ${draftId}\n\nRead the current draft with get_playlist_draft before changing it; the user may have edited it.${earlier}\n\nFeedback:\n${message}`,
     );
+  }
+
+  // A swapped-in agent starts with no conversation, so it gets the user's own
+  // earlier requests it never saw; the draft already holds what came of them.
+  private handoff(draftId: string, by: ProviderId): string {
+    const session = this.sessions.get(draftId);
+    const unseen = (this.asks.get(draftId) ?? []).slice(
+      session?.provider === by ? session.seen : 0,
+    );
+    const kept: string[] = [];
+    let room = HANDOFF_LIMIT;
+
+    // Newest first, so a long history loses its oldest requests rather than overflowing argv.
+    for (const message of [...unseen].reverse()) {
+      if (room <= 0) break;
+
+      // The typed instruction ends a feedback message, after any selected tracks.
+      const cut = message.length > room ? `…${message.slice(-room)}` : message;
+
+      kept.unshift(`- ${cut.replaceAll('\n', '\n  ')}`);
+      room -= message.length;
+    }
+
+    const dropped = unseen.length - kept.length;
+
+    return kept.length
+      ? `\n\nEarlier requests on this draft, oldest first:\n${dropped ? `- (${dropped} older left out)\n` : ''}${kept.join('\n')}`
+      : '';
+  }
+
+  private asked(draftId: string, message: string): void {
+    this.asks.set(draftId, [...(this.asks.get(draftId) ?? []), message]);
   }
 
   /** A request refused before Claude started, kept in the draft's log like any other outcome. */
@@ -148,6 +191,7 @@ export class AgentSessions {
   private run(draftId: string, prompt: string): void {
     const provider = this.provider(draftId);
     const session = this.sessions.get(draftId);
+    const seen = this.asks.get(draftId)?.length ?? 0;
 
     const stop = this.spawnTurn(
       provider,
@@ -159,7 +203,7 @@ export class AgentSessions {
       (event) => {
         if (event.kind === 'done' || event.kind === 'error') {
           if (event.kind === 'done' && event.session_id)
-            this.sessions.set(draftId, { provider: provider.id, id: event.session_id });
+            this.sessions.set(draftId, { provider: provider.id, id: event.session_id, seen });
 
           this.running.delete(draftId);
         }
