@@ -80,6 +80,18 @@ const inlineVersion = {
   },
 };
 
+// The one native module, copied beside the bundles with its prebuilt binary. Not
+// under node_modules, which electron-builder leaves out of extraResources.
+const sqliteBeside = {
+  name: 'sqlite-beside',
+  setup(builder) {
+    builder.onResolve({ filter: /^better-sqlite3$/ }, () => ({
+      path: './better-sqlite3/lib/index.js',
+      external: true,
+    }));
+  },
+};
+
 async function bundle(entry, outfile) {
   await build({
     entryPoints: [entry],
@@ -89,9 +101,7 @@ async function bundle(entry, outfile) {
     target: 'node22',
     format: 'esm',
     logLevel: 'warning',
-    // The one native module; it is copied beside the bundles with its prebuilt binary.
-    external: ['better-sqlite3'],
-    plugins: [inlineVersion],
+    plugins: [inlineVersion, sqliteBeside],
     // CommonJS dependencies inside an ESM bundle still call require.
     banner: {
       js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",
@@ -103,7 +113,7 @@ await rm(stage, { recursive: true, force: true });
 
 const app = join(stage, 'app');
 const core = join(stage, 'core');
-const sqlite = join(core, 'node_modules/better-sqlite3');
+const sqlite = join(core, 'better-sqlite3');
 
 log('staging the app and its core');
 await mkdir(app, { recursive: true });

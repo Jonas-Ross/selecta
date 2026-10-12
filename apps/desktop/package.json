@@ -57,9 +57,6 @@
     },
     "dmg": {
       "artifactName": "Selecta-${version}-${arch}.${ext}"
-    },
-    "zip": {
-      "artifactName": "Selecta-${version}-${arch}-mac.${ext}"
     }
   }
 }
