@@ -11,7 +11,8 @@ set -euo pipefail
 
 # Everything lives in main, so bash has read the whole file before a pull rewrites it.
 main() {
-  repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+  # Physical path, since Electron's argv (what pgrep matches) has symlinks resolved.
+  repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)
   desktop=$repo/apps/desktop
   electron_app=$desktop/.dev/Selecta.app
   state=$repo/node_modules/.selecta-latest
@@ -219,13 +220,18 @@ install_app() {
   mkdir -p "$HOME/Applications"
   # The applet knows only where this checkout is; every step is this script.
   sed "s|__SCRIPT__|$desktop/scripts/latest.sh|" "$desktop/scripts/latest.applescript" > "$tmp/latest.applescript"
-  rm -rf "$dest"
-  osacompile -o "$dest" "$tmp/latest.applescript"
-  "$(cd "$desktop" && node -p "require('electron')")" "$desktop/scripts/icon.mjs" "$dest/Contents/Resources/applet.icns"
-  plutil -replace CFBundleIdentifier -string io.github.jonas-ross.selecta.latest "$dest/Contents/Info.plist"
+  trap 'rm -rf "$tmp"' EXIT
+  # Built beside, so a failed compile leaves the installed app alone.
+  osacompile -o "$tmp/app.app" "$tmp/latest.applescript"
+  "$(cd "$desktop" && node -p "require('electron')")" "$desktop/scripts/icon.mjs" "$tmp/app.app/Contents/Resources/applet.icns"
+  plutil -replace CFBundleIdentifier -string io.github.jonas-ross.selecta.latest "$tmp/app.app/Contents/Info.plist"
+  # osacompile's asset catalog icon wins over applet.icns, so drop it.
+  rm -f "$tmp/app.app/Contents/Resources/Assets.car"
+  plutil -remove CFBundleIconName "$tmp/app.app/Contents/Info.plist" 2> /dev/null || true
   # Editing the bundle breaks osacompile's signature, which macOS then refuses to run.
-  codesign --force --deep --sign - "$dest"
-  rm -rf "$tmp"
+  codesign --force --deep --sign - "$tmp/app.app"
+  rm -rf "$dest"
+  mv "$tmp/app.app" "$dest"
   say "Installed $dest"
 }
 

@@ -11,22 +11,22 @@ on run
 	set progress completed steps to 0
 
 	set facts to runStep("check", "Checking for updates")
-	set behind to (valueOf("behind", facts)) as integer
+	set behindCount to (valueOf("behind", facts)) as integer
 	set reason to ""
 	if valueOf("branch", facts) is not "main" then
 		set reason to "is on " & valueOf("branch", facts) & ", not main"
 	else if valueOf("dirty", facts) is "1" then
 		set reason to "has uncommitted changes"
-	else if (valueOf("ahead", facts) as integer) > 0 and behind > 0 then
+	else if (valueOf("ahead", facts) as integer) > 0 and behindCount > 0 then
 		set reason to "has commits origin/main doesn't, so it can't fast-forward"
 	end if
 	if reason is not "" then
 		display dialog "Your selecta checkout " & reason & ", so it stays as it is." buttons {"Cancel", "Open As Is"} default button 2 with title "Selecta Latest" with icon caution
-		set behind to 0
+		set behindCount to 0
 	end if
 
 	if valueOf("running", facts) is "1" then
-		if behind is 0 and valueOf("built", facts) is "1" then
+		if behindCount is 0 and valueOf("built", facts) is "1" then
 			runStep("open", "Opening Selecta")
 			return
 		end if
@@ -38,10 +38,10 @@ on run
 		runStep("stop", "Closing Selecta")
 	end if
 
-	if behind is 1 then
+	if behindCount is 1 then
 		runStep("pull", "Pulling 1 new commit")
-	else if behind > 1 then
-		runStep("pull", "Pulling " & behind & " new commits")
+	else if behindCount > 1 then
+		runStep("pull", "Pulling " & behindCount & " new commits")
 	end if
 	if valueOf("metrognome", facts) is "outdated" then runStep("metrognome", "Upgrading metrognome")
 	runStep("install", "Checking dependencies")
@@ -58,7 +58,8 @@ on runStep(stepName, label)
 	try
 		repeat until (do shell script "test -f " & quoted form of codeFile & " && echo y || echo n") is "y"
 			set lastLine to do shell script "tail -n 1 " & quoted form of outFile & " | cut -c 1-90"
-			if lastLine is not "" then set progress additional description to label & "…" & return & lastLine
+			-- check prints facts, not progress.
+			if lastLine is not "" and stepName is not "check" then set progress additional description to label & "…" & return & lastLine
 			delay 0.3
 		end repeat
 	on error number -128
