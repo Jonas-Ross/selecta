@@ -146,9 +146,11 @@ export function createApi(
     },
   };
 
-  return async (method: string, args: unknown): Promise<unknown> => {
+  const call = async (method: string, args: unknown): Promise<unknown> => {
     if (!Object.hasOwn(handlers, method)) throw new Error(`Unknown method: ${method}`);
 
     return handlers[method as Method](args);
   };
+
+  return Object.assign(call, { stopMeasuring: () => measurer.stop() });
 }

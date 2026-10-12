@@ -78,7 +78,8 @@ createInterface({ input: process.stdin })
   // Main closing stdin is the shutdown signal.
   .on('close', () => {
     agent.cancelAll();
-    // A measurement mid-run would otherwise hold the enrich lock past the cache closing.
+    // A measurement waiting or mid-run would otherwise outlive the cache closing.
+    call.stopMeasuring();
     metrognome.killAll();
     releaseHeldEnrichLocks();
     stopWatching();

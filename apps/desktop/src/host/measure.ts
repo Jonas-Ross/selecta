@@ -13,8 +13,18 @@ export type MeasurerDeps = {
   run: MeasureRun;
   features: (trackId: string) => AudioFeaturesRow | undefined;
   now?: () => number;
-  sleep?: (ms: number) => Promise<void>;
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 };
+
+const STOPPED = 'The app is closing, so this measurement was dropped.';
+
+function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+
+    signal.addEventListener('abort', () => (clearTimeout(timer), resolve()), { once: true });
+  });
+}
 
 // metrognome's own limiter allows 18 store searches a minute, but each process
 // starts with a fresh burst, so the host paces the runs it starts as well.
@@ -24,19 +34,22 @@ export function createMeasurer({
   run,
   features,
   now = Date.now,
-  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  sleep = abortableSleep,
 }: MeasurerDeps) {
   type Waiter = { resolve: (value: Measured) => void; reject: (error: Error) => void };
   const queued = new Map<string, Waiter>();
   const inFlight = new Map<string, Promise<Measured>>();
   let working = false;
   let nextStart = 0;
+  const stopping = new AbortController();
 
   async function drain(): Promise<void> {
     working = true;
 
     while (queued.size > 0) {
-      await sleep(Math.max(0, nextStart - now()));
+      await sleep(Math.max(0, nextStart - now()), stopping.signal);
+
+      if (stopping.signal.aborted) break;
 
       const batch = [...queued];
 
@@ -59,6 +72,8 @@ export function createMeasurer({
   return {
     /** Measure a track, or join the measurement of it already waiting or running. */
     measure(trackId: string): Promise<Measured> {
+      if (stopping.signal.aborted) return Promise.reject(new Error(STOPPED));
+
       const existing = inFlight.get(trackId);
 
       if (existing) return existing;
@@ -72,6 +87,15 @@ export function createMeasurer({
       if (!working) void drain();
 
       return promise;
+    },
+
+    /** Drop what is waiting its turn, so quitting never runs it against a closed cache. */
+    stop(): void {
+      stopping.abort();
+
+      for (const waiter of queued.values()) waiter.reject(new Error(STOPPED));
+
+      queued.clear();
     },
   };
 }

@@ -174,3 +174,25 @@ it('stops a metrognome still running when the app quits', async () => {
   tracked.killAll();
   expect(await closed).toBe('SIGTERM');
 });
+
+it('drops measurements still waiting their turn when the app quits', async () => {
+  const runs: string[][] = [];
+  const measurer = createMeasurer({
+    run: async (ids) => {
+      runs.push(ids);
+
+      return { skipped: [], errors: [] };
+    },
+    features: () => undefined,
+  });
+
+  await measurer.measure('A');
+
+  // The next run waits out A's share of the search budget on a real timer.
+  const waiting = measurer.measure('B');
+
+  measurer.stop();
+  await expect(waiting).rejects.toThrow('The app is closing');
+  await expect(measurer.measure('C')).rejects.toThrow('The app is closing');
+  expect(runs).toEqual([['A']]);
+});
