@@ -38,6 +38,7 @@ Shared storage and bridge types live in `packages/core/src/types/`; the cross-cu
 | `npm install` | Install deps |
 | `npm run build` | Compile core, then the MCP server and widgets, then write the root `dist/index.js` entry, then bundle the desktop app; each package also typechecks its tests (`tsconfig.json`), emitting from `tsconfig.build.json` |
 | `npm run desktop` | Build and launch the desktop app (needs a signed-in `claude` or `codex` CLI) |
+| `npm run latest` | Fast-forward main, upgrade brew's metrognome, install and build only what changed, then open the desktop app; `apps/desktop/scripts/latest.sh install-app` puts the same thing in ~/Applications as Selecta Latest |
 | `npm run package [-- --arch arm64\|x64]` | Build `Selecta.app`, a DMG and a zip into `apps/desktop/.package/out`, with Node, core and the MCP server inside (macOS only) |
 | `npm run e2e` | Build, then drive the desktop app with Playwright against a simulated Music.app and Claude (`xvfb-run -a` on Linux) |
 | `npm test` | Unit suite (fast, no Music.app) |

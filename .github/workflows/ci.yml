@@ -26,6 +26,8 @@ jobs:
       - name: gate scripts
         run: |
           scripts/risk-tier.test.sh
+      - name: launcher script
+        run: apps/desktop/scripts/latest.test.sh
 
   check:
     name: ${{ matrix.name }}

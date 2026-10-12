@@ -131,4 +131,10 @@ npm run build
 npm run desktop
 ```
 
+### Always on latest
+
+`npm run latest` (`scripts/latest.sh`) opens the app on the newest main: it fetches, fast-forwards, upgrades metrognome when its Homebrew tap has a newer release, runs `npm ci` only when `package-lock.json` or Node changed, and builds only when the commit did. Its stamps live in `node_modules/.selecta-latest`, so a fresh install rebuilds. It never touches a checkout that is off main, has uncommitted changes or has diverged: it says so and offers to open it as it is, which builds a dirty tree every time. If the app is already open and nothing is newer it comes to the front; otherwise it offers to close and reopen it. A failed fetch or brew upgrade opens what is already there.
+
+`scripts/latest.sh install-app` compiles `scripts/latest.applescript` into `~/Applications/Selecta Latest.app`, with the app's icon, for the Dock or Spotlight. It runs the same steps one at a time in a progress window showing each step's latest line, asks in dialogs where the terminal would, and appends everything to `~/Library/Logs/Selecta/launcher.log`. The app it opens writes its own output to `desktop-output.log` beside it. Reinstall it only if the checkout moves.
+
 It uses the same `~/Library/Application Support/Selecta/library.db` as the MCP server, so refresh the library first. CI typechecks and bundles the app (`ELECTRON_SKIP_BINARY_DOWNLOAD=1`) but never launches it; the tests cover the host, the stream parser and the view logic, rail geometry included, without Electron or Claude. `npm run e2e` launches it against a simulated Music.app and a scripted Claude (`docs/desktop-harness.md`).
