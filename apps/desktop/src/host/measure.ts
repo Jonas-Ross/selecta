@@ -18,11 +18,13 @@ export type MeasurerDeps = {
 
 const STOPPED = 'The app is closing, so this measurement was dropped.';
 
-function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+export function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
+    const abort = () => (clearTimeout(timer), resolve());
+    // The signal lives as long as the app, so a finished sleep takes its listener with it.
+    const timer = setTimeout(() => (signal.removeEventListener('abort', abort), resolve()), ms);
 
-    signal.addEventListener('abort', () => (clearTimeout(timer), resolve()), { once: true });
+    signal.addEventListener('abort', abort, { once: true });
   });
 }
 

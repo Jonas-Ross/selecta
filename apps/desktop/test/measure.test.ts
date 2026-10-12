@@ -6,7 +6,13 @@ import { DraftStore } from '@selecta/core/drafts/store.js';
 import { withOperation } from '@selecta/core/operations/lock.js';
 import { createApi } from '../src/host/api.js';
 import type { AgentSessions } from '../src/host/agent.js';
-import { createMeasurer, SEARCH_SPACING_MS, trackedSpawn, verdict } from '../src/host/measure.js';
+import {
+  abortableSleep,
+  createMeasurer,
+  SEARCH_SPACING_MS,
+  trackedSpawn,
+  verdict,
+} from '../src/host/measure.js';
 
 const recorded = readFileSync(
   new URL('../../../packages/core/test/fixtures/metrognome.jsonl', import.meta.url),
@@ -220,4 +226,13 @@ it('drops measurements still waiting their turn when the app quits', async () =>
   await expect(waiting).rejects.toThrow('The app is closing');
   await expect(measurer.measure('C')).rejects.toThrow('The app is closing');
   expect(runs).toEqual([['A']]);
+});
+
+it('leaves no listener behind on the app-long signal once a pacing sleep ends', async () => {
+  const stopping = new AbortController();
+  const remove = vi.spyOn(stopping.signal, 'removeEventListener');
+
+  await abortableSleep(1, stopping.signal);
+
+  expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
 });
