@@ -1,5 +1,5 @@
 // Electron main stays a pipe: a window, and the core host process behind it.
-import { app, BrowserWindow, dialog, ipcMain, protocol } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -8,6 +8,11 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { ARTWORK_SCHEME, artworkDir, artworkFileFor } from '../shared/artwork.js';
 import type { HostEvent } from '../shared/protocol.js';
+import { loginShellPath, packagedPath } from './env.js';
+
+// Named Selecta, Electron would put its profile in the folder core keeps library.db in;
+// this is where it lived before the rename.
+app.setPath('userData', join(app.getPath('appData'), '@selecta/desktop'));
 
 const here = (file: string) => fileURLToPath(new URL(file, import.meta.url));
 const pending = new Map<
@@ -18,9 +23,25 @@ let nextId = 1;
 let window: BrowserWindow | undefined;
 let quitting = false;
 
-const host = spawn(process.env.SELECTA_NODE ?? 'node', [here('./host.js')], {
-  stdio: ['pipe', 'pipe', 'inherit'],
-});
+// Packaged, the app carries its own Node, core and MCP server in Resources/core.
+const core = (file: string) => join(process.resourcesPath, 'core', file);
+const host = app.isPackaged
+  ? spawn(core('node'), [core('host.js')], {
+      stdio: ['pipe', 'pipe', 'inherit'],
+      env: {
+        ...process.env,
+        PATH: packagedPath(
+          process.env,
+          homedir(),
+          core(''),
+          loginShellPath(process.env.SHELL ?? '/bin/zsh'),
+        ),
+        SELECTA_MCP_ENTRY: core('mcp.js'),
+      },
+    })
+  : spawn(process.env.SELECTA_NODE ?? 'node', [here('./host.js')], {
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
 
 createInterface({ input: host.stdout }).on('line', (line) => {
   const message = JSON.parse(line) as { id: number; result?: unknown; error?: string } | HostEvent;
@@ -89,8 +110,29 @@ async function serveArtwork(request: Request): Promise<Response> {
   }
 }
 
+// Electron's default menu, with Help pointing at Selecta rather than Electron.
+function menu() {
+  const open = (url: string) => () => void shell.openExternal(url);
+
+  return Menu.buildFromTemplate([
+    { role: 'appMenu' },
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Selecta Website', click: open('https://jonas-ross.github.io/selecta/') },
+        { label: 'Report a Problem', click: open('https://github.com/Jonas-Ross/selecta/issues') },
+      ],
+    },
+  ]);
+}
+
 void app.whenReady().then(() => {
   protocol.handle(ARTWORK_SCHEME, serveArtwork);
+  Menu.setApplicationMenu(menu());
   window = new BrowserWindow({
     width: 1440,
     height: 900,
