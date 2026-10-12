@@ -54,7 +54,9 @@ on runStep(stepName, label)
 	set progress additional description to label & "…"
 	set outFile to do shell script "mktemp -t selecta-latest"
 	set codeFile to outFile & ".code"
-	set pid to do shell script "(" & quoted form of script_ & " " & stepName & " > " & quoted form of outFile & " 2>&1 < /dev/null; echo $? > " & quoted form of (codeFile & ".tmp") & "; mv " & quoted form of (codeFile & ".tmp") & " " & quoted form of codeFile & ") > /dev/null 2>&1 & echo $!"
+	set inner to quoted form of script_ & " " & stepName & " > " & quoted form of outFile & " 2>&1 < /dev/null; echo $? > " & quoted form of (codeFile & ".tmp") & "; mv " & quoted form of (codeFile & ".tmp") & " " & quoted form of codeFile
+	-- Its own process group, so Stop takes npm, the build and everything else it started.
+	set pid to do shell script "perl -e 'setpgrp(0, 0); exec @ARGV' /bin/sh -c " & quoted form of inner & " > /dev/null 2>&1 & echo $!"
 	try
 		repeat until (do shell script "test -f " & quoted form of codeFile & " && echo y || echo n") is "y"
 			set lastLine to do shell script "tail -n 1 " & quoted form of outFile & " | cut -c 1-90"
@@ -63,7 +65,7 @@ on runStep(stepName, label)
 			delay 0.3
 		end repeat
 	on error number -128
-		do shell script "pkill -P " & pid & "; kill " & pid & " 2> /dev/null; true"
+		do shell script "kill -TERM -- -" & pid & " 2> /dev/null; true"
 		error number -128
 	end try
 	set code to do shell script "cat " & quoted form of codeFile
