@@ -28,12 +28,20 @@ the whole point, since that is exactly the 2022-and-later gap. The two
 backlogs are counted separately by `status` and by each pass's
 `pending_remaining`.
 
-Those columns record the latest attempt, so a retry that fails after an earlier
-success reads `no_match` while the earlier value stays on the row. `status`
-therefore reports each source's `owns` beside its attempt outcomes: how many
-stored values carry that source's provenance. `successful` can drop after a
-re-score; `owns` drops only when a value is cleared. Keeping `ok` on a failed
-retry instead would hide a preview that has genuinely gone.
+Those columns record the latest attempt, so a retry that ends `no_data` after
+an earlier success keeps the earlier value on the row. `status` therefore
+reports each source's `owns` beside its attempt outcomes: how many stored
+values carry that source's provenance. `successful` can drop after a re-score;
+`owns` drops only when a value is cleared.
+
+A retry that ends `no_match` clears the values that source stored. Every one of
+them was measured from whatever recording the source matched, and it has just
+said it cannot identify the track. Before analysis discarded uncertain store
+matches, it stored tempos measured from previews of other songs; the 2026-10-12
+key re-measure found 161 of them still on the row behind a `no_match`, because
+the retry kept them. The cost is a value lost when a preview has genuinely gone
+from the store. A retry only happens after `supersede` or `reopen`, whose undo
+journal holds the row as it was.
 
 ## Neither pass overwrites the other
 

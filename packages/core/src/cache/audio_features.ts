@@ -72,6 +72,22 @@ export function mergeFeatures(
   const sources = { ...existing.sources };
   let landed = false;
 
+  // A source that can no longer identify the track has no basis for what it
+  // measured from the recording it once matched, so those values go.
+  for (const source of ['catalog', 'analysis'] as const) {
+    if (candidate[statusFieldFor(source)] !== 'no_match') continue;
+
+    for (const field of SOURCE_FIELDS) {
+      const provenance = sources[field];
+
+      if (provenance == null || sourceForProvenance(provenance) !== source) continue;
+
+      for (const dependent of CLEARED_WITH[field]) Object.assign(merged, { [dependent]: null });
+
+      delete sources[field];
+    }
+  }
+
   if (merged.bpm == null && candidate.bpm != null) {
     merged.bpm = candidate.bpm;
     merged.bpmConfidence = candidate.bpmConfidence;

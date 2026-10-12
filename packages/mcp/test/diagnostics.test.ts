@@ -106,7 +106,7 @@ describe('readStatus', () => {
       }),
     ]);
     cache.applySupersedeFeatures(cache.planSupersedeFeatures('analysis', [analysisKey]));
-    // The retry finds nothing; merge keeps the bpm and records the attempt.
+    // The retry stands behind nothing; merge keeps the bpm and records the attempt.
     cache.saveAudioFeatures([
       featuresRow({
         trackPersistentId: 'T-ANGEL',
@@ -117,9 +117,9 @@ describe('readStatus', () => {
         sources: null,
         mbRecordingMbid: null,
         deezerTrackId: null,
-        status: 'no_match',
+        status: 'no_data',
         catalogStatus: null,
-        analysisStatus: 'no_match',
+        analysisStatus: 'no_data',
       }),
     ]);
     cache.close();
@@ -127,7 +127,7 @@ describe('readStatus', () => {
     const { analysis, catalog } = readStatus(dbPath).audio_features!.sources;
 
     // The attempt outcome stays accurate: this retry did fail.
-    expect(analysis).toMatchObject({ attempted: 1, successful: 0, no_match: 1 });
+    expect(analysis).toMatchObject({ attempted: 1, successful: 0, no_data: 1 });
     expect(analysis.owns).toEqual({ bpm: 1, musical_key: 0, danceability: 0 });
     expect(catalog.owns).toEqual({ bpm: 1, musical_key: 1, danceability: 1 });
   });
