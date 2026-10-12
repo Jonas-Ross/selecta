@@ -55,7 +55,7 @@ Three maintenance commands rewrite stored features. Each is a dry run that repor
 
 | Command | Use |
 |---|---|
-| `supersede [--source S] [-p <algo>...] [--apply]` | List what produced each stored feature; with `-p`, clear what those algorithms measured so the next `enrich` measures it again |
+| `supersede [--source S] [-p <algo>...] [--unmatched] [--apply]` | List what produced each stored feature; with `-p`, clear what those algorithms measured so the next `enrich` measures it again |
 | `reopen -s S -m <field> [--apply]` | Give tracks with no value in a field another try from that source, for example after setting `SELECTA_STORE_COUNTRY` |
 | `restore <journal> [--apply]` | Put back the rows an applied command journalled |
 

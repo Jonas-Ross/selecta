@@ -167,6 +167,41 @@ describe('destructive CLI commands', () => {
     expect(journal.rows.audio_features).toHaveLength(2);
   });
 
+  it('narrows supersede to tracks the source could no longer identify', async () => {
+    const { dbPath } = seeded();
+
+    inspect(dbPath, (cache) =>
+      cache.restoreAudioFeatures([
+        { ...cache.getAudioFeatures('T-ANGEL')!, analysisStatus: 'no_match', status: 'no_match' },
+      ]),
+    );
+
+    const before = inspect(dbPath, (cache) => snapshotCache(cache.db));
+    const argv = ['supersede', '-p', ANALYSIS_KEY, '--unmatched'];
+    const dry = await run(dbPath, argv);
+
+    expect(dry.json.summary).toMatchObject({ tracks: 1, rows_removed: 1 });
+    expectOnlyChanged(
+      before,
+      inspect(dbPath, (cache) => snapshotCache(cache.db)),
+      [],
+    );
+
+    const { json } = await run(dbPath, [...argv, '--apply']);
+
+    expect(json.summary).toEqual(dry.json.summary);
+    expectOnlyChanged(
+      before,
+      inspect(dbPath, (cache) => snapshotCache(cache.db)),
+      [{ table: 'audio_features', key: 'T-ANGEL', change: 'removed' }],
+    );
+    expect(JSON.parse(readFileSync(json.undo_journal, 'utf8')).arguments).toEqual({
+      source: 'analysis',
+      provenance: [ANALYSIS_KEY],
+      unmatched: true,
+    });
+  });
+
   it('puts the cache back byte for byte when the journal is restored', async () => {
     const { dbPath } = seeded();
     const before = inspect(dbPath, (cache) => snapshotCache(cache.db));
@@ -487,7 +522,9 @@ describe('destructive CLI commands', () => {
     const { json } = await run(dbPath, ['supersede']);
 
     expect(json.provenance).toEqual(
-      expect.arrayContaining([{ field: 'musicalKey', provenance: ANALYSIS_KEY, trackCount: 1 }]),
+      expect.arrayContaining([
+        { field: 'musicalKey', provenance: ANALYSIS_KEY, trackCount: 1, unmatched: 0 },
+      ]),
     );
   });
 });

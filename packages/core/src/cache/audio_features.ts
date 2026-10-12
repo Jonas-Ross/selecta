@@ -72,20 +72,6 @@ export function mergeFeatures(
   const sources = { ...existing.sources };
   let landed = false;
 
-  // A source that can no longer identify the track has no basis for what it
-  // measured from the recording it once matched, so those values go.
-  for (const source of ['catalog', 'analysis'] as const) {
-    if (candidate[statusFieldFor(source)] !== 'no_match') continue;
-
-    for (const field of SOURCE_FIELDS) {
-      const provenance = sources[field];
-
-      if (provenance == null || sourceForProvenance(provenance) !== source) continue;
-
-      clearField(merged, sources, field);
-    }
-  }
-
   if (merged.bpm == null && candidate.bpm != null) {
     merged.bpm = candidate.bpm;
     merged.bpmConfidence = candidate.bpmConfidence;
@@ -137,16 +123,6 @@ const CLEARED_WITH: Record<SourceField, readonly (keyof AudioFeaturesRow)[]> = {
   musicalKey: ['musicalKey', 'camelot', 'keyConfidence', 'keyMaturity'],
   danceability: ['danceability'],
 };
-
-function clearField(
-  row: AudioFeaturesRow,
-  sources: NonNullable<AudioFeaturesRow['sources']>,
-  field: SourceField,
-): void {
-  for (const dependent of CLEARED_WITH[field]) Object.assign(row, { [dependent]: null });
-
-  delete sources[field];
-}
 
 /**
  * The row-level status after one source's attempt is cleared.
@@ -269,7 +245,9 @@ export function supersedeFeatures(
     // the provenance is gone so a second supersede cannot find the row either.
     if (sourceForProvenance(provenance) !== source) continue;
 
-    clearField(next, sources, field);
+    for (const dependent of CLEARED_WITH[field]) Object.assign(next, { [dependent]: null });
+
+    delete sources[field];
     clearedFields.push(field);
   }
 

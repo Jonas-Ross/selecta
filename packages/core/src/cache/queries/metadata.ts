@@ -8,12 +8,15 @@ import type {
   NoteSubject,
   PendingTrack,
 } from '../../types/cache.js';
-import type { SourceField } from '../audio_features.js';
+import { sourceForProvenance, type SourceField } from '../audio_features.js';
 
 export type FeatureProvenanceRow = {
   field: string;
   provenance: string;
   trackCount: number;
+  // Of those, tracks whose producing source's latest attempt could not
+  // identify the recording: values measured from a match it now disowns.
+  unmatched: number;
 };
 
 export function createMetadataQueries(db: Database) {
@@ -140,14 +143,19 @@ export function createMetadataQueries(db: Database) {
   // malformed JSON, and this is the read-only survey, so one odd row must not
   // take it down.
   const provenanceStmt = db.prepare(`
-    SELECT field, provenance, COUNT(*) AS trackCount FROM (
-      SELECT 'bpm' AS field, json_extract(sources, '$.bpm') AS provenance
+    SELECT field, provenance, COUNT(*) AS trackCount,
+      SUM(catalog_status = 'no_match') AS catalogUnmatched,
+      SUM(analysis_status = 'no_match') AS analysisUnmatched
+    FROM (
+      SELECT 'bpm' AS field, json_extract(sources, '$.bpm') AS provenance,
+          catalog_status, analysis_status
         FROM audio_features WHERE bpm IS NOT NULL AND json_valid(sources)
       UNION ALL
-      SELECT 'musicalKey', json_extract(sources, '$.musicalKey')
+      SELECT 'musicalKey', json_extract(sources, '$.musicalKey'), catalog_status, analysis_status
         FROM audio_features WHERE musical_key IS NOT NULL AND json_valid(sources)
       UNION ALL
-      SELECT 'danceability', json_extract(sources, '$.danceability')
+      SELECT 'danceability', json_extract(sources, '$.danceability'),
+          catalog_status, analysis_status
         FROM audio_features WHERE danceability IS NOT NULL AND json_valid(sources)
     )
     WHERE provenance IS NOT NULL
@@ -209,7 +217,16 @@ export function createMetadataQueries(db: Database) {
 
     /** Distinct provenance values across stored features, with track counts. */
     featureProvenance(): FeatureProvenanceRow[] {
-      return provenanceStmt.all() as FeatureProvenanceRow[];
+      const rows = provenanceStmt.all() as (Omit<FeatureProvenanceRow, 'unmatched'> & {
+        catalogUnmatched: number;
+        analysisUnmatched: number;
+      })[];
+
+      return rows.map(({ catalogUnmatched, analysisUnmatched, ...row }) => ({
+        ...row,
+        unmatched:
+          sourceForProvenance(row.provenance) === 'catalog' ? catalogUnmatched : analysisUnmatched,
+      }));
     },
 
     /** IDs of rows whose sources name any of these provenance values. */

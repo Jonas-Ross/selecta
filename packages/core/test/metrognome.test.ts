@@ -586,90 +586,6 @@ describe('merging one pass into the other', () => {
     });
     expect(merged.landed).toBe(false);
   });
-
-  it('drops what a pass measured once that pass can no longer identify the track', () => {
-    // A tempo stored before uncertain matches were discarded, from a preview
-    // that was another song; the re-run now says so.
-    const stored = featuresRow({
-      bpm: 141,
-      bpmConfidence: 0.8,
-      bpmMaturity: 'validated',
-      bpmWindowLow: 90,
-      bpmWindowHigh: 180,
-      musicalKey: 'C major',
-      camelot: '8B',
-      keyConfidence: 0.7,
-      keyMaturity: 'provisional',
-      sources: {
-        bpm: 'metrognome/onset-autocorrelation-comb@3',
-        musicalKey: 'metrognome/band-profiles@4',
-        danceability: 'acousticbrainz',
-      },
-      catalogStatus: 'ok',
-      analysisStatus: 'ok',
-    });
-    const unmatched = {
-      ...blankFeatures('T-TEARDROP', FETCHED_AT),
-      analysisStatus: 'no_match' as const,
-    };
-
-    const merged = mergeFeatures(stored, unmatched);
-
-    expect(merged.row).toMatchObject({
-      bpm: null,
-      bpmConfidence: null,
-      bpmMaturity: null,
-      bpmWindowLow: null,
-      bpmWindowHigh: null,
-      musicalKey: null,
-      camelot: null,
-      keyConfidence: null,
-      keyMaturity: null,
-      // The catalog's own finding is not the analysis pass's to withdraw.
-      danceability: 0.618,
-      sources: { danceability: 'acousticbrainz' },
-      analysisStatus: 'no_match',
-      catalogStatus: 'ok',
-      status: 'ok',
-    });
-    expect(merged.landed).toBe(false);
-
-    const catalogLost = mergeFeatures(
-      featuresRow({
-        sources: {
-          bpm: 'deezer',
-          musicalKey: 'metrognome/band-profiles@4',
-          danceability: 'acousticbrainz',
-        },
-      }),
-      { ...blankFeatures('T-TEARDROP', FETCHED_AT), catalogStatus: 'no_match' },
-    );
-
-    expect(catalogLost.row).toMatchObject({
-      bpm: null,
-      danceability: null,
-      musicalKey: 'A minor',
-      sources: { musicalKey: 'metrognome/band-profiles@4' },
-    });
-  });
-
-  it('keeps an earlier measurement when a pass found the track but stood behind nothing', () => {
-    const stored = featuresRow({
-      bpm: 141,
-      sources: { bpm: 'metrognome/onset-autocorrelation-comb@3' },
-      analysisStatus: 'ok',
-    });
-    const unsure = {
-      ...blankFeatures('T-TEARDROP', FETCHED_AT),
-      analysisStatus: 'no_data' as const,
-    };
-
-    expect(mergeFeatures(stored, unsure).row).toMatchObject({
-      bpm: 141,
-      sources: { bpm: 'metrognome/onset-autocorrelation-comb@3' },
-      analysisStatus: 'no_data',
-    });
-  });
 });
 
 describe('the analysis enrichment pass', () => {
@@ -729,44 +645,6 @@ describe('the analysis enrichment pass', () => {
       status: 'ok',
     });
     expect(cache.getTrack('T-MIDNIGHT')!.bpm).toBe(parsed('T-MIDNIGHT').features.tempo.bpm);
-    cache.close();
-  });
-
-  it('clears a tempo stored from a match the re-run calls another song', async () => {
-    // The library state after the 2026-10-12 key re-measure: a tempo from
-    // before uncertain matches were discarded, its keyless track reopened.
-    const cache = seeded();
-
-    cache.saveAudioFeatures([
-      featuresRow({
-        trackPersistentId: 'T-MIDNIGHT',
-        bpm: 141,
-        musicalKey: null,
-        danceability: null,
-        sources: { bpm: 'metrognome/onset-autocorrelation-comb@3' },
-        status: 'ok',
-        catalogStatus: null,
-        analysisStatus: null,
-      }),
-    ]);
-
-    const fixture = parsed('T-MIDNIGHT');
-
-    fixture.track.uncertain = true;
-
-    await enrichPendingTracks(
-      cache,
-      { trackIds: ['T-MIDNIGHT'], source: 'analysis' },
-      answeringStub({ 'T-MIDNIGHT': JSON.stringify(fixture) }),
-    );
-
-    expect(cache.getAudioFeatures('T-MIDNIGHT')).toMatchObject({
-      bpm: null,
-      sources: null,
-      analysisStatus: 'no_match',
-      status: 'no_match',
-    });
-    expect(cache.getTrack('T-MIDNIGHT')!.bpm).toBeNull();
     cache.close();
   });
 
