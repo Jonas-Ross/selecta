@@ -161,7 +161,9 @@ open_app() {
   say "Opening Selecta"
   mkdir -p "$log_dir"
   # Detached, with its output in a log, so this script (and the launcher) can exit.
-  nohup node "$desktop/scripts/start.mjs" >> "$log_dir/desktop-output.log" 2>&1 < /dev/null &
+  # Its own process group, so a timeout can stop the cp or codesign start.mjs is waiting on.
+  nohup perl -e 'setpgrp(0, 0); exec @ARGV' node "$desktop/scripts/start.mjs" \
+    >> "$log_dir/desktop-output.log" 2>&1 < /dev/null &
   local launcher=$!
   # A first launch may download Electron and rebuild the dev bundle, so allow minutes.
   for _ in $(seq 1 900); do
@@ -169,7 +171,7 @@ open_app() {
     kill -0 "$launcher" 2> /dev/null || break
     sleep 0.2
   done
-  kill "$launcher" 2> /dev/null || true
+  kill -TERM -- "-$launcher" 2> /dev/null || true
   say "Selecta didn't start; see $log_dir/desktop-output.log" >&2
   exit 1
 }
