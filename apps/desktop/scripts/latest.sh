@@ -55,7 +55,7 @@ main() {
 say() { printf '%s\n' "$*"; }
 
 # One run at a time per checkout, so two launches never build or rebuild the dev bundle together.
-# A flock lasts until every process holding fd 9 (this run and its children) has exited.
+# A flock lasts until every process holding fd 9 has exited, so a crash never leaves it stale.
 lock() {
   exec 9>> "$(git rev-parse --absolute-git-dir)/selecta-latest.lock"
   perl -MFcntl=:flock -e 'open(my $f, ">>&=9") or die "$!"; flock($f, LOCK_EX | LOCK_NB) or exit 1' || {
