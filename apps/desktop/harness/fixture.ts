@@ -8,6 +8,7 @@ import { buildReadLibraryScript } from '@selecta/core/bridge/scripts/read_librar
 import { camelotFor } from '@selecta/core/domain/camelot.js';
 import type { LibrarySnapshot } from '@selecta/core/types/bridge.js';
 import { fixtureTracks, type FixtureTrack } from './library.js';
+import { hears, type MetrognomeScript } from './metrognome.js';
 import { MusicSim } from './music.js';
 import { startSim, type ClaudeScript } from './server.js';
 
@@ -34,6 +35,7 @@ type Fixtures = {
   music: MusicSim;
   // Wrapped, since Playwright would take a bare function for a fixture.
   claude: { script: ClaudeScript };
+  metrognome: { script: MetrognomeScript };
   home: string;
   electronApp: ElectronApplication;
   page: Page;
@@ -44,14 +46,20 @@ export const test = base.extend<Fixtures>({
   tracks: [fixtureTracks(), { option: true }],
   music: async ({ tracks }, use) => use(new MusicSim(tracks)),
   claude: [{ script: buildFromSearch() }, { option: true }],
+  metrognome: [{ script: hears(126, 'A minor', '8A') }, { option: true }],
   home: async ({ music, tracks }, use) => {
     const home = mkdtempSync(join(tmpdir(), 'selecta-harness-'));
 
     seed(join(home, 'Library/Application Support/Selecta/library.db'), music, tracks);
     await use(home);
   },
-  electronApp: async ({ music, claude, home }, use) => {
-    const sim = await startSim({ music, claude: claude.script, home });
+  electronApp: async ({ music, claude, metrognome, home }, use) => {
+    const sim = await startSim({
+      music,
+      claude: claude.script,
+      metrognome: metrognome.script,
+      home,
+    });
     const electronApp = await _electron.launch({
       // Chromium won't run as root with its sandbox on.
       args: [...(process.getuid?.() === 0 ? ['--no-sandbox'] : []), app],
@@ -100,12 +108,12 @@ function seed(dbPath: string, music: MusicSim, tracks: FixtureTrack[]) {
         bpmMaturity: 'validated',
         bpmWindowLow: null,
         bpmWindowHigh: null,
-        musicalKey: t.musicalKey!,
+        musicalKey: t.musicalKey ?? null,
         camelot: camelotFor(t.musicalKey),
         keyConfidence: 0.7,
         keyMaturity: 'provisional',
         danceability: null,
-        sources: { bpm: 'metrognome@1', musicalKey: 'metrognome@1' },
+        sources: { bpm: 'metrognome@1', ...(t.musicalKey && { musicalKey: 'metrognome@1' }) },
         mbRecordingMbid: null,
         deezerTrackId: null,
         status: 'ok',

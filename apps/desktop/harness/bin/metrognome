@@ -1,0 +1,19 @@
+#!/usr/bin/env node
+// Answers each query from the test's metrognome script; no network, no audio.
+import { createInterface } from 'node:readline';
+
+if (process.argv.includes('--version')) {
+  process.stdout.write('metrognome 0.2.0\n');
+  process.exit(0);
+}
+
+for await (const line of createInterface({ input: process.stdin })) {
+  if (line.trim() === '') continue;
+
+  const response = await fetch(`${process.env.SELECTA_SIM_URL}/metrognome`, {
+    method: 'POST',
+    body: line,
+  });
+
+  process.stdout.write(`${await response.text()}\n`);
+}

@@ -1,5 +1,6 @@
 // Where a tempo or key came from and how far to trust it, in words a
 // non-musician can read. Absent provenance stays "not recorded", never guessed.
+import type { MissReason } from '../shared/protocol.js';
 import type { Track } from './state.js';
 
 export function sourceText(source?: string): string {
@@ -65,4 +66,27 @@ export function keyFacts(track: Track): Fact[] {
     },
     ...(track.key_maturity ? [{ label: 'status', text: MATURITY[track.key_maturity] }] : []),
   ];
+}
+
+/** Why a feature is still blank after measuring: a word for the lane, a sentence for its card. */
+export function missWords(reason: MissReason, error?: string): { label: string; text: string } {
+  switch (reason) {
+    case 'unsure':
+      return {
+        label: 'unsure',
+        text: 'Listened to its preview but wasn’t sure enough to give a value, so it stays blank.',
+      };
+    case 'no_reading':
+      return {
+        label: 'no reading',
+        text: 'Couldn’t get a clear reading from its preview, or there isn’t one.',
+      };
+    case 'not_found':
+      return {
+        label: 'not in store',
+        text: 'Couldn’t find this track in the iTunes Store, so there was nothing to listen to.',
+      };
+    case 'failed':
+      return { label: 'failed', text: error ?? 'The measurement didn’t finish. Try again.' };
+  }
 }

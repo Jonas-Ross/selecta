@@ -40,7 +40,7 @@ export function Spec({
         {[track.artist ?? 'Unknown artist', track.album].filter(Boolean).join(' · ')}
       </p>
       <dl className="facts">
-        <FeatureFacts track={track} />
+        <FeatureFacts track={track} trackId={track.persistent_id} />
         <div className="fact">
           <dt>Plays</dt>
           <dd>

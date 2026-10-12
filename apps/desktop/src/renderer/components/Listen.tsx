@@ -63,7 +63,7 @@ export function Listen({
       </div>
       <aside className="sleeve-back" aria-label="Sleeve back">
         <dl className="facts">
-          <FeatureFacts track={row} />
+          <FeatureFacts track={row} trackId={row.track_id} />
         </dl>
         <span className="ls-lab">Up next</span>
         {next && j ? (

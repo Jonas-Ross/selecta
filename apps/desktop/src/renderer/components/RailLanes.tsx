@@ -16,6 +16,7 @@ import {
 import type { Row } from '../state.js';
 import { Term } from './Explain.js';
 import { JoinMarker } from './JoinMarker.js';
+import { Measure } from './Measure.js';
 import { ValueLabel } from './ValueLabel.js';
 
 export function RailGutter({ shelf, scale }: { shelf: Shelf; scale: BpmScale }) {
@@ -117,13 +118,13 @@ export function RailLanes({
   for (const { x0 } of slots.slice(1))
     seams += `M${x0.toFixed(1)} ${shelf.tempo.top}v${shelf.tempo.height}M${x0.toFixed(1)} ${shelf.key.top}v${shelf.key.height}`;
 
-  const missing = (x0: number, lane: Box) =>
+  const missing = (row: Row, x0: number, lane: Box, kind: 'tempo' | 'key') =>
     step > 84 && (
       <span
         className="missing"
-        style={{ transform: `translate(${x0 + step / 2}px, ${lane.top + lane.height / 2 - 7}px)` }}
+        style={{ transform: `translate(${x0 + step / 2}px, ${lane.top + lane.height / 2 - 9}px)` }}
       >
-        <Term name="missing">not measured</Term>
+        <Measure trackId={row.track_id} kind={kind} title={row.title} />
       </span>
     );
 
@@ -185,7 +186,7 @@ export function RailLanes({
                 {starts[k]!.partial ? '+' : ''}
               </span>
               {slot.tempo === undefined ? (
-                missing(slot.x0, shelf.tempo)
+                missing(slot.row, slot.x0, shelf.tempo, 'tempo')
               ) : (
                 <ValueLabel
                   kind="tempo"
@@ -196,7 +197,7 @@ export function RailLanes({
                 />
               )}
               {slot.key === undefined ? (
-                missing(slot.x0, shelf.key)
+                missing(slot.row, slot.x0, shelf.key, 'key')
               ) : (
                 <ValueLabel
                   kind="key"
