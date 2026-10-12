@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import type { MetrognomeScript } from './metrognome.js';
 import type { MusicSim } from './music.js';
 
 export type Turn = {
@@ -17,7 +18,12 @@ export type ClaudeScript = (turn: Turn) => Promise<void>;
 
 type Config = { mcpServers: { selecta: { command: string; args: string[]; env?: object } } };
 
-export async function startSim(options: { music: MusicSim; claude: ClaudeScript; home: string }) {
+export async function startSim(options: {
+  music: MusicSim;
+  claude: ClaudeScript;
+  metrognome: MetrognomeScript;
+  home: string;
+}) {
   const server = createServer(async (request, response) => {
     let body = '';
 
@@ -41,6 +47,8 @@ export async function startSim(options: { music: MusicSim; claude: ClaudeScript;
         }),
       );
       response.end();
+    } else if (request.url === '/metrognome') {
+      response.end(JSON.stringify(await options.metrognome(JSON.parse(body))));
     } else response.writeHead(404).end();
   });
 

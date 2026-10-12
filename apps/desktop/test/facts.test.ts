@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { keyFacts, sourceShort, sourceText, tempoFacts } from '../src/renderer/facts.js';
+import { keyFacts, missWords, sourceShort, sourceText, tempoFacts } from '../src/renderer/facts.js';
 
 it('says where a value came from in plain words', () => {
   expect(sourceText('metrognome/kick@3')).toBe('Measured on this Mac from a 30 s preview');
@@ -33,4 +33,11 @@ it('says where a value came from in a few words beside it', () => {
   expect(sourceShort('music_app')).toBe('Music.app tag');
   expect(sourceShort(undefined)).toBe('Source not recorded');
   expect(sourceShort('somewhere')).toBe('somewhere');
+});
+
+it('says why a measured feature is still blank, passing a failed run’s own reason through', () => {
+  expect(missWords('unsure').label).toBe('unsure');
+  expect(missWords('not_found').text).toMatch(/iTunes Store/);
+  expect(missWords('failed', 'metrognome was not found').text).toBe('metrognome was not found');
+  expect(missWords('failed').text).toMatch(/Try again/);
 });

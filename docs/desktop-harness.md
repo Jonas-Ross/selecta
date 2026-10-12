@@ -4,13 +4,14 @@ The desktop app runs end to end without a Mac: the real Electron build, the real
 
 ## How it fits together
 
-Selecta never touches audio: Music.app plays, and the app only reads and moves Music's player through JXA scripts (`docs/desktop-app.md`, Listen). So the hard part of testing Listen is not sound, it is Music's player: where it is, what it does next, and how it answers late or not at all. The harness replaces exactly the three programs the app shells out to, through `PATH`, and nothing in `src` knows:
+Selecta never touches audio: Music.app plays, and the app only reads and moves Music's player through JXA scripts (`docs/desktop-app.md`, Listen). So the hard part of testing Listen is not sound, it is Music's player: where it is, what it does next, and how it answers late or not at all. The harness replaces exactly the four programs the app shells out to, through `PATH`, and nothing in `src` knows:
 
 | Program | Replaced by | Does |
 |---|---|---|
 | `osascript` | `harness/bin/osascript` | Sends the JXA script to `MusicSim`, which runs it in a VM against a model of Music's scripting objects |
 | `claude` | `harness/bin/claude` (via `SELECTA_CLAUDE_PATH`) | Runs the test's turn script, which calls the real MCP server the app configured, under the app's own allow and deny lists |
 | `sips` | `harness/bin/sips` | Copies the sleeve, which is already thumbnail-sized |
+| `metrognome` | `harness/bin/metrognome` | Answers each query from the test's metrognome script (`harness/metrognome.ts`), so Measure runs with no network or audio |
 
 The shims post to a small HTTP server inside the Playwright process (`harness/server.ts`), so a test holds the simulator and the Claude script directly. Each test gets a throwaway `HOME`, with the cache seeded through the real `read_library` script, so the app's database, drafts, artwork and action log all land there.
 
