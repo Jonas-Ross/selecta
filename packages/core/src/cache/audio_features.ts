@@ -82,9 +82,7 @@ export function mergeFeatures(
 
       if (provenance == null || sourceForProvenance(provenance) !== source) continue;
 
-      for (const dependent of CLEARED_WITH[field]) Object.assign(merged, { [dependent]: null });
-
-      delete sources[field];
+      clearField(merged, sources, field);
     }
   }
 
@@ -139,6 +137,16 @@ const CLEARED_WITH: Record<SourceField, readonly (keyof AudioFeaturesRow)[]> = {
   musicalKey: ['musicalKey', 'camelot', 'keyConfidence', 'keyMaturity'],
   danceability: ['danceability'],
 };
+
+function clearField(
+  row: AudioFeaturesRow,
+  sources: NonNullable<AudioFeaturesRow['sources']>,
+  field: SourceField,
+): void {
+  for (const dependent of CLEARED_WITH[field]) Object.assign(row, { [dependent]: null });
+
+  delete sources[field];
+}
 
 /**
  * The row-level status after one source's attempt is cleared.
@@ -261,9 +269,7 @@ export function supersedeFeatures(
     // the provenance is gone so a second supersede cannot find the row either.
     if (sourceForProvenance(provenance) !== source) continue;
 
-    for (const dependent of CLEARED_WITH[field]) Object.assign(next, { [dependent]: null });
-
-    delete sources[field];
+    clearField(next, sources, field);
     clearedFields.push(field);
   }
 
