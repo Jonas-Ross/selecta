@@ -1,5 +1,6 @@
 {
   "name": "@selecta/desktop",
+  "productName": "Selecta",
   "version": "0.1.0",
   "private": true,
   "description": "Selecta desktop app: build playlists from your library with Claude.",
@@ -8,7 +9,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.host.json && tsc -p tsconfig.renderer.json && tsc && node build.mjs",
     "e2e": "playwright test",
-    "start": "electron ."
+    "start": "node scripts/start.mjs",
+    "package": "node scripts/package.mjs"
   },
   "dependencies": {
     "@selecta/core": "0.1.0",
@@ -23,6 +25,38 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
     "selecta": "0.1.0"
+  },
+  "build": {
+    "appId": "io.github.jonas-ross.selecta",
+    "copyright": "Copyright © 2026 Jonas Ross",
+    "directories": {
+      "app": ".package/app",
+      "output": ".package/out"
+    },
+    "extraResources": [
+      {
+        "from": ".package/core",
+        "to": "core"
+      }
+    ],
+    "npmRebuild": false,
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": ".package/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": "-",
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "Selecta reads your library and plays your drafts in Music."
+      }
+    },
+    "dmg": {
+      "artifactName": "Selecta-${version}-${arch}.${ext}"
+    }
   }
 }
