@@ -1,6 +1,8 @@
 // The agent, docked right: the brief, the run's log, and the feedback box.
 // Selected records ride above the box as the subject of what you type.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { PROVIDER_LABELS, type ProviderId, type ProviderStatus } from '../../shared/protocol.js';
+import { canSwap } from '../providers.js';
 import type { LogItem, Row } from '../state.js';
 
 type Group = { kind: 'tools'; names: string[] } | LogItem;
@@ -21,7 +23,9 @@ function group(log: LogItem[]): Group[] {
 }
 
 export function ClaudePanel({
-  agent,
+  by,
+  choices,
+  onPick,
   log,
   working,
   hasDraft,
@@ -31,7 +35,10 @@ export function ClaudePanel({
   onSend,
   onStop,
 }: {
-  agent: string;
+  by: ProviderId;
+  /** The agents this machine has, for the head's swap. */
+  choices?: ProviderStatus[];
+  onPick: (id: ProviderId) => void;
   log: LogItem[];
   working: boolean;
   hasDraft: boolean;
@@ -41,6 +48,7 @@ export function ClaudePanel({
   onSend: (text: string) => void;
   onStop: () => void;
 }) {
+  const agent = PROVIDER_LABELS[by];
   const [text, setText] = useState('');
   const end = useRef<HTMLDivElement>(null);
   // The brief sits above the log rather than repeating in it. Feedback on a
@@ -66,7 +74,26 @@ export function ClaudePanel({
   return (
     <aside className="claude" aria-label={agent}>
       <div className="claude-head">
-        <h2>{agent}</h2>
+        {choices && canSwap(choices, by) ? (
+          <div className="agent-choice small" role="radiogroup" aria-label="Agent">
+            {choices.map((option) => (
+              <label key={option.id} title={option.problem}>
+                <input
+                  type="radio"
+                  name="panel-agent"
+                  value={option.id}
+                  checked={by === option.id}
+                  // A swap only changes who answers next, so it waits for the current turn.
+                  disabled={working || (!option.ready && by !== option.id)}
+                  onChange={() => onPick(option.id)}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <h2>{agent}</h2>
+        )}
         <span className={working ? 'state working' : 'state'}>{working ? 'working' : 'ready'}</span>
       </div>
       {brief && (
@@ -95,7 +122,11 @@ export function ClaudePanel({
           ) : (
             <div key={index} className={`msg ${item.kind}`}>
               <span className="who">
-                {item.kind === 'you' ? 'You' : item.kind === 'claude' ? agent : 'Problem'}
+                {item.kind === 'you'
+                  ? 'You'
+                  : item.kind === 'claude'
+                    ? PROVIDER_LABELS[item.by ?? by]
+                    : 'Problem'}
               </span>
               {item.text}
             </div>

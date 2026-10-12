@@ -10,7 +10,7 @@ import { Home } from './components/Home.js';
 import { Settings } from './components/Settings.js';
 import { SettingsProvider } from './hooks/useSettings.js';
 import type { ProviderId } from '../shared/protocol.js';
-import { rememberedProvider } from './providers.js';
+import { rememberedProvider, rememberProvider } from './providers.js';
 import { recoverRuns, rejectRun, runEvent, type Run } from './state.js';
 
 type Screen = { name: 'home' } | { name: 'brief' } | { name: 'draft'; draftId: string };
@@ -18,6 +18,8 @@ type Screen = { name: 'home' } | { name: 'brief' } | { name: 'draft'; draftId: s
 function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [runs, setRuns] = useState<Record<string, Run>>({});
+  // A swap on the draft screen, applied by the next message.
+  const [picked, setPicked] = useState<Record<string, ProviderId>>({});
 
   // The host keeps every run's record, so a reload or a missed event catches up from it.
   const resync = useCallback(
@@ -60,7 +62,8 @@ function App() {
     ask(draftId, brief, selecta.call('agent.start', { draft_id: draftId, brief, provider }));
 
   // The host forgets a draft's agent on restart; the last one picked stands in.
-  const agentFor = (draftId: string) => runs[draftId]?.by ?? rememberedProvider();
+  const agentFor = (draftId: string) =>
+    picked[draftId] ?? runs[draftId]?.by ?? rememberedProvider();
 
   if (screen.name === 'brief')
     return (
@@ -83,6 +86,11 @@ function App() {
         key={draftId}
         draftId={draftId}
         run={runs[draftId]}
+        by={agentFor(draftId) ?? 'claude'}
+        onPick={(provider) => {
+          rememberProvider(provider);
+          setPicked((current) => ({ ...current, [draftId]: provider }));
+        }}
         onStart={(brief) => start(draftId, brief, agentFor(draftId))}
         onSend={(text, message) =>
           ask(

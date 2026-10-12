@@ -28,3 +28,10 @@ export function pickProvider(found: ProviderStatus[]): ProviderId | undefined {
 
   return (ready.find((option) => option.id === last) ?? ready[0])?.id;
 }
+
+/** Offer a swap when there is another agent to run, or the draft's own one can't. */
+export function canSwap(found: ProviderStatus[] | undefined, current: ProviderId): boolean {
+  const ready = found?.filter((option) => option.ready) ?? [];
+
+  return ready.length > 1 || (ready.length > 0 && !ready.some((option) => option.id === current));
+}

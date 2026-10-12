@@ -70,6 +70,7 @@ export const test = base.extend<Fixtures>({
         PATH: `${bin}${delimiter}${process.env.PATH}`,
         SELECTA_SIM_URL: sim.url,
         SELECTA_CLAUDE_PATH: join(bin, 'claude'),
+        SELECTA_CODEX_PATH: join(bin, 'codex'),
       },
     });
 
