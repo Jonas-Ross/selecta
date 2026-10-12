@@ -3,7 +3,7 @@
 // ends honest at compile time.
 import type { toInspectedTrack } from '@selecta/core/domain/track_projections.js';
 import type { DraftSummary } from '@selecta/core/drafts/store.js';
-import type { PlaybackView } from '@selecta/core/operations/playback.js';
+import type { AuditionView, PlaybackView } from '@selecta/core/operations/playback.js';
 import type { ArtworkReadResult } from '@selecta/core/types/bridge.js';
 
 export type { DraftSummary };
@@ -17,6 +17,12 @@ export type Crate = { tracks: CrateTrack[]; total: number; order: 'recently_adde
 export type ArtworkAnswer = ArtworkReadResult[string];
 
 export type PlayerView = PlaybackView;
+export type { AuditionView };
+
+/** A stand-in the agent offered for one record, and why in its own words. */
+export type Suggestion = { track: CrateTrack; reason: string };
+
+export const ASK_LIMIT = 500;
 
 export type Methods = {
   'library.crate': (args: { query?: string }) => Crate;
@@ -38,6 +44,14 @@ export type Methods = {
   }) => void;
   'agent.cancel': (args: { draft_id: string }) => void;
   'agent.history': () => Record<string, RunSnapshot>;
+  'agent.suggest': (args: {
+    draft_id: string;
+    entry_id: string;
+    ask?: string;
+    exclude?: string[];
+    provider?: ProviderId;
+  }) => Suggestion[];
+  'agent.stopSuggest': (args: { draft_id: string }) => void;
   'player.state': (args: { draft_id: string }) => PlayerView;
   'player.play': (args: {
     draft_id: string;
@@ -49,6 +63,13 @@ export type Methods = {
   'player.resume': (args: { draft_id: string }) => PlayerView;
   'player.seek': (args: { draft_id: string; position: number }) => PlayerView;
   'player.detach': (args: { draft_id: string; revision: number }) => void;
+  'player.audition': (args: {
+    track_ids: string[];
+    index: number;
+    position?: number;
+  }) => AuditionView;
+  'player.auditionState': () => AuditionView;
+  'player.auditionStop': () => void;
 };
 
 export type Method = keyof Methods;

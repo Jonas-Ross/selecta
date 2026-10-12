@@ -12,17 +12,20 @@ import {
 import type { DraftStore } from '@selecta/core/drafts/store.js';
 import { createPlayback } from '@selecta/core/operations/playback.js';
 import {
+  ASK_LIMIT,
   BRIEF_LIMIT,
   PROVIDER_IDS,
   PROVIDER_LABELS,
   type Method,
   type ProviderId,
   type ProviderStatus,
+  type Suggestion,
 } from '../shared/protocol.js';
 import { ARTWORK_GET_LIMIT } from '../shared/artwork.js';
 import type { AgentSessions } from './agent.js';
 import type { ArtworkCache } from './artwork.js';
-import { crate } from './library.js';
+import { crate, crateTrack } from './library.js';
+import { SUGGEST_LIMIT, parsePicks, suggestPrompt } from './suggest.js';
 
 const DraftId = z.strictObject(getDraftInputShape);
 const Provider = z.enum(PROVIDER_IDS).optional();
@@ -46,6 +49,19 @@ const Play = z.strictObject({
   position: z.number().nonnegative().optional(),
 });
 const Seek = z.strictObject({ ...getDraftInputShape, position: z.number().nonnegative() });
+const Suggest = z.strictObject({
+  ...getDraftInputShape,
+  entry_id: z.string().uuid(),
+  ask: z.string().trim().max(ASK_LIMIT).optional(),
+  exclude: z.array(z.string().max(64)).max(100).optional(),
+  provider: Provider,
+});
+// A record and its neighbours, or fewer at either end of the draft.
+const Audition = z.strictObject({
+  track_ids: z.array(z.string().min(1).max(64)).min(1).max(3),
+  index: z.number().int().nonnegative(),
+  position: z.number().nonnegative().optional(),
+});
 const Artwork = z.strictObject({
   track_ids: z.array(z.string().max(64)).max(ARTWORK_GET_LIMIT),
   refresh: z.array(z.string().max(64)).max(ARTWORK_GET_LIMIT).optional(),
@@ -71,6 +87,53 @@ export function createApi(
   // Named for the agent the user asked, which may not be the one the host last ran.
   const linkedMessage = (draftId: string, provider?: ProviderId) =>
     `${provider ? PROVIDER_LABELS[provider] : agent.provider(draftId).label} can't edit this draft while it plays through the Selecta Preview playlist in Music. Stop listening to send it feedback.`;
+
+  async function suggest(args: unknown): Promise<Suggestion[]> {
+    const { draft_id, entry_id, ask, exclude = [], provider } = Suggest.parse(args);
+    const { entries } = deps.drafts().get(draft_id);
+    const at = entries.findIndex((entry) => entry.entry_id === entry_id);
+    const record = entries[at];
+
+    if (!record) throw new Error('That record is no longer in the draft.');
+
+    const row = deps.cache().getTrack(record.track_id);
+    const reply = await agent.suggest(
+      draft_id,
+      suggestPrompt({
+        draftId: draft_id,
+        position: at + 1,
+        count: entries.length,
+        trackId: record.track_id,
+        title: row?.title ?? undefined,
+        artist: row?.artist ?? undefined,
+        brief: agent.brief(draft_id),
+        ask: ask || undefined,
+        exclude,
+      }),
+      provider,
+    );
+    // The agent is told the rules; these hold whatever it does.
+    const taken = new Set([...entries.map((entry) => entry.track_id), ...exclude]);
+    const picks: Suggestion[] = [];
+
+    for (const { track_id, reason } of parsePicks(reply)) {
+      const found = taken.has(track_id) ? null : deps.cache().getTrack(track_id);
+
+      if (!found) continue;
+
+      taken.add(track_id);
+      picks.push({ track: crateTrack(found), reason });
+
+      if (picks.length === SUGGEST_LIMIT) break;
+    }
+
+    if (!picks.length)
+      throw new Error(
+        `${agent.provider(draft_id).label} didn't find a stand-in. Try asking for something else.`,
+      );
+
+    return picks;
+  }
 
   const handlers: Record<Method, (args: unknown) => unknown> = {
     'library.crate': (args) => crate(deps.cache(), args),
@@ -99,6 +162,8 @@ export function createApi(
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),
     'agent.history': () => agent.history(),
+    'agent.suggest': suggest,
+    'agent.stopSuggest': (args) => agent.stopSuggest(DraftId.parse(args).draft_id),
     'player.state': (args) => player.state(DraftId.parse(args).draft_id),
     'player.play': (args) => {
       const { draft_id, revision, entry_id, position } = Play.parse(args);
@@ -117,6 +182,15 @@ export function createApi(
 
       return player.detach(draft_id, revision);
     },
+    'player.audition': (args) => {
+      const { track_ids, index, position } = Audition.parse(args);
+
+      if (index >= track_ids.length) throw new Error('Nothing to play at that place.');
+
+      return player.audition(track_ids, index, position);
+    },
+    'player.auditionState': () => player.auditionState(),
+    'player.auditionStop': () => player.stopAudition(),
   };
 
   return async (method: string, args: unknown): Promise<unknown> => {
