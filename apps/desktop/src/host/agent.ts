@@ -94,7 +94,8 @@ export class AgentSessions {
     for (const message of [...unseen].reverse()) {
       if (room <= 0) break;
 
-      const cut = message.length > room ? `${message.slice(0, room)}…` : message;
+      // The typed instruction ends a feedback message, after any selected tracks.
+      const cut = message.length > room ? `…${message.slice(-room)}` : message;
 
       kept.unshift(`- ${cut.replaceAll('\n', '\n  ')}`);
       room -= message.length;

@@ -263,7 +263,7 @@ it('hands a resumed session only the requests another agent took since its last 
   expect(prompt).not.toContain('deep house');
 });
 
-it('keeps the newest requests when the handoff would run long', async () => {
+it('keeps the newest requests, and the end of a cut one, when the handoff would run long', async () => {
   const { runs, spawn } = fakeClaude();
   const { agent } = sessions(spawn);
 
@@ -272,7 +272,7 @@ it('keeps the newest requests when the handoff would run long', async () => {
   await settle();
 
   for (const [index, letter] of ['a', 'b', 'c'].entries()) {
-    agent.send(DRAFT, letter.repeat(7_000));
+    agent.send(DRAFT, `${'-'.repeat(5_000)}${letter.repeat(2_000)}`);
     runs[index + 1]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
     await settle();
   }
@@ -282,7 +282,7 @@ it('keeps the newest requests when the handoff would run long', async () => {
   const prompt = runs[4]!.args.at(-1)!;
 
   expect(prompt).toContain(
-    `- (1 older left out)\n- ${'a'.repeat(2_000)}…\n- ${'b'.repeat(7_000)}\n`,
+    `- (1 older left out)\n- …${'a'.repeat(2_000)}\n- ${'-'.repeat(5_000)}${'b'.repeat(2_000)}\n`,
   );
   expect(prompt).not.toContain('brief');
   expect(prompt.length).toBeLessThan(17_000);
