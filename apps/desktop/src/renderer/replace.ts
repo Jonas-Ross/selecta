@@ -31,9 +31,12 @@ export type Listening = 'hear' | 'in' | 'out';
 
 export type AuditionPlan = { track_ids: string[]; index: number; position?: number };
 
-/** Stops once any audition still starting has landed, so a late start can't play on unheard. */
-export const stopAfter = (starting: Promise<unknown> | undefined, stop: () => Promise<unknown>) =>
-  (starting ?? Promise.resolve()).then(stop, stop);
+/**
+ * Stops once the player call under way has landed, so a late start can't play on unheard and
+ * a pause in flight isn't raced for Music's lock. Stopping again after a pause is a no-op.
+ */
+export const stopAfter = (inFlight: Promise<unknown> | undefined, stop: () => Promise<unknown>) =>
+  (inFlight ?? Promise.resolve()).then(stop, stop);
 
 /** Reads every `every` ms until stopped. A failed read is handed on and ends the poll, never retried. */
 export function poll<T>(

@@ -33,8 +33,8 @@ export function useReplace(
   const asked = useRef(0);
   // Set once an audition has written Selecta Preview, so closing knows to pause it.
   const auditioned = useRef(false);
-  // The audition still starting, which holds Music until it lands.
-  const starting = useRef<Promise<unknown>>(undefined);
+  // The audition or pause still under way, which holds Music until it lands.
+  const inFlight = useRef<Promise<unknown>>(undefined);
   const [polling, setPolling] = useState(false);
   const current = useRef(state);
 
@@ -81,12 +81,12 @@ export function useReplace(
     setTrouble(undefined);
 
     if (auditioned.current)
-      void stopAfter(starting.current, () => selecta.call('player.auditionStop')).catch(
+      void stopAfter(inFlight.current, () => selecta.call('player.auditionStop')).catch(
         (e: Error) => warn(e.message),
       );
 
     auditioned.current = false;
-    starting.current = undefined;
+    inFlight.current = undefined;
     setPolling(false);
     setHeard(undefined);
   }, [draftId, warn]);
@@ -109,6 +109,12 @@ export function useReplace(
       },
     );
   }, [polling]);
+
+  function track<T>(call: Promise<T>) {
+    inFlight.current = call;
+
+    return call;
+  }
 
   function act(call: () => Promise<AuditionView | void>) {
     if (busy) return;
@@ -139,13 +145,9 @@ export function useReplace(
         auditioned.current = true;
         setPolling(true);
 
-        const call = selecta.call('player.audition', plan);
-
-        starting.current = call;
-
-        return call;
+        return track(selecta.call('player.audition', plan));
       }),
-    pause: () => act(() => selecta.call('player.auditionStop')),
+    pause: () => act(() => track(selecta.call('player.auditionStop'))),
   };
 }
 
