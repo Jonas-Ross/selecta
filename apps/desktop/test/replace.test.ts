@@ -1,5 +1,11 @@
 import { expect, it } from 'vitest';
-import { around, auditionPlan, swapEntries, swappedIn } from '../src/renderer/replace.js';
+import {
+  around,
+  auditionPlan,
+  stopAfter,
+  swapEntries,
+  swappedIn,
+} from '../src/renderer/replace.js';
 import type { Row } from '../src/renderer/state.js';
 
 const row = (n: number, duration_seconds?: number): Row => ({
@@ -76,4 +82,24 @@ it('starts a join the chosen lead before the end', () => {
     index: 0,
     position: 270,
   });
+});
+
+it('stops an audition only once one still starting has landed, however it lands', async () => {
+  const calls: string[] = [];
+  const stop = async () => void calls.push('stop');
+  let land!: (ok: boolean) => void;
+  const starting = new Promise<void>((resolve, reject) => {
+    land = (ok) => (ok ? resolve() : reject(new Error('busy')));
+  });
+
+  const stopped = stopAfter(starting, stop);
+
+  await Promise.resolve();
+  expect(calls).toEqual([]);
+  land(false);
+  await stopped;
+  expect(calls).toEqual(['stop']);
+
+  await stopAfter(undefined, stop);
+  expect(calls).toEqual(['stop', 'stop']);
 });

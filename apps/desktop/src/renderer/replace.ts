@@ -27,6 +27,10 @@ export type Listening = 'hear' | 'in' | 'out';
 
 export type AuditionPlan = { track_ids: string[]; index: number; position?: number };
 
+/** Stops once any audition still starting has landed, so a late start can't play on unheard. */
+export const stopAfter = (starting: Promise<unknown> | undefined, stop: () => Promise<unknown>) =>
+  (starting ?? Promise.resolve()).then(stop, stop);
+
 /**
  * Selecta Preview gets the neighbours either side of the candidate, so Music plays on
  * through the join and AutoMix blends it; a join starts `lead` seconds before it. Undefined when there is no such join to hear.

@@ -192,13 +192,15 @@ export class DraftStore {
     return this.access(false, (db) => this.readPreview(db));
   }
 
-  /** Called under the shared Music lock, before a raw replacement can start. */
-  unlinkPreview(): void {
-    this.access(true, (db) =>
+  /** Called under the shared Music lock, before a raw replacement can start. Returns the new generation. */
+  unlinkPreview(): string {
+    return this.access(true, (db) =>
       db
-        .transaction(() => {
-          this.writePreview(db, { generation: randomUUID(), version: 0, status: 'inactive' });
-        })
+        .transaction(
+          () =>
+            this.writePreview(db, { generation: randomUUID(), version: 0, status: 'inactive' })
+              .generation,
+        )
         .immediate(),
     );
   }

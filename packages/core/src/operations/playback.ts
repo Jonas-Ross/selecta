@@ -107,12 +107,16 @@ export function createPlayback(deps: PlaybackDeps) {
     return player;
   };
   const read = async () => watch(await bridge.readPlayer());
-  // The tracks an audition last wrote into the preview, and the playlist Music plays them from.
-  let auditioning: { playlistId: string; trackIds: string[] } | undefined;
+  // The tracks an audition last wrote into the preview, the playlist Music plays them from, and
+  // the slot generation it left; another front end linking a draft moves the generation on.
+  let auditioning: { playlistId: string; trackIds: string[]; generation?: string } | undefined;
+  const ours = () =>
+    auditioning !== undefined && drafts().preview()?.generation === auditioning.generation;
 
   const auditionView = (player: PlayerState): AuditionView => {
     const on =
       auditioning !== undefined &&
+      ours() &&
       player.running &&
       player.playlist?.persistentId === auditioning.playlistId &&
       player.track !== undefined;
@@ -256,7 +260,16 @@ export function createPlayback(deps: PlaybackDeps) {
         // The audition's tracks are going, but Music plays them until this play takes over.
         if (auditioning) auditioning = { ...auditioning, trackIds: [] };
 
-        const { preview_result: result } = await syncDraftPreview(drafts(), deps, draft, true);
+        const { preview_result: result } = await syncDraftPreview(
+          drafts(),
+          deps,
+          draft,
+          true,
+        ).finally(() => {
+          // This play took the slot, so the audition stays ours to pause if it fails from here.
+          if (auditioning)
+            auditioning = { ...auditioning, generation: drafts().preview()?.generation };
+        });
 
         if (result?.error) throw new Error([result.error, result.hint].filter(Boolean).join(': '));
 
@@ -384,17 +397,19 @@ export function createPlayback(deps: PlaybackDeps) {
         if (missing) throw new Error([missing.error, missing.hint].filter(Boolean).join(': '));
 
         const live = await read();
+        const owned = ours() ? auditioning : undefined;
         // Already holding these tracks and on them in Music, so only the place changes.
         const loaded =
-          auditioning !== undefined &&
-          JSON.stringify(auditioning.trackIds) === JSON.stringify(trackIds) &&
+          owned !== undefined &&
+          JSON.stringify(owned.trackIds) === JSON.stringify(trackIds) &&
           live.running &&
           live.state !== 'stopped' &&
-          live.playlist?.persistentId === auditioning.playlistId;
+          live.playlist?.persistentId === owned.playlistId;
+        const generation = loaded ? owned.generation : drafts().unlinkPreview();
 
         if (!loaded) {
-          auditioning = undefined;
-          drafts().unlinkPreview();
+          // Music plays the last audition until the new one takes over, so it stays ours to pause.
+          auditioning = owned && { ...owned, trackIds: [], generation };
 
           const written = await replacePreview(trackIds, undefined, deps);
 
@@ -414,7 +429,7 @@ export function createPlayback(deps: PlaybackDeps) {
           ...(!loaded && { restart: true }),
         });
 
-        auditioning = { playlistId: result.playlistId, trackIds };
+        auditioning = { playlistId: result.playlistId, trackIds, generation };
 
         return auditionView(result.player);
       }),
@@ -424,7 +439,12 @@ export function createPlayback(deps: PlaybackDeps) {
     // Pauses the audition if Music is still on it; anything the user moved on to keeps playing.
     stopAudition: () =>
       withOperation(cache(), 'music', async () => {
-        if (!auditioning) return;
+        // A draft another front end plays from the same playlist is not the audition's to pause.
+        if (!auditioning || !ours()) {
+          auditioning = undefined;
+
+          return;
+        }
 
         const { playlistId, trackIds } = auditioning;
 

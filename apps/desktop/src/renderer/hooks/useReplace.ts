@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AuditionView, ProviderId, Suggestion } from '../../shared/protocol.js';
 import { selecta } from '../api.js';
-import type { AuditionPlan } from '../replace.js';
+import { stopAfter, type AuditionPlan } from '../replace.js';
 
 const READ_EVERY_MS = 1000;
 
@@ -28,6 +28,8 @@ export function useReplace(draftId: string, provider: () => ProviderId | undefin
   const asked = useRef(0);
   // Set once an audition has written Selecta Preview, so closing knows to pause it.
   const auditioned = useRef(false);
+  // The audition still starting, which holds Music until it lands.
+  const starting = useRef<Promise<unknown>>(undefined);
   const [polling, setPolling] = useState(false);
   const current = useRef(state);
 
@@ -73,9 +75,13 @@ export function useReplace(draftId: string, provider: () => ProviderId | undefin
     setState(undefined);
     setTrouble(undefined);
 
-    if (auditioned.current) void selecta.call('player.auditionStop').catch(() => undefined);
+    if (auditioned.current)
+      void stopAfter(starting.current, () => selecta.call('player.auditionStop')).catch(
+        () => undefined,
+      );
 
     auditioned.current = false;
+    starting.current = undefined;
     setPolling(false);
     setHeard(undefined);
   }, [draftId]);
@@ -137,7 +143,11 @@ export function useReplace(draftId: string, provider: () => ProviderId | undefin
         auditioned.current = true;
         setPolling(true);
 
-        return selecta.call('player.audition', plan);
+        const call = selecta.call('player.audition', plan);
+
+        starting.current = call;
+
+        return call;
       }),
     pause: () => act(() => selecta.call('player.auditionStop')),
   };
