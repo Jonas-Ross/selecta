@@ -29,6 +29,13 @@ it('reads a triple run as bold italics', () => {
   expect(parseInline('___important___')).toEqual(both);
 });
 
+it('never closes emphasis inside code or on an escaped marker', () => {
+  expect(parseInline('*run `a*b` now*')).toEqual([
+    { kind: 'em', children: ['run ', { kind: 'code', text: 'a*b' }, ' now'] },
+  ]);
+  expect(parseInline('**a \\** b**')).toEqual([{ kind: 'strong', children: ['a ** b'] }]);
+});
+
 it('leaves stray markers and snake_case alone', () => {
   expect(parseInline('2 * 3 * 4')).toEqual(['2 * 3 * 4']);
   expect(parseInline('track_id and draft_id')).toEqual(['track_id and draft_id']);

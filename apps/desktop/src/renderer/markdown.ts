@@ -202,6 +202,19 @@ export function parseInline(text: string): Inline[] {
 
 const WORD = /[\p{L}\p{N}]/u;
 
+/** Where `delim` occurs from `from` on, outside code spans and escapes. */
+function* closers(text: string, delim: string, from: number): Generator<number> {
+  for (let j = from; j < text.length; j++) {
+    if (text[j] === '\\') j++;
+    else if (text[j] === '`') {
+      const run = /^`+/.exec(text.slice(j))![0];
+      const end = text.indexOf(run, j + run.length);
+
+      j = (end > 0 ? end : j) + run.length - 1;
+    } else if (text.startsWith(delim, j)) yield j;
+  }
+}
+
 /** A delimiter run at `i` with a matching closer, in CommonMark's spirit if not its letter. */
 function emphasis(text: string, i: number): { node: Inline; end: number } | undefined {
   for (const [delim, kind] of [
@@ -227,7 +240,7 @@ function emphasis(text: string, i: number): { node: Inline; end: number } | unde
     )
       continue;
 
-    for (let end = text.indexOf(delim, open + 1); end > 0; end = text.indexOf(delim, end + 1)) {
+    for (const end of closers(text, delim, open + 1)) {
       const after = text[end + delim.length] ?? ' ';
 
       // A closer touches its text, and a lone `*` is never half of a `**`.
