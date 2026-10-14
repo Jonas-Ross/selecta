@@ -123,6 +123,8 @@ export function parseMarkdown(source: string): Block[] {
 
 const PUNCT = /[!-/:-@[-`{-~]/;
 const SAFE_LINK = /^(https?:|mailto:)/i;
+// One level of balanced parentheses in the URL, as Wikipedia's have.
+const LINK = /^\[([^\]]+)\]\(\s*<?((?:[^\s()<>]|\([^\s()<>]*\))+)>?\s*\)/;
 
 export function parseInline(text: string): Inline[] {
   const out: Inline[] = [];
@@ -167,8 +169,7 @@ export function parseInline(text: string): Inline[] {
     }
 
     if (c === '[') {
-      // One level of balanced parentheses in the URL, as Wikipedia's have.
-      const link = /^\[([^\]]+)\]\(\s*<?((?:[^\s()<>]|\([^\s()<>]*\))+)>?\s*\)/.exec(text.slice(i));
+      const link = LINK.exec(text.slice(i));
 
       if (link) {
         const label = parseInline(link[1]!);
@@ -202,7 +203,7 @@ export function parseInline(text: string): Inline[] {
 
 const WORD = /[\p{L}\p{N}]/u;
 
-/** Where `delim` occurs from `from` on, outside code spans and escapes. */
+/** Where `delim` occurs from `from` on, outside code spans, escapes and links. */
 function* closers(text: string, delim: string, from: number): Generator<number> {
   for (let j = from; j < text.length; j++) {
     if (text[j] === '\\') j++;
@@ -212,6 +213,12 @@ function* closers(text: string, delim: string, from: number): Generator<number> 
 
       j = (end > 0 ? end : j) + run.length - 1;
     } else if (text.startsWith(delim, j)) yield j;
+    else if (text[j] === '[') {
+      // A link's URL may hold the delimiter, which never closes a span.
+      const link = LINK.exec(text.slice(j));
+
+      if (link) j += link[0].length - 1;
+    }
   }
 }
 
