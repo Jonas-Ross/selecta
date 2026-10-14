@@ -37,10 +37,12 @@ import {
   type Row,
   type Run,
 } from '../state.js';
+import { Banner } from './Banner.js';
 import { Bench } from './Bench.js';
 import { ClaudePanel } from './ClaudePanel.js';
 import { Crate, type CrateTrack } from './Crate.js';
 import { Flight, type FlightPlan } from './Flight.js';
+import { Groove } from './Groove.js';
 import { Listen } from './Listen.js';
 import { Rail, type Opening, type RailHandle } from './Rail.js';
 import { RecordMenu } from './RecordMenu.js';
@@ -151,6 +153,7 @@ export function Draft({
   // A record in the air is an edit not yet queued, so Save and Home wait for it to land.
   const airborne = flight !== undefined;
   const span = bpmSpan(items);
+  const grooveRecords = items.map((row) => ({ id: row.track_id, seconds: row.duration_seconds }));
   const sides = replacing && around(items, replacing.entryId);
   // Not while Claude runs: linking the draft mid-run would refuse its edits partway through.
   const canPlay =
@@ -536,6 +539,12 @@ export function Draft({
       />
       <div className="draft-body">
         <section className="draft-main" aria-label="Draft">
+          <Groove
+            records={grooveRecords}
+            now={listen.current ? listen.now : undefined}
+            playing={listen.playing}
+            progress={listen.duration ? listen.position / listen.duration : undefined}
+          />
           {replacing?.view === 'bench' && sides ? (
             <Bench around={sides} replace={replace} agent={agent} onSwap={swap} />
           ) : tab === 'listen' ? (
@@ -617,53 +626,63 @@ export function Draft({
                   : 'Drag to reorder · right-click to replace')}
             </span>
           </div>
-          {outOfStep && (
-            <p className="notice bar error">
-              Music may be playing an old copy of this draft. Stop, then play again.
-            </p>
-          )}
-          {player.problem && (
-            <button type="button" className="notice bar dismiss" onClick={player.dismiss}>
-              Music.app: {player.problem}
-              <span className="mono">dismiss</span>
-            </button>
-          )}
-          {notice && (
-            <button
-              type="button"
-              className="notice bar dismiss"
-              onClick={() => setNotice(undefined)}
-            >
-              {notice}
-              <span className="mono">dismiss</span>
-            </button>
-          )}
-          {swapped && (
-            <p className="notice bar" role="status">
-              {swapped.text}
-              {swapped.undo && (
-                <button type="button" className="btn line sm" onClick={swapped.undo}>
-                  Undo
-                </button>
-              )}
-              <button type="button" className="mono" onClick={() => setSwapped(undefined)}>
-                dismiss
+          <Banner value={outOfStep}>
+            {() => (
+              <p className="notice bar error">
+                Music may be playing an old copy of this draft. Stop, then play again.
+              </p>
+            )}
+          </Banner>
+          <Banner value={player.problem}>
+            {(problem) => (
+              <button type="button" className="notice bar dismiss" onClick={player.dismiss}>
+                Music.app: {problem}
+                <span className="mono">dismiss</span>
               </button>
-            </p>
-          )}
-          {artProblem && (
-            <button
-              type="button"
-              className="notice bar dismiss"
-              onClick={() => {
-                setArtProblem(undefined);
-                retryArtwork();
-              }}
-            >
-              Album art unavailable: {artProblem}
-              <span className="mono">try again</span>
-            </button>
-          )}
+            )}
+          </Banner>
+          <Banner value={notice}>
+            {(text) => (
+              <button
+                type="button"
+                className="notice bar dismiss"
+                onClick={() => setNotice(undefined)}
+              >
+                {text}
+                <span className="mono">dismiss</span>
+              </button>
+            )}
+          </Banner>
+          <Banner value={swapped}>
+            {({ text, undo }) => (
+              <p className="notice bar" role="status">
+                {text}
+                {undo && (
+                  <button type="button" className="btn line sm" onClick={undo}>
+                    Undo
+                  </button>
+                )}
+                <button type="button" className="mono" onClick={() => setSwapped(undefined)}>
+                  dismiss
+                </button>
+              </p>
+            )}
+          </Banner>
+          <Banner value={artProblem}>
+            {(problem) => (
+              <button
+                type="button"
+                className="notice bar dismiss"
+                onClick={() => {
+                  setArtProblem(undefined);
+                  retryArtwork();
+                }}
+              >
+                Album art unavailable: {problem}
+                <span className="mono">try again</span>
+              </button>
+            )}
+          </Banner>
           <Rail
             items={items}
             selected={selected}

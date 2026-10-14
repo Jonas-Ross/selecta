@@ -41,7 +41,7 @@ export function RailGutter({ shelf, scale }: { shelf: Shelf; scale: BpmScale }) 
         <Term name="time">Time</Term>
       </span>
       <span className="lane-title" style={{ top: shelf.join + 2 }}>
-        <Term name="join">Joins</Term>
+        <Term name="join">Transitions</Term>
       </span>
       <span className="lane-title" style={{ top: shelf.key.top - 22 }}>
         <Term name="key">Key</Term> <Term name="camelot">Camelot</Term>

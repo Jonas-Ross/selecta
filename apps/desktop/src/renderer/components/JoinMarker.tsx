@@ -75,7 +75,7 @@ export function JoinMarker({
     hot
       ? undefined
       : {
-          title: 'The join',
+          title: 'Transition',
           side: `${position} → ${position + 1}`,
           body: (
             <>
@@ -120,7 +120,7 @@ export function JoinMarker({
         type="button"
         className={`join${hot ? ' hot' : ''}`}
         style={{ width, transform: `translate(${(x - width / 2).toFixed(1)}px, ${y}px)` }}
-        aria-label={`Join ${position} to ${position + 1}: ${from.title ?? 'Untitled'} into ${to.title ?? 'Untitled'}. ${facts.tempo}, ${facts.words.toLowerCase()}.`}
+        aria-label={`Transition ${position} to ${position + 1}: ${from.title ?? 'Untitled'} into ${to.title ?? 'Untitled'}. ${facts.tempo}, ${facts.words.toLowerCase()}.`}
         {...explain}
       >
         <span className="join-flash" ref={flash} />
