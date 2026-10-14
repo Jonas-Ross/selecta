@@ -187,6 +187,8 @@ export function buildOverwritePlaylistScript(args: {
   return wrapJxaScript(
     args,
     `
+      // Resolve first: its per-track lookups must not sit between the guard and the write.
+      ${RESOLVE_AND_ADD_HELPERS}
       ${PLAYLIST_KIND_FN}
       ${PLAIN_USER_PLAYLISTS_NAMED}
       function liveIds(p) { return p.tracks.length === 0 ? [] : p.tracks.persistentID(); }
@@ -205,7 +207,6 @@ export function buildOverwritePlaylistScript(args: {
       if (playlistKind(pl) !== 'user') return JSON.stringify({ notEditable: true });
       if (pl.name() !== args.savedName || JSON.stringify(liveIds(pl)) !== expected)
         return JSON.stringify({ orderDrifted: true });
-      ${RESOLVE_AND_ADD_HELPERS}
       const persistentId = pl.persistentID();
       return writeResult(pl, persistentId, {}, () => {
         if (pl.name() !== args.name) pl.name = args.name;
