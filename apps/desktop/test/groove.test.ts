@@ -33,6 +33,16 @@ it('spans the window from its farthest corner to below its bottom edge', () => {
   expect(cy - bands[0]!.inner).toBeGreaterThan(800);
 });
 
+it('narrows the gaps on a long draft so every record keeps grooves', () => {
+  const records = Array.from({ length: 500 }, (_, i) => ({ id: `r${i}`, seconds: 240 }));
+  const { bands, rings } = cut(1200, 800, records);
+
+  expect(bands).toHaveLength(500);
+
+  for (const band of bands)
+    expect(rings.some((r) => r.r <= band.outer && r.r > band.inner)).toBe(true);
+});
+
 it('cuts one band across a side with no records', () => {
   expect(cut(1200, 800, []).bands).toHaveLength(1);
 });

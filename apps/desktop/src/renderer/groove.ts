@@ -7,8 +7,9 @@ export type Cut = { cx: number; cy: number; bands: Band[]; rings: Ring[] };
 
 // The centre sits far below the window so the arcs run nearly level with the rail.
 const CENTRE = { x: 0.42, y: 2.05 };
-// The smooth run between two tracks, as on a pressed LP.
+// The smooth run between two tracks, as on a pressed LP; long drafts narrow it so gaps never take over a quarter of the side.
 const GAP = 16;
+const GAP_SHARE = 0.25;
 // A record with no known length cuts as long as the average one, or this with none known.
 const FALLBACK_SECONDS = 300;
 
@@ -27,7 +28,9 @@ export function cut(
   const fallback = known.length ? known.reduce((a, b) => a + b) / known.length : FALLBACK_SECONDS;
   const seconds = side.map((r) => (r.seconds && r.seconds > 0 ? r.seconds : fallback));
   const total = seconds.reduce((a, b) => a + b);
-  const span = Math.max(0, outer - inner - GAP * (side.length - 1));
+  const gap =
+    side.length > 1 ? Math.min(GAP, ((outer - inner) * GAP_SHARE) / (side.length - 1)) : 0;
+  const span = outer - inner - gap * (side.length - 1);
   const bands: Band[] = [];
   const rings: Ring[] = [];
   let at = outer;
@@ -37,7 +40,7 @@ export function cut(
 
     bands.push(band);
     rings.push(...grooves(band));
-    at = band.inner - GAP;
+    at = band.inner - gap;
   });
 
   return { cx, cy, bands, rings };
