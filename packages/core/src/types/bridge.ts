@@ -175,13 +175,14 @@ export interface Bridge {
     expectedTrackIds?: string[]; // live order guard in the same replacement call
   }): Promise<PlaylistReplaceResult>;
 
-  // Clear and repopulate (and rename) a plain user playlist found by ID, or by
-  // savedName when that alone holds expectedTrackIds and isn't one of knownIds.
+  // Clear and repopulate (and rename) a plain user playlist found by ID, or, when
+  // followRekey, by savedName when that alone holds expectedTrackIds and isn't one of knownIds.
   // Refuses before writing unless the live name and order are still savedName and expectedTrackIds.
   overwritePlaylist(input: {
     playlistId: string;
     savedName: string;
     knownIds: string[];
+    followRekey: boolean;
     name: string;
     trackIds: string[];
     expectedTrackIds: string[];

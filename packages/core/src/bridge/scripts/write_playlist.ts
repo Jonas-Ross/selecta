@@ -179,6 +179,7 @@ export function buildOverwritePlaylistScript(args: {
   playlistId: string;
   savedName: string;
   knownIds: string[];
+  followRekey: boolean;
   name: string;
   trackIds: string[];
   expectedTrackIds: string[];
@@ -194,6 +195,7 @@ export function buildOverwritePlaylistScript(args: {
       // iCloud rotates a fresh playlist's ID; the one playlist of that name still
       // holding exactly what was saved is the same playlist (docs/music-app.md).
       if (pl === undefined) {
+        if (!args.followRekey) return JSON.stringify({ playlistNotFound: true });
         const named = plainUserPlaylistsNamed(args.savedName, 2);
         if (named.length !== 1 || args.knownIds.indexOf(named[0].persistentID()) !== -1 ||
             JSON.stringify(liveIds(named[0])) !== expected)

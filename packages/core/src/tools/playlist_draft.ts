@@ -438,8 +438,9 @@ export class PlaylistDraftTools {
       // The saved playlist is gone or no longer what was saved: leave it be, and let the next save make a new one.
       const unlink = preWrite && link !== undefined && UNLINKED.has(outcome.error.error);
       const response = creationResponse(outcome);
+      // Any update that may have written is reported as one, partial or not.
       const result =
-        'observed' in outcome && link
+        link && !preWrite
           ? { ...response, updated: true }
           : unlink && outcome.status === 'rejected_before_write'
             ? {

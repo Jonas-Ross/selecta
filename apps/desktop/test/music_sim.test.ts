@@ -163,11 +163,17 @@ it('trims the double an iCloud add can leave', async () => {
 describe('overwriting a saved playlist', () => {
   const saved = ids.slice(0, 3);
   const next = [ids[2]!, ids[0]!, ids[4]!];
-  const overwrite = (playlistId: string, expectedTrackIds = saved, knownIds: string[] = []) =>
+  const overwrite = (
+    playlistId: string,
+    expectedTrackIds = saved,
+    knownIds: string[] = [],
+    followRekey = true,
+  ) =>
     bridge.overwritePlaylist({
       playlistId,
       savedName: 'Peak',
       knownIds,
+      followRekey,
       name: 'Peak time',
       trackIds: next,
       expectedTrackIds,
@@ -197,6 +203,16 @@ describe('overwriting a saved playlist', () => {
     const copy = music.addPlaylist('Peak', saved);
 
     await expect(overwrite('GONE', saved, [copy])).rejects.toMatchObject({
+      errorCode: 'playlist_not_found',
+      writePhase: 'not_started',
+    });
+    expect(live()).toEqual([{ id: copy, name: 'Peak', tracks: saved }]);
+  });
+
+  it('never follows a name once a rotated ID is past the rekey window', async () => {
+    const copy = music.addPlaylist('Peak', saved);
+
+    await expect(overwrite('GONE', saved, [], false)).rejects.toMatchObject({
       errorCode: 'playlist_not_found',
       writePhase: 'not_started',
     });

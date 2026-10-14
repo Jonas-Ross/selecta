@@ -813,6 +813,13 @@ export class SelectaCache {
     run();
   }
 
+  /** Whether Selecta created this playlist (by current ID) within the window. */
+  isRecentCreation(currentId: string, windowMinutes: number, now = new Date()): boolean {
+    const since = new Date(now.getTime() - windowMinutes * 60_000).toISOString();
+
+    return this.queries.getCreationsSince(since).some((c) => c.currentPersistentId === currentId);
+  }
+
   /** Names of playlists created within the window — the "watch list" for echo logging. */
   getRecentCreationNames(windowMinutes: number, now = new Date()): string[] {
     const since = new Date(now.getTime() - windowMinutes * 60_000).toISOString();

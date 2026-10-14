@@ -128,6 +128,13 @@ it('says an update rewrote the playlist rather than made one', () => {
   expect(saveOutcome({ result: { name: 'Peak', track_count: 9, updated: true } })).toBe(
     'Updated "Peak" in Music, now 9 tracks.',
   );
+  expect(
+    saveOutcome({
+      error: 'jxa_error',
+      result: { error: 'jxa_error', updated: true },
+      partial_write: { playlist_id: 'P1' },
+    }),
+  ).toBe('Music.app was rewriting playlist P1. jxa_error');
 });
 
 it('labels the save button by what the draft recorded', () => {

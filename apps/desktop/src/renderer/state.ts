@@ -242,7 +242,9 @@ export function saveOutcome(
       ? ` and was seen holding ${partial.observed_track_ids.length} tracks`
       : '';
 
-    parts.push(`Music.app created playlist ${String(partial.playlist_id)}${seen}.`);
+    parts.push(
+      `Music.app ${result?.updated === true ? 'was rewriting' : 'created'} playlist ${String(partial.playlist_id)}${seen}.`,
+    );
   }
 
   if (response.error) parts.push(response.error, ...(response.hint ? [response.hint] : []));

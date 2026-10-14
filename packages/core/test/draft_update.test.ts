@@ -70,6 +70,7 @@ it('keeps the saved playlist through edits and rewrites it in place on the next 
     playlistId: 'P-SAVED',
     savedName: 'Mix',
     knownIds: expect.not.arrayContaining(['P-SAVED']),
+    followRekey: true,
     name: 'Mix II',
     trackIds: reordered,
     expectedTrackIds: ids,
@@ -117,6 +118,21 @@ it('names every playlist the cache knows, so a rotated-ID lookup never takes one
   );
 });
 
+it("follows a rotated ID by name only within refresh's rekey window", async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(Date.now() + 61 * 60_000);
+
+  try {
+    await tools.save({ draft_id: draftId, revision: await reorder() });
+  } finally {
+    vi.useRealTimers();
+  }
+
+  expect(deps.bridge.overwritePlaylist).toHaveBeenCalledWith(
+    expect.objectContaining({ followRekey: false }),
+  );
+});
+
 it('lets go of a playlist changed in Music, so the next save makes a new one', async () => {
   vi.mocked(deps.bridge.overwritePlaylist).mockRejectedValueOnce(
     preWriteError('validation_error', 'drifted', 'Changed in Music.app.'),
@@ -157,7 +173,10 @@ it('holds an update of unknown outcome like any uncertain save', async () => {
 
   const revision = await reorder();
 
-  expect(await tools.save({ draft_id: draftId, revision })).toMatchObject({ error: 'jxa_error' });
+  expect(await tools.save({ draft_id: draftId, revision })).toMatchObject({
+    error: 'jxa_error',
+    result: { updated: true },
+  });
   expect(store.get(draftId).save).toMatchObject({
     status: 'finished',
     result: { error: 'jxa_error' },
