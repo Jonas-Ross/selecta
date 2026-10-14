@@ -44,7 +44,7 @@ it('resolves a reference link, held to the same schemes', () => {
   ).toEqual([
     {
       kind: 'p',
-      lines: [[{ kind: 'link', href: 'https://example.com', children: ['docs'] }, ' and bad']],
+      children: [{ kind: 'link', href: 'https://example.com', children: ['docs'] }, ' and bad'],
     },
   ]);
 });
@@ -95,7 +95,7 @@ it('links only to the web or mail, keeping the label of anything else', () => {
 
 it('passes raw HTML through as text', () => {
   expect(parseMarkdown('<img src=x onerror=alert(1)>')).toEqual([
-    { kind: 'p', lines: [['<img src=x onerror=alert(1)>']] },
+    { kind: 'p', children: ['<img src=x onerror=alert(1)>'] },
   ]);
 });
 
@@ -105,21 +105,22 @@ it('keeps a numbered list continuing from an earlier one at its own number', () 
   );
 
   expect(blocks).toEqual([
-    { kind: 'p', lines: [['Here are some more:']] },
+    { kind: 'p', children: ['Here are some more:'] },
     {
       kind: 'list',
       ordered: true,
       start: 5,
       items: [
-        [{ kind: 'p', lines: [[{ kind: 'strong', children: ['Bass in the Red'] }]] }],
-        [{ kind: 'p', lines: [[{ kind: 'strong', children: ['Full Send'] }, ', a nod']] }],
+        [{ kind: 'p', children: [{ kind: 'strong', children: ['Bass in the Red'] }] }],
+        [{ kind: 'p', children: [{ kind: 'strong', children: ['Full Send'] }, ', a nod'] }],
       ],
     },
-    { kind: 'p', lines: [['The name is still ', { kind: 'strong', children: ['Redline'] }, '.']] },
+    { kind: 'p', children: ['The name is still ', { kind: 'strong', children: ['Redline'] }, '.'] },
   ]);
 });
 
-const para = (text: string) => ({ kind: 'p', lines: [[text]] });
+const para = (text: string) => ({ kind: 'p', children: [text] });
+const br = { kind: 'br' };
 
 it('holds a loose list together and keeps indented lines in their item', () => {
   expect(parseMarkdown('- one\n  more\n\n- two\n\nafter')).toEqual([
@@ -127,7 +128,7 @@ it('holds a loose list together and keeps indented lines in their item', () => {
       kind: 'list',
       ordered: false,
       start: 1,
-      items: [[{ kind: 'p', lines: [['one'], ['more']] }], [para('two')]],
+      items: [[{ kind: 'p', children: ['one', br, 'more'] }], [para('two')]],
     },
     para('after'),
   ]);
@@ -158,10 +159,18 @@ it('nests a list under an item', () => {
 it('reads fences, headings, quotes and rules, keeping line breaks in a paragraph', () => {
   expect(parseMarkdown('## Plan\nfirst\nsecond\n```\nlet *x* = 1\n```\n> quoted\n\n---')).toEqual([
     { kind: 'heading', children: ['Plan'] },
-    { kind: 'p', lines: [['first'], ['second']] },
+    { kind: 'p', children: ['first', br, 'second'] },
     { kind: 'code', text: 'let *x* = 1' },
-    { kind: 'quote', blocks: [{ kind: 'p', lines: [['quoted']] }] },
+    { kind: 'quote', blocks: [para('quoted')] },
     { kind: 'rule' },
+  ]);
+});
+
+it('keeps a line break inside formatting', () => {
+  expect(parseInline('**first  \nsecond** and [a\nb](https://x.com)')).toEqual([
+    { kind: 'strong', children: ['first', br, 'second'] },
+    ' and ',
+    { kind: 'link', href: 'https://x.com', children: ['a', br, 'b'] },
   ]);
 });
 

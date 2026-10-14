@@ -1,5 +1,5 @@
 // An agent's reply, formatted. Built from parsed data, never set as HTML.
-import { Fragment, useMemo, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { parseMarkdown, type Block, type Inline } from '../markdown.js';
 
 function inline(nodes: Inline[]): ReactNode[] {
@@ -7,6 +7,8 @@ function inline(nodes: Inline[]): ReactNode[] {
     if (typeof node === 'string') return node;
 
     switch (node.kind) {
+      case 'br':
+        return <br key={k} />;
       case 'code':
         return <code key={k}>{node.text}</code>;
       case 'strong':
@@ -29,16 +31,7 @@ function inline(nodes: Inline[]): ReactNode[] {
 function block(node: Block, k: number): ReactNode {
   switch (node.kind) {
     case 'p':
-      return (
-        <p key={k}>
-          {node.lines.map((line, n) => (
-            <Fragment key={n}>
-              {n > 0 && <br />}
-              {inline(line)}
-            </Fragment>
-          ))}
-        </p>
-      );
+      return <p key={k}>{inline(node.children)}</p>;
     case 'heading':
       return (
         <p key={k} className="md-h">

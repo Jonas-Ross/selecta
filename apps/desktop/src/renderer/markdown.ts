@@ -10,18 +10,20 @@ import { gfmStrikethrough } from 'micromark-extension-gfm-strikethrough';
 
 export type Inline =
   | string
+  | { kind: 'br' }
   | { kind: 'code'; text: string }
   | { kind: 'strong' | 'em' | 'del'; children: Inline[] }
   | { kind: 'link'; href: string; children: Inline[] };
 
 export type Block =
-  | { kind: 'p'; lines: Inline[][] }
+  | { kind: 'p'; children: Inline[] }
   | { kind: 'heading'; children: Inline[] }
   | { kind: 'code'; text: string }
   | { kind: 'quote'; blocks: Block[] }
   | { kind: 'list'; ordered: boolean; start: number; items: Block[][] }
   | { kind: 'rule' };
 
+const BR: Inline = { kind: 'br' };
 const SAFE_LINK = /^(https?:|mailto:)/i;
 
 const options = {
@@ -52,14 +54,14 @@ function visit(node: Nodes, see: (node: Nodes) => void) {
 
 /** A line of inline Markdown, without its paragraph. */
 export function parseInline(text: string): Inline[] {
-  return parseMarkdown(text).flatMap((block) => (block.kind === 'p' ? block.lines.flat() : []));
+  return parseMarkdown(text).flatMap((block) => (block.kind === 'p' ? block.children : []));
 }
 
 function blocks(nodes: RootContent[], urls: Urls): Block[] {
   return nodes.flatMap((node): Block[] => {
     switch (node.type) {
       case 'paragraph':
-        return [{ kind: 'p', lines: lines(node.children, urls) }];
+        return [{ kind: 'p', children: inline(node.children, urls) }];
       case 'heading':
         return [{ kind: 'heading', children: inline(node.children, urls) }];
       case 'code':
@@ -79,31 +81,11 @@ function blocks(nodes: RootContent[], urls: Urls): Block[] {
         return [{ kind: 'rule' }];
       // Raw HTML stays visible as the text it is.
       case 'html':
-        return [{ kind: 'p', lines: [[node.value]] }];
+        return [{ kind: 'p', children: [node.value] }];
       default:
         return [];
     }
   });
-}
-
-/** A paragraph's content, split where the reply broke its lines. */
-function lines(nodes: PhrasingContent[], urls: Urls): Inline[][] {
-  const out: Inline[][] = [[]];
-
-  for (const node of inline(nodes, urls)) {
-    if (typeof node !== 'string') {
-      out.at(-1)!.push(node);
-      continue;
-    }
-
-    node.split('\n').forEach((part, n) => {
-      if (n > 0) out.push([]);
-
-      if (part) out.at(-1)!.push(part);
-    });
-  }
-
-  return out;
 }
 
 function inline(nodes: PhrasingContent[], urls: Urls): Inline[] {
@@ -115,7 +97,14 @@ function inline(nodes: PhrasingContent[], urls: Urls): Inline[] {
     else out.push(item);
   }
 
-  return out;
+  // A line break in the reply stays one, at any depth.
+  return out.flatMap((item) =>
+    typeof item === 'string'
+      ? item
+          .split('\n')
+          .flatMap((part, n): Inline[] => [...(n ? [BR] : []), ...(part ? [part] : [])])
+      : [item],
+  );
 }
 
 function phrase(node: PhrasingContent, urls: Urls): Inline[] {
