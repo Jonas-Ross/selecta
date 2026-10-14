@@ -25,7 +25,6 @@ test('keeps a saved draft editable and updates the same playlist on the next sav
   await expect(page.getByText('Drag to reorder · right-click to replace')).toBeVisible();
   // Settle the card's fade and the rail's springs, for the screenshots.
   await page.waitForTimeout(1200);
-  await page.screenshot({ path: 'test-results/save-after-saved.png' });
 
   await records.nth(4).focus();
   await page.keyboard.press('Alt+ArrowLeft');
@@ -36,13 +35,11 @@ test('keeps a saved draft editable and updates the same playlist on the next sav
   [moved[3], moved[4]] = [moved[4]!, moved[3]!];
   await page.getByRole('button', { name: 'Update in Music' }).click();
   await expect(page.getByRole('dialog')).toContainText("Replaces what's in “Harness set”");
-  await page.screenshot({ path: 'test-results/save-after-update-confirm.png' });
   await page.getByRole('dialog').getByRole('button', { name: 'Update' }).click();
   await expect(page.getByText(/Updated "Harness set" in Music/)).toBeVisible();
 
   expect(saved(music)).toEqual([{ id: first!.id, name: 'Harness set', tracks: moved }]);
   await page.waitForTimeout(1200);
-  await page.screenshot({ path: 'test-results/save-after-updated.png' });
 });
 
 test('leaves a playlist changed in Music alone and saves a new one next time', async ({
