@@ -29,6 +29,15 @@ it('reads a triple run as bold italics', () => {
   expect(parseInline('___important___')).toEqual(both);
 });
 
+it('splits a triple run whose spans close apart', () => {
+  expect(parseInline('***bold** rest*')).toEqual([
+    { kind: 'em', children: [{ kind: 'strong', children: ['bold'] }, ' rest'] },
+  ]);
+  expect(parseInline('***it* rest**')).toEqual([
+    { kind: 'strong', children: [{ kind: 'em', children: ['it'] }, ' rest'] },
+  ]);
+});
+
 it('never closes emphasis inside code, a link or on an escaped marker', () => {
   expect(parseInline('*run `a*b` now*')).toEqual([
     { kind: 'em', children: ['run ', { kind: 'code', text: 'a*b' }, ' now'] },

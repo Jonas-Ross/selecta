@@ -222,6 +222,52 @@ function* closers(text: string, delim: string, from: number): Generator<number> 
   }
 }
 
+/** The first place `delim` can close a span, searching from `from`. */
+function closer(text: string, delim: string, from: number): number | undefined {
+  for (const end of closers(text, delim, from)) {
+    const after = text[end + delim.length] ?? ' ';
+
+    // A closer touches its text, and a lone `*` is never half of a `**`.
+    if (
+      /\s/.test(text[end - 1]!) ||
+      (delim[0] === '_' && WORD.test(after)) ||
+      (delim.length === 1 && (after === delim || text[end - 1] === delim))
+    )
+      continue;
+
+    return end;
+  }
+
+  return undefined;
+}
+
+/** A triple run closed in two steps (`***a** b*`): whichever span closes first is inside. */
+function splitTriple(
+  text: string,
+  i: number,
+  c: string,
+): { node: Inline; end: number } | undefined {
+  const single = closer(text, c, i + 4);
+  const double = closer(text, c + c, i + 4);
+
+  if (double !== undefined && (single === undefined || double < single)) {
+    const end = closer(text, c, double + 2);
+
+    if (end !== undefined)
+      return { node: { kind: 'em', children: parseInline(text.slice(i + 1, end)) }, end: end + 1 };
+  } else if (single !== undefined) {
+    const end = closer(text, c + c, single + 1);
+
+    if (end !== undefined)
+      return {
+        node: { kind: 'strong', children: parseInline(text.slice(i + 2, end)) },
+        end: end + 2,
+      };
+  }
+
+  return undefined;
+}
+
 /** A delimiter run at `i` with a matching closer, in CommonMark's spirit if not its letter. */
 function emphasis(text: string, i: number): { node: Inline; end: number } | undefined {
   for (const [delim, kind] of [
@@ -247,25 +293,23 @@ function emphasis(text: string, i: number): { node: Inline; end: number } | unde
     )
       continue;
 
-    for (const end of closers(text, delim, open + 1)) {
-      const after = text[end + delim.length] ?? ' ';
+    const end = closer(text, delim, open + 1);
 
-      // A closer touches its text, and a lone `*` is never half of a `**`.
-      if (
-        /\s/.test(text[end - 1]!) ||
-        (delim[0] === '_' && WORD.test(after)) ||
-        (delim.length === 1 && (after === delim || text[end - 1] === delim))
-      )
-        continue;
+    if (end === undefined) {
+      const split = delim.length === 3 ? splitTriple(text, i, delim[0]!) : undefined;
 
-      const children = parseInline(text.slice(open, end));
+      if (split) return split;
 
-      return {
-        // A triple run is bold italics.
-        node: { kind, children: delim.length === 3 ? [{ kind: 'em', children }] : children },
-        end: end + delim.length,
-      };
+      continue;
     }
+
+    const children = parseInline(text.slice(open, end));
+
+    return {
+      // A triple run is bold italics.
+      node: { kind, children: delim.length === 3 ? [{ kind: 'em', children }] : children },
+      end: end + delim.length,
+    };
   }
 
   return undefined;
