@@ -124,6 +124,8 @@ it("leaves another receipt's edit conflict standing when the update follows a ro
   expect(cache.resolvePlaylistId('P-OTHER')).toBe('P-ROTATED');
   expect(cache.hasEditConflict('P-OTHER')).toBe(true);
   expect(cache.hasEditConflict('P-SAVED')).toBe(false);
+  expect(cache.getCreationName('P-SAVED')).toBe('Mix II');
+  expect(cache.getCreationName('P-OTHER')).toBe('Mix');
 });
 
 it('names every playlist the cache knows, so a rotated-ID lookup never takes one', async () => {
@@ -142,6 +144,9 @@ it("follows a rotated ID by name only within refresh's rekey window", async () =
   vi.setSystemTime(Date.now() + 61 * 60_000);
 
   try {
+    // A recent receipt that only aliases this playlist doesn't reopen the window.
+    deps.cacheInstance.recordPlaylistCreation('P-OTHER', 'Mix', ids);
+    deps.cacheInstance.applyRekey('P-OTHER', 'P-OTHER', 'P-SAVED');
     await tools.save({ draft_id: draftId, revision: await reorder() });
   } finally {
     vi.useRealTimers();

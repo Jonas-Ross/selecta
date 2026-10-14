@@ -752,7 +752,7 @@ export class SelectaCache {
   }
 
   /**
-   * Commit an in-place rewrite of a playlist Selecta created. Its receipt takes
+   * Commit an in-place rewrite of a playlist Selecta created. Its own receipt takes
    * the new name and order, so a later iCloud rekey still matches at refresh;
    * a rotated ID the write followed is rekeyed live first.
    */
@@ -760,9 +760,10 @@ export class SelectaCache {
     playlist: PlaylistWriteResult;
     name: string;
     staleId: string;
+    createdId: string;
   }): void {
     this.db.transaction(() => {
-      const { playlist, name, staleId } = input;
+      const { playlist, name, staleId, createdId } = input;
       const live = {
         persistentId: playlist.persistentId,
         name,
@@ -773,7 +774,7 @@ export class SelectaCache {
       if (staleId !== playlist.persistentId) this.applyLiveRekey(staleId, live, true);
       else this.upsertPlaylistAfterWrite(playlist, name, live.trackIds);
 
-      this.queries.setCreationContents(live.persistentId, name, live.trackIds);
+      this.queries.setCreationContents(createdId, name, live.trackIds);
     })();
   }
 
@@ -816,11 +817,11 @@ export class SelectaCache {
     run();
   }
 
-  /** Whether Selecta created this playlist (by current ID) within the window. */
-  isRecentCreation(currentId: string, windowMinutes: number, now = new Date()): boolean {
+  /** Whether the receipt Selecta created under `createdId` falls within the window. */
+  isRecentCreation(createdId: string, windowMinutes: number, now = new Date()): boolean {
     const since = new Date(now.getTime() - windowMinutes * 60_000).toISOString();
 
-    return this.queries.getCreationsSince(since).some((c) => c.currentPersistentId === currentId);
+    return this.queries.getCreationsSince(since).some((c) => c.createdPersistentId === createdId);
   }
 
   /** Names of playlists created within the window — the "watch list" for echo logging. */

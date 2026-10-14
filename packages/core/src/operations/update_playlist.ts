@@ -5,6 +5,7 @@ import { attemptFailure, persistenceFailure, settleUnderLock } from './create_pl
 import { missingTrackIdsError, playlistEditConflictError } from './resources.js';
 
 export type UpdatePlaylistInput = {
+  // The ID Selecta created it under; its receipt resolves the current one.
   playlistId: string;
   savedName: string;
   name: string;
@@ -39,11 +40,16 @@ export function updatePlaylist(
         // whatever it is called now.
         knownIds: cache.getPlaylistIds().filter((id) => id !== playlistId),
         // Only a fresh playlist's ID rotates; past refresh's window a name match could be a copy.
-        followRekey: cache.isRecentCreation(playlistId, RECONCILE_WINDOW_MINUTES),
+        followRekey: cache.isRecentCreation(input.playlistId, RECONCILE_WINDOW_MINUTES),
       });
 
       observed = { playlist, name: input.name, expectedTrackIds: input.trackIds };
-      cache.persistPlaylistUpdate({ playlist, name: input.name, staleId: playlistId });
+      cache.persistPlaylistUpdate({
+        playlist,
+        name: input.name,
+        staleId: playlistId,
+        createdId: input.playlistId,
+      });
 
       return { status: 'observed_success', observed };
     } catch (error) {
