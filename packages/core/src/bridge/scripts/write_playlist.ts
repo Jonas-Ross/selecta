@@ -178,6 +178,7 @@ export function buildReplacePlaylistScript(args: {
 export function buildOverwritePlaylistScript(args: {
   playlistId: string;
   savedName: string;
+  knownIds: string[];
   name: string;
   trackIds: string[];
   expectedTrackIds: string[];
@@ -194,7 +195,8 @@ export function buildOverwritePlaylistScript(args: {
       // holding exactly what was saved is the same playlist (docs/music-app.md).
       if (pl === undefined) {
         const named = plainUserPlaylistsNamed(args.savedName, 2);
-        if (named.length !== 1 || JSON.stringify(liveIds(named[0])) !== expected)
+        if (named.length !== 1 || args.knownIds.indexOf(named[0].persistentID()) !== -1 ||
+            JSON.stringify(liveIds(named[0])) !== expected)
           return JSON.stringify({ playlistNotFound: true });
         pl = named[0];
       }

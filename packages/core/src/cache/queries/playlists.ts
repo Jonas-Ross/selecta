@@ -62,6 +62,10 @@ export function createPlaylistsQueries(
     'UPDATE playlist_creations SET current_persistent_id = ?, edit_conflict = 0 WHERE current_persistent_id = ?',
   );
 
+  const setCreationContentsStmt = db.prepare(
+    'UPDATE playlist_creations SET name = ?, track_ids_json = ? WHERE current_persistent_id = ?',
+  );
+
   const deletePlaylistRowStmt = db.prepare('DELETE FROM playlists WHERE persistent_id = ?');
 
   return {
@@ -128,6 +132,10 @@ export function createPlaylistsQueries(
       const row = resolveCreationStmt.get(createdId) as { name: string } | undefined;
 
       return row?.name ?? null;
+    },
+
+    setCreationContents(currentId: string, name: string, trackIds: string[]): void {
+      setCreationContentsStmt.run(name, JSON.stringify(trackIds), currentId);
     },
 
     repointCreations(fromCurrentId: string, toCurrentId: string): void {

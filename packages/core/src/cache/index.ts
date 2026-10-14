@@ -751,6 +751,36 @@ export class SelectaCache {
     })();
   }
 
+  /**
+   * Commit an in-place rewrite of a playlist Selecta created. Its receipt takes
+   * the new name and order, so a later iCloud rekey still matches at refresh;
+   * a rotated ID the write followed is rekeyed live first.
+   */
+  persistPlaylistUpdate(input: {
+    playlist: PlaylistWriteResult;
+    name: string;
+    staleId: string;
+  }): void {
+    this.db.transaction(() => {
+      const { playlist, name, staleId } = input;
+      const live = {
+        persistentId: playlist.persistentId,
+        name,
+        trackIds: playlist.trackPersistentIds,
+      };
+
+      if (staleId !== playlist.persistentId) this.applyLiveRekey(staleId, live);
+      else this.upsertPlaylistAfterWrite(playlist, name, live.trackIds);
+
+      this.queries.setCreationContents(live.persistentId, name, live.trackIds);
+    })();
+  }
+
+  /** Cached plain user playlists with exactly this name. */
+  getUserPlaylistIdsByName(name: string): string[] {
+    return this.queries.getUserPlaylistIdsByName(name);
+  }
+
   /** The name on a creation receipt, by the ID Selecta created it under. */
   getCreationName(createdId: string): string | null {
     return this.queries.getCreationName(createdId);

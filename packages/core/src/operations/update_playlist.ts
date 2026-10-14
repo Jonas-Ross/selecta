@@ -29,14 +29,18 @@ export function updatePlaylist(
 
       if (error) return { status: 'rejected_before_write', error };
 
+      const playlistId = cache.resolvePlaylistId(input.playlistId);
+
       attempted = true;
       const playlist = await deps.bridge.overwritePlaylist({
         ...input,
-        playlistId: cache.resolvePlaylistId(input.playlistId),
+        playlistId,
+        // Same-name playlists the cache already knows are the user's own, never a rekey.
+        knownIds: cache.getUserPlaylistIdsByName(input.savedName).filter((id) => id !== playlistId),
       });
 
       observed = { playlist, name: input.name, expectedTrackIds: input.trackIds };
-      cache.upsertPlaylistAfterWrite(playlist, input.name, playlist.trackPersistentIds);
+      cache.persistPlaylistUpdate({ playlist, name: input.name, staleId: playlistId });
 
       return { status: 'observed_success', observed };
     } catch (error) {

@@ -163,10 +163,11 @@ it('trims the double an iCloud add can leave', async () => {
 describe('overwriting a saved playlist', () => {
   const saved = ids.slice(0, 3);
   const next = [ids[2]!, ids[0]!, ids[4]!];
-  const overwrite = (playlistId: string, expectedTrackIds = saved) =>
+  const overwrite = (playlistId: string, expectedTrackIds = saved, knownIds: string[] = []) =>
     bridge.overwritePlaylist({
       playlistId,
       savedName: 'Peak',
+      knownIds,
       name: 'Peak time',
       trackIds: next,
       expectedTrackIds,
@@ -190,6 +191,16 @@ describe('overwriting a saved playlist', () => {
 
     expect((await overwrite(old)).persistentId).toBe(id);
     expect(live()).toEqual([{ id, name: 'Peak time', tracks: next }]);
+  });
+
+  it('never takes a same-name copy the cache already knows for a rotated ID', async () => {
+    const copy = music.addPlaylist('Peak', saved);
+
+    await expect(overwrite('GONE', saved, [copy])).rejects.toMatchObject({
+      errorCode: 'playlist_not_found',
+      writePhase: 'not_started',
+    });
+    expect(live()).toEqual([{ id: copy, name: 'Peak', tracks: saved }]);
   });
 
   it('writes nothing when the playlist changed in Music since it was saved', async () => {
