@@ -38,6 +38,17 @@ it('shares a closing run between nested spans', () => {
   ]);
 });
 
+it('resolves a reference link, held to the same schemes', () => {
+  expect(
+    parseMarkdown('[docs][s] and [bad][b]\n\n[s]: https://example.com\n[b]: javascript:x'),
+  ).toEqual([
+    {
+      kind: 'p',
+      lines: [[{ kind: 'link', href: 'https://example.com', children: ['docs'] }, ' and bad']],
+    },
+  ]);
+});
+
 it('links a bare URL', () => {
   expect(parseInline('see https://example.com/x')).toEqual([
     'see ',

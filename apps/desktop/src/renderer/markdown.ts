@@ -30,7 +30,24 @@ const options = {
 };
 
 export function parseMarkdown(source: string): Block[] {
-  return blocks(fromMarkdown(source, options).children);
+  const tree = fromMarkdown(source, options);
+  const urls: Urls = new Map();
+
+  // Reference links (`[docs][x]`) resolve through definitions anywhere in the reply.
+  visit(tree, (node) => {
+    if (node.type === 'definition' && !urls.has(node.identifier))
+      urls.set(node.identifier, node.url);
+  });
+
+  return blocks(tree.children, urls);
+}
+
+type Urls = Map<string, string>;
+
+function visit(node: Nodes, see: (node: Nodes) => void) {
+  see(node);
+
+  if ('children' in node) for (const child of node.children) visit(child, see);
 }
 
 /** A line of inline Markdown, without its paragraph. */
@@ -38,24 +55,24 @@ export function parseInline(text: string): Inline[] {
   return parseMarkdown(text).flatMap((block) => (block.kind === 'p' ? block.lines.flat() : []));
 }
 
-function blocks(nodes: RootContent[]): Block[] {
+function blocks(nodes: RootContent[], urls: Urls): Block[] {
   return nodes.flatMap((node): Block[] => {
     switch (node.type) {
       case 'paragraph':
-        return [{ kind: 'p', lines: lines(node.children) }];
+        return [{ kind: 'p', lines: lines(node.children, urls) }];
       case 'heading':
-        return [{ kind: 'heading', children: inline(node.children) }];
+        return [{ kind: 'heading', children: inline(node.children, urls) }];
       case 'code':
         return [{ kind: 'code', text: node.value }];
       case 'blockquote':
-        return [{ kind: 'quote', blocks: blocks(node.children) }];
+        return [{ kind: 'quote', blocks: blocks(node.children, urls) }];
       case 'list':
         return [
           {
             kind: 'list',
             ordered: !!node.ordered,
             start: node.start ?? 1,
-            items: node.children.map((item) => blocks(item.children)),
+            items: node.children.map((item) => blocks(item.children, urls)),
           },
         ];
       case 'thematicBreak':
@@ -70,10 +87,10 @@ function blocks(nodes: RootContent[]): Block[] {
 }
 
 /** A paragraph's content, split where the reply broke its lines. */
-function lines(nodes: PhrasingContent[]): Inline[][] {
+function lines(nodes: PhrasingContent[], urls: Urls): Inline[][] {
   const out: Inline[][] = [[]];
 
-  for (const node of inline(nodes)) {
+  for (const node of inline(nodes, urls)) {
     if (typeof node !== 'string') {
       out.at(-1)!.push(node);
       continue;
@@ -89,10 +106,10 @@ function lines(nodes: PhrasingContent[]): Inline[][] {
   return out;
 }
 
-function inline(nodes: PhrasingContent[]): Inline[] {
+function inline(nodes: PhrasingContent[], urls: Urls): Inline[] {
   const out: Inline[] = [];
 
-  for (const item of nodes.flatMap(phrase)) {
+  for (const item of nodes.flatMap((node) => phrase(node, urls))) {
     // Escapes and entities arrive as separate text nodes.
     if (typeof item === 'string' && typeof out.at(-1) === 'string') out[out.length - 1] += item;
     else out.push(item);
@@ -101,7 +118,7 @@ function inline(nodes: PhrasingContent[]): Inline[] {
   return out;
 }
 
-function phrase(node: PhrasingContent): Inline[] {
+function phrase(node: PhrasingContent, urls: Urls): Inline[] {
   switch (node.type) {
     case 'text':
     case 'html':
@@ -111,21 +128,25 @@ function phrase(node: PhrasingContent): Inline[] {
     case 'inlineCode':
       return [{ kind: 'code', text: node.value }];
     case 'strong':
-      return [{ kind: 'strong', children: inline(node.children) }];
+      return [{ kind: 'strong', children: inline(node.children, urls) }];
     case 'emphasis':
-      return [{ kind: 'em', children: inline(node.children) }];
+      return [{ kind: 'em', children: inline(node.children, urls) }];
     case 'delete':
-      return [{ kind: 'del', children: inline(node.children) }];
+      return [{ kind: 'del', children: inline(node.children, urls) }];
     case 'link':
+
+    case 'linkReference': {
+      const href = node.type === 'link' ? node.url : (urls.get(node.identifier) ?? '');
+
       // Anything but a web or mail link keeps only its label.
-      return SAFE_LINK.test(node.url)
-        ? [{ kind: 'link', href: node.url, children: inline(node.children) }]
-        : inline(node.children);
+      return SAFE_LINK.test(href)
+        ? [{ kind: 'link', href, children: inline(node.children, urls) }]
+        : inline(node.children, urls);
+    }
+
     case 'image':
     case 'imageReference':
       return node.alt ? [node.alt] : [];
-    case 'linkReference':
-      return inline(node.children);
     default:
       return text(node);
   }
