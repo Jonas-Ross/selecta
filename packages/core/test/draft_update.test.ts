@@ -107,6 +107,25 @@ it('rekeys the cache when the update followed a rotated ID', async () => {
   );
 });
 
+it("leaves another receipt's edit conflict standing when the update follows a rotated ID", async () => {
+  const cache = deps.cacheInstance;
+
+  // A second receipt whose rekey landed on this playlist, which held its own note.
+  cache.setNote('playlist', 'P-SAVED', 'mine');
+  cache.recordPlaylistCreation('P-OTHER', 'Mix', ids);
+  cache.setNote('playlist', 'P-OTHER', 'other');
+  cache.applyRekey('P-OTHER', 'P-OTHER', 'P-SAVED');
+  expect(cache.hasEditConflict('P-OTHER')).toBe(true);
+  vi.mocked(deps.bridge.overwritePlaylist).mockImplementationOnce(async ({ trackIds }) =>
+    written(trackIds, 'P-ROTATED'),
+  );
+
+  await tools.save({ draft_id: draftId, revision: await reorder() });
+  expect(cache.resolvePlaylistId('P-OTHER')).toBe('P-ROTATED');
+  expect(cache.hasEditConflict('P-OTHER')).toBe(true);
+  expect(cache.hasEditConflict('P-SAVED')).toBe(false);
+});
+
 it('names every playlist the cache knows, so a rotated-ID lookup never takes one', async () => {
   deps.cacheInstance.upsertPlaylistAfterWrite(written(ids, 'P-COPY'), 'Since renamed', ids);
 

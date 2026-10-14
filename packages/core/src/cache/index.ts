@@ -769,7 +769,8 @@ export class SelectaCache {
         trackIds: playlist.trackPersistentIds,
       };
 
-      if (staleId !== playlist.persistentId) this.applyLiveRekey(staleId, live);
+      // The rekey proves only this receipt's playlist; another receipt's conflict still stands.
+      if (staleId !== playlist.persistentId) this.applyLiveRekey(staleId, live, true);
       else this.upsertPlaylistAfterWrite(playlist, name, live.trackIds);
 
       this.queries.setCreationContents(live.persistentId, name, live.trackIds);
@@ -793,13 +794,15 @@ export class SelectaCache {
    * at the live ID, move the note, mirror the live row and order, drop the
    * stale row. No receipt is retired or created. A note already on the live ID
    * wins (see movePlaylistNote); the refused one goes with the stale row.
+   * keepConflicts leaves receipts' edit conflicts as they were.
    */
   applyLiveRekey(
     staleId: string,
     live: { persistentId: string; name: string; trackIds: string[] },
+    keepConflicts = false,
   ): void {
     const run = this.db.transaction(() => {
-      this.queries.repointCreations(staleId, live.persistentId);
+      this.queries.repointCreations(staleId, live.persistentId, keepConflicts);
       // Move before delete: deletePlaylistRow takes the note with the row.
       this.queries.movePlaylistNote(staleId, live.persistentId);
       this.upsertPlaylistAfterWrite(

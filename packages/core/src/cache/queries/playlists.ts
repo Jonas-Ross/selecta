@@ -61,6 +61,9 @@ export function createPlaylistsQueries(
   const repointCreationsByCurrentIdStmt = db.prepare(
     'UPDATE playlist_creations SET current_persistent_id = ?, edit_conflict = 0 WHERE current_persistent_id = ?',
   );
+  const repointCreationsKeepingConflictsStmt = db.prepare(
+    'UPDATE playlist_creations SET current_persistent_id = ? WHERE current_persistent_id = ?',
+  );
 
   const setCreationContentsStmt = db.prepare(
     'UPDATE playlist_creations SET name = ?, track_ids_json = ? WHERE current_persistent_id = ?',
@@ -138,8 +141,11 @@ export function createPlaylistsQueries(
       setCreationContentsStmt.run(name, JSON.stringify(trackIds), currentId);
     },
 
-    repointCreations(fromCurrentId: string, toCurrentId: string): void {
-      repointCreationsByCurrentIdStmt.run(toCurrentId, fromCurrentId);
+    repointCreations(fromCurrentId: string, toCurrentId: string, keepConflicts = false): void {
+      (keepConflicts ? repointCreationsKeepingConflictsStmt : repointCreationsByCurrentIdStmt).run(
+        toCurrentId,
+        fromCurrentId,
+      );
     },
 
     deletePlaylistRow(persistentId: string): void {
