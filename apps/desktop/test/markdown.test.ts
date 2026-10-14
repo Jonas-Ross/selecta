@@ -22,6 +22,13 @@ it('nests emphasis inside bold', () => {
   ]);
 });
 
+it('reads a triple run as bold italics', () => {
+  const both = [{ kind: 'strong', children: [{ kind: 'em', children: ['important'] }] }];
+
+  expect(parseInline('***important***')).toEqual(both);
+  expect(parseInline('___important___')).toEqual(both);
+});
+
 it('leaves stray markers and snake_case alone', () => {
   expect(parseInline('2 * 3 * 4')).toEqual(['2 * 3 * 4']);
   expect(parseInline('track_id and draft_id')).toEqual(['track_id and draft_id']);

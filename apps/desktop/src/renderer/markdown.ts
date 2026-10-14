@@ -205,6 +205,8 @@ const WORD = /[\p{L}\p{N}]/u;
 /** A delimiter run at `i` with a matching closer, in CommonMark's spirit if not its letter. */
 function emphasis(text: string, i: number): { node: Inline; end: number } | undefined {
   for (const [delim, kind] of [
+    ['***', 'strong'],
+    ['___', 'strong'],
     ['**', 'strong'],
     ['__', 'strong'],
     ['~~', 'del'],
@@ -236,8 +238,11 @@ function emphasis(text: string, i: number): { node: Inline; end: number } | unde
       )
         continue;
 
+      const children = parseInline(text.slice(open, end));
+
       return {
-        node: { kind, children: parseInline(text.slice(open, end)) },
+        // A triple run is bold italics.
+        node: { kind, children: delim.length === 3 ? [{ kind: 'em', children }] : children },
         end: end + delim.length,
       };
     }
