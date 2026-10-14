@@ -29,7 +29,7 @@ export function transportHeld(busy: boolean, linked: boolean, pending: unknown):
 }
 
 /**
- * Where "Hear the join" starts; with no known length there is no end to count back from.
+ * Where "Hear the transition" starts; with no known length there is no end to count back from.
  * Music.app reports an unset length as 0, so that counts as unknown too.
  */
 export function joinStart(duration: number | undefined, lead: number): number | undefined {

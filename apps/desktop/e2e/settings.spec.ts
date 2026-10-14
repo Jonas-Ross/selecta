@@ -1,6 +1,6 @@
 import { expect, test } from '../harness/fixture.js';
 
-test('opens Settings from the app menu, and Hear the join starts where the setting says', async ({
+test('opens Settings from the app menu, and Hear the transition starts where the setting says', async ({
   electronApp,
   page,
   music,
@@ -61,7 +61,7 @@ test('opens Settings from the app menu, and Hear the join starts where the setti
     page.getByText('Plays the last 30 seconds of this track into the next.'),
   ).toBeVisible();
   music.setSpeed(0);
-  await page.getByRole('button', { name: 'Hear the join' }).click();
+  await page.getByRole('button', { name: 'Hear the transition' }).click();
 
   await expect.poll(() => music.snapshot().player.state).toBe('playing');
 
