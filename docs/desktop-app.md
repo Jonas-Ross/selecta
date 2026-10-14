@@ -30,7 +30,7 @@ The host keeps a local action log at `~/Library/Logs/Selecta/desktop.log` (`src/
 | `springs.ts`, `reorder.ts` | The spring step, settle test and per-frame stepper, and where a dragged or carried record lands |
 | `crate.ts`, `flight.ts` | How each record in the crate stands and shades, flick and wheel flips, and the arc a record flies from the crate to the rail |
 | `listen.ts` | Which record is playing, the live position between reads, set time, where a join starts, and the key wheel's geometry |
-| `markdown.ts` | An agent's reply parsed into the Markdown subset agents write (paragraphs, headings, lists, quotes, code, emphasis, web and mail links), as data the panel builds elements from, so a reply never reaches the page as HTML |
+| `markdown.ts` | An agent's reply parsed by micromark (CommonMark, GFM strikethrough and bare links) and cut down to what the panel draws, as data it builds elements from, so a reply never reaches the page as HTML |
 
 Styles live in `src/renderer/styles/`, split by concern and all built from the custom properties in `tokens.css`: `base.css` (reset, buttons, notices), `chrome.css` (top bar, save card), `home.css` (Home and Brief), `crate.css`, `rail.css`, and for Listen `listen.css` (the record playing), `sleeve-back.css`, `wheel.css` and `transport.css`, `panel.css` (Claude), `explain.css`, and `replace.css` for replacing a record. The fonts are the website's, copied into `src/renderer/styles/fonts/` and served from the bundle, since the page's CSP allows only `'self'`. The window uses an inset title bar, so the top bar is the drag region and leaves the traffic lights 80px.
 

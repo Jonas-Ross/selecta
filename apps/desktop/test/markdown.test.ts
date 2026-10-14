@@ -23,10 +23,26 @@ it('nests emphasis inside bold', () => {
 });
 
 it('reads a triple run as bold italics', () => {
-  const both = [{ kind: 'strong', children: [{ kind: 'em', children: ['important'] }] }];
+  const both = [{ kind: 'em', children: [{ kind: 'strong', children: ['important'] }] }];
 
   expect(parseInline('***important***')).toEqual(both);
   expect(parseInline('___important___')).toEqual(both);
+});
+
+it('shares a closing run between nested spans', () => {
+  expect(parseInline('**bold and *italic***')).toEqual([
+    { kind: 'strong', children: ['bold and ', { kind: 'em', children: ['italic'] }] },
+  ]);
+  expect(parseInline('__bold and _italic___')).toEqual([
+    { kind: 'strong', children: ['bold and ', { kind: 'em', children: ['italic'] }] },
+  ]);
+});
+
+it('links a bare URL', () => {
+  expect(parseInline('see https://example.com/x')).toEqual([
+    'see ',
+    { kind: 'link', href: 'https://example.com/x', children: ['https://example.com/x'] },
+  ]);
 });
 
 it('splits a triple run whose spans close apart', () => {
@@ -48,7 +64,7 @@ it('never closes emphasis inside code, a link or on an escaped marker', () => {
       children: ['see ', { kind: 'link', href: 'https://a.com/a*b', children: ['it'] }, ' now'],
     },
   ]);
-  expect(parseInline('**a \\** b**')).toEqual([{ kind: 'strong', children: ['a ** b'] }]);
+  expect(parseInline('**a \\* b**')).toEqual([{ kind: 'strong', children: ['a * b'] }]);
 });
 
 it('leaves stray markers and snake_case alone', () => {
