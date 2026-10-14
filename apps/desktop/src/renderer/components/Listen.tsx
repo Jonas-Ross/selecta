@@ -1,6 +1,6 @@
 // Listen, in the crate's place above the rail: the record playing, large, with
 // its disc out and turning while Music.app plays it, and the sleeve back
-// beside it: its facts, the join into the next record, and the set's route
+// beside it: its facts, the transition into the next record, and the set's route
 // round the key wheel.
 import { join } from '../joins.js';
 import { useSettings } from '../hooks/useSettings.js';
@@ -78,7 +78,7 @@ export function Listen({
             </div>
             <dl className="joinbox">
               <dt>
-                <Term name="join">The join</Term>
+                <Term name="join">Transition</Term>
               </dt>
               <dd>{j.tempo}</dd>
               <dt>
@@ -101,7 +101,7 @@ export function Listen({
             </dl>
             <div className="hj">
               <button type="button" className="btn uv" disabled={joinDisabled} onClick={onJoin}>
-                Hear the join
+                Hear the transition
               </button>
               <p>Plays the last {joinLead} seconds of this track into the next.</p>
             </div>

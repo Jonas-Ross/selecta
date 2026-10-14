@@ -212,7 +212,7 @@ const TERMS = {
     body: <p>The inner ring of the key wheel. Minor keys tend to sound darker.</p>,
   },
   join: {
-    title: 'The joins',
+    title: 'Transitions',
     body: <p>How tempo and key change from one track to the next.</p>,
   },
   provisional: {

@@ -1,13 +1,11 @@
-/* Home and Brief: one centred column on the hairline grid. */
+/* Home and Brief: one centred column over the record side. */
 .page {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: var(--s7) var(--s5);
-  background:
-    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / var(--grid-step) var(--grid-step),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / var(--grid-step) var(--grid-step),
-    var(--bg);
+  isolation: isolate;
+  background: var(--bg);
 }
 .column {
   max-width: 720px;

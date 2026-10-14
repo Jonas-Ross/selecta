@@ -189,7 +189,7 @@ export function Shortlist({
                     <button
                       type="button"
                       className="btn line sm"
-                      title="Both joins up close"
+                      title="Both transitions up close"
                       onClick={() => replace.view('bench', id)}
                     >
                       Close-up

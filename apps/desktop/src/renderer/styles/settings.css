@@ -117,7 +117,7 @@
   color: var(--ink4);
 }
 
-/* Hear the join: the outgoing record's last two minutes, the lit tail is what plays,
+/* Hear the transition: the outgoing record's last two minutes, the lit tail is what plays,
    then the next record. The slider sits over the tail so the thumb is the cue. */
 .jl {
   --thumb: 14px;

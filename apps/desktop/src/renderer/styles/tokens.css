@@ -15,7 +15,6 @@
   --line: rgba(150, 170, 210, 0.075);
   --line2: rgba(150, 170, 210, 0.14);
   --line3: rgba(150, 170, 210, 0.26);
-  --grid: rgba(150, 170, 210, 0.028);
   --rim: rgba(196, 210, 245, 0.62);
   --rim-glow: rgba(150, 170, 255, 0.35);
 
@@ -83,7 +82,6 @@
   --top: 48px;
   --lights: 80px;
   --claude-w: 352px;
-  --grid-step: 40px;
 
   --ease: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);

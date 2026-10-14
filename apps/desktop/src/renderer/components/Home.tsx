@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { DraftSummary } from '../../shared/protocol.js';
 import { selecta } from '../api.js';
 import { orphanRuns, saveLabel, type Run } from '../state.js';
+import { Groove } from './Groove.js';
 import { TopBar } from './TopBar.js';
 
 export function Home({
@@ -39,6 +40,7 @@ export function Home({
         }
       />
       <main className="page">
+        <Groove fixed />
         <div className="column">
           <div className="page-head">
             <h1>Drafts</h1>

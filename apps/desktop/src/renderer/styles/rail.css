@@ -13,10 +13,9 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background:
-    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / var(--grid-step) var(--grid-step),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / var(--grid-step) var(--grid-step),
-    var(--bg);
+  position: relative;
+  isolation: isolate;
+  background: var(--bg);
 }
 .draft-head {
   display: flex;
