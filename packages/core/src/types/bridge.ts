@@ -177,7 +177,7 @@ export interface Bridge {
 
   // Clear and repopulate (and rename) a plain user playlist found by ID, or by
   // savedName when that alone holds expectedTrackIds and isn't one of knownIds.
-  // Refuses before writing unless the live order is exactly expectedTrackIds.
+  // Refuses before writing unless the live name and order are still savedName and expectedTrackIds.
   overwritePlaylist(input: {
     playlistId: string;
     savedName: string;

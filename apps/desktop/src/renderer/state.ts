@@ -262,7 +262,10 @@ export function saveLabel(save?: Save, update = false): string {
   return save.result?.error && save.result.creation_committed !== true ? 'Save uncertain' : 'Saved';
 }
 
-/** Only a save still in flight or of unknown outcome holds the draft: core never repeats a write. */
-export function saveHolds(save?: Save): boolean {
-  return save !== undefined && saveLabel(save) !== 'Saved';
+/**
+ * A save in flight or of unknown outcome holds the draft, since core never repeats a write;
+ * so does a good one with no playlist to update, or the next save would make a second.
+ */
+export function saveHolds(draft?: DraftView['draft']): boolean {
+  return draft?.save !== undefined && (saveLabel(draft.save) !== 'Saved' || !draft.playlist);
 }

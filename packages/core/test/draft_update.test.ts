@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import Database from 'better-sqlite3';
 import { DraftStore } from '../src/drafts/store.js';
 import { PlaylistDraftTools } from '../src/tools/playlist_draft.js';
 import { BridgeError, preWriteError } from '../src/types/errors.js';
@@ -157,4 +158,28 @@ it('holds an update of unknown outcome like any uncertain save', async () => {
     await tools.save({ draft_id: draftId, revision: store.get(draftId).revision }),
   ).toHaveProperty('error', 'validation_error');
   expect(deps.bridge.overwritePlaylist).toHaveBeenCalledTimes(1);
+});
+
+it('reads the playlist of a save made before drafts kept one', async () => {
+  const legacy = randomUUID();
+  const body = (result: Record<string, unknown>) =>
+    JSON.stringify({
+      ...store.get(draftId),
+      draft_id: legacy,
+      playlist: undefined,
+      save: { revision: 1, status: 'finished', result },
+    });
+  const write = (result: Record<string, unknown>) =>
+    new Database(store.path)
+      .prepare('INSERT OR REPLACE INTO drafts VALUES (?, ?)')
+      .run(legacy, body(result));
+
+  write({ playlist_id: 'P-OLD', name: 'Old', track_count: 2 });
+  expect(store.get(legacy).playlist).toEqual({ playlist_id: 'P-OLD', name: 'Old', track_ids: ids });
+
+  write({ playlist_id: 'P-OLD', name: 'Old', track_count: 2, order_matches_request: false });
+  expect(store.get(legacy).playlist).toBeUndefined();
+
+  write({ error: 'jxa_error', partial_write: { playlist_id: 'P-OLD' } });
+  expect(store.get(legacy).playlist).toBeUndefined();
 });

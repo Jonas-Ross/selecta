@@ -201,7 +201,8 @@ export function buildOverwritePlaylistScript(args: {
         pl = named[0];
       }
       if (playlistKind(pl) !== 'user') return JSON.stringify({ notEditable: true });
-      if (JSON.stringify(liveIds(pl)) !== expected) return JSON.stringify({ orderDrifted: true });
+      if (pl.name() !== args.savedName || JSON.stringify(liveIds(pl)) !== expected)
+        return JSON.stringify({ orderDrifted: true });
       ${RESOLVE_AND_ADD_HELPERS}
       const persistentId = pl.persistentID();
       return writeResult(pl, persistentId, {}, () => {

@@ -143,7 +143,7 @@ export function Draft({
   const draft = view?.draft;
   const items = pendingOrder(rows(view ?? {}), pending);
   const saved = draft?.save !== undefined;
-  const saveHeld = saveHolds(draft?.save);
+  const saveHeld = saveHolds(draft);
   const linked = previewLinked(view ?? {});
   const locked = saveHeld || saving || leaving;
   const sum = totals(items);

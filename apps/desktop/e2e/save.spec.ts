@@ -75,7 +75,7 @@ test('leaves a playlist changed in Music alone and saves a new one next time', a
   await page.getByRole('button', { name: 'Update in Music' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Update' }).click();
   await expect(
-    page.getByText(/changed in Music.app since it was saved. Nothing was written/),
+    page.getByText(/changed or renamed in Music.app since it was saved. Nothing was written/),
   ).toBeVisible();
   expect(saved(music)[0]!.tracks).toEqual(edited);
 

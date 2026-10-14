@@ -213,6 +213,16 @@ describe('overwriting a saved playlist', () => {
     expect(live()).toEqual([{ id, name: 'Peak', tracks: saved.slice(1) }]);
   });
 
+  it('writes nothing when it was renamed in Music since it was saved', async () => {
+    const id = music.addPlaylist('Peak (mine)', saved);
+
+    await expect(overwrite(id)).rejects.toMatchObject({
+      errorCode: 'validation_error',
+      writePhase: 'not_started',
+    });
+    expect(live()).toEqual([{ id, name: 'Peak (mine)', tracks: saved }]);
+  });
+
   it('writes nothing when it is gone and its name now holds something else', async () => {
     const old = music.addPlaylist('Peak', saved);
     const id = music.rekey('Peak');

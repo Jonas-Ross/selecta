@@ -100,11 +100,28 @@ it('keeps what Music.app was seen to do when the save also reports an error', ()
   ).toBe('Music.app created playlist P1 and was seen holding 2 tracks. jxa_error');
 });
 
-it('holds the draft only while a save is pending or of unknown outcome', () => {
+it('holds the draft while a save is unsettled, or done with no playlist to update', () => {
+  const draft = (save?: object, linked = true) =>
+    ({
+      draft_id: '00000000-0000-4000-8000-000000000000',
+      revision: 3,
+      name: 'Peak',
+      entries: [],
+      selected_entry_ids: [],
+      feedback: '',
+      ...(save ? { save } : {}),
+      ...(linked ? { playlist: { playlist_id: 'P', name: 'Peak', track_ids: [] } } : {}),
+    }) as Parameters<typeof saveHolds>[0];
+  const done = { revision: 1, status: 'finished', result: { playlist_id: 'P' } };
+
   expect(saveHolds(undefined)).toBe(false);
-  expect(saveHolds({ revision: 1, status: 'finished', result: { playlist_id: 'P' } })).toBe(false);
-  expect(saveHolds({ revision: 1, status: 'pending' })).toBe(true);
-  expect(saveHolds({ revision: 1, status: 'finished', result: { error: 'jxa_error' } })).toBe(true);
+  expect(saveHolds(draft())).toBe(false);
+  expect(saveHolds(draft(done))).toBe(false);
+  expect(saveHolds(draft(done, false))).toBe(true);
+  expect(saveHolds(draft({ revision: 1, status: 'pending' }))).toBe(true);
+  expect(
+    saveHolds(draft({ revision: 1, status: 'finished', result: { error: 'jxa_error' } })),
+  ).toBe(true);
 });
 
 it('says an update rewrote the playlist rather than made one', () => {

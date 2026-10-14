@@ -192,7 +192,7 @@ export const bridge: Bridge = {
       throw preWriteError(
         'validation_error',
         'The saved playlist changed in Music.app since it was saved.',
-        'The saved playlist was changed in Music.app since it was saved. Nothing was written, so those changes are kept.',
+        'The saved playlist was changed or renamed in Music.app since it was saved. Nothing was written, so those changes are kept.',
       );
 
     if ('missingTrackIds' in result) throwMissingTracks(result.missingTrackIds, 'not_started');
