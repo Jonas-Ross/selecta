@@ -12,6 +12,7 @@ import {
   rejectRun,
   rows,
   runEvent,
+  saveHolds,
   saveLabel,
   saveOutcome,
   totals,
@@ -99,8 +100,22 @@ it('keeps what Music.app was seen to do when the save also reports an error', ()
   ).toBe('Music.app created playlist P1 and was seen holding 2 tracks. jxa_error');
 });
 
+it('holds the draft only while a save is pending or of unknown outcome', () => {
+  expect(saveHolds(undefined)).toBe(false);
+  expect(saveHolds({ revision: 1, status: 'finished', result: { playlist_id: 'P' } })).toBe(false);
+  expect(saveHolds({ revision: 1, status: 'pending' })).toBe(true);
+  expect(saveHolds({ revision: 1, status: 'finished', result: { error: 'jxa_error' } })).toBe(true);
+});
+
+it('says an update rewrote the playlist rather than made one', () => {
+  expect(saveOutcome({ result: { name: 'Peak', track_count: 9, updated: true } })).toBe(
+    'Updated "Peak" in Music, now 9 tracks.',
+  );
+});
+
 it('labels the save button by what the draft recorded', () => {
   expect(saveLabel(undefined)).toBe('Save to Music');
+  expect(saveLabel(undefined, true)).toBe('Update in Music');
   expect(saveLabel({ revision: 1, status: 'pending' })).toBe('Save pending');
   expect(saveLabel({ revision: 1, status: 'finished', result: { playlist_id: 'P' } })).toBe(
     'Saved',
