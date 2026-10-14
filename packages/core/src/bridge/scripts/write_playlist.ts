@@ -174,3 +174,39 @@ export function buildReplacePlaylistScript(args: {
     `,
   );
 }
+
+export function buildOverwritePlaylistScript(args: {
+  playlistId: string;
+  savedName: string;
+  name: string;
+  trackIds: string[];
+  expectedTrackIds: string[];
+}): string {
+  return wrapJxaScript(
+    args,
+    `
+      ${PLAYLIST_KIND_FN}
+      ${PLAIN_USER_PLAYLISTS_NAMED}
+      function liveIds(p) { return p.tracks.length === 0 ? [] : p.tracks.persistentID(); }
+      const expected = JSON.stringify(args.expectedTrackIds);
+      let pl = Music.playlists.whose({ persistentID: args.playlistId })()[0];
+      // iCloud rotates a fresh playlist's ID; the one playlist of that name still
+      // holding exactly what was saved is the same playlist (docs/music-app.md).
+      if (pl === undefined) {
+        const named = plainUserPlaylistsNamed(args.savedName, 2);
+        if (named.length !== 1 || JSON.stringify(liveIds(named[0])) !== expected)
+          return JSON.stringify({ playlistNotFound: true });
+        pl = named[0];
+      }
+      if (playlistKind(pl) !== 'user') return JSON.stringify({ notEditable: true });
+      if (JSON.stringify(liveIds(pl)) !== expected) return JSON.stringify({ orderDrifted: true });
+      ${RESOLVE_AND_ADD_HELPERS}
+      const persistentId = pl.persistentID();
+      return writeResult(pl, persistentId, {}, () => {
+        if (pl.name() !== args.name) pl.name = args.name;
+        for (let i = pl.tracks.length - 1; i >= 0; i--) Music.delete(pl.tracks[i]);
+        addTracksInOrder(pl, args.trackIds);
+      });
+    `,
+  );
+}

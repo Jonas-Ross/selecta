@@ -104,6 +104,16 @@ export const replace = z.union([
   z.object({ ambiguousPreview: z.literal(true) }),
   writeSuccess.extend({ created: z.boolean() }).refine(consistentCount, { path: ['trackCount'] }),
 ]);
+export const overwrite = z.union([
+  notFound.extend(noCreationTarget),
+  notEditable.extend(noCreationTarget),
+  z.object({ orderDrifted: z.literal(true) }).extend(noCreationTarget),
+  creationMissing,
+  partialWriteResult,
+  writeSuccess
+    .extend({ partialWrite: z.never().optional() })
+    .refine(consistentCount, { path: ['trackCount'] }),
+]);
 export const clone = z.union([
   partialWriteResult,
   creationMissing,
