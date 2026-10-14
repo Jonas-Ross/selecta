@@ -41,6 +41,7 @@ import { Bench } from './Bench.js';
 import { ClaudePanel } from './ClaudePanel.js';
 import { Crate, type CrateTrack } from './Crate.js';
 import { Flight, type FlightPlan } from './Flight.js';
+import { Groove } from './Groove.js';
 import { Listen } from './Listen.js';
 import { Rail, type Opening, type RailHandle } from './Rail.js';
 import { RecordMenu } from './RecordMenu.js';
@@ -150,6 +151,7 @@ export function Draft({
   // A record in the air is an edit not yet queued, so Save and Home wait for it to land.
   const airborne = flight !== undefined;
   const span = bpmSpan(items);
+  const grooveRecords = items.map((row) => ({ id: row.track_id, seconds: row.duration_seconds }));
   const sides = replacing && around(items, replacing.entryId);
   // Not while Claude runs: linking the draft mid-run would refuse its edits partway through.
   const canPlay =
@@ -530,6 +532,12 @@ export function Draft({
       />
       <div className="draft-body">
         <section className="draft-main" aria-label="Draft">
+          <Groove
+            records={grooveRecords}
+            now={listen.current ? listen.now : undefined}
+            playing={listen.playing}
+            progress={listen.duration ? listen.position / listen.duration : undefined}
+          />
           {replacing?.view === 'bench' && sides ? (
             <Bench around={sides} replace={replace} agent={agent} onSwap={swap} />
           ) : tab === 'listen' ? (
