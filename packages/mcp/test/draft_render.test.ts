@@ -137,3 +137,32 @@ it('updates row and timeline nodes in place across selection, reorder and busy r
   // The repeat badge follows the data: b is no longer a repeated track.
   expect(rowB.children[2]!.children[0]!.children[1]!.textContent).toBe('');
 });
+
+it('labels the save of a saved draft as an update of its playlist', () => {
+  const el = elementLookup();
+  const draft = {
+    draft_id: 'draft',
+    revision: 2,
+    name: 'Fixture II',
+    feedback: '',
+    selected_entry_ids: [] as string[],
+    entries: [{ entry_id: 'a', track_id: 'same' }],
+    playlist: undefined as { name: string } | undefined,
+  };
+  const render = () =>
+    renderDraft(el, {
+      draft,
+      inspection: undefined,
+      inspection_error: undefined,
+      busy: false,
+      lanes: { tempo: false, key: false },
+      edit: vi.fn(),
+    });
+
+  render();
+  expect(el('save-label').textContent).toBe('Save to Music.app');
+  draft.playlist = { name: 'Fixture' };
+  render();
+  expect(el('save-label').textContent).toBe('Update in Music.app');
+  expect(el('save').title).toContain('“Fixture”');
+});
