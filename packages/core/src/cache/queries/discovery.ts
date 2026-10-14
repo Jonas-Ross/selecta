@@ -168,6 +168,8 @@ export function createDiscoveryQueries(db: Database) {
     `SELECT ${PLAYLIST_COLUMNS} FROM playlists p WHERE p.persistent_id = ?`,
   );
 
+  const playlistIdsStmt = db.prepare('SELECT persistent_id AS id FROM playlists');
+
   const userPlaylistIdsByNameStmt = db.prepare(
     `SELECT persistent_id AS id FROM playlists WHERE name = ? AND kind = 'user' ORDER BY persistent_id`,
   );
@@ -191,6 +193,10 @@ export function createDiscoveryQueries(db: Database) {
            GROUP BY p.persistent_id ORDER BY p.name COLLATE NOCASE`);
 
   return {
+    getPlaylistIds(): string[] {
+      return (playlistIdsStmt.all() as { id: string }[]).map((r) => r.id);
+    },
+
     playlistExists(persistentId: string): boolean {
       return playlistExistsStmt.get(persistentId) !== undefined;
     },

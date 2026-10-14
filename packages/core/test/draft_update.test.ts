@@ -69,7 +69,7 @@ it('keeps the saved playlist through edits and rewrites it in place on the next 
   expect(deps.bridge.overwritePlaylist).toHaveBeenCalledWith({
     playlistId: 'P-SAVED',
     savedName: 'Mix',
-    knownIds: [],
+    knownIds: expect.not.arrayContaining(['P-SAVED']),
     name: 'Mix II',
     trackIds: reordered,
     expectedTrackIds: ids,
@@ -92,20 +92,28 @@ it('rekeys the cache when the update followed a rotated ID', async () => {
   const revision = await reorder();
 
   await tools.save({ draft_id: draftId, revision });
-  expect(store.get(draftId).playlist).toMatchObject({ playlist_id: 'P-ROTATED' });
+  expect(store.get(draftId).playlist).toMatchObject({ playlist_id: 'P-SAVED' });
   expect(deps.cacheInstance.getPlaylist('P-SAVED')).toBeNull();
   expect(deps.cacheInstance.resolvePlaylistId('P-SAVED')).toBe('P-ROTATED');
   expect(deps.cacheInstance.getPlaylistTrackIds('P-ROTATED')).toEqual(reordered);
+
+  await tools.save({ draft_id: draftId, revision: await reorder() });
+  expect(deps.bridge.overwritePlaylist).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      playlistId: 'P-ROTATED',
+      knownIds: expect.not.arrayContaining(['P-ROTATED']),
+    }),
+  );
 });
 
-it('names same-name playlists the cache knows, so a rotated-ID lookup never takes one', async () => {
-  deps.cacheInstance.upsertPlaylistAfterWrite(written(ids, 'P-COPY'), 'Mix', ids);
+it('names every playlist the cache knows, so a rotated-ID lookup never takes one', async () => {
+  deps.cacheInstance.upsertPlaylistAfterWrite(written(ids, 'P-COPY'), 'Since renamed', ids);
 
   const revision = await reorder();
 
   await tools.save({ draft_id: draftId, revision });
   expect(deps.bridge.overwritePlaylist).toHaveBeenCalledWith(
-    expect.objectContaining({ knownIds: ['P-COPY'] }),
+    expect.objectContaining({ knownIds: expect.arrayContaining(['P-COPY']) }),
   );
 });
 

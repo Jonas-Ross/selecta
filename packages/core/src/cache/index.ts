@@ -776,9 +776,9 @@ export class SelectaCache {
     })();
   }
 
-  /** Cached plain user playlists with exactly this name. */
-  getUserPlaylistIdsByName(name: string): string[] {
-    return this.queries.getUserPlaylistIdsByName(name);
+  /** Every cached playlist's ID. */
+  getPlaylistIds(): string[] {
+    return this.queries.getPlaylistIds();
   }
 
   /** The name on a creation receipt, by the ID Selecta created it under. */

@@ -35,8 +35,9 @@ export function updatePlaylist(
       const playlist = await deps.bridge.overwritePlaylist({
         ...input,
         playlistId,
-        // Same-name playlists the cache already knows are the user's own, never a rekey.
-        knownIds: cache.getUserPlaylistIdsByName(input.savedName).filter((id) => id !== playlistId),
+        // A playlist the cache knows under its own ID is another playlist, never a rekey,
+        // whatever it is called now.
+        knownIds: cache.getPlaylistIds().filter((id) => id !== playlistId),
       });
 
       observed = { playlist, name: input.name, expectedTrackIds: input.trackIds };

@@ -455,7 +455,8 @@ export class PlaylistDraftTools {
           playlist:
             'observed' in outcome
               ? {
-                  playlist_id: outcome.observed.playlist.persistentId,
+                  // The creation receipt stays keyed by the first ID, and resolves on from it.
+                  playlist_id: link?.playlist_id ?? outcome.observed.playlist.persistentId,
                   name: outcome.observed.name,
                   track_ids: outcome.observed.playlist.trackPersistentIds,
                 }
