@@ -8,9 +8,6 @@ import {
   nowIndex,
   queuePlay,
   setClock,
-  wheelCell,
-  wheelPoint,
-  wheelRoute,
 } from '../src/renderer/listen.js';
 import type { Row } from '../src/renderer/state.js';
 
@@ -65,22 +62,6 @@ it('says why the player is not showing this draft', () => {
   expect(elsewhere({ running: true, state: 'playing', entry_id: 'a' })).toBeUndefined();
   expect(elsewhere({ running: true, state: 'stopped' })).toBeUndefined();
   expect(elsewhere(undefined)).toBeUndefined();
-});
-
-it('places keys on the wheel like a clock, minor inside major', () => {
-  expect(wheelPoint('12B')).toEqual([0, -106]);
-  expect(wheelPoint('12B', 'label')).toEqual([0, -124]);
-  expect(wheelPoint('3A')![0]).toBeCloseTo(64);
-  expect(wheelPoint('3A')![1]).toBeCloseTo(0);
-  expect(wheelPoint('13A')).toBeUndefined();
-  expect(wheelPoint(undefined)).toBeUndefined();
-  expect(wheelCell(12, 'A')).toMatch(/^M.*A92 92 0 0 1 .*A52 52 0 0 0 .*Z$/);
-});
-
-it('draws the route through the wheel, lifting the pen at a missing key', () => {
-  expect(wheelRoute(['12B', '12A'], 0, 1)).toBe('M0.0 -106.0L0.0 -64.0');
-  expect(wheelRoute(['12B', undefined, '12A'], 0, 2)).toBe('M0.0 -106.0M0.0 -64.0');
-  expect(wheelRoute(['12B', '12A'], 1, 5)).toBe('M0.0 -64.0');
 });
 
 it('plays on the revision the queued edits leave, unless play stopped being allowed meanwhile', async () => {

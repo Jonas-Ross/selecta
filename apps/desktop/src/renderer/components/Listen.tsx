@@ -1,6 +1,5 @@
 // Listen, in the crate's place above the rail: the record playing, large, and
-// the sleeve back beside it: its facts, the transition into the next record,
-// and the set's route round the key wheel.
+// the sleeve back beside it: its facts and the transition into the next record.
 import type { CSSProperties } from 'react';
 import { join } from '../joins.js';
 import { useReducedMotion } from '../hooks/motion.js';
@@ -9,7 +8,6 @@ import { usePalette } from '../palette.js';
 import type { Row } from '../state.js';
 import { Term } from './Explain.js';
 import { FeatureFacts } from './FeatureFacts.js';
-import { KeyWheel } from './KeyWheel.js';
 import { Sleeve } from './Sleeve.js';
 
 export function Listen({
@@ -122,7 +120,6 @@ export function Listen({
         ) : (
           <p className="last">Last track in the draft.</p>
         )}
-        <KeyWheel items={items} now={now} />
       </aside>
     </section>
   );
