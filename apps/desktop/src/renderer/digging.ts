@@ -18,9 +18,9 @@ const STEPS: Record<string, string> = {
 export const digStep = (tool?: string) =>
   tool === undefined ? 'reading your brief' : (STEPS[tool] ?? tool);
 
-/** Slots that fit the visible rail, never fewer than one or more than a crate's worth. */
-export const ghostCount = (view: number, step: number, size: number) =>
-  Math.min(10, Math.max(1, Math.floor((view - PAD * 2 - size) / step) + 1));
+/** Whole slots that fit the visible rail, never fewer than one or more than a crate's worth. */
+export const ghostCount = (view: number, step: number, gap: number) =>
+  Math.min(10, Math.max(1, Math.floor((view - PAD + gap / 2) / step)));
 
 /** The next sleeve to pull: never the one just pulled, and not simply the neighbour. */
 export function nextPull(current: number, turn: number, count: number): number {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { digStep, ghostCount, nextPull } from '../digging.js';
 import { useReducedMotion } from '../hooks/motion.js';
-import { GUTTER, PAD, type Shelf } from '../lanes.js';
+import { GUTTER, slotX, type Shelf } from '../lanes.js';
 
 // Long enough to read the step line between pulls.
 const PULL_MS = 2600;
@@ -24,7 +24,7 @@ export function Digging({
   calls: number;
 }) {
   const reduced = useReducedMotion();
-  const count = ghostCount(view, shelf.step, shelf.size);
+  const count = ghostCount(view, shelf.step, shelf.gap);
   const [pull, setPull] = useState({ at: Math.min(1, count - 1), turn: 0 });
 
   useEffect(() => {
@@ -62,7 +62,8 @@ export function Digging({
           className={i === pulled ? 'ghost pulled' : 'ghost'}
           aria-hidden="true"
           style={{
-            left: GUTTER + PAD + i * shelf.step,
+            // Where RailRecord stands the record that replaces it.
+            left: GUTTER + slotX(i, shelf.step) + shelf.gap / 2,
             top: shelf.rail - shelf.size,
             width: shelf.size,
             height: shelf.size,

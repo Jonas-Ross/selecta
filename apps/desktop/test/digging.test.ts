@@ -15,14 +15,14 @@ describe('digStep', () => {
 
 describe('ghostCount', () => {
   it('fills the visible rail with whole slots', () => {
-    // PAD 12 either side: 4 slots of 100 with 40 gaps need 12 + 3*140 + 100 + 12 = 544.
-    expect(ghostCount(544, 140, 100)).toBe(4);
-    expect(ghostCount(543, 140, 100)).toBe(3);
+    // As RailRecord places them: PAD 12, half a gap, then 4 slots of 100 with 40 gaps end at 12 + 20 + 3*140 + 100 = 552.
+    expect(ghostCount(552, 140, 40)).toBe(4);
+    expect(ghostCount(551, 140, 40)).toBe(3);
   });
 
   it('keeps one on a narrow rail and caps a wide one', () => {
-    expect(ghostCount(50, 140, 100)).toBe(1);
-    expect(ghostCount(10_000, 140, 100)).toBe(10);
+    expect(ghostCount(50, 140, 40)).toBe(1);
+    expect(ghostCount(10_000, 140, 40)).toBe(10);
   });
 });
 
