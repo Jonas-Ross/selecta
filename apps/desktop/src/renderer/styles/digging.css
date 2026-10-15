@@ -1,0 +1,137 @@
+/* The rail while the agent digs: white labels in the slots records will fill. */
+.digging {
+  position: absolute;
+  inset: 0;
+}
+.digging-say {
+  position: absolute;
+  left: var(--gutter, 56px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--s2);
+  padding-top: var(--s2);
+  text-align: center;
+  z-index: 1;
+  container-type: size;
+}
+.digging-say b {
+  /* Shrinks with the tempo lane, which the key lane squeezes on short windows. */
+  font: 700 clamp(var(--fs-title), 30cqh, var(--fs-hero)) / 1 var(--display);
+  font-stretch: 125%;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.digging-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font: var(--fs-meta) var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--ink3);
+  animation: digging-step 0.4s var(--ease-out) backwards;
+}
+/* Acid marks what is happening now. */
+.digging-step::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--acid);
+  box-shadow: 0 0 8px var(--acid);
+  animation: digging-blink 1.8s var(--ease) infinite;
+}
+@keyframes digging-step {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes digging-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.ghost {
+  position: absolute;
+  animation: ghost-in 0.5s var(--ease-out) calc(var(--i) * 70ms) backwards;
+}
+@keyframes ghost-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+/* A finger running through the crate: each sleeve tips back on its bottom edge in turn. */
+.ghost-body {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+  animation: ghost-flick 3.2s var(--ease) calc(var(--i) * 110ms) infinite;
+}
+@keyframes ghost-flick {
+  0%,
+  16%,
+  100% {
+    transform: none;
+  }
+  7% {
+    transform: perspective(600px) rotateX(14deg) translateY(-7px);
+  }
+}
+.ghost-sleeve .sleeve-ring {
+  opacity: 0.5;
+  transition: opacity 0.5s var(--ease-out);
+}
+.ghost.pulled .ghost-sleeve .sleeve-ring {
+  opacity: 1;
+}
+.ghost.pulled .ghost-sleeve::after {
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--acid) 70%, transparent),
+    inset 0 0 0 1px var(--line2);
+}
+
+/* The record inside, pulled half out of the top: grooves, a still sheen, a turning label. */
+.ghost-disc {
+  position: absolute;
+  left: 4%;
+  top: 4%;
+  width: 92%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from 20deg,
+      transparent,
+      rgba(220, 230, 255, 0.1) 8%,
+      transparent 18%,
+      transparent 50%,
+      rgba(220, 230, 255, 0.08) 58%,
+      transparent 68%
+    ),
+    repeating-radial-gradient(circle, #0b0d11 0 1.5px, #171a21 1.5px 3px);
+  box-shadow:
+    0 0 0 1px var(--line2),
+    0 -10px 30px -12px var(--shadow);
+  transform: translateY(0);
+  transition: transform 0.7s var(--ease-out);
+}
+.ghost.pulled .ghost-disc {
+  transform: translateY(-50%);
+}
+.ghost-disc i {
+  position: absolute;
+  inset: 34%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, var(--bg) 0 5%, transparent 5.5%),
+    linear-gradient(var(--bg) 0 0) 50% 8% / 2px 18% no-repeat,
+    var(--acid);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--acid) 30%, transparent);
+  /* 33⅓ rpm. */
+  animation: spin 1.8s linear infinite;
+}

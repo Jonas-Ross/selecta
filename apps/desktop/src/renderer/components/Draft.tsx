@@ -43,6 +43,7 @@ import { Banner } from './Banner.js';
 import { Bench } from './Bench.js';
 import { ClaudePanel } from './ClaudePanel.js';
 import { Crate, type CrateTrack } from './Crate.js';
+import { Digging } from './Digging.js';
 import { Flight, type FlightPlan } from './Flight.js';
 import { Groove } from './Groove.js';
 import { Listen } from './Listen.js';
@@ -79,6 +80,7 @@ export function Draft({
 }) {
   const [view, setView] = useState<DraftView>();
   const log = run?.log ?? [];
+  const tools = log.flatMap((item) => (item.kind === 'tool' ? item.text : []));
   const agent = PROVIDER_LABELS[by];
   const { settings, update } = useSettings();
   const chatCollapsed = settings.chat === 'collapsed';
@@ -711,19 +713,21 @@ export function Draft({
             handle={rail}
             replacing={replacing?.entryId}
             onMenu={(entryId, x, y) => !replacing && setMenu({ entryId, x, y })}
-            empty={
-              <div className="rail-wait">
-                {working ? (
-                  <>
-                    <b>{agent} is picking tracks</b>
-                  </>
-                ) : (
-                  <>
-                    <b>No draft yet</b>
-                    <span>Try again in the {agent} panel.</span>
-                  </>
-                )}
-              </div>
+            empty={(shelf, width) =>
+              working ? (
+                <Digging
+                  agent={agent}
+                  shelf={shelf}
+                  view={width}
+                  tool={tools.at(-1)}
+                  calls={tools.length}
+                />
+              ) : (
+                <div className="rail-wait">
+                  <b>No draft yet</b>
+                  <span>Try again in the {agent} panel.</span>
+                </div>
+              )
             }
           />
           <Transport
