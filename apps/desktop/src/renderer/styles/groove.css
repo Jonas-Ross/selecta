@@ -63,3 +63,37 @@
   stroke: rgba(214, 255, 58, 0.28);
   stroke-width: 1;
 }
+/* Registered so a new sleeve's colours fade in rather than cut; white leaves the light as it was. */
+@property --tint-a {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fff;
+}
+@property --tint-b {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fff;
+}
+.groove {
+  transition:
+    --tint-a 1.4s var(--ease),
+    --tint-b 1.4s var(--ease);
+}
+.groove-tint {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: multiply;
+  background: linear-gradient(90deg, var(--tint-a) 20%, var(--tint-b) 80%);
+}
+/* Every groove faintly in the sleeve's colours, beyond the sheen's reach. */
+.groove-glow {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  mix-blend-mode: screen;
+  opacity: 0;
+  transition: opacity 1.4s var(--ease);
+}
+.groove.tinted .groove-glow {
+  opacity: 0.3;
+}
