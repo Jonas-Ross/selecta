@@ -71,6 +71,8 @@ Cmd+, or Selecta → Settings… opens a sheet over whatever screen is up (`comp
 | Key lane | Show or hide the key lane under the rail; hidden by default, since a draft's keys are often too patchy to read as a line. Hidden, its height goes to the records and then the tempo lane. Keys still show on the card, sleeve back and transitions. |
 | Movement | Match macOS, or Reduce, which turns on the reduced-motion paths whatever macOS says. |
 
+The store also keeps whether the agent panel is tucked away, though the sheet doesn't show it: the panel's arrow or Cmd+\\ slides it to a slim edge so the draft gets the width, and a dot on the edge lights while the agent works or once it has replied.
+
 ## The agent
 
 Each turn is one run of a coding-agent CLI on the user's own login to it, so the app needs no API key and builds on a subscription they already pay for (`src/host/agent.ts`). `src/host/providers.ts` holds one adapter per CLI: the arguments for a turn and a parser for its event stream. The brief offers every CLI that is installed and signed in (`src/host/detect.ts`, asked fresh each time the brief opens), says why any other can't run, holds Build until one can, and remembers the last one picked; the panel takes that agent's name. Feedback goes to whichever agent the draft last used, unless the panel's own picker, shown when two agents can run, hands the draft to the other one; each reply keeps the name of the agent that wrote it.
