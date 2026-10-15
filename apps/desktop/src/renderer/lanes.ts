@@ -29,6 +29,7 @@ const KEY_ROW = 5;
 // Under the crate the rail is short, so rows tighten before the records shrink further.
 const COMPACT_KEY_ROW = 3;
 const COMPACT_BELOW = 560;
+const MIN_KEY_ROW = 1.5;
 const EMPTY_BAND = 20;
 const BAND_GAP = 8;
 // A join marker's two lines, when no key title sits under them.
@@ -48,24 +49,30 @@ export function keyRings(camelots: (string | undefined)[]): Rings {
 /**
  * Lanes are sized by what they hold and records take the rest of the height,
  * up to a size past which too few fit across. Without the key lane the tempo
- * lane takes what is left; any air beyond that sits mostly below so the rail sits high.
+ * lane takes what is left. Remaining air sits mostly below so the rail sits
+ * high, or is split evenly when there is no key lane to sit under it.
  */
 export function shelfLayout(height: number, rings?: Rings): Shelf {
   const compact = height < COMPACT_BELOW;
-  const row = compact ? COMPACT_KEY_ROW : KEY_ROW;
+  const minSize = compact ? 64 : 92;
   const baseTempoH = clamp(height * 0.17, compact ? 60 : 84, 150);
+  // Lane title, tick row, captions, joins (with the key title), bottom margin.
+  const fixed = 28 + 24 + 46 + (rings ? 54 : JOIN_ROW) + 16;
+  const used = Number(Boolean(rings?.A)) + Number(Boolean(rings?.B));
+  // At the window's minimum height the rows shrink further so the bands stay on screen.
+  const fits =
+    (height - fixed - baseTempoH - minSize - BAND_GAP - (2 - used) * EMPTY_BAND) / (12 * used);
+  const row = clamp(fits, MIN_KEY_ROW, compact ? COMPACT_KEY_ROW : KEY_ROW);
   const bandB = rings?.B ? 12 * row : EMPTY_BAND;
   const bandA = rings?.A ? 12 * row : EMPTY_BAND;
   const keyH = rings ? bandB + BAND_GAP + bandA : 0;
-  // Lane title, tick row, captions, joins (with the key title), bottom margin.
-  const fixed = 28 + 24 + 46 + (rings ? 54 : JOIN_ROW) + 16;
-  const size = Math.round(clamp(height - fixed - baseTempoH - keyH - 40, compact ? 64 : 92, 212));
+  const size = Math.round(clamp(height - fixed - baseTempoH - keyH - 40, minSize, 212));
   // Wide enough for a two-line join marker between neighbours.
   const gap = Math.round(clamp(size * 0.34, 48, 64));
   const free = Math.max(0, height - fixed - baseTempoH - keyH - size);
   const tempoH = rings ? baseTempoH : Math.min(baseTempoH + free, TEMPO_TALL);
   const spare = free - (tempoH - baseTempoH);
-  const top = 28 + spare * 0.3;
+  const top = 28 + spare * (rings ? 0.3 : 0.5);
   const rail = top + tempoH + 24 + size;
   const keyTop = rail + 46 + 54;
 
