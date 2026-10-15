@@ -565,6 +565,7 @@ export function Draft({
               now={listen.now}
               playing={listen.playing}
               current={listen.current}
+              position={listen.position}
               status={listen.status}
               joinDisabled={!canPlay || held || !listen.canJoin}
               onJoin={listen.join}
