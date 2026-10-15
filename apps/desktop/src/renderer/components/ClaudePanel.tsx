@@ -8,6 +8,10 @@ import { Markdown } from './Markdown.js';
 
 type Group = { kind: 'tools'; names: string[] } | LogItem;
 
+// How much of each draft's log the open panel has shown. Outlives the panel, so a
+// reply that lands while you're on another screen still lights the edge.
+const shown = new Map<string, number>();
+
 /** Consecutive tool calls read as one row of chips. */
 function group(log: LogItem[]): Group[] {
   const out: Group[] = [];
@@ -24,6 +28,7 @@ function group(log: LogItem[]): Group[] {
 }
 
 export function ClaudePanel({
+  draftId,
   by,
   choices,
   onPick,
@@ -38,6 +43,7 @@ export function ClaudePanel({
   collapsed,
   onCollapse,
 }: {
+  draftId: string;
   by: ProviderId;
   /** The agents this machine has, for the head's swap. */
   choices?: ProviderStatus[];
@@ -62,13 +68,12 @@ export function ClaudePanel({
   const briefAt = log.findIndex((item) => item.brief);
   const brief = log[briefAt]?.text;
   const rest = group(log.filter((_, index) => index !== briefAt));
-  // What arrived while tucked away lights the edge until the panel opens again.
-  const [seen, setSeen] = useState(log.length);
-  const unread = collapsed && log.slice(seen).some((item) => item.kind !== 'you');
+  const unread =
+    collapsed && log.slice(shown.get(draftId) ?? log.length).some((item) => item.kind !== 'you');
 
   useEffect(() => {
-    if (!collapsed) setSeen(log.length);
-  }, [collapsed, log.length]);
+    if (!collapsed || !shown.has(draftId)) shown.set(draftId, log.length);
+  }, [draftId, collapsed, log.length]);
 
   useEffect(() => {
     const toggle = (e: KeyboardEvent) => {

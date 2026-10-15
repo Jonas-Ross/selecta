@@ -791,6 +791,7 @@ export function Draft({
             document.body,
           )}
         <ClaudePanel
+          draftId={draftId}
           by={by}
           choices={choices}
           onPick={onPick}
