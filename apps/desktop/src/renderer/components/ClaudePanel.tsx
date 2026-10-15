@@ -42,6 +42,7 @@ export function ClaudePanel({
   onStop,
   collapsed,
   onCollapse,
+  onOpened,
 }: {
   draftId: string;
   by: ProviderId;
@@ -56,9 +57,11 @@ export function ClaudePanel({
   onUnselect: (entryId: string) => void;
   onSend: (text: string) => void;
   onStop: () => void;
-  /** Tucked to a slim edge so the draft gets the width. */
+  /** Slid off to a slim edge so the draft gets the width. */
   collapsed: boolean;
   onCollapse: (collapsed: boolean) => void;
+  /** The panel has finished sliding open over the draft. */
+  onOpened: () => void;
 }) {
   const agent = PROVIDER_LABELS[by];
   const [text, setText] = useState('');
@@ -70,6 +73,7 @@ export function ClaudePanel({
   const rest = group(log.filter((_, index) => index !== briefAt));
   const unread =
     collapsed && log.slice(shown.get(draftId) ?? log.length).some((item) => item.kind !== 'you');
+  const label = collapsed ? `Show ${agent}` : `Hide ${agent}`;
 
   useEffect(() => {
     if (!collapsed || !shown.has(draftId)) shown.set(draftId, log.length);
@@ -88,6 +92,15 @@ export function ClaudePanel({
     return () => removeEventListener('keydown', toggle);
   }, [collapsed, onCollapse]);
 
+  // Backstop for a slide whose transitionend never comes, as in a hidden window.
+  useEffect(() => {
+    if (collapsed) return;
+
+    const settle = setTimeout(onOpened, 1000);
+
+    return () => clearTimeout(settle);
+  }, [collapsed]);
+
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
   }, [log, working]);
@@ -103,20 +116,24 @@ export function ClaudePanel({
   }
 
   return (
-    <aside className={collapsed ? 'claude collapsed' : 'claude'} aria-label={agent}>
+    <aside
+      className={collapsed ? 'claude collapsed' : 'claude'}
+      aria-label={agent}
+      onTransitionEnd={(e) =>
+        e.target === e.currentTarget && e.propertyName === 'transform' && !collapsed && onOpened()
+      }
+    >
       <button
         type="button"
-        className={unread || working ? 'claude-edge lit' : 'claude-edge'}
-        aria-label={`Show ${agent}`}
-        title={`Show ${agent} (⌘\\)`}
-        inert={!collapsed}
-        onClick={() => onCollapse(false)}
+        className={collapsed && (unread || working) ? 'claude-toggle lit' : 'claude-toggle'}
+        aria-label={label}
+        aria-expanded={!collapsed}
+        title={`${label} (⌘\\)`}
+        onClick={() => onCollapse(!collapsed)}
       >
         <svg viewBox="0 0 10 10" aria-hidden="true">
-          <path d="M6.5 1.5L3 5l3.5 3.5" />
+          <path d="M4 2l3 3-3 3" />
         </svg>
-        <span>{agent}</span>
-        <i aria-hidden="true" />
       </button>
       <div className="claude-inner" inert={collapsed}>
         <div className="claude-head">
@@ -140,21 +157,8 @@ export function ClaudePanel({
           ) : (
             <h2>{agent}</h2>
           )}
-          <span className="claude-end">
-            <span className={working ? 'state working' : 'state'}>
-              {working ? 'working' : 'ready'}
-            </span>
-            <button
-              type="button"
-              className="claude-hide"
-              aria-label={`Hide ${agent}`}
-              title={`Hide ${agent} (⌘\\)`}
-              onClick={() => onCollapse(true)}
-            >
-              <svg viewBox="0 0 10 10" aria-hidden="true">
-                <path d="M3.5 1.5L7 5 3.5 8.5" />
-              </svg>
-            </button>
+          <span className={working ? 'state working' : 'state'}>
+            {working ? 'working' : 'ready'}
           </span>
         </div>
         {brief && (
