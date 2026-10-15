@@ -170,6 +170,13 @@ void app.whenReady().then(() => {
       nodeIntegration: false,
     },
   });
+  // A link in an agent's reply opens in the browser; the app's window never navigates away.
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
+
+    return { action: 'deny' };
+  });
+  window.webContents.on('will-navigate', (event) => event.preventDefault());
   void window.loadFile(here('./renderer/index.html'));
 });
 

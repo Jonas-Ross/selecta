@@ -30,6 +30,7 @@ The host keeps a local action log at `~/Library/Logs/Selecta/desktop.log` (`src/
 | `springs.ts`, `reorder.ts` | The spring step, settle test and per-frame stepper, and where a dragged or carried record lands |
 | `crate.ts`, `flight.ts` | How each record in the crate stands and shades, flick and wheel flips, and the arc a record flies from the crate to the rail |
 | `listen.ts` | Which record is playing, the live position between reads, set time, where a transition starts, and the key wheel's geometry |
+| `markdown.ts` | An agent's reply parsed by micromark (CommonMark, GFM strikethrough and bare links) and cut down to what the panel draws, as data it builds elements from, so a reply never reaches the page as HTML |
 
 Styles live in `src/renderer/styles/`, split by concern and all built from the custom properties in `tokens.css`: `base.css` (reset, buttons, notices), `chrome.css` (top bar, save card), `home.css` (Home and Brief), `crate.css`, `rail.css`, and for Listen `listen.css` (the record playing), `sleeve-back.css`, `wheel.css` and `transport.css`, `panel.css` (Claude), `explain.css`, and `replace.css` for replacing a record. The fonts are the website's, copied into `src/renderer/styles/fonts/` and served from the bundle, since the page's CSP allows only `'self'`. The window uses an inset title bar, so the top bar is the drag region and leaves the traffic lights 80px.
 
@@ -72,6 +73,8 @@ Cmd+, or Selecta → Settings… opens a sheet over whatever screen is up (`comp
 ## The agent
 
 Each turn is one run of a coding-agent CLI on the user's own login to it, so the app needs no API key and builds on a subscription they already pay for (`src/host/agent.ts`). `src/host/providers.ts` holds one adapter per CLI: the arguments for a turn and a parser for its event stream. The brief offers every CLI that is installed and signed in (`src/host/detect.ts`, asked fresh each time the brief opens), says why any other can't run, holds Build until one can, and remembers the last one picked; the panel takes that agent's name. Feedback goes to whichever agent the draft last used, unless the panel's own picker, shown when two agents can run, hands the draft to the other one; each reply keeps the name of the agent that wrote it.
+
+A link in a reply opens in the browser: main denies every new window, hands web and mail links to the system, and stops the app's own window navigating anywhere.
 
 | Agent | Run | Stream |
 |---|---|---|
