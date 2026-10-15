@@ -84,7 +84,14 @@ export function Draft({
   const agent = PROVIDER_LABELS[by];
   const { settings, update } = useSettings();
   const chatCollapsed = settings.chat === 'collapsed';
-  const collapseChat = (collapsed: boolean) => update({ chat: collapsed ? 'collapsed' : 'open' });
+  // The draft takes the width the moment the panel starts sliding away, and gives it back only
+  // once the panel has slid over it, so its single reflow is always hidden under the panel.
+  const [chatOpening, setChatOpening] = useState(false);
+  const roomy = chatCollapsed || chatOpening;
+  const collapseChat = (collapsed: boolean) => {
+    setChatOpening(!collapsed);
+    update({ chat: collapsed ? 'collapsed' : 'open' });
+  };
   const [choices, setChoices] = useState<ProviderStatus[]>();
   // The host records a request before answering it, so until the answer the run may not show it yet.
   const [asking, setAsking] = useState(false);
@@ -548,7 +555,7 @@ export function Draft({
           />
         }
       />
-      <div className={chatCollapsed ? 'draft-body chat-collapsed' : 'draft-body'}>
+      <div className={roomy ? 'draft-body roomy' : 'draft-body'}>
         <section className="draft-main" aria-label="Draft">
           <Groove
             records={grooveRecords}
@@ -816,6 +823,7 @@ export function Draft({
           onStop={() => void selecta.call('agent.cancel', { draft_id: draftId })}
           collapsed={chatCollapsed}
           onCollapse={collapseChat}
+          onOpened={() => setChatOpening(false)}
         />
       </div>
     </div>

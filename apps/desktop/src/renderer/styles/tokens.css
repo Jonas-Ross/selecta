@@ -82,13 +82,14 @@
   --top: 48px;
   --lights: 80px;
   --claude-w: 352px;
-  --claude-edge-w: 40px;
+  --claude-edge-w: 20px;
 
   --ease: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --t-fast: 0.15s;
   --t-mid: 0.22s;
   --t-slow: 0.45s;
+  --t-slide: 0.32s;
 }
 
 @media (max-width: 1280px) {
