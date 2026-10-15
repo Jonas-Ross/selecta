@@ -1,7 +1,5 @@
 // Pure logic for the Listen screen: which record is playing, where the set is
-// in time, and the key wheel's geometry. Music.app is the clock; this only
-// reads it and fills in between reads.
-import { parseCamelot } from '@selecta/core/domain/harmonic.js';
+// in time. Music.app is the clock; this only reads it and fills in between reads.
 import type { PlayerView } from '../shared/protocol.js';
 import type { EditQueue } from './edits.js';
 import type { Row } from './state.js';
@@ -75,59 +73,4 @@ export function elsewhere(player: PlayerView | undefined): string | undefined {
   if (player.entry_id !== undefined || player.state === 'stopped') return undefined;
 
   return 'Music is playing something outside this draft';
-}
-
-// Wheel radii per ring, minor A inside major B: the cell's band, the route's
-// points, and the labels, kept apart so a dot never sits on its number.
-const RINGS = {
-  A: { cell: [52, 92], at: 64, label: 82 },
-  B: { cell: [94, 134], at: 106, label: 124 },
-} as const;
-
-const f1 = (value: number) => value.toFixed(1);
-
-function polar(radius: number, angle: number): [number, number] {
-  return [radius * Math.sin(angle), -radius * Math.cos(angle)];
-}
-
-/** A Camelot position on the wheel, 12 at the top like a clock; undefined when unreadable. */
-export function wheelPoint(
-  camelot?: string,
-  at: 'at' | 'label' = 'at',
-): [number, number] | undefined {
-  const position = parseCamelot(camelot);
-
-  if (!position) return undefined;
-
-  return polar(RINGS[position.mode][at], ((position.number % 12) * Math.PI) / 6);
-}
-
-/** The ring cell for one position, as an SVG path. */
-export function wheelCell(number: number, mode: 'A' | 'B'): string {
-  const [r0, r1] = RINGS[mode].cell;
-  const a0 = ((number % 12) - 0.5) * (Math.PI / 6);
-  const a1 = ((number % 12) + 0.5) * (Math.PI / 6);
-  const p = (r: number, a: number) => polar(r, a).map(f1).join(' ');
-
-  return `M${p(r0, a0)}L${p(r1, a0)}A${r1} ${r1} 0 0 1 ${p(r1, a1)}L${p(r0, a1)}A${r0} ${r0} 0 0 0 ${p(r0, a0)}Z`;
-}
-
-/** The set's route through the wheel from record `from` to `to`, lifting the pen at a missing key. */
-export function wheelRoute(camelots: (string | undefined)[], from: number, to: number): string {
-  let path = '';
-  let pen = false;
-
-  for (let i = Math.max(0, from); i <= Math.min(to, camelots.length - 1); i++) {
-    const point = wheelPoint(camelots[i]);
-
-    if (!point) {
-      pen = false;
-      continue;
-    }
-
-    path += `${pen ? 'L' : 'M'}${f1(point[0])} ${f1(point[1])}`;
-    pen = true;
-  }
-
-  return path;
 }
