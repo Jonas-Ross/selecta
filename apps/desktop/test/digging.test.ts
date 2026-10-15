@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { digStep, ghostCount, nextPull } from '../src/renderer/digging.js';
+import { digStep, ghostCount, nextPull, runTools } from '../src/renderer/digging.js';
+
+describe('runTools', () => {
+  it('counts only calls since the latest request, so a retry starts fresh', () => {
+    const log = [
+      { kind: 'you' as const, text: 'Warm-up', brief: true as const },
+      { kind: 'tool' as const, text: 'search' },
+      { kind: 'error' as const, text: 'failed' },
+      { kind: 'you' as const, text: 'Warm-up' },
+    ];
+
+    expect(runTools(log)).toEqual([]);
+    expect(runTools([...log, { kind: 'tool', text: 'library overview' }])).toEqual([
+      'library overview',
+    ]);
+  });
+});
 
 describe('digStep', () => {
   it('names known tools in plain words and starts on the brief', () => {

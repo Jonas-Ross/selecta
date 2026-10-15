@@ -11,6 +11,7 @@ import {
   type Suggestion,
 } from '../../shared/protocol.js';
 import { onArtworkFailure, retryArtwork } from '../artwork.js';
+import { runTools } from '../digging.js';
 import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
 import { useReducedMotion } from '../hooks/motion.js';
@@ -80,7 +81,7 @@ export function Draft({
 }) {
   const [view, setView] = useState<DraftView>();
   const log = run?.log ?? [];
-  const tools = log.flatMap((item) => (item.kind === 'tool' ? item.text : []));
+  const tools = runTools(log);
   const agent = PROVIDER_LABELS[by];
   const { settings, update } = useSettings();
   const chatCollapsed = settings.chat === 'collapsed';

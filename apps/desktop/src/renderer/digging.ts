@@ -1,6 +1,7 @@
 // What the empty rail shows while the agent builds: white labels standing in the
 // slots records will fill, and the agent's latest step in plain words.
 import { PAD } from './lanes.js';
+import type { LogItem } from './state.js';
 
 // Tool names as the log holds them, underscores already spaces.
 const STEPS: Record<string, string> = {
@@ -13,6 +14,13 @@ const STEPS: Record<string, string> = {
   'get playlist draft': 'reading the draft',
   'edit playlist draft': 'laying records out',
 };
+
+/** Tool calls since the latest request, so a retried build starts fresh. */
+export function runTools(log: LogItem[]): string[] {
+  const asked = log.map((item) => item.kind).lastIndexOf('you');
+
+  return log.slice(asked + 1).flatMap((item) => (item.kind === 'tool' ? item.text : []));
+}
 
 /** The latest tool call in plain words, or where every run starts. */
 export const digStep = (tool?: string) =>
