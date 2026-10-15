@@ -42,7 +42,6 @@ export function ClaudePanel({
   onStop,
   collapsed,
   onCollapse,
-  onOpened,
 }: {
   draftId: string;
   by: ProviderId;
@@ -60,8 +59,6 @@ export function ClaudePanel({
   /** Slid off to a slim edge so the draft gets the width. */
   collapsed: boolean;
   onCollapse: (collapsed: boolean) => void;
-  /** The panel has finished sliding open over the draft. */
-  onOpened: () => void;
 }) {
   const agent = PROVIDER_LABELS[by];
   const [text, setText] = useState('');
@@ -92,15 +89,6 @@ export function ClaudePanel({
     return () => removeEventListener('keydown', toggle);
   }, [collapsed, onCollapse]);
 
-  // Backstop for a slide whose transitionend never comes, as in a hidden window.
-  useEffect(() => {
-    if (collapsed) return;
-
-    const settle = setTimeout(onOpened, 1000);
-
-    return () => clearTimeout(settle);
-  }, [collapsed]);
-
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
   }, [log, working]);
@@ -116,13 +104,7 @@ export function ClaudePanel({
   }
 
   return (
-    <aside
-      className={collapsed ? 'claude collapsed' : 'claude'}
-      aria-label={agent}
-      onTransitionEnd={(e) =>
-        e.target === e.currentTarget && e.propertyName === 'transform' && !collapsed && onOpened()
-      }
-    >
+    <aside className={collapsed ? 'claude collapsed' : 'claude'} aria-label={agent}>
       <button
         type="button"
         className={collapsed && (unread || working) ? 'claude-toggle lit' : 'claude-toggle'}

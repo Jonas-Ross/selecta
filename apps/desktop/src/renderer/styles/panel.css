@@ -1,20 +1,20 @@
-/* Claude's panel: brief, log, and the feedback box. It floats over the draft's right edge and
-   slides with a transform, so the draft reflows once (under it) instead of every frame. */
+/* Claude's panel: brief, log, and the feedback box. Its width eases so the draft gives way in
+   step; the inner column keeps its width and slides off the window's edge rather than squeezing. */
 .claude {
-  position: absolute;
-  inset: 0 0 0 auto;
+  position: relative;
   z-index: 2;
   width: var(--claude-w);
   background: var(--bg1);
   border-left: 1px solid var(--line2);
-  transition: transform var(--t-slide) var(--ease-out);
+  transition: width var(--t-slide) var(--ease-out);
 }
 .claude.collapsed {
-  transform: translateX(calc(var(--claude-w) - var(--claude-edge-w)));
+  width: var(--claude-edge-w);
 }
 .claude-inner {
   display: flex;
   flex-direction: column;
+  width: var(--claude-w);
   height: 100%;
   transition: opacity var(--t-mid) var(--ease);
 }
