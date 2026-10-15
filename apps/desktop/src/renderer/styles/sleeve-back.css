@@ -1,5 +1,7 @@
-/* The sleeve back: facts, the join into the next record, the key wheel. */
+/* The sleeve back: facts and the join into the next record. */
 .sleeve-back {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   overflow-y: auto;
   padding: var(--s4) var(--s5) var(--s5);
@@ -9,7 +11,12 @@
   scrollbar-color: var(--line3) transparent;
 }
 .sleeve-back .facts {
-  margin-top: 0;
+  margin: 0 0 var(--s4);
+  border-top: 0;
+}
+/* Up next sits on the band's floor, level with the title, rather than under a gap. */
+.sleeve-back > .ls-lab {
+  margin-top: auto;
 }
 .ls-lab {
   display: block;
