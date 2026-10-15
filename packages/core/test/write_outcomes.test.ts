@@ -5,6 +5,7 @@ import { bridge } from '../src/bridge/index.js';
 import { runJxa } from '../src/bridge/jxa.js';
 import {
   buildCreatePlaylistScript,
+  buildOverwritePlaylistScript,
   buildReplacePlaylistScript,
 } from '../src/bridge/scripts/write_playlist.js';
 import { handleCreatePlaylist } from '../src/tools/create_playlist.js';
@@ -315,4 +316,18 @@ it('adoption reads the reserved live order without any mutation, including repea
   expect(raw).toEqual({ persistentId: 'P-LIVE', trackCount: 3, trackPersistentIds: ids });
   expect(music.delete).not.toHaveBeenCalled();
   expect(music.make).not.toHaveBeenCalled();
+});
+
+it('resolves tracks before the overwrite guard, so no lookup runs between it and the write', () => {
+  const script = buildOverwritePlaylistScript({
+    playlistId: 'P',
+    savedName: 'Mix',
+    knownIds: [],
+    followRekey: true,
+    name: 'Mix',
+    trackIds: [A],
+    expectedTrackIds: [A],
+  });
+
+  expect(script.indexOf('lib.tracks.whose')).toBeLessThan(script.indexOf('orderDrifted'));
 });

@@ -10,6 +10,7 @@ import { BridgeError, toErrorEnvelope } from '../types/errors.js';
 import { handleInspectTracklist, inspectTracklistInputShape } from './inspect_tracklist.js';
 import { creationResponse } from '../domain/playlist_creation.js';
 import { createPlaylist } from '../operations/create_playlist.js';
+import { updatePlaylist } from '../operations/update_playlist.js';
 import { isSelectaError, parseInput, validationError } from './errors.js';
 import type { ToolDeps } from './deps.js';
 
@@ -64,7 +65,15 @@ export const editDraftInputShape = {
 export const SHOW_DRAFT_DESCRIPTION = `Open an interactive playlist draft from ordered cached track_ids. Supply a new UUID as draft_id; this identity is also recoverable from the original tool input after reload. Local draft only: no playback or Music.app write. Each repeated ID gets a separate entry_id. Returns inspection facts, draft_id, revision and editable entries; works as JSON without UI. Selection identifies the subject of explicit feedback, not an instruction to replace or preserve tracks. Empty selection refers to the whole playlist. Use edit_playlist_draft with the returned revision and preserve existing entry_ids when revising. Selection and feedback are also published as widget context; read it through the host when it offers a way to, rather than asking the user to repeat them. Feedback messages may be staged in the composer for the user to send. After reload recover by get_playlist_draft using draft_id; never create a replacement silently. Save only on explicit user approval via save_playlist_draft with the exact revision.`;
 export const EDIT_DRAFT_DESCRIPTION = `Edit local playlist draft at an exact revision: replace ordered entries, name, selection or feedback. Preserve entry_ids for existing occurrences including repeated tracks; omit entry_id for new occurrences. Selected entry IDs identify which occurrences the feedback refers to; empty selection means the whole playlist. Follow explicit feedback rather than inferring an action from selection alone. When this draft owns an active preview, requested ordered-track changes also update Music.app without another confirmation. Name, selection and feedback-only changes never rewrite Music.app. Local edits succeed independently of preview conflict/failure; inspect preview.status/result and explicitly reconcile errors, never automatically retry. A stale revision fails: get_playlist_draft and reconcile rather than replaying. Returns the new revision and current cached inspection; removed library tracks remain recoverable but cannot be saved.`;
 export const GET_DRAFT_DESCRIPTION = `Read-only recovery of a local draft by draft_id, including latest revision, edits, selection, feedback, save outcome and shared preview status. No Music.app call or draft mutation. Missing tracks return inspection_error alongside the recoverable draft. Missing drafts return a recovery hint.`;
-export const SAVE_DRAFT_DESCRIPTION = `Explicitly save the approved exact draft revision as a real Music.app playlist using create_playlist contracts. Never call for selection, reorder or feedback. Claims this revision before writing and stores the outcome, so duplicate or uncertain requests never automatically repeat a write. A proven pre-write rejection (local preflight or a validated live creation guard) releases the claim: fix the cause, get the latest draft revision, then explicitly retry. Subprocess failures, including permission/app-not-running errors, do not prove that no write occurred and retain the guard; inspect result/partial_write and Music.app before deciding a new draft revision is safe to save. A pending save after interruption is uncertain, not permission to retry. An owned unresolved preview blocks saving: reconcile and synchronize the audition before approving permanent Save.`;
+export const SAVE_DRAFT_DESCRIPTION = `Explicitly save the approved exact draft revision as a real Music.app playlist using create_playlist contracts. A draft saved before updates that same playlist in place (tracks, order and name) instead of creating another, and only while Music.app still holds exactly what was saved; otherwise nothing is written and the next save creates a new playlist. Never call for selection, reorder or feedback. Claims this revision before writing and stores the outcome, so duplicate or uncertain requests never automatically repeat a write. A proven pre-write rejection (local preflight or a validated live creation guard) releases the claim: fix the cause, get the latest draft revision, then explicitly retry. Subprocess failures, including permission/app-not-running errors, do not prove that no write occurred and retain the guard; inspect result/partial_write and Music.app before deciding a new draft revision is safe to save. A pending save after interruption is uncertain, not permission to retry. An owned unresolved preview blocks saving: reconcile and synchronize the audition before approving permanent Save.`;
+
+// Proven pre-write refusals that mean the saved playlist can't be updated in place.
+const UNLINKED = new Set([
+  'playlist_not_found',
+  'playlist_not_editable',
+  'playlist_rekey_conflict',
+  'validation_error',
+]);
 
 export class PlaylistDraftTools {
   private store: DraftStore;
@@ -411,17 +420,50 @@ export class PlaylistDraftTools {
         ...draft,
         save: { revision, status: 'pending' },
       }));
-      const outcome = await createPlaylist(
-        { name: claimed.name, trackIds: claimed.entries.map((entry) => entry.track_id) },
-        this.deps,
-      );
-      const result = creationResponse(outcome);
+      const link = claimed.playlist;
+      const trackIds = claimed.entries.map((entry) => entry.track_id);
+      const outcome = link
+        ? await updatePlaylist(
+            {
+              playlistId: link.playlist_id,
+              savedName: link.name,
+              name: claimed.name,
+              trackIds,
+              expectedTrackIds: link.track_ids,
+            },
+            this.deps,
+          )
+        : await createPlaylist({ name: claimed.name, trackIds }, this.deps);
+      const preWrite = outcome.status === 'rejected_before_write';
+      // The saved playlist is gone or no longer what was saved: leave it be, and let the next save make a new one.
+      const unlink = preWrite && link !== undefined && UNLINKED.has(outcome.error.error);
+      const response = creationResponse(outcome);
+      // Any update that may have written is reported as one, partial or not.
+      const result =
+        link && !preWrite
+          ? { ...response, updated: true }
+          : unlink && outcome.status === 'rejected_before_write'
+            ? {
+                ...outcome.error,
+                hint: `${outcome.error.hint} Save again to make it a new playlist.`,
+              }
+            : response;
 
       try {
-        const preWrite = outcome.status === 'rejected_before_write';
         const finished = this.store.update(draft_id, claimed.revision, (draft) => ({
           ...draft,
           save: preWrite ? undefined : { revision, status: 'finished', result },
+          playlist:
+            'observed' in outcome
+              ? {
+                  // The creation receipt stays keyed by the first ID, and resolves on from it.
+                  playlist_id: link?.playlist_id ?? outcome.observed.playlist.persistentId,
+                  name: outcome.observed.name,
+                  track_ids: outcome.observed.playlist.trackPersistentIds,
+                }
+              : unlink
+                ? undefined
+                : draft.playlist,
         }));
 
         return {

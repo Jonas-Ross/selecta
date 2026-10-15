@@ -230,7 +230,9 @@ export function saveOutcome(
   // An error can still carry what Music.app was seen to do; this app has no other view of it.
   if (result?.name !== undefined) {
     parts.push(
-      `Saved "${String(result.name)}" to Music with ${String(result.track_count)} tracks.`,
+      result.updated === true
+        ? `Updated "${String(result.name)}" in Music, now ${String(result.track_count)} tracks.`
+        : `Saved "${String(result.name)}" to Music with ${String(result.track_count)} tracks.`,
     );
 
     if (result.order_matches_request === false)
@@ -240,7 +242,9 @@ export function saveOutcome(
       ? ` and was seen holding ${partial.observed_track_ids.length} tracks`
       : '';
 
-    parts.push(`Music.app created playlist ${String(partial.playlist_id)}${seen}.`);
+    parts.push(
+      `Music.app ${result?.updated === true ? 'was rewriting' : 'created'} playlist ${String(partial.playlist_id)}${seen}.`,
+    );
   }
 
   if (response.error) parts.push(response.error, ...(response.hint ? [response.hint] : []));
@@ -251,11 +255,19 @@ export function saveOutcome(
 type Save = NonNullable<NonNullable<DraftView['draft']>['save']>;
 
 /** A recorded attempt, good or bad, blocks another: core never repeats a write. */
-export function saveLabel(save?: Save): string {
-  if (!save) return 'Save to Music';
+export function saveLabel(save?: Save, update = false): string {
+  if (!save) return update ? 'Update in Music' : 'Save to Music';
 
   if (save.status === 'pending') return 'Save pending';
 
   // A cleanup failure after a committed creation still means the playlist exists.
   return save.result?.error && save.result.creation_committed !== true ? 'Save uncertain' : 'Saved';
+}
+
+/**
+ * A save in flight or of unknown outcome holds the draft, since core never repeats a write;
+ * so does a good one with no playlist to update, or the next save would make a second.
+ */
+export function saveHolds(draft?: DraftView['draft']): boolean {
+  return draft?.save !== undefined && (saveLabel(draft.save) !== 'Saved' || !draft.playlist);
 }

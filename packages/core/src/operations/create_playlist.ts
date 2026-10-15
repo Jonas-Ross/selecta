@@ -11,7 +11,7 @@ import { OperationCleanupError, withOperation } from './lock.js';
 import { PREVIEW_PLAYLIST_NAME } from './playlist.js';
 import { missingTrackIdsError, resolvePlaylist } from './resources.js';
 
-function persistenceFailure(observed: CreationObservation, error: unknown): CreationOutcome {
+export function persistenceFailure(observed: CreationObservation, error: unknown): CreationOutcome {
   return {
     status: 'persistence_failed',
     observed,
@@ -31,14 +31,25 @@ export async function createPlaylist(
   input: CreatePlaylistInput,
   deps: { cache: () => SelectaCache; bridge: Bridge },
 ): Promise<CreationOutcome> {
+  return settleUnderLock(deps.cache, 'Creation', (cache) =>
+    createUnderLock(input, cache, deps.bridge),
+  );
+}
+
+/** Runs one Music.app write under the Music lock; a lock cleanup failure never hides its outcome. */
+export async function settleUnderLock(
+  open: () => SelectaCache,
+  what: 'Creation' | 'Update',
+  write: (cache: SelectaCache) => Promise<CreationOutcome>,
+): Promise<CreationOutcome> {
   // release() runs in finally and can replace the callback's return value.
   let settled: CreationOutcome | undefined;
 
   try {
-    const cache = deps.cache();
+    const cache = open();
 
     return await withOperation(cache, 'music', async () => {
-      settled = await createUnderLock(input, cache, deps.bridge);
+      settled = await write(cache);
 
       return settled;
     });
@@ -61,7 +72,7 @@ export async function createPlaylist(
               playlist_id: settled.observed.playlist.persistentId,
               observed_track_ids: settled.observed.playlist.trackPersistentIds,
             },
-            hint: `Creation committed to Music.app and the cache, including its receipt and any note. ${cleanupHint} No refresh or repeat creation is needed for this committed result.`,
+            hint: `${what} committed to Music.app and the cache${what === 'Creation' ? ', including its receipt and any note' : ''}. ${cleanupHint} No refresh or repeat ${what.toLowerCase()} is needed for this committed result.`,
           },
         };
 
@@ -79,7 +90,7 @@ export async function createPlaylist(
       status: 'rejected_before_write',
       error: toErrorEnvelope(error, {
         error: 'cache_unavailable',
-        hint: 'Creation was rejected before calling Music.app.',
+        hint: `${what} was rejected before calling Music.app.`,
       }),
     };
   }
@@ -175,38 +186,47 @@ async function createUnderLock(
   } catch (error) {
     if (observed) return persistenceFailure(observed, error);
 
-    const preWrite =
-      !attempted ||
-      (error instanceof BridgeError && error.writePhase === 'not_started' && !error.partialWrite);
-    const envelope = toErrorEnvelope(
-      error,
-      attempted
-        ? {
-            error: 'jxa_error',
-            hint: 'Music.app creation outcome is unknown. Inspect Music.app; do not repeat the write.',
-          }
-        : { error: 'cache_unavailable', hint: 'Creation was rejected before calling Music.app.' },
-    );
-
-    // These read-oriented defaults suggest retrying; creation needs inspection
-    // first because an executor error carries no event-phase evidence.
-    const failureHint =
-      envelope.error === 'music_app_not_running'
-        ? 'Music.app was unavailable during the creation attempt.'
-        : envelope.error === 'automation_permission_denied'
-          ? 'Music.app automation was denied during the creation attempt.'
-          : envelope.hint;
-
-    return {
-      status: preWrite ? 'rejected_before_write' : 'write_uncertain',
-      error: !preWrite
-        ? {
-            ...envelope,
-            hint: `${failureHint} Creation may have started. Inspect Music.app; do not repeat the write.`,
-          }
-        : envelope,
-    };
+    return attemptFailure(error, attempted, 'Creation');
   }
+}
+
+/** Sorts a failed bridge attempt into proven-pre-write or uncertain; only a validated guard proves no write. */
+export function attemptFailure(
+  error: unknown,
+  attempted: boolean,
+  what: 'Creation' | 'Update',
+): CreationOutcome {
+  const preWrite =
+    !attempted ||
+    (error instanceof BridgeError && error.writePhase === 'not_started' && !error.partialWrite);
+  const envelope = toErrorEnvelope(
+    error,
+    attempted
+      ? {
+          error: 'jxa_error',
+          hint: `Music.app ${what.toLowerCase()} outcome is unknown. Inspect Music.app; do not repeat the write.`,
+        }
+      : { error: 'cache_unavailable', hint: `${what} was rejected before calling Music.app.` },
+  );
+
+  // These read-oriented defaults suggest retrying; a write needs inspection
+  // first because an executor error carries no event-phase evidence.
+  const failureHint =
+    envelope.error === 'music_app_not_running'
+      ? `Music.app was unavailable during the ${what.toLowerCase()} attempt.`
+      : envelope.error === 'automation_permission_denied'
+        ? `Music.app automation was denied during the ${what.toLowerCase()} attempt.`
+        : envelope.hint;
+
+  return {
+    status: preWrite ? 'rejected_before_write' : 'write_uncertain',
+    error: !preWrite
+      ? {
+          ...envelope,
+          hint: `${failureHint} ${what} may have started. Inspect Music.app; do not repeat the write.`,
+        }
+      : envelope,
+  };
 }
 
 function cachedSourceError(source: PlaylistRow): SelectaError | null {

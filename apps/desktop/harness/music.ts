@@ -455,7 +455,6 @@ export class MusicSim {
   private playlistSpec(pl: Playlist) {
     const spec = Object.defineProperties(
       {
-        name: () => pl.name,
         persistentID: () => pl.persistentId,
         class: () => (pl.kind === 'library' ? 'libraryPlaylist' : 'userPlaylist'),
         smart: () => pl.kind === 'smart',
@@ -467,6 +466,15 @@ export class MusicSim {
       {
         tracks: { get: () => this.tracksOf(pl) },
         description: { set: () => {} },
+        // JXA reads a property by calling it and writes it by assignment.
+        name: {
+          get: () => () => pl.name,
+          set: (name: string) => {
+            this.calls.push(`rename ${pl.name} to ${name}`);
+            pl.name = name;
+          },
+          enumerable: true,
+        },
       },
     );
 

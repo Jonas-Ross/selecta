@@ -45,6 +45,7 @@ import {
   buildCreatePlaylistScript,
   buildClonePlaylistScript,
   buildReplacePlaylistScript,
+  buildOverwritePlaylistScript,
 } from './scripts/write_playlist.js';
 import {
   buildDeletePlaylistByIdScript,
@@ -167,6 +168,37 @@ export const bridge: Bridge = {
     if ('missingTrackIds' in result) throwMissingTracks(result.missingTrackIds);
 
     if ('partialWrite' in result) throwPartialWrite(result.partialWrite);
+
+    return result;
+  },
+  async overwritePlaylist(input): Promise<PlaylistWriteResult> {
+    const result = await runJxa(buildOverwritePlaylistScript(input), schemas.overwrite);
+
+    if ('playlistNotFound' in result)
+      throw preWriteError(
+        'playlist_not_found',
+        'Music.app no longer has the saved playlist.',
+        'The saved playlist is no longer in Music.app. Nothing was written.',
+      );
+
+    if ('notEditable' in result)
+      throw preWriteError(
+        'playlist_not_editable',
+        'Saved playlist is no longer a user playlist.',
+        'The saved playlist is no longer one Selecta can edit. Nothing was written.',
+      );
+
+    if ('orderDrifted' in result)
+      throw preWriteError(
+        'validation_error',
+        'The saved playlist changed in Music.app since it was saved.',
+        'The saved playlist was changed or renamed in Music.app since it was saved. Nothing was written, so those changes are kept.',
+      );
+
+    if ('missingTrackIds' in result) throwMissingTracks(result.missingTrackIds, 'not_started');
+
+    if ('partialWrite' in result && result.partialWrite !== undefined)
+      throwPartialWrite(result.partialWrite);
 
     return result;
   },

@@ -751,6 +751,38 @@ export class SelectaCache {
     })();
   }
 
+  /**
+   * Commit an in-place rewrite of a playlist Selecta created. Its own receipt takes
+   * the new name and order, so a later iCloud rekey still matches at refresh;
+   * a rotated ID the write followed is rekeyed live first.
+   */
+  persistPlaylistUpdate(input: {
+    playlist: PlaylistWriteResult;
+    name: string;
+    staleId: string;
+    createdId: string;
+  }): void {
+    this.db.transaction(() => {
+      const { playlist, name, staleId, createdId } = input;
+      const live = {
+        persistentId: playlist.persistentId,
+        name,
+        trackIds: playlist.trackPersistentIds,
+      };
+
+      // The rekey proves only this receipt's playlist; another receipt's conflict still stands.
+      if (staleId !== playlist.persistentId) this.applyLiveRekey(staleId, live, true);
+      else this.upsertPlaylistAfterWrite(playlist, name, live.trackIds);
+
+      this.queries.setCreationContents(createdId, name, live.trackIds);
+    })();
+  }
+
+  /** Every cached playlist's ID. */
+  getPlaylistIds(): string[] {
+    return this.queries.getPlaylistIds();
+  }
+
   /** The name on a creation receipt, by the ID Selecta created it under. */
   getCreationName(createdId: string): string | null {
     return this.queries.getCreationName(createdId);
@@ -763,13 +795,15 @@ export class SelectaCache {
    * at the live ID, move the note, mirror the live row and order, drop the
    * stale row. No receipt is retired or created. A note already on the live ID
    * wins (see movePlaylistNote); the refused one goes with the stale row.
+   * keepConflicts leaves receipts' edit conflicts as they were.
    */
   applyLiveRekey(
     staleId: string,
     live: { persistentId: string; name: string; trackIds: string[] },
+    keepConflicts = false,
   ): void {
     const run = this.db.transaction(() => {
-      this.queries.repointCreations(staleId, live.persistentId);
+      this.queries.repointCreations(staleId, live.persistentId, keepConflicts);
       // Move before delete: deletePlaylistRow takes the note with the row.
       this.queries.movePlaylistNote(staleId, live.persistentId);
       this.upsertPlaylistAfterWrite(
@@ -781,6 +815,13 @@ export class SelectaCache {
     });
 
     run();
+  }
+
+  /** Whether the receipt Selecta created under `createdId` falls within the window. */
+  isRecentCreation(createdId: string, windowMinutes: number, now = new Date()): boolean {
+    const since = new Date(now.getTime() - windowMinutes * 60_000).toISOString();
+
+    return this.queries.getCreationsSince(since).some((c) => c.createdPersistentId === createdId);
   }
 
   /** Names of playlists created within the window — the "watch list" for echo logging. */

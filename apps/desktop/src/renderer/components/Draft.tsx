@@ -28,6 +28,7 @@ import {
   pendingOrder,
   previewLinked,
   rows,
+  saveHolds,
   saveLabel,
   saveOutcome,
   totals,
@@ -144,8 +145,9 @@ export function Draft({
   const draft = view?.draft;
   const items = pendingOrder(rows(view ?? {}), pending);
   const saved = draft?.save !== undefined;
+  const saveHeld = saveHolds(draft);
   const linked = previewLinked(view ?? {});
-  const locked = saved || saving || leaving;
+  const locked = saveHeld || saving || leaving;
   const sum = totals(items);
   const inDraft = useMemo(() => new Set(items.map((row) => row.track_id)), [items]);
   // A record in the air is an edit not yet queued, so Save and Home wait for it to land.
@@ -471,7 +473,7 @@ export function Draft({
       ? 'Confirming the save'
       : saving
         ? 'Saving to Music'
-        : saved
+        : saveHeld
           ? saveLabel(draft?.save)
           : leaving
             ? 'Finishing your edits'
@@ -518,10 +520,15 @@ export function Draft({
         right={
           <SaveConfirm
             phase={phase}
-            label={saving && phase !== 'confirm' ? 'Saving…' : saveLabel(draft?.save)}
-            disabled={!draft || locked || working || airborne || playerHeld}
+            label={
+              saving && phase !== 'confirm'
+                ? 'Saving…'
+                : saveLabel(draft?.save, draft?.playlist !== undefined)
+            }
+            disabled={!draft || saved || locked || working || airborne || playerHeld}
             done={saved}
             name={draft?.name ?? ''}
+            target={draft?.playlist?.name}
             tracks={sum.tracks}
             minutes={sum.minutes}
             partial={sum.partial}

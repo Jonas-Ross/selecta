@@ -45,6 +45,19 @@ export function renderDraft(el, { draft, inspection, inspection_error, busy, lan
   el('send').disabled = false;
   el('keep-feedback').disabled = pending;
   el('save').disabled = !!draft.save || !!inspection_error;
+  // A saved draft's next save rewrites that playlist; say so before the click.
+  const target = draft.playlist?.name;
+
+  el('save-label').textContent = target ? 'Update in Music.app' : 'Save to Music.app';
+  el('save').setAttribute(
+    'aria-label',
+    target
+      ? `Replace the tracks, order and name of “${target}” in Music.app with this revision`
+      : 'Save this revision to Music.app',
+  );
+  el('save').title = target
+    ? `Rewrites “${target}” in Music.app, only if it still holds what was saved`
+    : '';
   el('summary').textContent = inspection
     ? `${inspection.track_count} tracks / ${clockLabel(inspection.runtime.known_seconds)}${inspection.runtime.missing_count ? ' known runtime' : ' runtime'}${inspection.duplicate_ids.length ? ` / ${inspection.duplicate_ids.length} repeated` : ''}`
     : (inspection_error?.hint ?? 'Inspection unavailable');
