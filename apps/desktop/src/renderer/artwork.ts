@@ -126,13 +126,14 @@ export function createArtworkStore(get: Get) {
 
 const store = createArtworkStore((args) => selecta.call('artwork.get', args));
 
-export function useArtwork(trackId: string): string | undefined {
+/** No track asks nothing, so a component can call this before it knows its record. */
+export function useArtwork(trackId: string | undefined): string | undefined {
   const subscribe = useCallback(
-    (listener: () => void) => store.subscribe(trackId, listener),
+    (listener: () => void) => (trackId ? store.subscribe(trackId, listener) : () => {}),
     [trackId],
   );
 
-  return useSyncExternalStore(subscribe, () => store.url(trackId));
+  return useSyncExternalStore(subscribe, () => (trackId ? store.url(trackId) : undefined));
 }
 
 /** Calls `listener` with the reason whenever an artwork lookup fails. */

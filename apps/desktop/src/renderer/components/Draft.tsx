@@ -15,6 +15,7 @@ import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
 import { useReducedMotion } from '../hooks/motion.js';
 import { useListen } from '../hooks/useListen.js';
+import { usePalette } from '../palette.js';
 import { onMeasured } from '../hooks/useMeasure.js';
 import { useReplace } from '../hooks/useReplace.js';
 import { transportHeld } from '../listen.js';
@@ -170,6 +171,10 @@ export function Draft({
     canPlay,
   });
   const { player } = listen;
+  // Listen lights the grooves in the colours of the record it shows, cued or playing.
+  const tint = usePalette(
+    tab === 'listen' && replacing?.view !== 'bench' ? listen.nowRow?.track_id : undefined,
+  );
   // An edit syncs the preview under the music lock a player action holds, and a first play links it mid-flight.
   const playerHeld = listen.busy;
   const held = transportHeld(listen.busy, linked, pending);
@@ -544,6 +549,7 @@ export function Draft({
             now={listen.current ? listen.now : undefined}
             playing={listen.playing}
             progress={listen.duration ? listen.position / listen.duration : undefined}
+            tint={tint}
           />
           {replacing?.view === 'bench' && sides ? (
             <Bench around={sides} replace={replace} agent={agent} onSwap={swap} />

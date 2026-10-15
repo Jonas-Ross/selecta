@@ -2,8 +2,11 @@
 // its disc out and turning while Music.app plays it, and the sleeve back
 // beside it: its facts, the transition into the next record, and the set's route
 // round the key wheel.
+import type { CSSProperties } from 'react';
 import { join } from '../joins.js';
+import { useReducedMotion } from '../hooks/motion.js';
 import { useSettings } from '../hooks/useSettings.js';
+import { usePalette } from '../palette.js';
 import type { Row } from '../state.js';
 import { Term } from './Explain.js';
 import { FeatureFacts } from './FeatureFacts.js';
@@ -31,6 +34,8 @@ export function Listen({
   const { joinLead } = useSettings().settings;
   const row = items[now];
   const next = items[now + 1];
+  const palette = usePalette(row?.track_id);
+  const still = useReducedMotion();
 
   if (!row)
     return (
@@ -42,7 +47,21 @@ export function Listen({
   const j = next && join(row, next);
 
   return (
-    <section className="deck" aria-label="Listen">
+    <section
+      className={`deck${playing && row.bpm && !still ? ' breathing' : ''}`}
+      aria-label="Listen"
+    >
+      <i
+        className={`deck-glow${palette ? ' on' : ''}`}
+        aria-hidden="true"
+        style={
+          {
+            background: palette?.a,
+            // Swells once a bar, four beats, at the record's measured tempo.
+            '--bar': row.bpm ? `${240 / row.bpm}s` : undefined,
+          } as CSSProperties
+        }
+      />
       <div className={`deck-hero${playing ? ' spinning' : ''}${current ? ' out' : ''}`}>
         <div className="deck-record" key={row.entry_id}>
           <div className="deck-disc" aria-hidden="true">

@@ -90,9 +90,10 @@ ipcMain.handle('selecta:call', (_event, method: string, args: unknown) => {
   return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
 });
 
-// Standard so thumbnails have ordinary URLs; secure so the page treats them as its own.
+// Standard so thumbnails have ordinary URLs; secure so the page treats them as its own;
+// CORS so Listen can read a sleeve's colours off a canvas.
 protocol.registerSchemesAsPrivileged([
-  { scheme: ARTWORK_SCHEME, privileges: { standard: true, secure: true } },
+  { scheme: ARTWORK_SCHEME, privileges: { standard: true, secure: true, corsEnabled: true } },
 ]);
 
 // Only a thumbnail's bare file name in the artwork folder, so no path reaches the disk.
@@ -104,7 +105,9 @@ async function serveArtwork(request: Request): Promise<Response> {
   try {
     const bytes = await readFile(join(artworkDir(homedir()), file));
 
-    return new Response(new Uint8Array(bytes), { headers: { 'content-type': 'image/jpeg' } });
+    return new Response(new Uint8Array(bytes), {
+      headers: { 'content-type': 'image/jpeg', 'access-control-allow-origin': '*' },
+    });
   } catch {
     return new Response(null, { status: 404 });
   }
