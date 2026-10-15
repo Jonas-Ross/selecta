@@ -3,7 +3,7 @@
   position: relative;
   flex: none;
   /* Gives way before the rail does: the draft head, rail and transport below need about 460px. */
-  height: clamp(300px, min(44%, 100% - 460px), 430px);
+  height: clamp(300px, min(44%, 100% - 460px), 520px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   border-bottom: 1px solid var(--line);
@@ -19,10 +19,11 @@
 }
 .deck-hero {
   /* Sized by the band both ways, so a short window shrinks the record instead of cropping it. */
-  --size: min(400px, (100cqw - 300px) * 0.48, 100cqh - 40px);
+  --size: min(480px, (100cqw - 300px) * 0.48, 100cqh - 40px);
   position: relative;
   display: flex;
-  align-items: center;
+  /* The title sits on the sleeve's bottom edge, so a longer or shorter one doesn't move the rest. */
+  align-items: flex-end;
   gap: var(--s6);
   min-width: 0;
   padding: var(--s5) var(--s6);
@@ -49,7 +50,7 @@
 .deck-title h2 {
   margin: 14px 0 10px;
   /* Grows with the band, so a wide window fills with the title rather than empty room. */
-  font: 800 clamp(var(--fs-hero), 5cqw, 72px) / 0.92 var(--display);
+  font: 800 clamp(var(--fs-hero), 5cqw, 96px) / 0.92 var(--display);
   font-stretch: 125%;
   letter-spacing: -0.025em;
   overflow-wrap: anywhere;
@@ -101,10 +102,10 @@
 /* A narrow window stacks the title under a smaller record rather than squeezing it to a column. */
 @container (max-width: 800px) {
   .deck-hero {
-    --size: min(130px, 100cqh - 200px);
+    /* What the band's height leaves after the stacked title, padding and gap. */
+    --size: min(200px, 100cqh - 150px, 100cqw - 348px);
     flex-direction: column;
     align-items: flex-start;
-    justify-content: center;
     gap: var(--s4);
   }
   .deck-title h2 {
