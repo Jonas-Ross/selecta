@@ -15,6 +15,11 @@
   "dependencies": {
     "@selecta/core": "0.1.0",
     "better-sqlite3": "^13.0.3",
+    "mdast-util-from-markdown": "2.0.3",
+    "mdast-util-gfm-autolink-literal": "2.0.1",
+    "mdast-util-gfm-strikethrough": "2.0.1",
+    "micromark-extension-gfm-autolink-literal": "2.1.0",
+    "micromark-extension-gfm-strikethrough": "2.1.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zod": "^4.6.5"
@@ -22,6 +27,7 @@
   "devDependencies": {
     "@modelcontextprotocol/client": "2.3.1",
     "@playwright/test": "^1.64.0",
+    "@types/mdast": "4.0.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "electron": "^44.7.0",
@@ -30,7 +36,7 @@
   },
   "build": {
     "appId": "io.github.jonas-ross.selecta",
-    "copyright": "Copyright © 2026 Jonas Ross",
+    "copyright": "Copyright \u00a9 2026 Jonas Ross",
     "directories": {
       "app": ".package/app",
       "output": ".package/out"

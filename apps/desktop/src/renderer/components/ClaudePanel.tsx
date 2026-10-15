@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PROVIDER_LABELS, type ProviderId, type ProviderStatus } from '../../shared/protocol.js';
 import { canSwap } from '../providers.js';
 import type { LogItem, Row } from '../state.js';
+import { Markdown } from './Markdown.js';
 
 type Group = { kind: 'tools'; names: string[] } | LogItem;
 
@@ -128,7 +129,7 @@ export function ClaudePanel({
                     ? PROVIDER_LABELS[item.by ?? by]
                     : 'Problem'}
               </span>
-              {item.text}
+              {item.kind === 'claude' ? <Markdown text={item.text} /> : item.text}
             </div>
           ),
         )}
