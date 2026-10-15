@@ -76,3 +76,33 @@ test('opens Settings from the app menu, and Hear the transition starts where the
   );
   await page.screenshot({ path: 'test-results/listen-join-30.png' });
 });
+
+test('hides the key lane until Settings shows it', async ({ electronApp, page }) => {
+  const keyLane = page.locator('.gutter').getByText('Camelot');
+
+  await expect(page.getByRole('heading', { name: 'Drafts' })).toBeVisible();
+  await page.getByRole('button', { name: 'New playlist' }).first().click();
+  await page.getByLabel('The brief').fill('Warm-up, nothing too loud');
+  await page.getByRole('button', { name: 'Build it' }).click();
+  await expect(page.getByRole('list', { name: 'Draft order' }).getByRole('listitem')).toHaveCount(
+    8,
+  );
+  await expect(page.locator('.gutter').getByText('Tempo')).toBeVisible();
+  await expect(keyLane).toHaveCount(0);
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: 'test-results/key-lane-hidden.png' });
+
+  await electronApp.evaluate(({ Menu }) =>
+    Menu.getApplicationMenu()?.getMenuItemById('settings')?.click(),
+  );
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+
+  await expect(dialog.getByRole('radio', { name: 'Hide' })).toBeChecked();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: 'test-results/settings-key-lane.png' });
+  await dialog.getByText('Show').click();
+  await dialog.getByRole('button', { name: 'Close settings' }).click();
+  await expect(keyLane).toBeVisible();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: 'test-results/key-lane-shown.png' });
+});
