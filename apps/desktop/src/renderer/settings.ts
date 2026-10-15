@@ -12,12 +12,24 @@ export const JOIN_LEAD_TIGHT = 45;
 export const MOTIONS = ['system', 'reduce'] as const;
 export type Motion = (typeof MOTIONS)[number];
 
-export type Settings = { joinLead: number; crateOrder: CrateOrder; motion: Motion };
+export const CHATS = ['open', 'collapsed'] as const;
+export type Chat = (typeof CHATS)[number];
+
+export type Settings = {
+  joinLead: number;
+  crateOrder: CrateOrder;
+  motion: Motion;
+  // Off by default: a draft's keys are often too patchy to read as a lane.
+  keyLane: boolean;
+  chat: Chat;
+};
 
 export const DEFAULTS: Settings = {
   joinLead: JOIN_LEAD.initial,
   crateOrder: 'recently_added',
   motion: 'system',
+  keyLane: false,
+  chat: 'open',
 };
 
 export const CRATE_ORDER_LABELS: Record<CrateOrder, string> = {
@@ -47,6 +59,8 @@ export function parseSettings(raw: unknown): Settings {
     joinLead: typeof value.joinLead === 'number' ? clampLead(value.joinLead) : DEFAULTS.joinLead,
     crateOrder: pick(CRATE_ORDERS, value.crateOrder, DEFAULTS.crateOrder),
     motion: pick(MOTIONS, value.motion, DEFAULTS.motion),
+    keyLane: typeof value.keyLane === 'boolean' ? value.keyLane : DEFAULTS.keyLane,
+    chat: pick(CHATS, value.chat, DEFAULTS.chat),
   };
 }
 

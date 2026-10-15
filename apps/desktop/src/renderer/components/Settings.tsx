@@ -15,6 +15,8 @@ import {
 } from '../settings.js';
 
 const MOTION_LABELS: Record<Motion, string> = { system: 'Match macOS', reduce: 'Reduce' };
+const SHOWN = ['hide', 'show'] as const;
+const SHOWN_LABELS = { hide: 'Hide', show: 'Show' };
 
 // The preview's outgoing record spans the slider's whole range; the next record gets the rest.
 const OUT_SHARE = 0.8;
@@ -218,6 +220,22 @@ export function Settings() {
             labels={CRATE_ORDER_LABELS}
             value={settings.crateOrder}
             onChange={(crateOrder) => update({ crateOrder })}
+          />
+        </Row>
+      </section>
+
+      <section aria-labelledby="set-rail">
+        <h3 id="set-rail" className="set-head">
+          Rail
+        </h3>
+        <Row title="Key lane" hint="Each track's musical key, under the records.">
+          <Choice
+            name="key-lane"
+            label="Key lane"
+            options={SHOWN}
+            labels={SHOWN_LABELS}
+            value={settings.keyLane ? 'show' : 'hide'}
+            onChange={(shown) => update({ keyLane: shown === 'show' })}
           />
         </Row>
       </section>

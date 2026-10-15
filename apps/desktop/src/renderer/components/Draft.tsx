@@ -18,6 +18,7 @@ import { useListen } from '../hooks/useListen.js';
 import { usePalette } from '../palette.js';
 import { onMeasured } from '../hooks/useMeasure.js';
 import { useReplace } from '../hooks/useReplace.js';
+import { useSettings } from '../hooks/useSettings.js';
 import { transportHeld } from '../listen.js';
 import { withMoved } from '../reorder.js';
 import { around, site, swapEdit, swapEntries } from '../replace.js';
@@ -79,6 +80,9 @@ export function Draft({
   const [view, setView] = useState<DraftView>();
   const log = run?.log ?? [];
   const agent = PROVIDER_LABELS[by];
+  const { settings, update } = useSettings();
+  const chatCollapsed = settings.chat === 'collapsed';
+  const collapseChat = (collapsed: boolean) => update({ chat: collapsed ? 'collapsed' : 'open' });
   const [choices, setChoices] = useState<ProviderStatus[]>();
   // The host records a request before answering it, so until the answer the run may not show it yet.
   const [asking, setAsking] = useState(false);
@@ -542,7 +546,7 @@ export function Draft({
           />
         }
       />
-      <div className="draft-body">
+      <div className={chatCollapsed ? 'draft-body chat-collapsed' : 'draft-body'}>
         <section className="draft-main" aria-label="Draft">
           <Groove
             records={grooveRecords}
@@ -793,6 +797,7 @@ export function Draft({
             document.body,
           )}
         <ClaudePanel
+          draftId={draftId}
           by={by}
           choices={choices}
           onPick={onPick}
@@ -804,6 +809,8 @@ export function Draft({
           onUnselect={toggleSelected}
           onSend={send}
           onStop={() => void selecta.call('agent.cancel', { draft_id: draftId })}
+          collapsed={chatCollapsed}
+          onCollapse={collapseChat}
         />
       </div>
     </div>

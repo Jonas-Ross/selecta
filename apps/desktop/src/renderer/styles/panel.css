@@ -1,10 +1,94 @@
 /* Claude's panel: brief, log, and the feedback box. */
 .claude {
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: var(--bg1);
   border-left: 1px solid var(--line2);
+}
+/* Full width even mid-collapse, so the log never rewraps while the column slides. */
+.claude-inner {
+  display: flex;
+  flex-direction: column;
+  width: var(--claude-w);
+  height: 100%;
+  transition: opacity var(--t-mid) var(--ease);
+}
+.claude.collapsed .claude-inner {
+  opacity: 0;
+}
+.claude-edge {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--claude-edge-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s3);
+  padding-top: 18px;
+  color: var(--ink3);
+  opacity: 0;
+  transition:
+    opacity var(--t-mid) var(--ease),
+    color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+.claude.collapsed .claude-edge {
+  opacity: 1;
+  transition-delay: var(--t-mid), 0s, 0s;
+}
+.claude-edge:hover {
+  color: var(--ink);
+  background: var(--bg2);
+}
+.claude-edge svg,
+.claude-hide svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.claude-edge span {
+  writing-mode: vertical-rl;
+  font: 400 var(--fs-label) var(--mono);
+  letter-spacing: 0.06em;
+}
+/* Lit while the agent works or has said something since the panel closed. */
+.claude-edge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--uv);
+  opacity: 0;
+  transition: opacity var(--t-mid) var(--ease);
+}
+.claude-edge.lit i {
+  opacity: 1;
+}
+.claude-end {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.claude-hide {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: -6px;
+  border-radius: var(--r-sm);
+  color: var(--ink3);
+  transition:
+    color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+.claude-hide:hover {
+  color: var(--ink);
+  background: var(--bg2);
 }
 .claude-head {
   display: flex;
