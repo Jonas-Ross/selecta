@@ -7,6 +7,10 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--claude-w);
+  transition: grid-template-columns var(--t-slow) var(--ease);
+}
+.draft-body.chat-collapsed {
+  grid-template-columns: minmax(0, 1fr) var(--claude-edge-w);
 }
 .draft-main {
   display: flex;

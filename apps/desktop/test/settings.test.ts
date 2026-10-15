@@ -20,11 +20,16 @@ it('keeps the join lead on the slider’s steps and inside its range', () => {
 it('falls back to the default for anything it can’t read', () => {
   expect(parseSettings(undefined)).toEqual(DEFAULTS);
   expect(parseSettings('nope')).toEqual(DEFAULTS);
-  expect(parseSettings({ joinLead: '30', crateOrder: 'best', motion: 'wild' })).toEqual(DEFAULTS);
-  expect(parseSettings({ joinLead: 33, crateOrder: 'most_played', motion: 'reduce' })).toEqual({
+  expect(
+    parseSettings({ joinLead: '30', crateOrder: 'best', motion: 'wild', chat: 'hidden' }),
+  ).toEqual(DEFAULTS);
+  expect(
+    parseSettings({ joinLead: 33, crateOrder: 'most_played', motion: 'reduce', chat: 'collapsed' }),
+  ).toEqual({
     joinLead: 35,
     crateOrder: 'most_played',
     motion: 'reduce',
+    chat: 'collapsed',
   });
 });
 
@@ -37,8 +42,13 @@ it('round-trips through storage, and survives storage that is broken or throws',
   });
 
   expect(loadSettings()).toEqual(DEFAULTS);
-  storeSettings({ joinLead: 30, crateOrder: 'random', motion: 'system' });
-  expect(loadSettings()).toEqual({ joinLead: 30, crateOrder: 'random', motion: 'system' });
+  storeSettings({ joinLead: 30, crateOrder: 'random', motion: 'system', chat: 'collapsed' });
+  expect(loadSettings()).toEqual({
+    joinLead: 30,
+    crateOrder: 'random',
+    motion: 'system',
+    chat: 'collapsed',
+  });
   store.set('selecta.settings', '{not json');
   expect(loadSettings()).toEqual(DEFAULTS);
 
