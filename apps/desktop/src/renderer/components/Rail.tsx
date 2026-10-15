@@ -1,7 +1,8 @@
-// The draft as records standing on a lit rail, tempo lane above and key lane
-// below. Every record's slot is a spring (`useRailSprings`), so a drag, a
-// removal or Claude's edit moves records the same way, and the lanes are
-// redrawn from where the records are on each frame rather than where they will end up.
+// The draft as records standing on a lit rail, tempo lane above and, when
+// Settings shows it, key lane below. Every record's slot is a spring
+// (`useRailSprings`), so a drag, a removal or Claude's edit moves records the
+// same way, and the lanes are redrawn from where the records are on each frame
+// rather than where they will end up.
 import {
   useImperativeHandle,
   useLayoutEffect,
@@ -13,6 +14,7 @@ import {
 } from 'react';
 import type { Rect } from '../flight.js';
 import { useReducedMotion } from '../hooks/motion.js';
+import { useSettings } from '../hooks/useSettings.js';
 import { useRailSprings } from '../hooks/useRailSprings.js';
 import { bpmScale, GUTTER, keyRings, PAD, shelfLayout, slotX } from '../lanes.js';
 import { landingIndex } from '../reorder.js';
@@ -93,7 +95,8 @@ export function Rail({
   const hole = opening && !arrived ? Math.min(opening.at, count) : undefined;
   const rings = useMemo(() => keyRings(items.map((row) => row.camelot)), [items]);
   const scale = useMemo(() => bpmScale(items.map((row) => row.bpm)), [items]);
-  const shelf = shelfLayout(dims.h, rings);
+  const { keyLane } = useSettings().settings;
+  const shelf = shelfLayout(dims.h, keyLane ? rings : undefined);
   const step = shelf.step;
   const springs = useRailSprings({
     items,

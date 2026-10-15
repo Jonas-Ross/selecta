@@ -37,7 +37,7 @@ it('puts faster tempos higher, inside the lane', () => {
 });
 
 it('draws B above A, 12 at the top of each ring, and nothing for a missing key', () => {
-  const { bands } = shelfLayout(800, { A: true, B: true });
+  const bands = shelfLayout(800, { A: true, B: true }).bands!;
 
   expect(bands.B.top).toBeLessThan(bands.A.top);
   expect(keyY('8B', bands)!).toBeLessThan(bands.B.top + bands.B.height);
@@ -54,8 +54,8 @@ it('shrinks a ring the draft never uses and gives the height to the records', ()
   const both = shelfLayout(560, { A: true, B: true });
   const minorOnly = shelfLayout(560, { A: true, B: false });
 
-  expect(minorOnly.bands.B.height).toBeLessThan(both.bands.B.height);
-  expect(minorOnly.bands.A.height).toBe(both.bands.A.height);
+  expect(minorOnly.bands!.B.height).toBeLessThan(both.bands!.B.height);
+  expect(minorOnly.bands!.A.height).toBe(both.bands!.A.height);
   expect(minorOnly.size).toBeGreaterThan(both.size);
 });
 
@@ -103,13 +103,27 @@ it('stacks the bands in order inside the rail area, records large but bounded', 
     expect(shelf.step).toBe(shelf.size + shelf.gap);
     expect(shelf.tempo.top + shelf.tempo.height).toBeLessThan(shelf.rail - shelf.size);
     expect(shelf.join).toBeGreaterThan(shelf.rail);
-    expect(shelf.key.top).toBeGreaterThan(shelf.join);
-    expect(shelf.bands.A.top + shelf.bands.A.height).toBe(shelf.key.top + shelf.key.height);
+    expect(shelf.key!.top).toBeGreaterThan(shelf.join);
+    expect(shelf.bands!.A.top + shelf.bands!.A.height).toBe(shelf.key!.top + shelf.key!.height);
 
-    if (height >= 812) expect(shelf.key.top + shelf.key.height).toBeLessThanOrEqual(height);
+    if (height >= 812) expect(shelf.key!.top + shelf.key!.height).toBeLessThanOrEqual(height);
   }
 
   expect(shelfLayout(812, { A: true, B: true }).size).toBe(212);
+});
+
+it('gives the key lane’s room to the records when it is hidden', () => {
+  for (const height of [420, 812]) {
+    const hidden = shelfLayout(height);
+    const shown = shelfLayout(height, { A: true, B: true });
+
+    expect(hidden.key).toBeUndefined();
+    expect(hidden.bands).toBeUndefined();
+    expect(hidden.size).toBeGreaterThanOrEqual(shown.size);
+    expect(hidden.join).toBeGreaterThan(hidden.rail);
+  }
+
+  expect(shelfLayout(420).size).toBeGreaterThan(shelfLayout(420, { A: true, B: true }).size);
 });
 
 it('fades a label out as its room drops below what it needs', () => {
@@ -122,6 +136,8 @@ it('tightens the lanes under the crate before records drop below a readable size
   const short = shelfLayout(420, { A: true, B: true });
 
   expect(short.size).toBeGreaterThanOrEqual(64);
-  expect(short.key.top + short.key.height).toBeLessThanOrEqual(420);
-  expect(short.bands.A.height).toBeLessThan(shelfLayout(800, { A: true, B: true }).bands.A.height);
+  expect(short.key!.top + short.key!.height).toBeLessThanOrEqual(420);
+  expect(short.bands!.A.height).toBeLessThan(
+    shelfLayout(800, { A: true, B: true }).bands!.A.height,
+  );
 });

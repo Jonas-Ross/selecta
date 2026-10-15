@@ -17,8 +17,9 @@ export type Shelf = {
   tick: number; // y of the set-time labels
   rail: number; // y of the rail the records stand on
   join: number;
-  key: Box;
-  bands: { B: Box; A: Box };
+  // Absent when the key lane is hidden in Settings.
+  key?: Box;
+  bands?: { B: Box; A: Box };
 };
 
 const clamp = (value: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, value));
@@ -30,6 +31,8 @@ const COMPACT_KEY_ROW = 3;
 const COMPACT_BELOW = 560;
 const EMPTY_BAND = 20;
 const BAND_GAP = 8;
+// A join marker's two lines, when no key title sits under them.
+const JOIN_ROW = 34;
 
 export type Rings = { A: boolean; B: boolean };
 
@@ -45,15 +48,15 @@ export function keyRings(camelots: (string | undefined)[]): Rings {
  * up to a size past which too few fit across. What still remains is air,
  * mostly below so the rail sits high.
  */
-export function shelfLayout(height: number, rings: Rings): Shelf {
+export function shelfLayout(height: number, rings?: Rings): Shelf {
   const compact = height < COMPACT_BELOW;
   const row = compact ? COMPACT_KEY_ROW : KEY_ROW;
   const tempoH = clamp(height * 0.17, compact ? 60 : 84, 150);
-  const bandB = rings.B ? 12 * row : EMPTY_BAND;
-  const bandA = rings.A ? 12 * row : EMPTY_BAND;
-  const keyH = bandB + BAND_GAP + bandA;
-  // Lane title, tick row, captions, joins with the key title, bottom margin.
-  const fixed = 28 + 24 + 46 + 54 + 16;
+  const bandB = rings?.B ? 12 * row : EMPTY_BAND;
+  const bandA = rings?.A ? 12 * row : EMPTY_BAND;
+  const keyH = rings ? bandB + BAND_GAP + bandA : 0;
+  // Lane title, tick row, captions, joins (with the key title), bottom margin.
+  const fixed = 28 + 24 + 46 + (rings ? 54 : JOIN_ROW) + 16;
   const size = Math.round(clamp(height - fixed - tempoH - keyH - 40, compact ? 64 : 92, 212));
   // Wide enough for a two-line join marker between neighbours.
   const gap = Math.round(clamp(size * 0.34, 48, 64));
@@ -70,11 +73,13 @@ export function shelfLayout(height: number, rings: Rings): Shelf {
     tick: top + tempoH + 5,
     rail,
     join: rail + 46,
-    key: { top: keyTop, height: keyH },
-    bands: {
-      B: { top: keyTop, height: bandB },
-      A: { top: keyTop + bandB + BAND_GAP, height: bandA },
-    },
+    ...(rings && {
+      key: { top: keyTop, height: keyH },
+      bands: {
+        B: { top: keyTop, height: bandB },
+        A: { top: keyTop + bandB + BAND_GAP, height: bandA },
+      },
+    }),
   };
 }
 
@@ -125,7 +130,10 @@ export function tempoY(bpm: number, scale: BpmScale, box: Box): number {
 }
 
 /** The row for a Camelot position, 12 at the top of its ring, or undefined when there is none. */
-export function keyY(camelot: string | undefined, bands: Shelf['bands']): number | undefined {
+export function keyY(
+  camelot: string | undefined,
+  bands: NonNullable<Shelf['bands']>,
+): number | undefined {
   const position = parseCamelot(camelot);
 
   if (!position) return;
