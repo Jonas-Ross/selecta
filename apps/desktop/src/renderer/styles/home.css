@@ -168,7 +168,13 @@
   color: var(--ink2);
   transition:
     border-color var(--t-mid),
+    background var(--t-mid),
     color var(--t-mid);
+}
+.agent-choice input:not(:checked, :disabled):hover + span {
+  border-color: var(--line3);
+  background: var(--bg2);
+  color: var(--ink);
 }
 .agent-choice input:checked + span {
   border-color: var(--uv-line);

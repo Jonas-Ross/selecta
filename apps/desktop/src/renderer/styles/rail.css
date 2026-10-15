@@ -7,9 +7,10 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--claude-w);
-  transition: grid-template-columns var(--t-slow) var(--ease);
+  position: relative;
+  overflow: clip;
 }
-.draft-body.chat-collapsed {
+.draft-body.roomy {
   grid-template-columns: minmax(0, 1fr) var(--claude-edge-w);
 }
 .draft-main {
@@ -52,7 +53,7 @@
   align-items: center;
   gap: 6px;
   margin-left: auto;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
   font-size: var(--fs-label);
   color: var(--ink4);
@@ -84,7 +85,7 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
 }
 
 /* The left gutter stays put while the rail scrolls under it. */
@@ -285,7 +286,7 @@
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow: clip;
 }
 .join:hover .join-words,
 .join:focus-visible .join-words {
@@ -361,7 +362,7 @@
   position: absolute;
   inset: 0;
   container-type: size;
-  overflow: hidden;
+  overflow: clip;
   border-radius: var(--r-xs);
   background: linear-gradient(160deg, var(--bg3), var(--bg1) 70%);
   box-shadow: var(--sleeve-shadow);
@@ -453,7 +454,7 @@
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .rec-x {
@@ -502,7 +503,7 @@
 .cap-artist {
   display: block;
   white-space: nowrap;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
 }
 .cap-title {
