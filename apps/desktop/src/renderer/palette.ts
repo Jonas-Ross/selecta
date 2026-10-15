@@ -105,7 +105,8 @@ function lifted([r, g, b]: [number, number, number]): string {
 // null: read, and the art is grey or couldn't be read.
 const palettes = new Map<string, Palette | null>();
 
-function read(url: string): Promise<Palette | null> {
+// undefined: the image didn't load, so it isn't cached and a reloaded sleeve reads again.
+function read(url: string): Promise<Palette | null | undefined> {
   return new Promise((resolve) => {
     const image = new Image();
 
@@ -131,7 +132,7 @@ function read(url: string): Promise<Palette | null> {
       resolve(palette);
     };
 
-    image.onerror = () => resolve(null);
+    image.onerror = () => resolve(undefined);
     image.src = url;
   });
 }
@@ -147,6 +148,8 @@ export function usePalette(trackId: string | undefined): Palette | undefined {
     let alive = true;
 
     void read(url).then((palette) => {
+      if (palette === undefined) return;
+
       palettes.set(url, palette);
 
       if (alive) setRead((n) => n + 1);
