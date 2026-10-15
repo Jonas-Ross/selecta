@@ -63,7 +63,7 @@
   font-size: var(--fs-head);
   color: var(--ink2);
 }
-/* The sleeve's own colour, faint under the record, swelling once a bar while it plays. */
+/* The sleeve's own colour, faint under the record; Listen swells it once a bar while it plays. */
 .deck-glow {
   position: absolute;
   left: -10%;
@@ -80,18 +80,6 @@
 }
 .deck-glow.on {
   opacity: 0.32;
-}
-.deck.breathing .deck-glow {
-  animation: swell var(--bar) var(--ease) infinite;
-}
-@keyframes swell {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  12% {
-    transform: scale(1.08);
-  }
 }
 .deck-title .deck-status {
   margin-top: var(--s3);

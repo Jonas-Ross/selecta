@@ -82,3 +82,33 @@ test.describe('when Claude reaches for a write the app never allows', () => {
     ).toBeVisible();
   });
 });
+
+test('swells the glow on the bar Music is at, and moves the bar line when Music jumps', async ({
+  page,
+  music,
+}) => {
+  await build(page);
+  await page.getByRole('tab', { name: 'Listen' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
+
+  // Where the glow's swell puts the record, in seconds, against where Music is.
+  const drift = () =>
+    page.locator('.deck-glow').evaluate((el) => {
+      const [pulse] = el.getAnimations();
+      const now = document.timeline.currentTime as number;
+
+      return pulse ? (now - Number(pulse.startTime)) / 1000 : undefined;
+    });
+  const near = async () => {
+    const at = await drift();
+
+    return at !== undefined && Math.abs(at - music.snapshot().player.position) < 1.5;
+  };
+
+  await expect.poll(near).toBe(true);
+  music.advance(60);
+  await expect.poll(near).toBe(true);
+
+  await page.getByRole('button', { name: 'Pause' }).click();
+  await expect.poll(drift).toBeUndefined();
+});
