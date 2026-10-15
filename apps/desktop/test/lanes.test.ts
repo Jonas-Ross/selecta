@@ -126,6 +126,28 @@ it('gives the key lane’s room to the records when it is hidden', () => {
   expect(shelfLayout(420).size).toBeGreaterThan(shelfLayout(420, { A: true, B: true }).size);
 });
 
+it('grows the tempo lane into the key lane’s room rather than leaving air', () => {
+  for (const height of [560, 640]) {
+    const shelf = shelfLayout(height);
+
+    expect(shelf.tempo.height).toBeGreaterThan(
+      shelfLayout(height, { A: true, B: true }).tempo.height,
+    );
+    // Only the bottom margin is left under the joins.
+    expect(height - (shelf.join + 34)).toBeLessThanOrEqual(16 + 1);
+  }
+
+  expect(shelfLayout(1400).tempo.height).toBe(300);
+});
+
+it('keeps the key lane on screen at the shortest rail the window allows', () => {
+  for (const height of [345, 362]) {
+    const shelf = shelfLayout(height, { A: true, B: true });
+
+    expect(shelf.key!.top + shelf.key!.height).toBeLessThanOrEqual(height);
+  }
+});
+
 it('fades a label out as its room drops below what it needs', () => {
   expect(labelFade(200, 100, 20)).toBe(1);
   expect(labelFade(110, 100, 20)).toBe(0.5);

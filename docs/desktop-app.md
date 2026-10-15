@@ -70,7 +70,7 @@ Cmd+, or Selecta → Settings… opens a sheet over whatever screen is up (`comp
 |---|---|
 | Hear the transition | How far before a record's end the transition starts, 15 s to 2 min in 5 s steps, 60 s by default. Under 45 s it warns that AutoMix may not get room to blend. Replace's way in and way out use it too. |
 | Fill the crate with | What the crate holds with no search: recently added (default), most played, played lately, least played or shuffled. The same neutral orderings the MCP `search` offers; a search still orders by relevance. |
-| Key lane | Show or hide the key lane under the rail; hidden by default, since a draft's keys are often too patchy to read as a line. Hidden, its height goes to the records. Keys still show on the card, sleeve back and transitions. |
+| Key lane | Show or hide the key lane under the rail; hidden by default, since a draft's keys are often too patchy to read as a line. Hidden, its height goes to the records and then the tempo lane. Keys still show on the card, sleeve back and transitions. |
 | Movement | Match macOS, or Reduce, which turns on the reduced-motion paths whatever macOS says. |
 
 The store also keeps whether the agent panel is tucked away, though the sheet doesn't show it: the panel's arrow or Cmd+\\ slides it to a slim edge so the draft gets the width, and a dot on the edge lights while the agent works or once it has replied.
