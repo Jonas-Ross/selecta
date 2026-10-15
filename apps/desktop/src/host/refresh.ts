@@ -33,6 +33,12 @@ export function createLibrary({ cache, bridge, measure, onChange, now = Date.now
       .getTracksPendingEnrichment('analysis', Number.MAX_SAFE_INTEGER)
       .map((track) => track.persistentId);
 
+  // Features metrognome supplied, so a track counts as measured only when this run landed one.
+  const heardBy = (id: string) =>
+    Object.values(cache().getAudioFeatures(id)?.sources ?? {}).filter((source) =>
+      source?.startsWith('metrognome'),
+    ).length;
+
   function set(next: LibraryView) {
     view = next;
     onChange(next);
@@ -49,17 +55,19 @@ export function createLibrary({ cache, bridge, measure, onChange, now = Date.now
     for (let at = 0; at < queue.length; at += RUN_SIZE) {
       set({ read_at: readAt(), measuring: { done: at, of: queue.length } });
 
-      const results = await Promise.all(queue.slice(at, at + RUN_SIZE).map(measure));
+      const run = queue.slice(at, at + RUN_SIZE);
+      const had = run.map(heardBy);
+      const results = await Promise.all(run.map(measure));
       const failed = results.find((result) => result.error);
 
       // A run that failed outright (no metrognome, store down) would fail the same way again.
       if (failed && results.every((result) => result.error))
         return { read_at: readAt(), measured, failed: 'measure', error: failed.error };
 
-      measured += results.filter((result) => !result.tempo || !result.key).length;
+      measured += run.filter((id, i) => heardBy(id) > had[i]!).length;
     }
 
-    return { read_at: readAt(), measured, left: after.length - queue.length };
+    return { read_at: readAt(), measured, left: cache().countPendingEnrichment('analysis') };
   }
 
   async function run(): Promise<LibraryView> {

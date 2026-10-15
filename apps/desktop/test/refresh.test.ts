@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import type { LibrarySnapshot } from '@selecta/core/types/bridge.js';
 import fixture from '../../../packages/core/test/fixtures/library.json' with { type: 'json' };
-import { makeToolDeps } from '../../../packages/core/test/helpers.js';
+import { featuresRow, makeToolDeps } from '../../../packages/core/test/helpers.js';
 import { createLibrary } from '../src/host/refresh.js';
 import type { LibraryView, Measured } from '../src/shared/protocol.js';
 
@@ -11,14 +11,19 @@ const added: LibrarySnapshot = {
   tracks: [...library.tracks, { ...library.tracks[0], persistentId: 'T-NEW', title: 'New One' }],
 };
 
-function setup(measure: (id: string) => Promise<Measured>, read = async () => added) {
+type Measure = (
+  id: string,
+  cache: ReturnType<typeof makeToolDeps>['cacheInstance'],
+) => Promise<Measured>;
+
+function setup(measure: Measure, read = async () => added) {
   const deps = makeToolDeps({ readLibrary: vi.fn(read) });
   const views: LibraryView[] = [];
   const settled = new Promise<LibraryView>((resolve) => {
     const lib = createLibrary({
       cache: deps.cache,
       bridge: deps.bridge,
-      measure,
+      measure: (id) => measure(id, deps.cacheInstance),
       onChange: (view) => {
         views.push(view);
 
@@ -34,11 +39,25 @@ function setup(measure: (id: string) => Promise<Measured>, read = async () => ad
 
 it('reads the library, then measures the tracks it brought in before older unheard ones', async () => {
   const asked: string[] = [];
-  const { deps, views, settled } = setup(async (id) => {
+  const { deps, views, settled } = setup(async (id, cache) => {
     asked.push(id);
 
-    return id === 'T-BARE' ? { tempo: 'unsure', key: 'unsure' } : {};
+    // T-BARE has nothing to hear; T-TEARDROP's catalog BPM stays and analysis adds no key.
+    if (id !== 'T-BARE' && id !== 'T-TEARDROP')
+      cache.saveAudioFeatures([
+        featuresRow({
+          trackPersistentId: id,
+          sources: { bpm: 'metrognome/onset-autocorrelation-comb@1' },
+          analysisStatus: 'ok',
+          catalogStatus: null,
+        }),
+      ]);
+
+    return { key: 'unsure' };
   });
+
+  deps.cacheInstance.saveAudioFeatures([featuresRow({ analysisStatus: null })]);
+
   const done = await settled;
 
   expect(deps.bridge.readLibrary).toHaveBeenCalledTimes(1);
@@ -46,7 +65,8 @@ it('reads the library, then measures the tracks it brought in before older unhea
   expect(asked).toHaveLength(7);
   expect(views[0]).toMatchObject({ reading: true });
   expect(views).toContainEqual(expect.objectContaining({ measuring: { done: 0, of: 7 } }));
-  expect(done).toMatchObject({ measured: 6, left: 0 });
+  // Only tracks where metrognome actually landed a value count, and unsettled ones stay left.
+  expect(done).toMatchObject({ measured: 5, left: 2 });
   expect(done.read_at).toEqual(expect.any(Number));
   expect(deps.cache().getTrack('T-NEW')).toMatchObject({ title: 'New One' });
 });
