@@ -47,7 +47,10 @@ export function Digging({
 
   return (
     <div className="digging" role="status">
-      <div className="digging-say" style={{ top: shelf.tempo.top, height: shelf.tempo.height }}>
+      <div
+        className="digging-say"
+        style={{ left: GUTTER, top: shelf.tempo.top, height: shelf.tempo.height }}
+      >
         <b>{agent} is digging</b>
         <span key={tool} className="digging-step">
           {digStep(tool)}
