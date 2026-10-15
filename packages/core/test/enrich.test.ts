@@ -1,7 +1,7 @@
 // Enrichment layer: match heuristics pure, engine + tool handler against
 // in-memory SQLite with a canned FetchLike — no real network, ever.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
 import {
   FIELDS_BY_SOURCE,
@@ -725,6 +725,7 @@ describe('enrich_features tool', () => {
   it('measures with metrognome when no source is given, and never falls back to the catalogs', async () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
     const deps = makeDeps(fetchLike);
+    const page = vi.spyOn(deps.cache(), 'getTracksPendingEnrichment');
     const out = (await handleEnrichFeatures(
       {},
       {
@@ -740,6 +741,8 @@ describe('enrich_features tool', () => {
     expect(out.pending_remaining).toBe(6);
     expect(out.source_errors).toEqual([expect.stringContaining('brew install')]);
     expect(calls).toHaveLength(0);
+    // ~3s a track, so the default batch still lands inside a 60s tool-call timeout.
+    expect(page).toHaveBeenCalledWith('analysis', 15);
   });
 });
 
