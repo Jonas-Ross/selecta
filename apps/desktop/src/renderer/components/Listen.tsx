@@ -1,7 +1,7 @@
 // Listen, in the crate's place above the rail: the record playing, large, and
 // the sleeve back beside it: its facts, the transition into the next record,
 // and the set's route round the key wheel.
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { join } from '../joins.js';
 import { useReducedMotion } from '../hooks/motion.js';
 import { useSettings } from '../hooks/useSettings.js';
@@ -17,6 +17,7 @@ export function Listen({
   now,
   playing,
   current,
+  position,
   status,
   joinDisabled,
   onJoin,
@@ -26,6 +27,8 @@ export function Listen({
   playing: boolean;
   // Music.app is on this record, playing or paused, rather than it being only cued.
   current: boolean;
+  /** Seconds into the record Music is on. */
+  position: number;
   status?: string;
   joinDisabled: boolean;
   onJoin: () => void;
@@ -35,6 +38,9 @@ export function Listen({
   const next = items[now + 1];
   const palette = usePalette(row?.track_id);
   const still = useReducedMotion();
+  const glow = useRef<HTMLElement>(null);
+
+  usePulse(glow, playing && !still && row?.bpm ? 240 / row.bpm : undefined, position);
 
   if (!row)
     return (
@@ -46,20 +52,12 @@ export function Listen({
   const j = next && join(row, next);
 
   return (
-    <section
-      className={`deck${playing && row.bpm && !still ? ' breathing' : ''}`}
-      aria-label="Listen"
-    >
+    <section className="deck" aria-label="Listen">
       <i
+        ref={glow}
         className={`deck-glow${palette ? ' on' : ''}`}
         aria-hidden="true"
-        style={
-          {
-            background: palette?.a,
-            // Swells once a bar, four beats, at the record's measured tempo.
-            '--bar': row.bpm ? `${240 / row.bpm}s` : undefined,
-          } as CSSProperties
-        }
+        style={{ background: palette?.a }}
       />
       <div className={`deck-hero${playing ? ' playing' : ''}`}>
         <div className="deck-record" key={row.entry_id}>
@@ -126,4 +124,45 @@ export function Listen({
       </aside>
     </section>
   );
+}
+
+// Bars are counted from the start of the record by Music's position, so the swell pauses
+// and seeks with it. Where the first beat really falls isn't known: the app can't hear Music.
+function usePulse(el: RefObject<HTMLElement | null>, bar: number | undefined, position: number) {
+  const pulse = useRef<Animation>(undefined);
+
+  useEffect(() => {
+    if (!bar) return;
+
+    pulse.current = el.current!.animate(
+      [
+        { transform: 'scale(1)' },
+        { transform: 'scale(1.08)', offset: 0.04 },
+        { transform: 'scale(1)', offset: 0.6 },
+        { transform: 'scale(1)' },
+      ],
+      { duration: bar * 1000, iterations: Infinity, easing: 'ease-out' },
+    );
+
+    return () => {
+      pulse.current?.cancel();
+      pulse.current = undefined;
+    };
+  }, [el, bar]);
+
+  useEffect(() => {
+    const animation = pulse.current;
+
+    if (!animation) return;
+
+    const start = document.timeline.currentTime;
+
+    if (typeof start !== 'number') return;
+
+    const origin = start - position * 1000;
+
+    // Music is read about once a second, so only a real jump moves the bar line.
+    if (animation.startTime === null || Math.abs(Number(animation.startTime) - origin) > 120)
+      animation.startTime = origin;
+  }, [position, bar]);
 }
