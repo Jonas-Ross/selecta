@@ -1,7 +1,6 @@
-// Listen, in the crate's place above the rail: the record playing, large, with
-// its disc out and turning while Music.app plays it, and the sleeve back
-// beside it: its facts, the transition into the next record, and the set's route
-// round the key wheel.
+// Listen, in the crate's place above the rail: the record playing, large, and
+// the sleeve back beside it: its facts, the transition into the next record,
+// and the set's route round the key wheel.
 import type { CSSProperties } from 'react';
 import { join } from '../joins.js';
 import { useReducedMotion } from '../hooks/motion.js';
@@ -62,14 +61,9 @@ export function Listen({
           } as CSSProperties
         }
       />
-      <div className={`deck-hero${playing ? ' spinning' : ''}${current ? ' out' : ''}`}>
+      <div className={`deck-hero${playing ? ' playing' : ''}`}>
         <div className="deck-record" key={row.entry_id}>
-          <div className="deck-disc" aria-hidden="true">
-            <i className="deck-label" />
-          </div>
-          <div className="deck-sleeve">
-            <Sleeve trackId={row.track_id} title={row.title} />
-          </div>
+          <Sleeve trackId={row.track_id} title={row.title} />
         </div>
         <div className="deck-title">
           <span className="deck-kicker mono">
