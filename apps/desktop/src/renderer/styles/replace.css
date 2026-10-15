@@ -385,6 +385,7 @@
   padding: var(--s3) var(--s5);
   border-bottom: 1px solid var(--line);
   overflow: hidden;
+  container-type: size;
   animation: fadein 0.3s var(--ease-out) both;
 }
 @keyframes fadein {
@@ -394,7 +395,14 @@
 }
 .bench-row {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) 220px minmax(0, 1fr) 96px;
+  /* The band's height less the foot, padding and the title block under the cover. */
+  --big: clamp(112px, 100cqh - 180px, 320px);
+  --nb: clamp(84px, var(--big) * 0.55, 140px);
+  display: grid;
+  grid-template-columns:
+    minmax(0, var(--nb)) fit-content(280px) minmax(0, calc(var(--big) + 120px))
+    fit-content(280px) minmax(0, var(--nb));
+  justify-content: center;
   gap: 18px;
   align-items: center;
   min-height: 0;
@@ -409,11 +417,11 @@
 }
 .nb .sleeve {
   position: relative;
-  width: 84px;
-  height: 84px;
+  width: min(100%, var(--nb));
+  aspect-ratio: 1;
 }
 .nb b {
-  max-width: 96px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -486,6 +494,7 @@
 }
 .bench-mid {
   display: grid;
+  align-content: center;
   justify-items: center;
   gap: var(--s1);
   min-width: 0;
@@ -493,8 +502,8 @@
 }
 .bench-big {
   position: relative;
-  width: 112px;
-  height: 112px;
+  width: min(100%, var(--big));
+  aspect-ratio: 1;
 }
 .bench-big .sleeve {
   box-shadow:
@@ -525,7 +534,7 @@
   height: 11px;
 }
 .bench-mid h4 {
-  max-width: 220px;
+  max-width: 100%;
   margin-top: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -534,7 +543,7 @@
   font-stretch: 125%;
 }
 .bench-mid .by {
-  max-width: 220px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
