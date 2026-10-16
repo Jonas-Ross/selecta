@@ -8,11 +8,14 @@ import { backZ, counterText, frontZ, pose, visibleRange } from '../crate.js';
 import type { Rect } from '../flight.js';
 import { useReducedMotion } from '../hooks/motion.js';
 import { useCrateFlip } from '../hooks/useCrateFlip.js';
+import { refreshLibrary, useLibrary } from '../hooks/useLibrary.js';
+import { working } from '../library.js';
 import { onMeasured } from '../hooks/useMeasure.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { CRATE_ORDER_LABELS } from '../settings.js';
 import type { Crate as CrateData, CrateTrack } from '../../shared/protocol.js';
 import { Flight } from './Flight.js';
+import { LibraryRefresh } from './LibraryRefresh.js';
 import { Sleeve } from './Sleeve.js';
 import { Spec } from './Spec.js';
 
@@ -56,6 +59,7 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
   const [error, setError] = useState<string>();
   // Bumped when a measurement lands, so the card shows the new tempo or key.
   const [measured, setMeasured] = useState(0);
+  const library = useLibrary();
   const flip = useCrateFlip({
     data,
     size,
@@ -99,7 +103,8 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
       live = false;
       clearTimeout(timer);
     };
-  }, [query, crateOrder, measured]);
+    // A refresh's read and each of its measurements change what the crate holds.
+  }, [query, crateOrder, measured, library?.read_at, library?.measuring?.done, library?.measured]);
 
   useEffect(() => onMeasured(() => setMeasured((n) => n + 1)), []);
 
@@ -152,6 +157,7 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
         <span className="counter mono" aria-live="polite">
           {data && counterText(cur, count, data.total, data.query.trim() !== '')}
         </span>
+        <LibraryRefresh view={library} compact onError={setError} />
       </div>
       <div className="dig-body">
         <div
@@ -261,7 +267,15 @@ export function Crate({ inDraft, canAdd, lockedReason, onAdd, onCarry, onCarryEn
                 </div>
               ) : (
                 <div>
-                  <b>The crate is empty</b>Refresh the library from your AI or the CLI first.
+                  <b>The crate is empty</b>
+                  <button
+                    type="button"
+                    className="btn line"
+                    disabled={working(library)}
+                    onClick={() => void refreshLibrary().catch((e: Error) => setError(e.message))}
+                  >
+                    Read your library from Music
+                  </button>
                 </div>
               )}
             </div>

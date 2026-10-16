@@ -16,7 +16,7 @@ import type { Rect } from '../flight.js';
 import { useReducedMotion } from '../hooks/motion.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useRailSprings } from '../hooks/useRailSprings.js';
-import { bpmScale, GUTTER, keyRings, PAD, shelfLayout, slotX } from '../lanes.js';
+import { bpmScale, GUTTER, keyRings, PAD, shelfLayout, slotX, type Shelf } from '../lanes.js';
 import { landingIndex } from '../reorder.js';
 import type { Row } from '../state.js';
 import { RailGutter, RailLanes } from './RailLanes.js';
@@ -51,7 +51,8 @@ export type RailProps = {
   onClear: () => void;
   onMove: (entryId: string, to: number) => void;
   onRemove: (entryId: string) => void;
-  empty?: ReactNode;
+  /** What stands on the rail with no records, laid out on its shelf. */
+  empty?: (shelf: Shelf, view: number) => ReactNode;
   opening?: Opening;
   handle?: Ref<RailHandle>;
   // The record being replaced, marked on the rail.
@@ -320,7 +321,7 @@ export function Rail({
               </div>
             </div>
           </div>
-          {count === 0 && empty && <div className="rail-empty">{empty}</div>}
+          {count === 0 && empty && <div className="rail-empty">{empty(shelf, view)}</div>}
         </>
       )}
       <p className="sr" aria-live="polite">

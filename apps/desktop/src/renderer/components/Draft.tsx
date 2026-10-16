@@ -11,6 +11,7 @@ import {
   type Suggestion,
 } from '../../shared/protocol.js';
 import { onArtworkFailure, retryArtwork } from '../artwork.js';
+import { runTools } from '../digging.js';
 import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
 import { useReducedMotion } from '../hooks/motion.js';
@@ -43,6 +44,7 @@ import { Banner } from './Banner.js';
 import { Bench } from './Bench.js';
 import { ClaudePanel } from './ClaudePanel.js';
 import { Crate, type CrateTrack } from './Crate.js';
+import { Digging } from './Digging.js';
 import { Flight, type FlightPlan } from './Flight.js';
 import { Groove } from './Groove.js';
 import { Listen } from './Listen.js';
@@ -80,17 +82,11 @@ export function Draft({
 }) {
   const [view, setView] = useState<DraftView>();
   const log = run?.log ?? [];
+  const tools = runTools(log);
   const agent = PROVIDER_LABELS[by];
   const { settings, update } = useSettings();
   const chatCollapsed = settings.chat === 'collapsed';
-  // The draft takes the width the moment the panel starts sliding away, and gives it back only
-  // once the panel has slid over it, so its single reflow is always hidden under the panel.
-  const [chatOpening, setChatOpening] = useState(false);
-  const roomy = chatCollapsed || chatOpening;
-  const collapseChat = (collapsed: boolean) => {
-    setChatOpening(!collapsed);
-    update({ chat: collapsed ? 'collapsed' : 'open' });
-  };
+  const collapseChat = (collapsed: boolean) => update({ chat: collapsed ? 'collapsed' : 'open' });
   const [choices, setChoices] = useState<ProviderStatus[]>();
   // The host records a request before answering it, so until the answer the run may not show it yet.
   const [asking, setAsking] = useState(false);
@@ -555,8 +551,8 @@ export function Draft({
           />
         }
       />
-      <div className={roomy ? 'draft-body roomy' : 'draft-body'}>
-        <section className="draft-main" aria-label="Draft">
+      <div className="draft-body">
+        <div className="draft-ground">
           <Groove
             records={grooveRecords}
             now={listen.current ? listen.now : undefined}
@@ -564,6 +560,8 @@ export function Draft({
             progress={listen.duration ? listen.position / listen.duration : undefined}
             tint={tint}
           />
+        </div>
+        <section className="draft-main" aria-label="Draft">
           {replacing?.view === 'bench' && sides ? (
             <Bench around={sides} replace={replace} agent={agent} onSwap={swap} />
           ) : tab === 'listen' ? (
@@ -721,19 +719,21 @@ export function Draft({
             handle={rail}
             replacing={replacing?.entryId}
             onMenu={(entryId, x, y) => !replacing && setMenu({ entryId, x, y })}
-            empty={
-              <div className="rail-wait">
-                {working ? (
-                  <>
-                    <b>{agent} is picking tracks</b>
-                  </>
-                ) : (
-                  <>
-                    <b>No draft yet</b>
-                    <span>Try again in the {agent} panel.</span>
-                  </>
-                )}
-              </div>
+            empty={(shelf, width) =>
+              working ? (
+                <Digging
+                  agent={agent}
+                  shelf={shelf}
+                  view={width}
+                  tool={tools.at(-1)}
+                  calls={tools.length}
+                />
+              ) : (
+                <div className="rail-wait">
+                  <b>No draft yet</b>
+                  <span>Try again in the {agent} panel.</span>
+                </div>
+              )
             }
           />
           <Transport
@@ -839,7 +839,6 @@ export function Draft({
           onStop={() => void selecta.call('agent.cancel', { draft_id: draftId })}
           collapsed={chatCollapsed}
           onCollapse={collapseChat}
-          onOpened={() => setChatOpening(false)}
         />
       </div>
     </div>

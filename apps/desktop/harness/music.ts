@@ -207,6 +207,11 @@ export class MusicSim {
     return (0xa000000000000000n + BigInt(++this.ids)).toString(16).toUpperCase();
   }
 
+  /** A track bought or imported while the app is open. */
+  addTrack(track: SimTrack): void {
+    this.library.entries.push({ track });
+  }
+
   private playlist(name: string, kind: Kind, tracks: SimTrack[]): Playlist {
     return { persistentId: this.newId(), name, kind, entries: tracks.map((track) => ({ track })) };
   }

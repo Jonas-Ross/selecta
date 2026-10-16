@@ -34,8 +34,23 @@ export type Suggestion = { track: CrateTrack; reason: string };
 
 export const ASK_LIMIT = 500;
 
+/** When the library was last read from Music, and how a refresh from the app is going or went. */
+export type LibraryView = {
+  /** Epoch ms; null before the library has ever been read. */
+  read_at: number | null;
+  reading?: true;
+  measuring?: { done: number; of: number };
+  /** Tracks the last refresh measured a tempo or key for, and unheard ones it left for later. */
+  measured?: number;
+  left?: number;
+  failed?: 'read' | 'measure';
+  error?: string;
+};
+
 export type Methods = {
   'library.crate': (args: { query?: string; order?: CrateOrder }) => Crate;
+  'library.state': () => LibraryView;
+  'library.refresh': () => LibraryView;
   'artwork.get': (args: {
     track_ids: string[];
     refresh?: string[];
@@ -113,6 +128,7 @@ export type RunSnapshot = { events: AgentEvent[]; working: boolean };
 export type HostEvent =
   | { event: 'agent'; draft_id: string; seq: number; data: AgentEvent }
   | { event: 'drafts.changed' }
+  | { event: 'library'; data: LibraryView }
   // From main's menu rather than the host.
   | { event: 'settings.open' };
 

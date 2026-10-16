@@ -73,7 +73,7 @@ describe('external payload boundaries', () => {
       const fetchLike = vi.fn(async () => ({ ok: true, status: 200, json: async () => body }));
       const result = await enrichPendingTracks(
         cache,
-        { trackIds: ['T-TEARDROP'] },
+        { trackIds: ['T-TEARDROP'], source: 'catalog' },
         { fetchLike, sleep: async () => {} },
       );
 
@@ -95,7 +95,7 @@ describe('external payload boundaries', () => {
         const urls: string[] = [];
         const result = await enrichPendingTracks(
           cache,
-          { trackIds: ['T-TEARDROP'] },
+          { trackIds: ['T-TEARDROP'], source: 'catalog' },
           {
             sleep: async () => {},
             fetchLike: async (url) => {
