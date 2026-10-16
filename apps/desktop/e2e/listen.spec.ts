@@ -112,3 +112,61 @@ test('swells the glow on the bar Music is at, and moves the bar line when Music 
   await page.getByRole('button', { name: 'Pause' }).click();
   await expect.poll(drift).toBeUndefined();
 });
+
+test('crossfades between Dig and Listen with the crate kept and the rail held still', async ({
+  page,
+  electronApp,
+}) => {
+  // Tall enough that the band reaches its cap, where the two used to differ by 90px.
+  await electronApp.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]!.setSize(2048, 1280),
+  );
+  await build(page);
+
+  const crate = page.locator('.crate-stage .sl');
+
+  await expect(crate.first()).toBeAttached();
+
+  const railTop = () =>
+    page.evaluate(() => document.querySelector('.rail-area')!.getBoundingClientRect().top);
+  const before = await railTop();
+
+  for (const tab of ['Listen', 'Dig']) {
+    // The frame after the click, before any fetch could land.
+    const next = await page.evaluate(
+      (name) =>
+        new Promise<{ records: number; railTop: number }>((resolve) => {
+          [...document.querySelectorAll<HTMLElement>('[role=tab]')]
+            .find((el) => el.textContent === name)!
+            .click();
+          requestAnimationFrame(() =>
+            resolve({
+              records: document.querySelectorAll('.crate-stage .sl').length,
+              railTop: document.querySelector('.rail-area')!.getBoundingClientRect().top,
+            }),
+          );
+        }),
+      tab,
+    );
+
+    expect(next.records).toBeGreaterThan(0);
+    expect(next.railTop).toBe(before);
+  }
+
+  await expect(page.getByRole('region', { name: 'The crate' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Listen' })).toBeHidden();
+  // Flush with the draft, not nudged by another rule sharing its class name.
+  expect(
+    await page.evaluate(() => {
+      const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+
+      return [box('.mode-band').left, box('.mode-band').right];
+    }),
+  ).toEqual(
+    await page.evaluate(() => {
+      const box = document.querySelector('.draft-main')!.getBoundingClientRect();
+
+      return [box.left, box.right];
+    }),
+  );
+});

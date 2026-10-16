@@ -1,12 +1,9 @@
 /* Listen: the record playing, large, in the crate's band. */
 .deck {
   position: relative;
-  flex: none;
-  /* Gives way before the rail does: the draft head, rail and transport below need about 460px. */
-  height: clamp(300px, min(44%, 100% - 460px), 520px);
+  height: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
-  border-bottom: 1px solid var(--line);
   overflow: hidden;
   container-type: size;
 }

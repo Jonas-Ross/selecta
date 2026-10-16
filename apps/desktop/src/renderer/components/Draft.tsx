@@ -180,6 +180,8 @@ export function Draft({
     canPlay,
   });
   const { player } = listen;
+  // Both stay mounted, so flipping crossfades instead of rebuilding the crate from empty.
+  const band = replacing?.view === 'bench' && sides ? 'bench' : tab;
   // Listen lights the grooves in the colours of the record it shows, cued or playing.
   const tint = usePalette(
     tab === 'listen' && replacing?.view !== 'bench' ? listen.nowRow?.track_id : undefined,
@@ -562,31 +564,40 @@ export function Draft({
           />
         </div>
         <section className="draft-main" aria-label="Draft">
-          {replacing?.view === 'bench' && sides ? (
-            <Bench around={sides} replace={replace} agent={agent} onSwap={swap} />
-          ) : tab === 'listen' ? (
-            <Listen
-              items={items}
-              now={listen.now}
-              playing={listen.playing}
-              current={listen.current}
-              position={listen.position}
-              status={listen.status}
-              joinDisabled={!canPlay || held || !listen.canJoin}
-              onJoin={listen.join}
-            />
-          ) : (
-            <Crate
-              inDraft={inDraft}
-              canAdd={canAdd}
-              lockedReason={
-                lock ?? (draft ? 'One record at a time' : 'The draft is still being built')
-              }
-              onAdd={add}
-              onCarry={carry}
-              onCarryEnd={() => setOpening(undefined)}
-            />
-          )}
+          <div className="mode-band">
+            <div className={band === 'dig' ? 'mode-layer on' : 'mode-layer'} inert={band !== 'dig'}>
+              <Crate
+                inDraft={inDraft}
+                canAdd={canAdd}
+                lockedReason={
+                  lock ?? (draft ? 'One record at a time' : 'The draft is still being built')
+                }
+                onAdd={add}
+                onCarry={carry}
+                onCarryEnd={() => setOpening(undefined)}
+              />
+            </div>
+            <div
+              className={band === 'listen' ? 'mode-layer on' : 'mode-layer'}
+              inert={band !== 'listen'}
+            >
+              <Listen
+                items={items}
+                now={listen.now}
+                playing={listen.playing}
+                current={listen.current}
+                position={listen.position}
+                status={listen.status}
+                joinDisabled={!canPlay || held || !listen.canJoin}
+                onJoin={listen.join}
+              />
+            </div>
+            {band === 'bench' && sides && (
+              <div className="mode-layer on">
+                <Bench around={sides} replace={replace} agent={agent} onSwap={swap} />
+              </div>
+            )}
+          </div>
           <div className="draft-head">
             <div className="modes" role="tablist" aria-label="Above the draft">
               {(['dig', 'listen'] as const).map((name) => (
