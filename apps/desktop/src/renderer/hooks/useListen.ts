@@ -11,6 +11,8 @@ import { usePlayer } from './usePlayer.js';
 // Back past this many seconds restarts the record, as a player's previous button does.
 const RESTART_AFTER = 4;
 
+export type Listening = ReturnType<typeof useListen>;
+
 export function useListen({
   draftId,
   items,
@@ -97,6 +99,16 @@ export function useListen({
     if (current) playAt(row.entry_id);
   }
 
+  // Plays the record wherever Music is, as a click in listening mode's dock means.
+  function play(index: number) {
+    const row = items[index];
+
+    if (!row) return;
+
+    setCued(row.entry_id);
+    playAt(row.entry_id);
+  }
+
   const status = elsewhere(live) ?? (current || linked ? undefined : 'Plays in Music.');
 
   return {
@@ -114,6 +126,7 @@ export function useListen({
     whole: setClock(items, items.length, 0),
     canPrev: now > 0 || (current && position > RESTART_AFTER),
     cue,
+    play,
     toggle: () => {
       if (!nowRow) return;
 

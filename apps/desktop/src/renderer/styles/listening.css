@@ -1,0 +1,375 @@
+/* Listening mode: the draft full screen, the record turning behind a plain sleeve. */
+.lm {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  overflow: hidden;
+  animation: lm-in var(--t-slow) var(--ease-out);
+}
+@keyframes lm-in {
+  from {
+    opacity: 0;
+  }
+}
+.lm.idle {
+  cursor: none;
+}
+.tt {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  touch-action: none;
+}
+.tt.held {
+  cursor: grabbing;
+}
+.lm.still .tt {
+  cursor: default;
+}
+.tt canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The controls fade while music plays and nothing moves, and come back on any movement. */
+.lm-chrome {
+  transition:
+    opacity 0.6s var(--ease),
+    transform 0.6s var(--ease);
+}
+.lm.idle .lm-chrome {
+  opacity: 0;
+  pointer-events: none;
+}
+.lm.idle .lm-top {
+  transform: translateY(-8px);
+}
+.lm.idle .lm-bottom {
+  transform: translateY(8px);
+}
+
+.lm-top {
+  position: absolute;
+  inset: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--s3);
+  /* Clears the traffic lights until the window goes full screen. */
+  padding: var(--s4) var(--s6) var(--s4) var(--lights);
+  background: linear-gradient(rgba(0, 0, 0, 0.35), transparent);
+  -webkit-app-region: drag;
+}
+.lm-top button {
+  -webkit-app-region: no-drag;
+  justify-self: end;
+}
+.lm-set {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.lm-set b {
+  font-size: var(--fs-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lm-set .mono,
+.lm-hint {
+  font-size: var(--fs-tiny);
+  letter-spacing: 0.06em;
+  color: var(--ink3);
+}
+
+/* The sleeve and its title, centred in what the bars above and below leave. */
+.lm-centre {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s6);
+  padding: 80px var(--s6) 170px;
+  text-align: center;
+  pointer-events: none;
+}
+.lm-sleeve {
+  position: relative;
+  width: min(48vh, 62vw);
+  aspect-ratio: 1;
+  pointer-events: auto;
+  animation: rise var(--t-slow) var(--ease-out);
+}
+.lm-sleeve .sleeve {
+  border-radius: var(--r-md);
+  box-shadow:
+    0 40px 80px -30px rgba(0, 0, 0, 0.9),
+    0 10px 30px -10px rgba(0, 0, 0, 0.7);
+}
+.lm-meta {
+  max-width: min(900px, 80vw);
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
+}
+.lm-meta h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: 125%;
+  font-weight: 700;
+  font-size: clamp(28px, 4.4vw, 72px);
+  line-height: 1;
+  text-wrap: balance;
+}
+.lm-meta p {
+  margin: var(--s2) 0 0;
+  font-size: 16px;
+  color: var(--ink2);
+}
+.lm-meta .lm-status {
+  font-size: var(--fs-meta);
+  color: var(--ink3);
+}
+
+.lm-next {
+  position: absolute;
+  right: var(--s6);
+  bottom: 170px;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  max-width: 300px;
+  padding: var(--s2) var(--s4) var(--s2) var(--s2);
+  border-radius: var(--r-lg);
+  background: rgba(10, 12, 16, 0.55);
+  backdrop-filter: blur(12px);
+}
+.lm-next .sleeve {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 52px;
+}
+.lm-next .sleeve-title {
+  display: none;
+}
+.lm-next > span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-size: var(--fs-meta);
+  color: var(--ink2);
+}
+.lm-next b {
+  font-size: var(--fs-body);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lm-lab {
+  font-size: var(--fs-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+
+.lm-bottom {
+  position: absolute;
+  inset: auto 0 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--s4) var(--s3);
+  padding: var(--s4) var(--s6) var(--s5);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.45));
+}
+.lm-transport {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--s5);
+}
+.lm-round {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--ink);
+  transition: background var(--t-fast);
+}
+.lm-round svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+.lm-round:hover:not([disabled]) {
+  background: rgba(236, 238, 243, 0.1);
+}
+.lm-round.play {
+  width: 54px;
+  height: 54px;
+  background: var(--ink);
+  color: var(--bg);
+}
+.lm-round.play:hover:not([disabled]) {
+  background: var(--white);
+}
+.lm-round.play.on {
+  background: var(--acid);
+}
+.lm-round[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+.lm-foot {
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s3);
+}
+.lm-foot .mono {
+  font-size: var(--fs-tiny);
+  color: var(--ink3);
+}
+
+/* The draft as a dock: the playing sleeve opened out in the middle, the rest sliding past it. */
+.lm-dock {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 76px;
+  margin-block: -10px;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+}
+.lm-run {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  height: 56px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transition: transform 0.7s var(--ease-out);
+}
+.lm-tile {
+  position: relative;
+  flex: none;
+  width: var(--tile);
+  height: var(--tile);
+  transition:
+    opacity var(--t-mid),
+    transform var(--t-mid) var(--ease-out);
+}
+.lm-tile button {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-sm);
+}
+.lm-tile .sleeve-title {
+  display: none;
+}
+.lm-tile.past {
+  opacity: 0.4;
+  filter: saturate(0.4);
+}
+.lm-tile:not(.now):hover,
+.lm-tile:not(.now):focus-within {
+  opacity: 1;
+  filter: none;
+  transform: translateY(-6px) scale(1.12);
+}
+.lm-dock.soon .lm-tile.next {
+  animation: lm-soon 1.6s var(--ease) infinite;
+}
+.lm.still .lm-dock.soon .lm-tile.next {
+  animation: none;
+}
+@keyframes lm-soon {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+.lm-tile.now {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: var(--wide);
+  height: 56px;
+  padding: 6px var(--s4) 6px 6px;
+  border-radius: var(--r-xl);
+  background: rgba(10, 12, 16, 0.6);
+  box-shadow: inset 0 0 0 1px var(--line2);
+  backdrop-filter: blur(12px);
+}
+.lm-tile.now .sleeve {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+.lm-tile-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.lm-tile-text b {
+  font-size: var(--fs-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lm-tile-time {
+  flex: none;
+  font-size: var(--fs-meta);
+  color: var(--ink2);
+}
+.lm-dock.soon .lm-tile-time {
+  color: var(--tint-b, var(--ink));
+}
+.lm-scrub {
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  margin: 0;
+  background:
+    linear-gradient(var(--tint-a, var(--ink)), var(--tint-a, var(--ink))) 0 50% / var(--at) 2px
+      no-repeat,
+    linear-gradient(rgba(236, 238, 243, 0.16), rgba(236, 238, 243, 0.16)) 0 50% / 100% 2px no-repeat;
+  cursor: pointer;
+}
+.lm-scrub::-webkit-slider-thumb {
+  appearance: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.lm-scrub:hover::-webkit-slider-thumb,
+.lm-scrub:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+.lm-scrub[disabled] {
+  cursor: default;
+}
+
+/* A narrow window has no room beside the title; the dock still shows what's next. */
+@media (max-width: 1180px) {
+  .lm-next {
+    display: none;
+  }
+}
+/* Focus lands on the dialog itself when it opens; its controls keep their own rings. */
+.lm:focus {
+  outline: none;
+}
