@@ -319,7 +319,11 @@ export class SelectaCache {
   ): TrackResolution & { overlap: PlaylistOverlap[] } {
     return this.db.transaction(() => ({
       ...this.resolveTracks(trackIds),
-      overlap: this.queries.getPlaylistOverlap(trackIds, exclude, overlapLimit),
+      overlap: this.queries.getPlaylistOverlap(
+        trackIds,
+        { ...exclude, playlistIds: exclude.playlistIds?.map((id) => this.resolvePlaylistId(id)) },
+        overlapLimit,
+      ),
     }))();
   }
 

@@ -112,6 +112,43 @@ describe('playlist_overlap', () => {
       },
     });
   });
+
+  it("follows a saved draft's playlist through an iCloud rekey", async () => {
+    const deps = makeDeps(
+      makeBridge({
+        createPlaylist: vi.fn(async ({ trackIds }) => ({
+          persistentId: 'P-SAVED',
+          trackCount: trackIds.length,
+          trackPersistentIds: trackIds,
+        })),
+      }),
+    );
+    const tools = new PlaylistDraftTools(deps);
+    const draftId = randomUUID();
+
+    await tools.show({ draft_id: draftId, name: 'Mix', track_ids: ['T3', 'T4'] });
+    await tools.save({ draft_id: draftId, revision: 1 });
+    deps.cache().refreshFromSnapshot(
+      {
+        ...snapshot,
+        playlists: [
+          ...snapshot.playlists,
+          {
+            persistentId: 'P-REKEYED',
+            name: 'Mix',
+            kind: 'user',
+            trackPersistentIds: ['T3', 'T4'],
+          },
+        ],
+      },
+      { durationMs: 1 },
+    );
+    deps.cache().applyRekey('P-SAVED', 'P-SAVED', 'P-REKEYED');
+
+    expect(await tools.get({ draft_id: draftId })).toMatchObject({
+      inspection: { playlist_overlap: [{ playlist_id: 'P-CHILL' }] },
+    });
+  });
 });
 
 describe('Selecta Preview', () => {

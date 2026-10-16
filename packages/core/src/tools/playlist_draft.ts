@@ -94,12 +94,16 @@ export class PlaylistDraftTools {
     }
   }
 
-  private async view(draft: Draft) {
-    const inspection = await handleInspectTracklist(
+  private inspect(draft: Draft) {
+    return handleInspectTracklist(
       { track_ids: draft.entries.map((entry) => entry.track_id) },
       this.deps,
       draft.playlist ? [draft.playlist.playlist_id] : [],
     );
+  }
+
+  private async view(draft: Draft) {
+    const inspection = await this.inspect(draft);
 
     return {
       draft,
@@ -134,10 +138,7 @@ export class PlaylistDraftTools {
       return { ...latest, preview, preview_result: sync.preview_result };
     } catch (error) {
       // A persistent storage outage must not erase a known Music.app outcome.
-      const inspection = await handleInspectTracklist(
-        { track_ids: draft.entries.map((entry) => entry.track_id) },
-        this.deps,
-      );
+      const inspection = await this.inspect(draft);
 
       return {
         draft,
