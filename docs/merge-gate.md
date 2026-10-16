@@ -13,7 +13,7 @@ finishes green.
 | Tier | Files | Merges when |
 |---|---|---|
 | `deps` | any, when every commit is Dependabot's, as signed by GitHub, and every bump's `update-type:` trailer reads minor or patch | CI is green |
-| `auto` | Markdown other than `CLAUDE.md`, `packages/*/test/` apart from the list below, `package-lock.json` | CI is green and the Claude review passes |
+| `auto` | Markdown other than `CLAUDE.md`, `AGENTS.md` and `REVIEW.md`, `packages/*/test/` apart from the list below, `package-lock.json` | CI is green and the Claude review passes |
 | `jonas` | everything else | Jonas merges it |
 
 `jonas` is the default, so a file nobody classified fails closed. It covers
@@ -27,8 +27,8 @@ pass it has graded itself:
 
 - `.github/`, `scripts/` at any depth, every `package.json`, and the TypeScript,
   Vitest and lint config, any of which can loosen what CI checks.
-- `CLAUDE.md`, `AGENTS.md`, `.claude/` and `.codex/` at any depth, which steer
-  the agents and the Claude review.
+- `CLAUDE.md`, `AGENTS.md`, `REVIEW.md`, `.claude/` and `.codex/` at any depth,
+  which steer the agents and the Claude reviews.
 - `packages/core/test/table_diff.ts` and the destructive-command, supersede, reopen, migration
   and state-safety tests (split between `packages/core/test/` and `packages/mcp/test/`), which `docs/destructive-commands.md` makes the
   guardrail against lost data.
