@@ -85,14 +85,7 @@ export function Draft({
   const agent = PROVIDER_LABELS[by];
   const { settings, update } = useSettings();
   const chatCollapsed = settings.chat === 'collapsed';
-  // The draft takes the width the moment the panel starts sliding away, and gives it back only
-  // once the panel has slid over it, so its single reflow is always hidden under the panel.
-  const [chatOpening, setChatOpening] = useState(false);
-  const roomy = chatCollapsed || chatOpening;
-  const collapseChat = (collapsed: boolean) => {
-    setChatOpening(!collapsed);
-    update({ chat: collapsed ? 'collapsed' : 'open' });
-  };
+  const collapseChat = (collapsed: boolean) => update({ chat: collapsed ? 'collapsed' : 'open' });
   const [choices, setChoices] = useState<ProviderStatus[]>();
   // The host records a request before answering it, so until the answer the run may not show it yet.
   const [asking, setAsking] = useState(false);
@@ -556,8 +549,8 @@ export function Draft({
           />
         }
       />
-      <div className={roomy ? 'draft-body roomy' : 'draft-body'}>
-        <section className="draft-main" aria-label="Draft">
+      <div className="draft-body">
+        <div className="draft-ground">
           <Groove
             records={grooveRecords}
             now={listen.current ? listen.now : undefined}
@@ -565,6 +558,8 @@ export function Draft({
             progress={listen.duration ? listen.position / listen.duration : undefined}
             tint={tint}
           />
+        </div>
+        <section className="draft-main" aria-label="Draft">
           {replacing?.view === 'bench' && sides ? (
             <Bench around={sides} replace={replace} agent={agent} onSwap={swap} />
           ) : tab === 'listen' ? (
@@ -824,7 +819,6 @@ export function Draft({
           onStop={() => void selecta.call('agent.cancel', { draft_id: draftId })}
           collapsed={chatCollapsed}
           onCollapse={collapseChat}
-          onOpened={() => setChatOpening(false)}
         />
       </div>
     </div>

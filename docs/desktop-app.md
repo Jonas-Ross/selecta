@@ -73,7 +73,7 @@ Cmd+, or Selecta → Settings… opens a sheet over whatever screen is up (`comp
 | Key lane | Show or hide the key lane under the rail; hidden by default, since a draft's keys are often too patchy to read as a line. Hidden, its height goes to the records and then the tempo lane. Keys still show on the card, sleeve back and transitions. |
 | Movement | Match macOS, or Reduce, which turns on the reduced-motion paths whatever macOS says. |
 
-The store also keeps whether the agent panel is tucked away, though the sheet doesn't show it: the round button on the panel's edge, or Cmd+\\, slides it off to a slim strip so the draft gets the width, and a dot on the button lights while the agent works or once it has replied. The panel floats over the draft and slides by transform; the draft takes or gives back the width once, under the panel, so it never reflows mid-slide.
+The store also keeps whether the agent panel is tucked away, though the sheet doesn't show it: the round button on the panel's edge, or Cmd+\\, slides it off to a slim strip so the draft gets the width, and a dot on the button lights while the agent works or once it has replied. The panel's width eases and the draft gives way in step, so nothing snaps after the slide; the grooves behind both span the panel too and only shift, so they never redraw while it moves.
 
 ## The agent
 

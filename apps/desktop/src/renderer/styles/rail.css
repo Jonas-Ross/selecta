@@ -6,12 +6,22 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--claude-w);
+  grid-template-columns: minmax(0, 1fr) auto;
   position: relative;
+  isolation: isolate;
   overflow: clip;
 }
-.draft-body.roomy {
-  grid-template-columns: minmax(0, 1fr) var(--claude-edge-w);
+/* Spans the panel too, so the grooves never redraw while it slides; shifted by CENTRE.x
+   (groove.ts) of the panel's width to keep their centre over the draft. */
+.draft-ground {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  transform: translateX(calc(-0.42 * var(--claude-w)));
+  transition: transform var(--t-slide) var(--ease-out);
+}
+.draft-body:has(> .claude.collapsed) > .draft-ground {
+  transform: translateX(calc(-0.42 * var(--claude-edge-w)));
 }
 .draft-main {
   display: flex;
@@ -20,7 +30,6 @@
   min-height: 0;
   position: relative;
   isolation: isolate;
-  background: var(--bg);
 }
 .draft-head {
   display: flex;
