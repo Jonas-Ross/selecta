@@ -19,6 +19,7 @@ import {
   HEARD_LIMIT,
   PROVIDER_IDS,
   PROVIDER_LABELS,
+  type HostEvent,
   type Method,
   type ProviderId,
   type ProviderStatus,
@@ -29,6 +30,7 @@ import type { AgentSessions } from './agent.js';
 import type { ArtworkCache } from './artwork.js';
 import { crate, crateTrack } from './library.js';
 import { createMeasurer, heard } from './measure.js';
+import { createLibrary } from './refresh.js';
 import { SUGGEST_LIMIT, parsePicks, suggestPrompt } from './suggest.js';
 
 const DraftId = z.strictObject(getDraftInputShape);
@@ -80,6 +82,7 @@ export function createApi(
   agent: AgentSessions,
   artwork: ArtworkCache,
   providers: () => Promise<ProviderStatus[]>,
+  emit: (event: HostEvent) => void = () => {},
 ) {
   const drafts = new PlaylistDraftTools(deps);
   const player = createPlayback(deps);
@@ -122,6 +125,18 @@ export function createApi(
       };
     },
     features,
+  });
+
+  const library = createLibrary({
+    cache: deps.cache,
+    bridge: deps.bridge,
+    measure: (trackId) => measurer.measure(trackId),
+    onChange: (view) => {
+      emit({ event: 'library', data: view });
+
+      // Draft rows are cached tracks, so a read or a measurement can change what they show.
+      if (!view.reading) emit({ event: 'drafts.changed' });
+    },
   });
 
   // The store refuses linked drafts atomically; this only fails a run before
@@ -199,6 +214,8 @@ export function createApi(
 
   const handlers: Record<Method, (args: unknown) => unknown> = {
     'library.crate': (args) => crate(deps.cache(), args),
+    'library.state': () => library.state(),
+    'library.refresh': () => library.refresh(),
     'artwork.get': (args) => {
       const { track_ids, refresh } = Artwork.parse(args);
 

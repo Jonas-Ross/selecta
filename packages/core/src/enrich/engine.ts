@@ -46,8 +46,8 @@ export type TargetedEnrichmentOutcome =
       existingResult: EnrichmentResult;
     };
 
-// source picks the pass: 'catalog' queries the metadata services, 'analysis'
-// runs metrognome over the tracks' store previews. Each keeps its own terminal
+// source picks the pass: 'analysis' (default) runs metrognome over the tracks'
+// store previews, 'catalog' queries the metadata services. Each keeps its own terminal
 // record, so analysis still reaches tracks the catalogs had nothing for.
 export type EnrichOptions = (
   | { limit: number; trackIds?: undefined }
@@ -82,7 +82,7 @@ export async function enrichPendingTracks(
   deps: EnrichDeps = {},
 ): Promise<EnrichmentSummary> {
   return withOperation(cache, 'enrich', async () => {
-    const source = opts.source ?? 'catalog';
+    const source = opts.source ?? 'analysis';
     const selection = selectTargets(cache, opts, source);
     const now = deps.now ?? (() => new Date());
     const tally = createTally(selection.alreadyAttempted, deps);

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { DraftSummary } from '../../shared/protocol.js';
 import { selecta } from '../api.js';
+import { useLibrary } from '../hooks/useLibrary.js';
 import { orphanRuns, saveLabel, type Run } from '../state.js';
 import { Groove } from './Groove.js';
+import { LibraryFailure, LibraryRefresh } from './LibraryRefresh.js';
 import { TopBar } from './TopBar.js';
 
 export function Home({
@@ -16,6 +18,7 @@ export function Home({
 }) {
   const [drafts, setDrafts] = useState<DraftSummary[]>();
   const [error, setError] = useState<string>();
+  const library = useLibrary();
 
   useEffect(() => {
     const load = () =>
@@ -34,9 +37,12 @@ export function Home({
     <>
       <TopBar
         right={
-          <button type="button" className="btn primary" onClick={onNew}>
-            New playlist
-          </button>
+          <>
+            <LibraryRefresh view={library} onError={setError} />
+            <button type="button" className="btn primary" onClick={onNew}>
+              New playlist
+            </button>
+          </>
         }
       />
       <main className="page">
@@ -49,6 +55,7 @@ export function Home({
             )}
           </div>
           {error && <p className="notice error">{error}</p>}
+          <LibraryFailure view={library} />
           {drafts?.length === 0 && !orphans.length && (
             <div className="empty">
               <b>No drafts yet</b>
