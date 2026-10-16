@@ -1,7 +1,7 @@
 // Listening mode: the draft full screen for just listening. The sleeve plain in
 // the middle, the record turning behind it, and the draft as a dock of sleeves
 // with the playing one opened out. The controls fade while you listen.
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import type { Listening } from '../hooks/useListen.js';
 import { useReducedMotion } from '../hooks/motion.js';
@@ -44,11 +44,13 @@ export function ListeningMode({
   const palette = usePalette(row?.track_id);
   const still = useReducedMotion();
   const sleeve = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
   const idle = useIdle(listen.playing);
   const j = row && next && join(row, next);
   const left = listen.duration ? Math.max(0, listen.duration - listen.position) : undefined;
 
   useFullscreen(onClose);
+  useModal(dialog);
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -66,6 +68,8 @@ export function ListeningMode({
 
   return createPortal(
     <div
+      ref={dialog}
+      tabIndex={-1}
       className={`lm${idle ? ' idle' : ''}${still ? ' still' : ''}`}
       role="dialog"
       aria-modal="true"
@@ -299,6 +303,24 @@ function useIdle(playing: boolean): boolean {
   }, [playing]);
 
   return idle;
+}
+
+/** Takes focus into the dialog and makes the screen under it inert, giving focus back on close. */
+function useModal(dialog: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const root = document.getElementById('root');
+    const before = document.activeElement as HTMLElement | null;
+
+    if (root) root.inert = true;
+
+    dialog.current?.focus();
+
+    return () => {
+      if (root) root.inert = false;
+
+      before?.focus();
+    };
+  }, [dialog]);
 }
 
 /** Takes the window full screen while open; leaving full screen another way closes it too. */

@@ -369,3 +369,7 @@
     display: none;
   }
 }
+/* Focus lands on the dialog itself when it opens; its controls keep their own rings. */
+.lm:focus {
+  outline: none;
+}

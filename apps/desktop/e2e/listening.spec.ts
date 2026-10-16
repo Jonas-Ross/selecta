@@ -124,11 +124,20 @@ test('turns the record while playing, winds it down on pause, and spins it by ha
   expect(await frame()).not.toBe(stopped);
 });
 
-test('closes on Escape', async ({ page }) => {
+test('takes the keyboard while open, plays on Space, and closes on Escape', async ({ page }) => {
   const mode = await open(page);
 
-  await expect(mode).toBeVisible();
+  await expect(mode).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(mode.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+
+  // The screen underneath is inert, so Tab never leaves the dialog.
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press('Tab');
+    expect(await mode.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  }
+
   await page.keyboard.press('Escape');
   await expect(mode).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Full screen' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Full screen' })).toBeFocused();
 });

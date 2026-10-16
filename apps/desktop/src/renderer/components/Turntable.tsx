@@ -130,19 +130,27 @@ export function Turntable({
       swell: p.playing && !p.still ? swell(at, p.bpm) : 0,
       warm: nearing(at, p.duration, WARM_LEAD),
     };
-    // A paused record that has settled draws nothing new, so it costs nothing to leave open.
     const seen = JSON.stringify({ ...frame, mask: frame.mask.key });
 
-    if (seen !== drawn.current) {
-      drawn.current = seen;
-      tint.current ??= document.createElement('canvas');
-      paint(el.getContext('2d')!, tint.current, frame);
-    }
+    // A paused record that has settled stops the loop; a render, resize or hand starts it again.
+    if (seen === drawn.current) return false;
+
+    drawn.current = seen;
+    tint.current ??= document.createElement('canvas');
+    paint(el.getContext('2d')!, tint.current, frame);
 
     return true;
   });
 
-  useEffect(kick, [kick]);
+  useEffect(kick);
+
+  useEffect(() => {
+    const observer = new ResizeObserver(kick);
+
+    observer.observe(box.current!);
+
+    return () => observer.disconnect();
+  }, [kick]);
 
   const angleAt = (e: PointerEvent) => {
     const a = box.current!.getBoundingClientRect();
@@ -163,6 +171,7 @@ export function Turntable({
         grab.current = { id: e.pointerId, at: angleAt(e), t: e.timeStamp };
         spin.current = { ...spin.current, speed: 0 };
         box.current!.classList.add('held');
+        kick();
       }}
       onPointerMove={(e) => {
         const held = grab.current;
@@ -180,6 +189,7 @@ export function Turntable({
           flung: false,
         };
         grab.current = { id: held.id, at, t: e.timeStamp };
+        kick();
       }}
       onPointerUp={(e) => release(e.pointerId)}
       onPointerCancel={(e) => release(e.pointerId)}
@@ -194,6 +204,7 @@ export function Turntable({
     grab.current = undefined;
     spin.current = { ...spin.current, flung: true };
     box.current!.classList.remove('held');
+    kick();
   }
 }
 
