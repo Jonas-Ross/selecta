@@ -11,6 +11,8 @@ import { usePlayer } from './usePlayer.js';
 // Back past this many seconds restarts the record, as a player's previous button does.
 const RESTART_AFTER = 4;
 
+export type Listening = ReturnType<typeof useListen>;
+
 export function useListen({
   draftId,
   items,
