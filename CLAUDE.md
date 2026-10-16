@@ -90,7 +90,7 @@ Settled calls — don't re-litigate without the user:
 
 - No bias/weighting knobs (a `favorite_weight` blend was explicitly rejected). `search`'s sort lenses are neutral orderings the model picks, never weightings Selecta applies.
 - Genres surface raw; normalization is an opinion the model owns.
-- Co-occurrence counts hand-made (`kind = 'user'`) playlists only. Smart/subscription playlists are read-only snapshots.
+- Co-occurrence counts hand-made (`kind = 'user'`) playlists only, never the `Selecta Preview` slot. Drafts report how much they overlap each one (`playlist_overlap`) rather than Selecta capping it; `docs/playlist-drafts.md` has why. Smart/subscription playlists are read-only snapshots.
 - Playlist cloning accepts non-empty plain user sources only (max 500 entries). Generated, smart, subscription, special, and folder sources must never feed externally shifting curation back into user co-occurrence signal.
 - Refresh never deletes playlists based on name/content similarity; ambiguous copies require explicit user choice. CLI and MCP refresh share orchestration. Positional edits use explicit playlist_positions and verify the full expected order live.
 - Cache refresh is manual-only (`refresh_library`). Persistent IDs are trusted per library — re-import means the user re-runs refresh; no migration logic.
