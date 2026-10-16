@@ -133,7 +133,7 @@ export function ListeningMode({
           position={listen.position}
           duration={listen.duration ?? row?.duration_seconds}
           left={left}
-          onCue={listen.cue}
+          onPlay={listen.play}
           onSeek={listen.current ? (at) => void listen.player.seek(at) : undefined}
         />
         <div className="lm-transport">
@@ -200,7 +200,7 @@ function Dock({
   position,
   duration,
   left,
-  onCue,
+  onPlay,
   onSeek,
 }: {
   items: Row[];
@@ -210,7 +210,7 @@ function Dock({
   position: number;
   duration?: number;
   left?: number;
-  onCue: (index: number) => void;
+  onPlay: (index: number) => void;
   onSeek?: (position: number) => void;
 }) {
   const row = items[now];
@@ -265,7 +265,7 @@ function Dock({
                 aria-label={`Play ${r.title ?? 'Untitled'}`}
                 title={r.title}
                 disabled={disabled}
-                onClick={() => onCue(i)}
+                onClick={() => onPlay(i)}
               >
                 <Sleeve trackId={r.track_id} title={r.title} />
               </button>

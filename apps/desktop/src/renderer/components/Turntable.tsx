@@ -165,7 +165,8 @@ export function Turntable({
       className="tt"
       aria-hidden="true"
       onPointerDown={(e) => {
-        if (e.button !== 0) return;
+        // Reduced motion holds the record still, by hand too.
+        if (e.button !== 0 || props.current.still) return;
 
         e.currentTarget.setPointerCapture(e.pointerId);
         grab.current = { id: e.pointerId, at: angleAt(e), t: e.timeStamp };

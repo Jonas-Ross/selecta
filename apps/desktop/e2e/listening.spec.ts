@@ -141,3 +141,43 @@ test('takes the keyboard while open, plays on Space, and closes on Escape', asyn
   await expect(mode).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Full screen' })).toBeFocused();
 });
+
+test('plays a sleeve clicked in the dock, even before anything plays', async ({ page, music }) => {
+  const mode = await open(page);
+
+  await mode
+    .getByRole('button', { name: /^Play / })
+    .nth(2)
+    .click();
+  await expect(mode.locator('.lm-tile').nth(3)).toHaveAttribute('aria-current', 'true');
+  await expect(mode.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  expect(music.snapshot().player).toMatchObject({ state: 'playing', index: 4 });
+});
+
+test('holds the record still under reduced motion, by hand too', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+
+  const mode = await open(page);
+  const canvas = mode.locator('.tt canvas');
+  const frame = () => canvas.evaluate((el: HTMLCanvasElement) => el.toDataURL());
+  const settled = async () => {
+    const before = await frame();
+
+    await page.waitForTimeout(300);
+
+    return before === (await frame());
+  };
+  const box = (await canvas.boundingBox())!;
+
+  await expect.poll(settled, { timeout: 20_000 }).toBe(true);
+
+  const before = await frame();
+
+  await page.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.6, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  // Compared as a boolean, so a failure prints no image.
+  expect((await frame()) === before).toBe(true);
+});
