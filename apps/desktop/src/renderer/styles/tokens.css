@@ -78,9 +78,10 @@
   --r-lg: 8px;
   --r-xl: 10px;
 
-  /* Chrome geometry; the inset title bar leaves the traffic lights 80px. */
+  /* Chrome geometry. macOS 26's lights end at 78px from main.ts's x 18;
+     the mark's groove then starts about 20px clear of them. */
   --top: 48px;
-  --lights: 80px;
+  --lights: 96px;
   --claude-w: 352px;
   --claude-edge-w: 20px;
 

@@ -161,7 +161,7 @@ void app.whenReady().then(() => {
     minWidth: 1024,
     minHeight: 820,
     title: 'Selecta',
-    // The renderer draws its own top bar; the lights sit in its first 80px.
+    // The renderer draws its own top bar; tokens.css --lights clears the lights.
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 17 },
     // tokens.css --bg, so the window never flashes white before the page paints.
