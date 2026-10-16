@@ -19,6 +19,7 @@ import type {
   OverviewSnapshot,
   OverviewStats,
   PlayHistoryWindow,
+  PlaylistOverlap,
   PlaylistRef,
   PlaylistRow,
   ReconcileAction,
@@ -310,6 +311,22 @@ export class SelectaCache {
   }
 
   /** Co-occurrence aggregated across the seed set; seeds are never candidates. */
+  /** Resolved tracks plus the user playlists they overlap, read in one transaction. */
+  inspectionSnapshot(
+    trackIds: readonly string[],
+    exclude: { playlistIds?: readonly string[]; playlistNames?: readonly string[] },
+    overlapLimit: number,
+  ): TrackResolution & { overlap: PlaylistOverlap[] } {
+    return this.db.transaction(() => ({
+      ...this.resolveTracks(trackIds),
+      overlap: this.queries.getPlaylistOverlap(
+        trackIds,
+        { ...exclude, playlistIds: exclude.playlistIds?.map((id) => this.resolvePlaylistId(id)) },
+        overlapLimit,
+      ),
+    }))();
+  }
+
   getCoOccurrence(
     seedIds: string[],
     filters?: CoOccurrenceFilters,
