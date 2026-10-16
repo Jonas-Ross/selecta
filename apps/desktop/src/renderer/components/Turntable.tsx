@@ -84,10 +84,12 @@ export function Turntable({
     const p = props.current;
     const w = el.clientWidth;
     const h = el.clientHeight;
+    // Retina sharp, as the background's grooves are; capped so a mask stays a sensible size.
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
 
-    if (el.width !== w || el.height !== h) {
-      el.width = w;
-      el.height = h;
+    if (el.width !== Math.round(w * dpr) || el.height !== Math.round(h * dpr)) {
+      el.width = Math.round(w * dpr);
+      el.height = Math.round(h * dpr);
     }
 
     if (!w || !h) return true;
@@ -113,13 +115,14 @@ export function Turntable({
     const { x, y, r } = centre();
     // Out to the window's farthest corner from the sleeve.
     const outer = Math.hypot(Math.max(x, w - x), Math.max(y, h - y)) + 4;
-    const key = `${Math.round(outer)}:${Math.round(r)}:${p.records.map((d) => `${d.id}:${d.seconds ?? ''}`).join('|')}`;
+    const key = `${dpr}:${Math.round(outer)}:${Math.round(r)}:${p.records.map((d) => `${d.id}:${d.seconds ?? ''}`).join('|')}`;
 
-    if (mask.current?.key !== key) mask.current = cutMask(key, outer, r, p.records);
+    if (mask.current?.key !== key) mask.current = cutMask(key, outer, r, p.records, dpr);
 
     const frame = {
       w,
       h,
+      dpr,
       x,
       y,
       angle: spin.current.angle,
@@ -132,8 +135,14 @@ export function Turntable({
     };
     const seen = JSON.stringify({ ...frame, mask: frame.mask.key });
 
-    // A paused record that has settled stops the loop; a render, resize or hand starts it again.
-    if (seen === drawn.current) return false;
+    // Rounded colours can repeat a frame mid-fade, so only a record that has truly settled stops.
+    const moving =
+      grab.current !== undefined ||
+      spin.current.speed !== 0 ||
+      colours.current.some((c, i) => c.some((v, j) => v !== target[i]![j]));
+
+    // A settled record stops the loop; a render, resize or hand starts it again.
+    if (seen === drawn.current) return moving;
 
     drawn.current = seen;
     tint.current ??= document.createElement('canvas');
@@ -216,15 +225,18 @@ function cutMask(
   outer: number,
   r: number,
   records: { id: string; seconds?: number }[],
+  dpr: number,
 ): Mask {
   const { bands, rings } = lay(outer, r * INNER, records);
   const size = Math.ceil(outer * 2) + 4;
   const c = size / 2;
   const canvas = document.createElement('canvas');
 
-  canvas.width = canvas.height = size;
+  canvas.width = canvas.height = Math.round(size * dpr);
 
   const g = canvas.getContext('2d')!;
+
+  g.scale(dpr, dpr);
   let seed = 7;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
@@ -264,6 +276,7 @@ function paint(
   o: {
     w: number;
     h: number;
+    dpr: number;
     x: number;
     y: number;
     angle: number;
@@ -280,10 +293,13 @@ function paint(
   const [a, b] = colours;
   const far = Math.max(w, h);
 
-  if (tint.width !== w || tint.height !== h) {
-    tint.width = w;
-    tint.height = h;
+  if (tint.width !== Math.round(w * o.dpr) || tint.height !== Math.round(h * o.dpr)) {
+    tint.width = Math.round(w * o.dpr);
+    tint.height = Math.round(h * o.dpr);
   }
+
+  // Both drawn in CSS pixels onto device-pixel stores; a store drawn back is sized to w × h.
+  ctx.setTransform(o.dpr, 0, 0, o.dpr, 0, 0);
 
   // Ground: tokens.css --bg, with the sleeve's main colour glowing faintly behind it.
   ctx.globalCompositeOperation = 'source-over';
@@ -301,12 +317,13 @@ function paint(
   // The grooves turned and tinted, fading toward the window's edges.
   const tg = tint.getContext('2d')!;
 
+  tg.setTransform(o.dpr, 0, 0, o.dpr, 0, 0);
   tg.globalCompositeOperation = 'source-over';
   tg.clearRect(0, 0, w, h);
   tg.save();
   tg.translate(x, y);
   tg.rotate(o.angle);
-  tg.drawImage(mask.canvas, -mask.c, -mask.c);
+  tg.drawImage(mask.canvas, -mask.c, -mask.c, mask.c * 2, mask.c * 2);
   tg.restore();
   tg.globalCompositeOperation = 'source-in';
 
@@ -333,7 +350,7 @@ function paint(
     tg.fill('evenodd');
   }
 
-  ctx.drawImage(tint, 0, 0);
+  ctx.drawImage(tint, 0, 0, w, h);
 
   // The playing record's band lit, swelling once a bar; the next warming as its turn nears.
   ctx.globalCompositeOperation = 'lighter';
@@ -347,8 +364,8 @@ function paint(
     ring(ctx, x, y, band);
     ctx.clip('evenodd');
     ctx.globalAlpha = Math.min(1, alpha);
-    ctx.drawImage(tint, 0, 0);
-    ctx.drawImage(tint, 0, 0);
+    ctx.drawImage(tint, 0, 0, w, h);
+    ctx.drawImage(tint, 0, 0, w, h);
     ctx.restore();
   };
 
@@ -374,8 +391,8 @@ function paint(
 
   tg.fillStyle = sheen;
   tg.fillRect(0, 0, w, h);
-  ctx.drawImage(tint, 0, 0);
-  ctx.drawImage(tint, 0, 0);
+  ctx.drawImage(tint, 0, 0, w, h);
+  ctx.drawImage(tint, 0, 0, w, h);
 
   // Where the needle is: a fine line inside the playing band, acid as everything happening now.
   const band = bands[o.now];
