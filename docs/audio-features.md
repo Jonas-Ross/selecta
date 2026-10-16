@@ -4,14 +4,22 @@
 independent passes fill it, and `enrich_features` / `node dist/index.js enrich`
 pick between them with `source`:
 
+- **`analysis`** (the default) — the [metrognome](https://github.com/Jonas-Ross/metrognome)
+  binary, run as a subprocess over its `batch` mode, estimating tempo and key
+  from each track's 30-second store preview. Supplies bpm and musical key
+  (with its Camelot position), and covers what the catalogs cannot.
 - **`catalog`** — MusicBrainz → AcousticBrainz, then Deezer for bpm the others
   could not supply. Free public services, no keys. Supplies bpm, musical key and
   danceability. AcousticBrainz has been frozen since early 2022, so it has
   nothing for recent releases.
-- **`analysis`** — the [metrognome](https://github.com/Jonas-Ross/metrognome)
-  binary, run as a subprocess over its `batch` mode, estimating tempo and key
-  from each track's 30-second store preview. Supplies bpm and musical key
-  (with its Camelot position), and covers what the catalogs cannot.
+
+`analysis` became the default once metrognome 0.3.0 shipped its band key scorer:
+it reaches every release in the store, where the catalogs miss most of the last
+few years, and Selecta's own measurement has a known algorithm behind it.
+`catalog` stays as an opt-in pass, chiefly for danceability, which nothing else
+supplies. With no metrognome installed the default pass skips every track and
+says how to install it; it never falls back to the catalogs on its own, since a
+source the user didn't pick is a hidden fallback.
 
 ## Terminal is per source
 
@@ -168,7 +176,7 @@ the tool descriptions spell out.
 
 ## Watching a long run
 
-A whole-library `analysis` backlog is thousands of tracks at ~1-3s each, which
+A whole-library `analysis` backlog is thousands of tracks at ~3s each, which
 is hours. `stdout` stays the JSON channel — one summary object when the run
 ends — so everything a human reads is on `stderr`, and what `stderr` gets
 depends on whether it is a terminal:
