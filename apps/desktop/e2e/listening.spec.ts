@@ -181,3 +181,19 @@ test('holds the record still under reduced motion, by hand too', async ({ page }
   // Compared as a boolean, so a failure prints no image.
   expect((await frame()) === before).toBe(true);
 });
+
+test('leaves Escape to Settings when it opens over listening mode', async ({
+  page,
+  electronApp,
+}) => {
+  const mode = await open(page);
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+
+  await electronApp.evaluate(({ Menu }) =>
+    Menu.getApplicationMenu()?.getMenuItemById('settings')?.click(),
+  );
+  await expect(settings).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
+  await expect(mode).toBeVisible();
+});

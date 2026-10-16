@@ -54,6 +54,9 @@ export function ListeningMode({
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      // Keys meant for a sheet over this one, such as Settings, are that sheet's.
+      if (!dialog.current?.contains(e.target as Node)) return;
+
       if (e.key === 'Escape') onClose();
       else if (e.key === ' ' && !(e.target as Element).closest('button, input') && !disabled) {
         e.preventDefault();
@@ -308,7 +311,8 @@ function useIdle(playing: boolean): boolean {
 /** Takes focus into the dialog and makes the screen under it inert, giving focus back on close. */
 function useModal(dialog: RefObject<HTMLDivElement | null>) {
   useEffect(() => {
-    const root = document.getElementById('root');
+    // Only the draft screen: Settings, opened from the menu, sits over listening mode and must stay live.
+    const root = document.querySelector<HTMLElement>('.screen-draft');
     const before = document.activeElement as HTMLElement | null;
 
     if (root) root.inert = true;

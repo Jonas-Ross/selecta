@@ -94,7 +94,9 @@ export function Turntable({
 
     if (!w || !h) return true;
 
-    if (!grab.current && !p.still)
+    // Reduced motion stops the record where it is, coasting included.
+    if (p.still) spin.current = { ...spin.current, speed: 0, flung: false };
+    else if (!grab.current)
       spin.current = coast(spin.current, dt, p.playing ? turnSpeed(p.bpm) : 0);
 
     const target: [Rgb, Rgb] = [
