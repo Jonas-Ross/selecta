@@ -153,6 +153,7 @@ test.describe('when feedback arrives while the draft plays', () => {
     await expect(panel.getByText(/can't edit this draft/)).toHaveCount(0);
     expect(music.snapshot().player.state).toBe('paused');
   });
+});
 
 test('crossfades between Dig and Listen with the crate kept and the rail held still', async ({
   page,
