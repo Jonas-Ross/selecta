@@ -377,13 +377,11 @@
 
 /* The bench: the crate's band given over to one record and its two joins. */
 .bench {
-  flex: none;
-  height: clamp(300px, min(44%, 100% - 460px), 430px);
+  height: 100%;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
   padding: var(--s3) var(--s5);
-  border-bottom: 1px solid var(--line);
   overflow: hidden;
   container-type: size;
   animation: fadein 0.3s var(--ease-out) both;
