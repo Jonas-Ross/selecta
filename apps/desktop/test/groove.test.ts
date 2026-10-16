@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { cut } from '../src/renderer/groove.js';
+import { cut, lay } from '../src/renderer/groove.js';
 
 const width = (b: { outer: number; inner: number }) => b.outer - b.inner;
 
@@ -65,4 +65,16 @@ it('keeps every groove inside its band, and a moved record keeps its cut', () =>
 
   expect(pattern(after, 'a')).toEqual(pattern(before, 'a'));
   expect(pattern(before, 'a')).not.toEqual(pattern(before, 'b'));
+});
+
+it('lays records between any two radii, as listening mode turns them round the sleeve', () => {
+  const { bands, rings } = lay(500, 100, [
+    { id: 'a', seconds: 100 },
+    { id: 'b', seconds: 300 },
+  ]);
+
+  expect(bands[0]!.outer).toBe(500);
+  expect(bands[1]!.inner).toBeCloseTo(100);
+  expect(width(bands[1]!) / width(bands[0]!)).toBeCloseTo(3);
+  expect(rings.every((r) => r.r <= 500 && r.r > 100)).toBe(true);
 });
