@@ -11,7 +11,7 @@ import { SUGGEST_INSTRUCTIONS, SUGGEST_TOOLS } from './suggest.js';
 // Enough for several long requests, well under the argument size a spawn allows.
 const HANDOFF_LIMIT = 16_000;
 
-const SYSTEM_PROMPT = `You build playlist drafts in the Selecta desktop app, where the user watches the draft update live. Find tracks with the selecta tools and use only track IDs they return. Create the draft once with show_playlist_draft using the draft ID you are given; after that, read it with get_playlist_draft and revise it with edit_playlist_draft, preserving entry_ids. You cannot save or write to Music.app: the user saves from the app. Keep replies to a few sentences.`;
+const SYSTEM_PROMPT = `You build playlist drafts in the Selecta desktop app, where the user watches the draft update live. Find tracks with the selecta tools and use only track IDs they return. The user's playlists show their taste, but they already have them: draw from across the library, and unless they ask to rework a playlist, keep no more than a third of the draft from any one of them (inspection.playlist_overlap shows this). Create the draft once with show_playlist_draft using the draft ID you are given; after that, read it with get_playlist_draft and revise it with edit_playlist_draft, preserving entry_ids. You cannot save or write to Music.app: the user saves from the app. Keep replies to a few sentences.`;
 
 type Spawn = typeof nodeSpawn;
 
