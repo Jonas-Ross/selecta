@@ -48,6 +48,7 @@ import { Digging } from './Digging.js';
 import { Flight, type FlightPlan } from './Flight.js';
 import { Groove } from './Groove.js';
 import { Listen } from './Listen.js';
+import { ListeningMode } from './ListeningMode.js';
 import { Rail, type Opening, type RailHandle } from './Rail.js';
 import { RecordMenu } from './RecordMenu.js';
 import { Rolling } from './Rolling.js';
@@ -114,6 +115,7 @@ export function Draft({
   const [flight, setFlight] = useState<FlightPlan & { at: number }>();
   const [added, setAdded] = useState('');
   const [tab, setTab] = useState<'dig' | 'listen'>('dig');
+  const [full, setFull] = useState(false);
   const [menu, setMenu] = useState<{ entryId: string; x: number; y: number }>();
   const [swapped, setSwapped] = useState<{ text: string; undo?: () => void }>();
   const replace = useReplace(draftId, () => by, setNotice);
@@ -754,6 +756,14 @@ export function Draft({
             onNext={listen.next}
             onSeek={listen.current ? (position) => void player.seek(position) : undefined}
             onOpen={tab === 'listen' ? undefined : () => setTab('listen')}
+            onFull={
+              replacing
+                ? undefined
+                : () => {
+                    setTab('listen');
+                    setFull(true);
+                  }
+            }
             onStop={linked ? listen.stop : undefined}
             stopDisabled={held || saving}
           />
@@ -793,6 +803,16 @@ export function Draft({
             replace={replace}
             agent={agent}
             onSwap={swap}
+          />
+        )}
+        {full && (
+          <ListeningMode
+            name={draft?.name ?? ''}
+            items={items}
+            listen={listen}
+            disabled={!canPlay || held}
+            joinDisabled={!canPlay || held || !listen.canJoin}
+            onClose={() => setFull(false)}
           />
         )}
         {flight &&
