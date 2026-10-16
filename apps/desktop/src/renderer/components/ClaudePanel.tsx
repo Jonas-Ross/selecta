@@ -36,6 +36,7 @@ export function ClaudePanel({
   working,
   hasDraft,
   locked,
+  listening,
   selected,
   onUnselect,
   onSend,
@@ -52,9 +53,11 @@ export function ClaudePanel({
   working: boolean;
   hasDraft: boolean;
   locked: boolean;
+  /** The draft plays through the preview, so sending stops the music first. */
+  listening: boolean;
   selected: Row[];
   onUnselect: (entryId: string) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string) => Promise<boolean>;
   onStop: () => void;
   /** Slid off to a slim edge so the draft gets the width. */
   collapsed: boolean;
@@ -99,8 +102,11 @@ export function ClaudePanel({
     // Enter submits too, so the button's guards are repeated here.
     if (working || locked || !text.trim()) return;
 
-    onSend(text.trim());
+    const sent = text.trim();
+
     setText('');
+    // A message that never went out comes back to the box, unless something new is typed there.
+    void onSend(sent).then((ok) => ok || setText((now) => now || sent));
   }
 
   return (
@@ -239,7 +245,11 @@ export function ClaudePanel({
               </button>
             )}
           </div>
-          <p className="hint">Click records on the rail to talk about them.</p>
+          <p className="hint">
+            {listening && !working
+              ? `Sending stops the music so ${agent} can change the draft.`
+              : 'Click records on the rail to talk about them.'}
+          </p>
         </form>
       </div>
     </aside>

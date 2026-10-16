@@ -62,21 +62,30 @@ export function useListen({
   }, [playing]);
 
   // One Music operation at a time; a second would fail busy or queue an extra route.
-  function hold(step: () => Promise<unknown>) {
+  function hold<T>(step: () => Promise<T>): Promise<T> | undefined {
     if (player.busy || waiting.current) return;
 
     waiting.current = true;
     setQueued(true);
-    void step().finally(() => {
+
+    return step().finally(() => {
       waiting.current = false;
       setQueued(false);
+    });
+  }
+
+  function release() {
+    return queue.after(() => {
+      const revision = latest()?.revision;
+
+      return revision === undefined ? false : player.detach(revision);
     });
   }
 
   function playAt(entryId: string, at?: number) {
     if (!canPlay) return;
 
-    hold(() =>
+    void hold(() =>
       queuePlay(
         queue,
         () => allowed.current,
@@ -129,14 +138,8 @@ export function useListen({
     canJoin: joinAt !== undefined && now + 1 < items.length,
     join: () => nowRow && joinAt !== undefined && playAt(nowRow.entry_id, joinAt),
     // Waits like a play, so a stop never names a revision an edit is about to replace.
-    stop: () => {
-      hold(() =>
-        queue.after(() => {
-          const revision = latest()?.revision;
-
-          return revision === undefined ? undefined : player.detach(revision);
-        }),
-      );
-    },
+    stop: () => void hold(release),
+    /** Stops listening so the agent can edit, resolving to whether the draft is free. */
+    release: () => hold(release) ?? Promise.resolve(false),
   };
 }

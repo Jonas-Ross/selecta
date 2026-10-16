@@ -410,17 +410,22 @@ export function Draft({
     setAsking(true);
 
     // A build that failed before creating the draft has nothing to revise.
-    const request = draft
-      ? onSend(
-          text,
-          feedbackMessage(
+    const ask = () =>
+      draft
+        ? onSend(
             text,
-            items.filter((row) => selected.has(row.entry_id)),
-          ),
-        )
-      : onStart(text);
+            feedbackMessage(
+              text,
+              items.filter((row) => selected.has(row.entry_id)),
+            ),
+          )
+        : onStart(text);
+    // The agent can't edit a draft playing through the preview, so the music stops first.
+    const request = linked
+      ? listen.release().then((free) => free && ask().then(() => true))
+      : ask().then(() => true);
 
-    void request.finally(() => setAsking(false));
+    return request.finally(() => setAsking(false));
   }
 
   // Leaving locks the controls and waits for queued edits, and stays put if
@@ -812,7 +817,8 @@ export function Draft({
           log={log}
           working={working}
           hasDraft={draft !== undefined}
-          locked={locked || linked || listen.busy || replacing !== undefined}
+          locked={locked || listen.busy || replacing !== undefined}
+          listening={linked}
           selected={items.filter((row) => selected.has(row.entry_id))}
           onUnselect={toggleSelected}
           onSend={send}

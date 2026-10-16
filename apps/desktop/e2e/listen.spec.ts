@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from '../harness/fixture.js';
+import { buildFromSearch, expect, test } from '../harness/fixture.js';
 
 const preview = (music: { snapshot: () => { playlists: { name: string; tracks: string[] }[] } }) =>
   music.snapshot().playlists.find((pl) => pl.name === 'Selecta Preview')?.tracks;
@@ -111,4 +111,46 @@ test('swells the glow on the bar Music is at, and moves the bar line when Music 
 
   await page.getByRole('button', { name: 'Pause' }).click();
   await expect.poll(drift).toBeUndefined();
+});
+
+test.describe('when feedback arrives while the draft plays', () => {
+  test.use({
+    claude: {
+      script: async (turn) => {
+        if (!turn.resumed) return buildFromSearch()(turn);
+
+        const { draft } = await turn.call('get_playlist_draft', { draft_id: turn.draftId });
+
+        await turn.call('edit_playlist_draft', {
+          draft_id: turn.draftId,
+          revision: draft.revision,
+          entries: draft.entries
+            .slice(0, -1)
+            .map(({ entry_id, track_id }: Record<string, string>) => ({ entry_id, track_id })),
+        });
+        turn.say('Dropped the last one.');
+      },
+    },
+  });
+
+  test('stops the music and lets the agent edit', async ({ page, music }) => {
+    await build(page);
+    await page.getByRole('tab', { name: 'Listen' }).click();
+    await page.getByRole('button', { name: 'Play' }).click();
+    await expect(page.locator('[role=listitem][aria-current=true]')).toHaveCount(1);
+
+    const panel = page.getByRole('complementary', { name: 'Claude' });
+
+    await panel.getByLabel('Message to Claude').fill('Too close to that playlist');
+    await expect(panel.getByText(/Sending stops the music/)).toBeVisible();
+    await page.screenshot({ path: 'test-results/send-while-listening.png' });
+    await panel.getByRole('button', { name: 'Send' }).click();
+
+    await expect(panel.getByText('Dropped the last one.')).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Draft order' }).getByRole('listitem')).toHaveCount(
+      7,
+    );
+    await expect(panel.getByText(/can't edit this draft/)).toHaveCount(0);
+    expect(music.snapshot().player.state).toBe('paused');
+  });
 });
