@@ -6,7 +6,8 @@ import { createApi } from '../src/host/api.js';
 import type { AgentSessions } from '../src/host/agent.js';
 import type { ProviderStatus } from '../src/shared/protocol.js';
 
-const base = makeToolDeps();
+// Music isn't running, so stopping a linked draft has nothing to pause.
+const base = makeToolDeps({ readPlayer: async () => ({ running: false }) });
 const store = new DraftStore(base.drafts!().path);
 const deps = { ...base, drafts: () => store };
 const agent = {
@@ -108,19 +109,30 @@ it('lets the user edit a draft linked to the Music preview, but not the agent', 
     draft: { revision: 2 },
   });
   await call('agent.start', { draft_id: draftId, brief: 'go' });
-  await call('agent.send', { draft_id: draftId, message: 'go', text: 'typed' });
   expect(agent.refuse).toHaveBeenCalledWith(draftId, 'go', expect.stringMatching(linked), true);
-  expect(agent.refuse).toHaveBeenCalledWith(draftId, 'typed', expect.stringMatching(linked));
   expect(agent.start).not.toHaveBeenCalled();
-  expect(agent.send).not.toHaveBeenCalled();
 
   // After a restart the host has no choice on record; the one asked for names the refusal.
-  await call('agent.send', { draft_id: draftId, message: 'go', provider: 'claude' });
+  await call('agent.start', { draft_id: draftId, brief: 'go', provider: 'claude' });
   expect(agent.refuse).toHaveBeenLastCalledWith(
     draftId,
     'go',
     expect.stringMatching(/^Claude can't edit this draft/),
+    true,
   );
+});
+
+it('stops listening before feedback reaches the agent, whatever the renderer last saw', async () => {
+  const draftId = randomUUID();
+
+  store.create(draftId, 'Linked', ['T-TEARDROP', 'T-ROADS']);
+  store.claimPreview(draftId, 1, true);
+
+  await call('agent.send', { draft_id: draftId, message: 'go', text: 'typed' });
+
+  expect(store.preview()?.status).toBe('inactive');
+  expect(agent.refuse).not.toHaveBeenCalled();
+  expect(agent.send).toHaveBeenCalledWith(draftId, 'go', 'typed', undefined);
 });
 
 it('fills the crate newest first, or by relevance to a search, with provenance', async () => {

@@ -59,14 +59,8 @@ export function usePlayer(draftId: string, looking: boolean) {
     return call
       .then((next) => {
         if (next) accept(next);
-
-        return true;
       })
-      .catch((e: Error) => {
-        setProblem(e.message);
-
-        return false;
-      })
+      .catch((e: Error) => setProblem(e.message))
       .finally(() => setBusy(false));
   };
 

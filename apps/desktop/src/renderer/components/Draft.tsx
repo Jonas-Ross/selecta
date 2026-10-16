@@ -424,12 +424,10 @@ export function Draft({
             ),
           )
         : onStart(text);
-    // The agent can't edit a draft playing through the preview, so the music stops first.
-    const request = linked
-      ? listen.release().then((free) => free && ask().then(() => true))
-      : ask().then(() => true);
+    // Feedback waits for queued edits, so a host stopping the music names the revision they left.
+    const request = draft ? queue.after(ask) : ask();
 
-    return request.finally(() => setAsking(false));
+    void request.finally(() => setAsking(false));
   }
 
   // Leaving locks the controls and waits for queued edits, and stays put if

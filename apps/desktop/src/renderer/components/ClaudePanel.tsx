@@ -57,7 +57,7 @@ export function ClaudePanel({
   listening: boolean;
   selected: Row[];
   onUnselect: (entryId: string) => void;
-  onSend: (text: string) => Promise<boolean>;
+  onSend: (text: string) => void;
   onStop: () => void;
   /** Slid off to a slim edge so the draft gets the width. */
   collapsed: boolean;
@@ -102,11 +102,8 @@ export function ClaudePanel({
     // Enter submits too, so the button's guards are repeated here.
     if (working || locked || !text.trim()) return;
 
-    const sent = text.trim();
-
+    onSend(text.trim());
     setText('');
-    // A message that never went out comes back to the box, unless something new is typed there.
-    void onSend(sent).then((ok) => ok || setText((now) => now || sent));
   }
 
   return (
