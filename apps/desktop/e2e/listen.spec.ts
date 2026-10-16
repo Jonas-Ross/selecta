@@ -155,4 +155,18 @@ test('crossfades between Dig and Listen with the crate kept and the rail held st
 
   await expect(page.getByRole('region', { name: 'The crate' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Listen' })).toBeHidden();
+  // Flush with the draft, not nudged by another rule sharing its class name.
+  expect(
+    await page.evaluate(() => {
+      const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+
+      return [box('.mode-band').left, box('.mode-band').right];
+    }),
+  ).toEqual(
+    await page.evaluate(() => {
+      const box = document.querySelector('.draft-main')!.getBoundingClientRect();
+
+      return [box.left, box.right];
+    }),
+  );
 });

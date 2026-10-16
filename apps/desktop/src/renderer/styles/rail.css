@@ -33,13 +33,13 @@
 }
 /* The crate, Listen or the bench above the rail. One height for all, so the rail never moves
    when they swap; gives way before the rail does, since the head, rail and transport need ~460px. */
-.band {
+.mode-band {
   position: relative;
   flex: none;
   height: clamp(300px, min(44%, 100% - 460px), 520px);
   border-bottom: 1px solid var(--line);
 }
-.band-layer {
+.mode-layer {
   position: absolute;
   inset: 0;
   opacity: 0;
@@ -50,7 +50,7 @@
     transform var(--t-slow) var(--ease-out),
     visibility 0s var(--t-slow);
 }
-.band-layer.on {
+.mode-layer.on {
   opacity: 1;
   transform: none;
   visibility: visible;

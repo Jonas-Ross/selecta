@@ -562,8 +562,8 @@ export function Draft({
           />
         </div>
         <section className="draft-main" aria-label="Draft">
-          <div className="band">
-            <div className={band === 'dig' ? 'band-layer on' : 'band-layer'} inert={band !== 'dig'}>
+          <div className="mode-band">
+            <div className={band === 'dig' ? 'mode-layer on' : 'mode-layer'} inert={band !== 'dig'}>
               <Crate
                 inDraft={inDraft}
                 canAdd={canAdd}
@@ -576,7 +576,7 @@ export function Draft({
               />
             </div>
             <div
-              className={band === 'listen' ? 'band-layer on' : 'band-layer'}
+              className={band === 'listen' ? 'mode-layer on' : 'mode-layer'}
               inert={band !== 'listen'}
             >
               <Listen
@@ -591,7 +591,7 @@ export function Draft({
               />
             </div>
             {band === 'bench' && sides && (
-              <div className="band-layer on">
+              <div className="mode-layer on">
                 <Bench around={sides} replace={replace} agent={agent} onSwap={swap} />
               </div>
             )}
