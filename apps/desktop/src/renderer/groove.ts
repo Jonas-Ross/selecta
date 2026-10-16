@@ -23,6 +23,12 @@ export function cut(
   const cy = height * CENTRE.y;
   const outer = Math.hypot(Math.max(cx, width - cx), cy) + 4;
   const inner = cy - height - 60;
+
+  return { cx, cy, ...lay(outer, inner, records) };
+}
+
+/** The records cut between two radii, outside in; listening mode turns the same cut round the sleeve. */
+export function lay(outer: number, inner: number, records: { id: string; seconds?: number }[]) {
   const side = records.length ? records : [{ id: 'side' }];
   const known = side.flatMap((r) => (r.seconds && r.seconds > 0 ? [r.seconds] : []));
   const fallback = known.length ? known.reduce((a, b) => a + b) / known.length : FALLBACK_SECONDS;
@@ -43,7 +49,7 @@ export function cut(
     at = band.inner - gap;
   });
 
-  return { cx, cy, bands, rings };
+  return { bands, rings };
 }
 
 /** One band's grooves. Loud passages press wider, brighter grooves; seeded by the record, so it keeps its cut when moved. */

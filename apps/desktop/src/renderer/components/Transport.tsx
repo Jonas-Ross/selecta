@@ -1,7 +1,7 @@
 // The player bar under the draft: previous, play and next, the record playing,
 // a scrubber, and where the set is in time. Music.app is the clock; the bar
 // fills in between its reads.
-import { useState } from 'react';
+import { useScrub } from '../hooks/useScrub.js';
 import { formatClock } from '../lanes.js';
 import type { Row } from '../state.js';
 import { Sleeve } from './Sleeve.js';
@@ -22,6 +22,7 @@ export function Transport({
   onNext,
   onSeek,
   onOpen,
+  onFull,
   onStop,
   stopDisabled = false,
 }: {
@@ -40,21 +41,14 @@ export function Transport({
   onNext: () => void;
   onSeek?: (position: number) => void;
   onOpen?: () => void;
+  /** Opens listening mode: the draft full screen, just for listening. */
+  onFull?: () => void;
   // Set while the draft is linked to the preview: pauses and releases it so Claude can edit again.
   onStop?: () => void;
   stopDisabled?: boolean;
 }) {
   const length = duration ?? row?.duration_seconds;
-  // Held while dragging, so Music.app gets one seek on release rather than one per pixel.
-  // Bound to the entry it started on, so a record that ends mid-drag isn't seeked on the next.
-  const [scrub, setScrub] = useState<{ at: number; entry?: string }>();
-  const scrubbing = scrub?.entry === row?.entry_id ? scrub?.at : undefined;
-  const shown = scrubbing ?? position;
-  const commit = () => {
-    if (scrubbing !== undefined) onSeek?.(scrubbing);
-
-    setScrub(undefined);
-  };
+  const { shown, move, commit, cancel } = useScrub(row?.entry_id, position, onSeek);
 
   return (
     <footer className="transport" aria-label="Playback">
@@ -131,10 +125,10 @@ export function Transport({
           disabled={disabled || !onSeek || length === undefined}
           aria-label="Position in track"
           aria-valuetext={`${formatClock(shown)} of ${length === undefined ? 'unknown' : formatClock(length)}`}
-          onChange={(e) => setScrub({ at: Number(e.target.value), entry: row?.entry_id })}
+          onChange={(e) => move(Number(e.target.value))}
           onPointerUp={commit}
           onKeyUp={commit}
-          onBlur={() => setScrub(undefined)}
+          onBlur={cancel}
         />
         <span className="mono">{length === undefined ? '–:––' : formatClock(length)}</span>
       </div>
@@ -148,6 +142,18 @@ export function Transport({
           {set.totalPartial ? '+' : ''}
         </span>
       </div>
+      <button
+        type="button"
+        className="ib"
+        aria-label="Full screen"
+        title="Full screen"
+        disabled={!onFull || !row}
+        onClick={onFull}
+      >
+        <svg viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M2 2h4v1.5H3.5V6H2zM12 2v4h-1.5V3.5H8V2zM2 12V8h1.5v2.5H6V12zM12 12H8v-1.5h2.5V8H12z" />
+        </svg>
+      </button>
     </footer>
   );
 }
