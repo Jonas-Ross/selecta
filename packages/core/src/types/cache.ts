@@ -173,6 +173,14 @@ export type CoOccurringTrack = TrackRow & {
 export type CoOccurrenceFilters = {
   excludePlaylistIds?: string[];
   maxPlaylistTracks?: number;
+  // Selecta's own scratch slots hold what it auditioned, not what the user put together.
+  excludePlaylistNames?: string[];
+};
+
+// getPlaylistOverlap row: one user playlist and how many of the given tracks it holds.
+export type PlaylistOverlap = PlaylistRef & {
+  sharedTracks: number; // distinct given tracks it contains
+  playlistTracks: number; // distinct tracks it contains in total
 };
 
 export type SourcePlaylistAudit = {

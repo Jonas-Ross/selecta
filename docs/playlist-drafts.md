@@ -18,6 +18,12 @@ After a completed attempt, changing the name or ordered track list permits a new
 
 Playback controls and live now-playing observation remain outside this card.
 
+## Overlap with existing playlists
+
+Drafts kept coming back as near-copies of a playlist the user already had: the tool descriptions called co-occurrence the strongest "belongs together" signal, and its candidates are those playlists' contents, so the model filled drafts from them. Every inspection, and so every draft view, now carries `playlist_overlap`: up to three hand-made playlists holding at least two of the draft's tracks, with how many and what share of the draft. It is a fact, like artist counts; Selecta never caps, reorders or refuses a draft by it. The descriptions call playlists evidence of taste rather than the strongest signal, and ask the model to keep any one of them to a minority of a new draft unless the user asks to rework it. The desktop agent's prompt makes that a third. A number lives in the prompt rather than in core because a cap Selecta enforced would be a weighting knob, which the standing decisions rule out.
+
+`Selecta Preview` counts as neither overlap nor a co-occurrence source: it holds whatever was last auditioned, so counting it fed the previous draft back into the next. A saved draft's own playlist is left out of that draft's overlap. Playlists saved from earlier drafts otherwise count like any other hand-made playlist, since the user approved them.
+
 ## Linked preview iteration
 
 **Load into Selecta Preview** calls `preview_playlist_draft({draft_id, revision})`, explicitly replacing the shared audition slot and linking this draft. It never starts playback. Subsequent requested ordered-track changes call the bridge once as part of `edit_playlist_draft`, without redundant confirmation. Name, selection, feedback and identical ordered IDs do not write. Permanent Save remains explicit.
