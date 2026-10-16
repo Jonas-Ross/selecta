@@ -232,8 +232,11 @@ export function createApi(
       if (linked(draft_id)) agent.refuse(draft_id, brief, linkedMessage(draft_id, provider), true);
       else agent.start(draft_id, brief, provider);
     },
-    'agent.send': (args) => {
+    'agent.send': async (args) => {
       const { draft_id, message, text, provider } = Message.parse(args);
+
+      // Ownership is read here rather than from the renderer's view, which trails a play or stop.
+      if (linked(draft_id)) await player.detach(draft_id, deps.drafts().get(draft_id).revision);
 
       if (linked(draft_id))
         agent.refuse(draft_id, text ?? message, linkedMessage(draft_id, provider));

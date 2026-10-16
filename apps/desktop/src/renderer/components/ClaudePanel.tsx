@@ -36,6 +36,7 @@ export function ClaudePanel({
   working,
   hasDraft,
   locked,
+  listening,
   selected,
   onUnselect,
   onSend,
@@ -52,6 +53,8 @@ export function ClaudePanel({
   working: boolean;
   hasDraft: boolean;
   locked: boolean;
+  /** The draft plays through the preview, so sending stops the music first. */
+  listening: boolean;
   selected: Row[];
   onUnselect: (entryId: string) => void;
   onSend: (text: string) => void;
@@ -239,7 +242,11 @@ export function ClaudePanel({
               </button>
             )}
           </div>
-          <p className="hint">Click records on the rail to talk about them.</p>
+          <p className="hint">
+            {listening && !working
+              ? `Sending stops the music so ${agent} can change the draft.`
+              : 'Click records on the rail to talk about them.'}
+          </p>
         </form>
       </div>
     </aside>

@@ -414,15 +414,18 @@ export function Draft({
     setAsking(true);
 
     // A build that failed before creating the draft has nothing to revise.
-    const request = draft
-      ? onSend(
-          text,
-          feedbackMessage(
+    const ask = () =>
+      draft
+        ? onSend(
             text,
-            items.filter((row) => selected.has(row.entry_id)),
-          ),
-        )
-      : onStart(text);
+            feedbackMessage(
+              text,
+              items.filter((row) => selected.has(row.entry_id)),
+            ),
+          )
+        : onStart(text);
+    // Feedback waits for queued edits, so a host stopping the music names the revision they left.
+    const request = draft ? queue.after(ask) : ask();
 
     void request.finally(() => setAsking(false));
   }
@@ -843,7 +846,8 @@ export function Draft({
           log={log}
           working={working}
           hasDraft={draft !== undefined}
-          locked={locked || linked || listen.busy || replacing !== undefined}
+          locked={locked || listen.busy || replacing !== undefined}
+          listening={linked}
           selected={items.filter((row) => selected.has(row.entry_id))}
           onUnselect={toggleSelected}
           onSend={send}
