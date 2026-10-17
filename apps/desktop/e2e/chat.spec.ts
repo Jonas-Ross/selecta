@@ -38,7 +38,7 @@ test('formats an agent reply as Markdown, links opening outside the app', async 
   await page.getByRole('button', { name: 'Build it' }).click();
 
   const at = page.url();
-  const reply = page.getByRole('complementary').locator('.msg.claude').last();
+  const reply = page.getByRole('complementary').locator('.msg.from-claude').last();
 
   await expect(reply.getByRole('strong').first()).toHaveText('My Neighbors Have Filed a Complaint');
   await expect(reply.locator('ol')).toHaveAttribute('start', '13');
