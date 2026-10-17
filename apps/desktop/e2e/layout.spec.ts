@@ -29,18 +29,16 @@ test('keeps the draft inside the window and the reply inside the panel under a l
   );
   await expect(page.locator('.msg.from-claude')).toHaveCount(1);
 
-  const fits = () =>
-    page.evaluate(() => {
-      const log = document.querySelector('.log')!;
+  const { draftBottom, window, logScrolls, logOverflowX } = await page.evaluate(() => {
+    const log = document.querySelector('.log')!;
 
-      return {
-        draftBottom: document.querySelector('.draft-main')!.getBoundingClientRect().bottom,
-        window: innerHeight,
-        logScrolls: log.scrollHeight > log.clientHeight,
-        logOverflowX: log.scrollWidth - log.clientWidth,
-      };
-    });
-  const { draftBottom, window, logScrolls, logOverflowX } = await fits();
+    return {
+      draftBottom: document.querySelector('.draft-main')!.getBoundingClientRect().bottom,
+      window: innerHeight,
+      logScrolls: log.scrollHeight > log.clientHeight,
+      logOverflowX: log.scrollWidth - log.clientWidth,
+    };
+  });
 
   expect(draftBottom).toBeLessThanOrEqual(window);
   expect(logScrolls).toBe(true);
