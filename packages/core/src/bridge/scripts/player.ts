@@ -120,8 +120,7 @@ export function buildControlPlayerScript(input: PlayerControl): string {
           delay(0.05);
         }
       }
-      // A read straight after pause() still says playing; the change lands a beat later.
-      delay(0.3);
+      // Every action above waited for its own read-back, so no fixed settle is needed here.
       return JSON.stringify(readPlayer());
     `,
   );

@@ -271,6 +271,11 @@ describe('player script contract', () => {
     );
 
     expect(buildControlPlayerScript({ action: 'pause', on })).not.toMatch(NO_WRITES);
+
+    // Each action reads its own result back, so none pays a fixed settle on top.
+    for (const action of ['pause', 'resume'] as const)
+      expect(buildControlPlayerScript({ action, on })).not.toMatch(/delay\(0\.[1-9]/);
+
     expect(() => buildControlPlayerScript({ action: 'seek', position: -1, on })).toThrow(
       expect.objectContaining({ errorCode: 'validation_error' }),
     );
