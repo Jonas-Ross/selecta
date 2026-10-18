@@ -31,12 +31,11 @@ function mapJxaError(stderr: string): ErrorCode {
 // consumers via defaultHints, so no hint is attached here.
 const jxaError = (code: ErrorCode, message: string): BridgeError => new BridgeError(code, message);
 
+const UNKNOWN_OUTCOME =
+  'The Music.app operation was interrupted; its outcome is unknown and writes may be partial. Inspect Music.app and run refresh_library before deciding what to do. Do not repeat the write blindly.';
+
 const interrupted = () =>
-  new BridgeError(
-    'jxa_error',
-    'osascript exceeded its deadline or output limit',
-    'The Music.app operation was interrupted; its outcome is unknown and writes may be partial. Inspect Music.app and run refresh_library before deciding what to do. Do not repeat the write blindly.',
-  );
+  new BridgeError('jxa_error', 'osascript exceeded its deadline or output limit', UNKNOWN_OUTCOME);
 
 // A full-library snapshot is megabytes of JSON on stdout; execFile's default
 // maxBuffer (1 MiB) would kill the read mid-stream.
@@ -223,7 +222,13 @@ export function createJxaWorker({
 
       settle(worker, (call) =>
         call.reject(
-          said ? jxaError(mapJxaError(said), `osascript worker failed: ${said}`) : interrupted(),
+          said
+            ? new BridgeError(
+                mapJxaError(said),
+                `osascript worker failed: ${said}`,
+                UNKNOWN_OUTCOME,
+              )
+            : interrupted(),
         ),
       );
     };

@@ -134,6 +134,8 @@ it('reports a worker that falls over with what it said', async () => {
   await expect(worker.run('crash')).rejects.toMatchObject({
     errorCode: 'jxa_error',
     message: expect.stringContaining('osascript fell over'),
+    // Whatever the call did before the worker died is unknown, as after a deadline.
+    hint: expect.stringContaining('outcome is unknown'),
   });
   await expect(worker.run('after')).resolves.toBe(3);
 });
