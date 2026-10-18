@@ -1,12 +1,13 @@
 import { expect, it, vi } from 'vitest';
 import { editQueue } from '../src/renderer/edits.js';
 import {
+  afterEdits,
   asked,
   elsewhere,
+  inFlight,
   joinStart,
   livePosition,
   nowIndex,
-  afterEdits,
   setClock,
 } from '../src/renderer/listen.js';
 import type { Row } from '../src/renderer/state.js';
@@ -131,4 +132,22 @@ it('shows what each transport action asks for, and stops only a draft that is pl
 
   expect(asked.stop(elsewhere)).toBe(elsewhere);
   expect(asked.pause(undefined, 0, 0)).toBeUndefined();
+});
+
+it("shows the newest call's answer once every call has landed, or none to read Music fresh", () => {
+  const calls = inFlight<string>();
+  const play = calls.send();
+  const stop = calls.send();
+
+  expect(calls.busy()).toBe(true);
+  // The play answers first, but the stop asked after it.
+  expect(calls.land(play, 'playing')).toBeUndefined();
+  expect(calls.land(stop, undefined)).toEqual({ answer: undefined });
+  expect(calls.busy()).toBe(false);
+
+  const a = calls.send();
+  const b = calls.send();
+
+  expect(calls.land(b, 'paused')).toBeUndefined();
+  expect(calls.land(a, 'playing')).toEqual({ answer: 'paused' });
 });

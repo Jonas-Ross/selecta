@@ -132,6 +132,26 @@ it("doesn't pause a draft that isn't playing", async () => {
   expect(calls).toEqual(['read']);
 });
 
+it("still pauses when it doesn't know where Music is", async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.pause('D');
+  await settle();
+  expect(calls).toEqual(['pause']);
+});
+
+it("runs a draft's call in turn only while the lane holds that draft or Music may be on it", async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.play('D', 'a');
+  void lane.forDraft('send', 'D', false, () => calls.push('send D'));
+  await lane.forDraft('send', 'E', false, () => calls.push('send E'));
+  void lane.forDraft('send', 'E', true, () => calls.push('send E linked'));
+  expect(calls).toEqual(['play a@0', 'send E']);
+  await settle();
+  expect(calls).toEqual(['play a@0', 'send E', 'send D', 'send E linked']);
+});
+
 it('seeks after a pause and before a resume', async () => {
   const { lane, calls, settle } = setup();
 

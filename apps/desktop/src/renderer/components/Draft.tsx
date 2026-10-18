@@ -29,6 +29,7 @@ import {
   nextPending,
   pendingOrder,
   previewLinked,
+  previewOutOfStep,
   rows,
   saveHolds,
   saveLabel,
@@ -57,9 +58,6 @@ import { TopBar } from './TopBar.js';
 import { Transport } from './Transport.js';
 
 // Preview states that mean Music.app may not hold what the draft says.
-const OUT_OF_STEP = new Set(['pending', 'out_of_date', 'conflict', 'error', 'uncertain']);
-// The statuses a queued sync moves on; it leaves a conflict or failure as it is.
-const CATCHING_UP = new Set(['pending', 'out_of_date']);
 
 type Current = NonNullable<DraftView['draft']>;
 
@@ -200,12 +198,7 @@ export function Draft({
     () => (replacing ? rail.current?.recordRect(replacing.entryId) : undefined),
     [replacing?.entryId],
   );
-  // A linked edit leaves the preview behind until the host's sync lands; that's catching up, not out of step.
-  const previewStatus = view?.preview?.status ?? '';
-  const outOfStep =
-    linked &&
-    OUT_OF_STEP.has(previewStatus) &&
-    !(view?.preview_syncing && CATCHING_UP.has(previewStatus));
+  const outOfStep = linked && previewOutOfStep(view ?? {});
 
   // A record that left the draft has nothing left to replace, and picks for neighbours another
   // front end has since changed no longer fit where they would go.

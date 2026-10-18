@@ -22,6 +22,36 @@ export function afterEdits<T>(
   });
 }
 
+/**
+ * Calls in flight to the host. Once the last lands, `land` gives what the newest one answered,
+ * since the host folds waiting calls together; none means Music must be read fresh.
+ */
+export function inFlight<T>() {
+  let out = 0;
+  let sent = 0;
+  let answer: T | undefined;
+
+  return {
+    busy: () => out > 0,
+    send: () => {
+      out++;
+
+      return ++sent;
+    },
+    land(call: number, next: T | undefined): { answer?: T } | undefined {
+      if (call === sent) answer = next;
+
+      if (--out > 0) return undefined;
+
+      const done = { answer };
+
+      answer = undefined;
+
+      return done;
+    },
+  };
+}
+
 /** What each transport action asks Music for, drawn on the screen until the host answers. */
 export const asked = {
   play: (entryId: string, position?: number): PlayerView => ({

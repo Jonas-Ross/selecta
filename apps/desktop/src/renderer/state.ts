@@ -83,6 +83,17 @@ export function previewLinked(view: DraftView): boolean {
   );
 }
 
+const OUT_OF_STEP = new Set(['pending', 'out_of_date', 'conflict', 'error', 'uncertain']);
+// The statuses a queued sync moves on; it leaves a conflict or failure as it is.
+const CATCHING_UP = new Set(['pending', 'out_of_date']);
+
+/** Music may be playing an old copy, and no sync already on its way will fix that. */
+export function previewOutOfStep(view: DraftView): boolean {
+  const status = view.preview?.status ?? '';
+
+  return OUT_OF_STEP.has(status) && !(view.preview_syncing && CATCHING_UP.has(status));
+}
+
 export function move<T>(items: T[], from: number, to: number): T[] {
   const next = [...items];
 

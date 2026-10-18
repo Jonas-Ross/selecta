@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayerView } from '../../shared/protocol.js';
 import { selecta } from '../api.js';
-import { asked } from '../listen.js';
+import { asked, inFlight } from '../listen.js';
 
 const READ_EVERY_MS = 1000;
 
@@ -17,11 +17,8 @@ export function usePlayer(
 ) {
   const [shown, setShown] = useState<{ view?: PlayerView; readAt: number }>({ readAt: 0 });
   const [problem, setProblem] = useState<string>();
-  // Calls not yet answered; while any are, the screen shows what was asked rather than a read.
-  const outstanding = useRef(0);
-  // The newest call's answer while earlier ones are still out, shown once they all land.
-  const answered = useRef<PlayerView>(undefined);
-  const sent = useRef(0);
+  // While calls are out, the screen shows what was asked rather than a read.
+  const [calls] = useState(() => inFlight<PlayerView>());
   // Bumped by every action, so a read started before it can't land after it.
   const epoch = useRef(0);
   const current = useRef(shown);
@@ -60,7 +57,7 @@ export function usePlayer(
     const read = () => {
       const at = epoch.current;
 
-      void readNow(() => alive && at === epoch.current && outstanding.current === 0).finally(() => {
+      void readNow(() => alive && at === epoch.current && !calls.busy()).finally(() => {
         if (alive) timer = setTimeout(read, READ_EVERY_MS);
       });
     };
@@ -71,7 +68,7 @@ export function usePlayer(
       alive = false;
       clearTimeout(timer);
     };
-  }, [watching, problem, readNow]);
+  }, [watching, problem, readNow, calls]);
 
   /** Shows `ask` applied to what's shown now, then the host's answer once every call has landed. */
   const act = (
@@ -79,9 +76,8 @@ export function usePlayer(
     call: () => Promise<unknown>,
   ) => {
     epoch.current++;
-    outstanding.current++;
 
-    const mine = ++sent.current;
+    const mine = calls.send();
 
     setProblem(undefined);
 
@@ -93,33 +89,29 @@ export function usePlayer(
       setShown(current.current);
     }
 
-    return call()
-      .then((next) => {
-        // A call that answers nothing, like a stop, leaves the next read to say where Music is.
-        if (mine === sent.current) answered.current = next as PlayerView | undefined;
-      })
-      .catch((e: Error) => {
-        // A failure leaves Music wherever it got to, which only a fresh read can say.
-        if (mine === sent.current) answered.current = undefined;
+    const landed = (next: PlayerView | undefined) => {
+      const done = calls.land(mine, next);
 
+      if (!done) return;
+
+      epoch.current++;
+
+      if (done.answer) return accept(done.answer);
+
+      // Nothing said what Music is doing now, so it's read rather than taken from what was asked.
+      const at = epoch.current;
+
+      void readNow(() => at === epoch.current && !calls.busy());
+    };
+
+    return call().then(
+      (next) => landed(next as PlayerView | undefined),
+      (e: Error) => {
         setProblem(e.message);
-      })
-      .finally(() => {
-        if (--outstanding.current > 0) return;
-
-        epoch.current++;
-
-        const answer = answered.current;
-
-        answered.current = undefined;
-
-        if (answer) return accept(answer);
-
-        // Nothing said what Music is doing now, so it's read rather than taken from what was asked.
-        const at = epoch.current;
-
-        void readNow(() => at === epoch.current && outstanding.current === 0);
-      });
+        // A failure leaves Music wherever it got to, which only a fresh read can say.
+        landed(undefined);
+      },
+    );
   };
 
   return {

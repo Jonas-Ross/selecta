@@ -177,8 +177,8 @@ export function createMusicLane({
 
     const last = seen.get(draftId)?.view;
 
-    // A play and pause that met while waiting leave nothing to stop unless this draft was playing.
-    if (t.run === 'pause' && !(last?.entry_id !== undefined && last.state === 'playing'))
+    // A pause where Music is known to be elsewhere has nothing to stop; one unknown is still sent.
+    if (t.run === 'pause' && last && !(last.entry_id !== undefined && last.state === 'playing'))
       t = { ...t, run: undefined };
 
     let view: PlaybackView | undefined;
@@ -260,6 +260,15 @@ export function createMusicLane({
     });
   }
 
+  async function detachNow(draftId: string, revisionAt: number) {
+    seen.delete(draftId);
+    await player.detach(draftId, revisionAt);
+  }
+
+  /** Something for this draft is playing, writing or waiting to. */
+  const holds = (draftId: string) =>
+    running?.draft === draftId || queue.some((job) => job.draft === draftId);
+
   // Drops what a draft still waits to play or write, which stopping makes moot.
   function forget(draftId: string) {
     drop((job) => job.key === transportKey(draftId) || job.key === syncKey(draftId));
@@ -293,14 +302,12 @@ export function createMusicLane({
       return push<void>({
         draft: draftId,
         step: () => 'detach',
-        run: async () => {
-          seen.delete(draftId);
-          await player.detach(draftId, revisionAt);
-        },
+        run: () => detachNow(draftId, revisionAt),
       });
     },
 
-    forget,
+    /** Detaches from inside a step already running in turn, leaving calls asked after it alone. */
+    detachNow,
 
     // Behind everything already asked, so an edit's order reaches Music before a play after it.
     sync(draftId: string) {
@@ -322,9 +329,7 @@ export function createMusicLane({
     syncing: (draftId: string) =>
       running?.key === syncKey(draftId) || queue.some((job) => job.key === syncKey(draftId)),
 
-    /** Something for this draft is playing, writing or waiting to. */
-    holds: (draftId: string) =>
-      running?.draft === draftId || queue.some((job) => job.draft === draftId),
+    holds,
 
     audition,
 
@@ -353,5 +358,11 @@ export function createMusicLane({
     /** Runs `step` in turn, for anything else that may write Music or depend on what it plays. */
     after: <T>(name: string, step: () => Promise<T> | T, draft?: string) =>
       push<T>({ step: () => name, draft, run: async () => step() }),
+
+    /** Runs `step` in turn only while the lane holds the draft or Music may be on it. */
+    forDraft: <T>(name: string, draftId: string, onMusic: boolean, step: () => Promise<T> | T) =>
+      onMusic || holds(draftId)
+        ? push<T>({ step: () => name, draft: draftId, run: async () => step() })
+        : Promise.resolve().then(step),
   };
 }
