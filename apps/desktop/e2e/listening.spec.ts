@@ -24,7 +24,9 @@ test('plays the draft full screen, follows Music down the dock, and closes on Do
   await expect(mode).toBeVisible();
   await mode.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(mode.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
-  expect(music.snapshot().player).toMatchObject({ state: 'playing', playlist: 'Selecta Preview' });
+  await expect
+    .poll(() => music.snapshot().player)
+    .toMatchObject({ state: 'playing', playlist: 'Selecta Preview' });
 
   const first = tracks.find((t) => t.persistentId === music.snapshot().player.track)!;
   const title = await mode.locator('h1').textContent();
@@ -151,7 +153,7 @@ test('plays a sleeve clicked in the dock, even before anything plays', async ({ 
     .click();
   await expect(mode.locator('.lm-tile').nth(3)).toHaveAttribute('aria-current', 'true');
   await expect(mode.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
-  expect(music.snapshot().player).toMatchObject({ state: 'playing', index: 4 });
+  await expect.poll(() => music.snapshot().player).toMatchObject({ state: 'playing', index: 4 });
 });
 
 test('holds the record still under reduced motion, by hand too', async ({ page }) => {

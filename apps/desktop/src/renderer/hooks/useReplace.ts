@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AuditionView, ProviderId, Suggestion } from '../../shared/protocol.js';
 import { selecta } from '../api.js';
-import { poll, stopAfter, type AuditionPlan } from '../replace.js';
+import { poll, type AuditionPlan } from '../replace.js';
 
 const READ_EVERY_MS = 1000;
 
@@ -27,14 +27,13 @@ export function useReplace(
 ) {
   const [state, setState] = useState<Replacing>();
   const [heard, setHeard] = useState<AuditionView>();
-  const [busy, setBusy] = useState(false);
+  // The newest audition call, or 0 once it has landed; the host folds waiting calls together.
+  const outstanding = useRef(0);
   const [trouble, setTrouble] = useState<string>();
   // Bumped by every ask and close, so a late answer never lands on a newer one.
   const asked = useRef(0);
   // Set once an audition has written Selecta Preview, so closing knows to pause it.
   const auditioned = useRef(false);
-  // The audition or pause still under way, which holds Music until it lands.
-  const inFlight = useRef<Promise<unknown>>(undefined);
   const [polling, setPolling] = useState(false);
   const current = useRef(state);
 
@@ -80,13 +79,11 @@ export function useReplace(
     setState(undefined);
     setTrouble(undefined);
 
+    // The host runs it after any audition already starting and drops any still waiting.
     if (auditioned.current)
-      void stopAfter(inFlight.current, () => selecta.call('player.auditionStop')).catch(
-        (e: Error) => warn(e.message),
-      );
+      void selecta.call('player.auditionStop').catch((e: Error) => warn(e.message));
 
     auditioned.current = false;
-    inFlight.current = undefined;
     setPolling(false);
     setHeard(undefined);
   }, [draftId, warn]);
@@ -102,7 +99,7 @@ export function useReplace(
     return poll(
       () => selecta.call('player.auditionState'),
       READ_EVERY_MS,
-      setHeard,
+      (next) => outstanding.current === 0 && setHeard(next),
       (e) => {
         setTrouble(e.message);
         setPolling(false);
@@ -110,27 +107,28 @@ export function useReplace(
     );
   }, [polling]);
 
-  function track<T>(call: Promise<T>) {
-    inFlight.current = call;
+  // `wanted` shows at once; the newest answer replaces it once every call has landed.
+  function act(wanted: AuditionView, call: () => Promise<AuditionView | void>) {
+    const mine = ++outstanding.current;
 
-    return call;
-  }
-
-  function act(call: () => Promise<AuditionView | void>) {
-    if (busy) return;
-
-    setBusy(true);
     setTrouble(undefined);
+    setHeard(wanted);
     call()
-      .then((next) => setHeard(next ?? { state: 'stopped' }))
-      .catch((e: Error) => setTrouble(e.message))
-      .finally(() => setBusy(false));
+      .then((next) => outstanding.current === mine && setHeard(next ?? { state: 'stopped' }))
+      .catch((e: Error) => {
+        setTrouble(e.message);
+
+        // What Music did instead is the next read's to say.
+        if (outstanding.current === mine) setHeard(undefined);
+      })
+      .finally(() => {
+        if (outstanding.current === mine) outstanding.current = 0;
+      });
   }
 
   return {
     state,
     heard,
-    busy,
     trouble,
     open: (entryId: string) => ask(entryId),
     ask: (text: string) => state && ask(state.entryId, text),
@@ -140,14 +138,22 @@ export function useReplace(
       setState(
         (s) => s && { ...s, view, active: trackId ?? s.active ?? s.picks[0]?.track.persistent_id },
       ),
-    audition: (plan: AuditionPlan) =>
-      act(() => {
-        auditioned.current = true;
-        setPolling(true);
-
-        return track(selecta.call('player.audition', plan));
-      }),
-    pause: () => act(() => track(selecta.call('player.auditionStop'))),
+    audition: (plan: AuditionPlan) => {
+      auditioned.current = true;
+      setPolling(true);
+      act(
+        {
+          state: 'playing',
+          track_id: plan.track_ids[plan.index],
+          index: plan.index,
+          ...(plan.position !== undefined && { position: plan.position }),
+          pending: true,
+        },
+        () => selecta.call('player.audition', plan),
+      );
+    },
+    pause: () =>
+      act({ ...heard, state: 'stopped', pending: true }, () => selecta.call('player.auditionStop')),
   };
 }
 

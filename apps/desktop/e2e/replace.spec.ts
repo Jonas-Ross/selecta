@@ -68,11 +68,13 @@ test('replaces a record from the shortlist or the bench, after hearing it in pla
   // Hear it plays the pick between the records either side of it, so the joins play too.
   await shortlist.getByRole('button', { name: 'Hear it' }).click();
   await expect.poll(() => preview(music)?.length).toBe(3);
-  expect(music.snapshot().player).toMatchObject({
-    state: 'playing',
-    playlist: 'Selecta Preview',
-    index: 2,
-  });
+  await expect
+    .poll(() => music.snapshot().player)
+    .toMatchObject({
+      state: 'playing',
+      playlist: 'Selecta Preview',
+      index: 2,
+    });
   await expect(shortlist.getByRole('button', { name: 'Pause' })).toBeVisible();
 
   // The second pick, up close.

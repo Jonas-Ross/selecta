@@ -3,7 +3,7 @@
 // ends honest at compile time.
 import type { toInspectedTrack } from '@selecta/core/domain/track_projections.js';
 import type { DraftSummary } from '@selecta/core/drafts/store.js';
-import type { AuditionView, PlaybackView } from '@selecta/core/operations/playback.js';
+import type { AuditionView as Heard, PlaybackView } from '@selecta/core/operations/playback.js';
 import type { ArtworkReadResult } from '@selecta/core/types/bridge.js';
 
 export type { DraftSummary };
@@ -26,8 +26,9 @@ export type Crate = { tracks: CrateTrack[]; total: number; order: CrateOrder | '
 /** A cached thumbnail's file name, null when the track has no artwork, or why it couldn't be read. */
 export type ArtworkAnswer = ArtworkReadResult[string];
 
-export type PlayerView = PlaybackView;
-export type { AuditionView };
+/** `pending` marks what the app asked for and Music hasn't confirmed yet, never a reading. */
+export type PlayerView = PlaybackView & { pending?: true };
+export type AuditionView = Heard & { pending?: true };
 
 /** A stand-in the agent offered for one record, and why in its own words. */
 export type Suggestion = { track: CrateTrack; reason: string };
@@ -80,12 +81,7 @@ export type Methods = {
   'features.measure': (args: { track_id: string }) => Measured;
   'features.heard': (args: { track_ids: string[] }) => Record<string, Measured>;
   'player.state': (args: { draft_id: string }) => PlayerView;
-  'player.play': (args: {
-    draft_id: string;
-    revision: number;
-    entry_id: string;
-    position?: number;
-  }) => PlayerView;
+  'player.play': (args: { draft_id: string; entry_id: string; position?: number }) => PlayerView;
   'player.pause': (args: { draft_id: string }) => PlayerView;
   'player.resume': (args: { draft_id: string }) => PlayerView;
   'player.seek': (args: { draft_id: string; position: number }) => PlayerView;

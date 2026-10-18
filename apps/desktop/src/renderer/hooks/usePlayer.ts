@@ -1,26 +1,51 @@
 // The Listen screen's view of Music.app. It reads the player about once a
 // second while Listen is open, the draft is linked or it is playing, and stops reading
 // after a failure until the user acts, so a denied permission isn't hit every second.
+// An action shows what it asked for at once, marked pending, until the host answers.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayerView } from '../../shared/protocol.js';
 import { selecta } from '../api.js';
+import { asked, inFlight } from '../listen.js';
 
 const READ_EVERY_MS = 1000;
 
-/** `looking` is Listen open or the draft linked; a draft playing keeps the bar live anywhere. */
-export function usePlayer(draftId: string, looking: boolean) {
-  const [view, setView] = useState<PlayerView>();
-  const [readAt, setReadAt] = useState(0);
-  const [busy, setBusy] = useState(false);
+export function usePlayer(
+  draftId: string,
+  looking: boolean,
+  // Sends a transport call in turn with the draft's queued edits, as a play is.
+  inTurn: <T>(call: () => Promise<T>) => Promise<T | undefined> = (call) => call(),
+) {
+  const [shown, setShown] = useState<{ view?: PlayerView; readAt: number }>({ readAt: 0 });
   const [problem, setProblem] = useState<string>();
+  // While calls are out, the screen shows what was asked rather than a read.
+  const [calls] = useState(() => inFlight<PlayerView>());
   // Bumped by every action, so a read started before it can't land after it.
   const epoch = useRef(0);
+  const current = useRef(shown);
 
-  const accept = useCallback((next: PlayerView) => {
-    setView(next);
-    setReadAt(performance.now());
+  current.current = shown;
+
+  const accept = useCallback((view: PlayerView) => {
+    setShown({ view, readAt: performance.now() });
   }, []);
 
+  // Shows a fresh read unless an action has started since it was asked.
+  const readNow = useCallback(
+    (fresh: () => boolean) =>
+      selecta.call('player.state', { draft_id: draftId }).then(
+        (next) => fresh() && accept(next),
+        (e: Error) => {
+          if (!fresh()) return;
+
+          setProblem(e.message);
+          // What was asked isn't left standing as if Music had done it.
+          setShown((s) => (s.view?.pending ? { readAt: 0 } : s));
+        },
+      ),
+    [draftId, accept],
+  );
+
+  const { view } = shown;
   const watching = looking || (view?.state === 'playing' && view.entry_id !== undefined);
 
   useEffect(() => {
@@ -32,15 +57,9 @@ export function usePlayer(draftId: string, looking: boolean) {
     const read = () => {
       const at = epoch.current;
 
-      selecta
-        .call('player.state', { draft_id: draftId })
-        .then(
-          (next) => alive && at === epoch.current && accept(next),
-          (e: Error) => alive && at === epoch.current && setProblem(e.message),
-        )
-        .finally(() => {
-          if (alive) timer = setTimeout(read, READ_EVERY_MS);
-        });
+      void readNow(() => alive && at === epoch.current && !calls.busy()).finally(() => {
+        if (alive) timer = setTimeout(read, READ_EVERY_MS);
+      });
     };
 
     read();
@@ -49,45 +68,74 @@ export function usePlayer(draftId: string, looking: boolean) {
       alive = false;
       clearTimeout(timer);
     };
-  }, [draftId, watching, problem, accept]);
+  }, [watching, problem, readNow, calls]);
 
-  const act = (call: Promise<PlayerView | void>) => {
+  /** Shows `ask` applied to what's shown now, then the host's answer once every call has landed. */
+  const act = (
+    ask: (now: { view?: PlayerView; readAt: number }) => PlayerView | undefined,
+    call: () => Promise<unknown>,
+  ) => {
     epoch.current++;
-    setBusy(true);
+
+    const mine = calls.send();
+
     setProblem(undefined);
 
-    return call
-      .then((next) => {
-        if (next) accept(next);
-      })
-      .catch((e: Error) => setProblem(e.message))
-      .finally(() => setBusy(false));
+    const wanted = ask(current.current);
+
+    // Kept in the ref too, so a second click before the next render builds on this one.
+    if (wanted) {
+      current.current = { view: { ...wanted, pending: true }, readAt: performance.now() };
+      setShown(current.current);
+    }
+
+    const landed = (next: PlayerView | undefined) => {
+      const done = calls.land(mine, next);
+
+      if (!done) return;
+
+      epoch.current++;
+
+      if (done.answer) return accept(done.answer);
+
+      // Nothing said what Music is doing now, so it's read rather than taken from what was asked.
+      const at = epoch.current;
+
+      void readNow(() => at === epoch.current && !calls.busy());
+    };
+
+    return call().then(
+      (next) => landed(next as PlayerView | undefined),
+      (e: Error) => {
+        setProblem(e.message);
+        // A failure leaves Music wherever it got to, which only a fresh read can say.
+        landed(undefined);
+      },
+    );
   };
 
   return {
     view,
-    readAt,
-    busy,
+    readAt: shown.readAt,
+    /** Some call is still waiting on Music. */
+    pending: view?.pending === true,
     problem,
     dismiss: () => setProblem(undefined),
-    play: (revision: number, entryId: string, position?: number) =>
+    act,
+    pause: () =>
       act(
-        selecta.call('player.play', {
-          draft_id: draftId,
-          revision,
-          entry_id: entryId,
-          ...(position !== undefined && { position }),
-        }),
+        (now) => asked.pause(now.view, now.readAt, performance.now()),
+        () => inTurn(() => selecta.call('player.pause', { draft_id: draftId })),
       ),
-    pause: () => act(selecta.call('player.pause', { draft_id: draftId })),
-    resume: () => act(selecta.call('player.resume', { draft_id: draftId })),
-    seek: (position: number) => act(selecta.call('player.seek', { draft_id: draftId, position })),
-    // The host pauses Music first if it's on this draft, then releases the preview.
-    detach: (revision: number) =>
+    resume: () =>
       act(
-        selecta
-          .call('player.detach', { draft_id: draftId, revision })
-          .then(() => selecta.call('player.state', { draft_id: draftId })),
+        (now) => asked.resume(now.view),
+        () => inTurn(() => selecta.call('player.resume', { draft_id: draftId })),
+      ),
+    seek: (position: number) =>
+      act(
+        (now) => asked.seek(now.view, position),
+        () => inTurn(() => selecta.call('player.seek', { draft_id: draftId, position })),
       ),
   };
 }

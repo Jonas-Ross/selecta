@@ -267,16 +267,10 @@ export function createPlayback(deps: PlaybackDeps) {
   return {
     state: async (draftId: string) => show(draftId, await readFor(draftId)),
 
-    async play(
-      draftId: string,
-      revision: number,
-      entryId: string,
-      position?: number,
-    ): Promise<PlaybackView> {
+    // By entry, not revision: entries keep their IDs across edits, so an edit landing meanwhile
+    // still plays the record asked for, and one that removed it is refused below.
+    async play(draftId: string, entryId: string, position?: number): Promise<PlaybackView> {
       let { draft, slot } = current(draftId);
-
-      if (draft.revision !== revision)
-        throw new Error('The draft changed since you pressed play. Try again.');
 
       const find = () => draft.entries.findIndex((entry) => entry.entry_id === entryId);
       let index = find();

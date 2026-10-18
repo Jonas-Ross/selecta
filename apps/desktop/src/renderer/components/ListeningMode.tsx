@@ -34,7 +34,7 @@ export function ListeningMode({
   name: string;
   items: Row[];
   listen: Listening;
-  /** The transport is held: Claude is working, an edit is landing, or Music is busy. */
+  /** The transport is held: Claude is working, or the draft is saving or leaving. */
   disabled: boolean;
   joinDisabled: boolean;
   onClose: () => void;
@@ -155,6 +155,7 @@ export function ListeningMode({
             type="button"
             className={`lm-round play${listen.playing ? ' on' : ''}`}
             aria-label={listen.playing ? 'Pause' : 'Play'}
+            aria-busy={listen.pending}
             disabled={disabled || !row}
             onClick={listen.toggle}
           >

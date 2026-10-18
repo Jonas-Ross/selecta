@@ -29,11 +29,13 @@ test('plays the draft through Selecta Preview, follows Music on, and keeps it in
   await expect(playing).toHaveCount(1);
   await expect(page.getByText(/agent waits/i)).toHaveCount(0);
   await expect(records.first()).toHaveAttribute('aria-current', 'true');
-  expect(music.snapshot().player).toMatchObject({
-    state: 'playing',
-    playlist: 'Selecta Preview',
-    index: 1,
-  });
+  await expect
+    .poll(() => music.snapshot().player)
+    .toMatchObject({
+      state: 'playing',
+      playlist: 'Selecta Preview',
+      index: 1,
+    });
 
   const first = tracks.find((t) => t.persistentId === preview(music)![0])!;
 
@@ -50,6 +52,67 @@ test('plays the draft through Selecta Preview, follows Music on, and keeps it in
   await expect(records.nth(1)).toHaveAttribute('aria-current', 'true');
 
   await page.screenshot({ path: 'test-results/listen.png' });
+  expect(actions().filter((a) => a.method?.startsWith('player.') && a.error)).toEqual([]);
+});
+
+test('answers at once while Music is slow, and plays only where the last click leads', async ({
+  page,
+  music,
+  actions,
+}) => {
+  await build(page);
+  await page.getByRole('tab', { name: 'Listen' }).click();
+
+  const records = page.getByRole('list', { name: 'Draft order' }).getByRole('listitem');
+  const transport = page.locator('footer.transport');
+  const release = music.hold();
+
+  await page.getByRole('button', { name: 'Play' }).click();
+  // The bar shows the play straight away, marked as not yet confirmed.
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
+  await expect(transport).toHaveAttribute('aria-busy', 'true');
+  await expect(records.first()).toHaveAttribute('aria-current', 'true');
+
+  // Clicks keep landing while the first play waits on Music, and fold into one step.
+  await page.getByRole('button', { name: 'Next record' }).click();
+  await page.getByRole('button', { name: 'Next record' }).click();
+  await page.getByRole('button', { name: 'Previous record' }).click();
+  await expect(records.nth(1)).toHaveAttribute('aria-current', 'true');
+  await expect(page.getByText('Waiting for Music.app')).toHaveCount(0);
+  expect(music.snapshot().player.state).toBe('stopped');
+
+  release();
+  await expect.poll(() => music.snapshot().player).toMatchObject({ state: 'playing', index: 2 });
+  await expect(transport).toHaveAttribute('aria-busy', 'false');
+  await expect(records.nth(1)).toHaveAttribute('aria-current', 'true');
+  expect(music.calls.filter((c) => c === 'next' || c === 'previous')).toEqual(['next']);
+
+  // A pause behind a play still in flight lands after it, leaving Music paused.
+  const again = music.hold();
+
+  await page.getByRole('button', { name: 'Next record' }).click();
+  await page.getByRole('button', { name: 'Pause' }).click();
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
+  again();
+  await expect.poll(() => music.snapshot().player.state).toBe('paused');
+  await expect(transport).toHaveAttribute('aria-busy', 'false');
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
+
+  // The rail stays free while Music is held, and the preview catches up once it answers.
+  const before = preview(music)!;
+  const third = await records.nth(4).textContent();
+  const later = music.hold();
+
+  await records.nth(4).focus();
+  await page.keyboard.press('Alt+ArrowLeft');
+  await expect(records.nth(3)).toHaveText(third!);
+  await expect(page.getByText(/old copy of this draft/)).toHaveCount(0);
+  expect(preview(music)).toEqual(before);
+  later();
+  await expect
+    .poll(() => preview(music))
+    .toEqual([...before.slice(0, 3), before[4], before[3], ...before.slice(5)]);
+  await expect(page.getByText(/old copy of this draft/)).toHaveCount(0);
   expect(actions().filter((a) => a.method?.startsWith('player.') && a.error)).toEqual([]);
 });
 
