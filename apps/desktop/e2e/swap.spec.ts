@@ -55,7 +55,7 @@ test('hands a built draft to Codex, which picks up the brief and the draft as th
   await expect(records).toHaveCount(5);
   await expect(panel.getByText('Dropped the last one.')).toBeVisible();
   // Each reply keeps the name of the agent that wrote it.
-  await expect(panel.locator('.msg.claude .who')).toHaveText(['Claude', 'Codex']);
+  await expect(panel.locator('.msg.from-claude .who')).toHaveText(['Claude', 'Codex']);
   await page.screenshot({ path: 'test-results/swap-after.png' });
 
   expect(turns.map((turn) => [turn.provider, turn.resumed])).toEqual([

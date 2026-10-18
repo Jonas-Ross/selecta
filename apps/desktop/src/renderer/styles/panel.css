@@ -155,12 +155,12 @@
   font: 400 var(--fs-label) var(--mono);
   color: var(--ink3);
 }
-.msg.you {
+.msg.from-you {
   color: var(--ink2);
   padding-left: var(--s3);
   border-left: 1px solid var(--line3);
 }
-.msg.error {
+.msg.from-error {
   color: var(--danger);
 }
 .chips {
