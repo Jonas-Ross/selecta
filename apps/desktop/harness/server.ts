@@ -49,6 +49,8 @@ export async function startSim(options: {
     for await (const chunk of request) body += chunk;
 
     if (request.url === '/osascript') {
+      await options.music.turn();
+
       try {
         response.end(JSON.stringify({ stdout: options.music.run(body) }));
       } catch (error) {

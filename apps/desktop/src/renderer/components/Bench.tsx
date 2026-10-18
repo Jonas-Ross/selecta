@@ -92,7 +92,7 @@ export function Bench({
   onSwap: (pick: Suggestion) => void;
 }) {
   const { joinLead } = useSettings().settings;
-  const { state, heard, busy, trouble } = replace;
+  const { state, heard, trouble } = replace;
 
   if (!state) return null;
 
@@ -115,7 +115,7 @@ export function Bench({
           from={prev}
           to={shown}
           side="in"
-          disabled={busy || !auditionPlan(around, shown, 'in', joinLead)}
+          disabled={!auditionPlan(around, shown, 'in', joinLead)}
           onListen={() => listen('in')}
         />
         <div className="bench-mid">
@@ -124,7 +124,6 @@ export function Bench({
             <button
               type="button"
               className={playing ? 'play-o on' : 'play-o'}
-              disabled={busy}
               aria-label={`${playing ? 'Pause' : 'Hear'} ${shown.title ?? 'this record'}`}
               onClick={() => (playing ? replace.pause() : listen('hear'))}
             >
@@ -147,7 +146,7 @@ export function Bench({
           from={shown}
           to={next}
           side="out"
-          disabled={busy || !auditionPlan(around, shown, 'out', joinLead)}
+          disabled={!auditionPlan(around, shown, 'out', joinLead)}
           onListen={() => listen('out')}
         />
         <Neighbour track={next} edge="End of the set" />

@@ -8,6 +8,7 @@ import {
   nextPending,
   pendingOrder,
   previewLinked,
+  previewOutOfStep,
   recoverRuns,
   rejectRun,
   rows,
@@ -171,6 +172,20 @@ it('treats a draft as linked only while it owns an active preview', () => {
   expect(previewLinked({ draft, preview: { owner: 'other', status: 'current' } })).toBe(false);
   expect(previewLinked({ draft, preview: { status: 'inactive' } })).toBe(false);
   expect(previewLinked({})).toBe(false);
+});
+
+it('calls a preview catching up only while a sync that can fix it is on its way', () => {
+  const at = (status: string, preview_syncing?: boolean) =>
+    previewOutOfStep({ preview: { status }, preview_syncing });
+
+  expect(at('current')).toBe(false);
+  expect(at('out_of_date')).toBe(true);
+  expect(at('out_of_date', true)).toBe(false);
+  expect(at('pending', true)).toBe(false);
+  // A sync leaves these as they are, so syncing doesn't hide them.
+  expect(at('conflict', true)).toBe(true);
+  expect(at('error', true)).toBe(true);
+  expect(at('uncertain', true)).toBe(true);
 });
 
 it('marks only the request that started a draft as its brief', () => {

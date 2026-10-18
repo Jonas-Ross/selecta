@@ -30,6 +30,7 @@ import type { AgentSessions } from './agent.js';
 import type { ArtworkCache } from './artwork.js';
 import { crate, crateTrack } from './library.js';
 import { createMeasurer, heard } from './measure.js';
+import { createMusicLane } from './music.js';
 import { createLibrary } from './refresh.js';
 import { SUGGEST_LIMIT, parsePicks, suggestPrompt } from './suggest.js';
 
@@ -50,7 +51,7 @@ const Message = z.strictObject({
 });
 const Revision = z.strictObject({ ...revisionInputShape });
 const Play = z.strictObject({
-  ...revisionInputShape,
+  ...getDraftInputShape,
   entry_id: z.string().uuid(),
   position: z.number().nonnegative().optional(),
 });
@@ -83,9 +84,35 @@ export function createApi(
   artwork: ArtworkCache,
   providers: () => Promise<ProviderStatus[]>,
   emit: (event: HostEvent) => void = () => {},
+  note: (event: string, detail: object) => void = () => {},
 ) {
   const drafts = new PlaylistDraftTools(deps);
   const player = createPlayback(deps);
+  const lane = createMusicLane({
+    player,
+    syncLinked: async (draftId) => {
+      // A stop that landed first leaves nothing to keep in step.
+      if (!linked(draftId)) return;
+
+      const { preview_result: result } = await drafts.syncLinked(draftId);
+
+      emit({ event: 'drafts.changed' });
+
+      // Thrown so the action log says why the preview fell behind; the draft view shows the status.
+      if (result?.error) throw new Error([result.error, result.hint].filter(Boolean).join(': '));
+
+      if (result?.order_matches_request === false)
+        throw new Error('preview_conflict: Selecta Preview read back in another order');
+    },
+    owns: (draftId) => linked(draftId),
+    log: (entry) => note('music', entry),
+  });
+  // A linked edit's Music write runs in the lane; the screen shows it as catching up, not out of step.
+  const catchingUp = <T>(view: T, syncing: boolean) =>
+    view && typeof view === 'object' && 'draft' in view
+      ? { ...view, preview_syncing: syncing }
+      : view;
+
   const features = (trackId: string) => deps.cache().getAudioFeatures(trackId) ?? undefined;
   const measurer = createMeasurer({
     run: async (trackIds) => {
@@ -131,6 +158,7 @@ export function createApi(
     cache: deps.cache,
     bridge: deps.bridge,
     measure: (trackId) => measurer.measure(trackId),
+    inTurn: (read) => lane.refresh(read),
     onChange: (view) => {
       emit({ event: 'library', data: view });
 
@@ -222,25 +250,58 @@ export function createApi(
       return artwork.get(track_ids, refresh);
     },
     'drafts.list': () => deps.drafts().list(),
-    'drafts.get': (args) => drafts.get(args),
-    'drafts.edit': (args) => drafts.edit(args),
-    'drafts.save': (args) => drafts.save(args),
+    'drafts.get': (args) => {
+      // Asked as the store is read, so the flag and the preview status describe the same moment.
+      const id = (args as { draft_id?: unknown } | undefined)?.draft_id;
+      const syncing = typeof id === 'string' && lane.syncing(id);
+
+      return drafts.get(args).then((view) => catchingUp(view, syncing));
+    },
+    'drafts.edit': async (args) => {
+      const id = (args as { draft_id?: unknown } | undefined)?.draft_id;
+      const edit = () =>
+        drafts.edit(args, {
+          schedulePreview: (draftId) => {
+            // The edit has landed, so an unreadable slot is the sync's to report, not the edit's.
+            let follow = true;
+
+            try {
+              follow = linked(draftId);
+            } catch {}
+
+            if (follow) void lane.sync(draftId).catch(() => {});
+          },
+        });
+      // Selecta Preview refuses edits while a write to it is in flight, so a draft Music is on waits its turn.
+      const view = await (typeof id === 'string'
+        ? lane.forDraft('edit', id, linked(id), edit)
+        : edit());
+
+      return 'draft' in view ? catchingUp(view, lane.syncing(view.draft.draft_id)) : view;
+    },
+    'drafts.save': (args) => lane.after('save', () => drafts.save(args)),
     'agent.providers': () => providers(),
+    // Behind any play still waiting, so a draft it links is linked before the agent is let in.
     'agent.start': (args) => {
       const { draft_id, brief, provider } = Brief.parse(args);
 
-      if (linked(draft_id)) agent.refuse(draft_id, brief, linkedMessage(draft_id, provider), true);
-      else agent.start(draft_id, brief, provider);
+      return lane.forDraft('agent start', draft_id, linked(draft_id), () => {
+        if (linked(draft_id))
+          agent.refuse(draft_id, brief, linkedMessage(draft_id, provider), true);
+        else agent.start(draft_id, brief, provider);
+      });
     },
-    'agent.send': async (args) => {
+    'agent.send': (args) => {
       const { draft_id, message, text, provider } = Message.parse(args);
 
-      // Ownership is read here rather than from the renderer's view, which trails a play or stop.
-      if (linked(draft_id)) await player.detach(draft_id, deps.drafts().get(draft_id).revision);
+      // Ownership is read in turn rather than from the renderer's view, which trails a play or stop.
+      return lane.forDraft('agent send', draft_id, linked(draft_id), async () => {
+        if (linked(draft_id)) await lane.detachNow(draft_id, deps.drafts().get(draft_id).revision);
 
-      if (linked(draft_id))
-        agent.refuse(draft_id, text ?? message, linkedMessage(draft_id, provider));
-      else agent.send(draft_id, message, text, provider);
+        if (linked(draft_id))
+          agent.refuse(draft_id, text ?? message, linkedMessage(draft_id, provider));
+        else agent.send(draft_id, message, text, provider);
+      });
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),
     'agent.history': () => agent.history(),
@@ -248,33 +309,33 @@ export function createApi(
     'agent.stopSuggest': (args) => agent.stopSuggest(DraftId.parse(args).draft_id),
     'features.measure': (args) => measurer.measure(TrackId.parse(args).track_id),
     'features.heard': (args) => heard(TrackIds.parse(args).track_ids, features),
-    'player.state': (args) => player.state(DraftId.parse(args).draft_id),
+    'player.state': (args) => lane.state(DraftId.parse(args).draft_id),
     'player.play': (args) => {
-      const { draft_id, revision, entry_id, position } = Play.parse(args);
+      const { draft_id, entry_id, position } = Play.parse(args);
 
-      return player.play(draft_id, revision, entry_id, position);
+      return lane.play(draft_id, entry_id, position);
     },
-    'player.pause': (args) => player.control(DraftId.parse(args).draft_id, { action: 'pause' }),
-    'player.resume': (args) => player.control(DraftId.parse(args).draft_id, { action: 'resume' }),
+    'player.pause': (args) => lane.pause(DraftId.parse(args).draft_id),
+    'player.resume': (args) => lane.resume(DraftId.parse(args).draft_id),
     'player.seek': (args) => {
       const { draft_id, position } = Seek.parse(args);
 
-      return player.control(draft_id, { action: 'seek', position });
+      return lane.seek(draft_id, position);
     },
     'player.detach': (args) => {
       const { draft_id, revision } = Revision.parse(args);
 
-      return player.detach(draft_id, revision);
+      return lane.detach(draft_id, revision);
     },
     'player.audition': (args) => {
       const { track_ids, index, position } = Audition.parse(args);
 
       if (index >= track_ids.length) throw new Error('Nothing to play at that place.');
 
-      return player.audition(track_ids, index, position);
+      return lane.audition(track_ids, index, position);
     },
-    'player.auditionState': () => player.auditionState(),
-    'player.auditionStop': () => player.stopAudition(),
+    'player.auditionState': () => lane.auditionState(),
+    'player.auditionStop': () => lane.auditionStop(),
   };
 
   const call = async (method: string, args: unknown): Promise<unknown> => {

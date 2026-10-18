@@ -4,7 +4,6 @@ import {
   auditionPlan,
   poll,
   site,
-  stopAfter,
   swapEdit,
   swapEntries,
 } from '../src/renderer/replace.js';
@@ -103,33 +102,6 @@ it('starts a join the chosen lead before the end', () => {
     index: 0,
     position: 270,
   });
-});
-
-it('stops an audition only once one still starting has landed, however it lands', async () => {
-  const calls: string[] = [];
-  const stop = async () => void calls.push('stop');
-  let land!: (ok: boolean) => void;
-  const starting = new Promise<void>((resolve, reject) => {
-    land = (ok) => (ok ? resolve() : reject(new Error('busy')));
-  });
-
-  const stopped = stopAfter(starting, stop);
-
-  await Promise.resolve();
-  expect(calls).toEqual([]);
-  land(false);
-  await stopped;
-  expect(calls).toEqual(['stop']);
-
-  await stopAfter(undefined, stop);
-  expect(calls).toEqual(['stop', 'stop']);
-
-  // A pause that fails is the caller's to say, not swallowed here.
-  await expect(
-    stopAfter(Promise.resolve(), async () => {
-      throw new Error('Music could not be paused. Pause it in Music.');
-    }),
-  ).rejects.toThrow('Music could not be paused');
 });
 
 it('polls until a read fails, then says so and stops rather than retrying', async () => {
