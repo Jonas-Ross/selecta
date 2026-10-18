@@ -27,7 +27,8 @@ export function useReplace(
 ) {
   const [state, setState] = useState<Replacing>();
   const [heard, setHeard] = useState<AuditionView>();
-  const [busy, setBusy] = useState(false);
+  // The newest audition call, or 0 once it has landed; the host folds waiting calls together.
+  const outstanding = useRef(0);
   const [trouble, setTrouble] = useState<string>();
   // Bumped by every ask and close, so a late answer never lands on a newer one.
   const asked = useRef(0);
@@ -102,7 +103,7 @@ export function useReplace(
     return poll(
       () => selecta.call('player.auditionState'),
       READ_EVERY_MS,
-      setHeard,
+      (next) => outstanding.current === 0 && setHeard(next),
       (e) => {
         setTrouble(e.message);
         setPolling(false);
@@ -116,21 +117,28 @@ export function useReplace(
     return call;
   }
 
-  function act(call: () => Promise<AuditionView | void>) {
-    if (busy) return;
+  // `wanted` shows at once; the newest answer replaces it once every call has landed.
+  function act(wanted: AuditionView, call: () => Promise<AuditionView | void>) {
+    const mine = ++outstanding.current;
 
-    setBusy(true);
     setTrouble(undefined);
+    setHeard(wanted);
     call()
-      .then((next) => setHeard(next ?? { state: 'stopped' }))
-      .catch((e: Error) => setTrouble(e.message))
-      .finally(() => setBusy(false));
+      .then((next) => outstanding.current === mine && setHeard(next ?? { state: 'stopped' }))
+      .catch((e: Error) => {
+        setTrouble(e.message);
+
+        // What Music did instead is the next read's to say.
+        if (outstanding.current === mine) setHeard(undefined);
+      })
+      .finally(() => {
+        if (outstanding.current === mine) outstanding.current = 0;
+      });
   }
 
   return {
     state,
     heard,
-    busy,
     trouble,
     open: (entryId: string) => ask(entryId),
     ask: (text: string) => state && ask(state.entryId, text),
@@ -140,14 +148,24 @@ export function useReplace(
       setState(
         (s) => s && { ...s, view, active: trackId ?? s.active ?? s.picks[0]?.track.persistent_id },
       ),
-    audition: (plan: AuditionPlan) =>
-      act(() => {
-        auditioned.current = true;
-        setPolling(true);
-
-        return track(selecta.call('player.audition', plan));
-      }),
-    pause: () => act(() => track(selecta.call('player.auditionStop'))),
+    audition: (plan: AuditionPlan) => {
+      auditioned.current = true;
+      setPolling(true);
+      act(
+        {
+          state: 'playing',
+          track_id: plan.track_ids[plan.index],
+          index: plan.index,
+          ...(plan.position !== undefined && { position: plan.position }),
+          pending: true,
+        },
+        () => track(selecta.call('player.audition', plan)),
+      );
+    },
+    pause: () =>
+      act({ ...heard, state: 'stopped', pending: true }, () =>
+        track(selecta.call('player.auditionStop')),
+      ),
   };
 }
 

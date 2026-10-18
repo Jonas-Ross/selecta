@@ -48,6 +48,16 @@
 .ib.play.on {
   background: var(--acid);
 }
+/* Asked of Music and not yet confirmed: the button already shows it, breathing until Music agrees. */
+.transport[aria-busy='true'] .ib.play,
+.lm-round.play[aria-busy='true'] {
+  animation: tp-pending 0.6s ease-in-out infinite alternate;
+}
+@keyframes tp-pending {
+  to {
+    opacity: 0.55;
+  }
+}
 .ib[disabled] {
   opacity: 0.35;
   cursor: default;

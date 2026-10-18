@@ -32,7 +32,7 @@ export function Shortlist({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const { joinLead } = useSettings().settings;
-  const { state, heard, busy, trouble } = replace;
+  const { state, heard, trouble } = replace;
   const { prev, row, next } = around;
   const active = state?.active ?? state?.picks[0]?.track.persistent_id;
 
@@ -165,7 +165,7 @@ export function Shortlist({
                     <button
                       type="button"
                       className="btn line sm"
-                      disabled={busy || !hear}
+                      disabled={!hear}
                       onClick={() =>
                         playing(id) ? replace.pause() : hear && replace.audition(hear)
                       }
@@ -177,7 +177,7 @@ export function Shortlist({
                       <button
                         type="button"
                         className="btn line sm"
-                        disabled={busy || !wayIn}
+                        disabled={!wayIn}
                         title={`The end of ${prev.title ?? 'the record before'} blending into this`}
                         onClick={() => wayIn && replace.audition(wayIn)}
                       >

@@ -11,6 +11,7 @@ export function Transport({
   index,
   count,
   playing,
+  pending = false,
   position,
   duration,
   set,
@@ -30,6 +31,8 @@ export function Transport({
   index: number;
   count: number;
   playing: boolean;
+  /** Music hasn't confirmed what the bar shows yet. */
+  pending?: boolean;
   position: number;
   duration?: number;
   set: { elapsed: number; partial: boolean; total: number; totalPartial: boolean };
@@ -51,7 +54,7 @@ export function Transport({
   const { shown, move, commit, cancel } = useScrub(row?.entry_id, position, onSeek);
 
   return (
-    <footer className="transport" aria-label="Playback">
+    <footer className="transport" aria-label="Playback" aria-busy={pending}>
       <div className="tp-btns">
         <button
           type="button"

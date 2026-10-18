@@ -1,9 +1,18 @@
 // The draft's playback controller: which record is cued or playing, where it
 // is, and the transport actions. Plays and stops wait on the draft's edit
-// queue, so the revision they name is the one the rail shows.
+// queue, so Music gets the order the rail shows; the screen moves at once.
 import { useEffect, useRef, useState } from 'react';
+import { selecta } from '../api.js';
 import type { EditQueue } from '../edits.js';
-import { elsewhere, joinStart, livePosition, nowIndex, queuePlay, setClock } from '../listen.js';
+import {
+  afterEdits,
+  asked,
+  elsewhere,
+  joinStart,
+  livePosition,
+  nowIndex,
+  setClock,
+} from '../listen.js';
 import type { DraftView, Row } from '../state.js';
 import { useSettings } from './useSettings.js';
 import { usePlayer } from './usePlayer.js';
@@ -24,7 +33,7 @@ export function useListen({
 }: {
   draftId: string;
   items: Row[];
-  /** The draft as last read, for the revision a queued play names. */
+  /** The draft as last read, for the revision a stop names. */
   latest: () => DraftView['draft'];
   queue: EditQueue<NonNullable<DraftView['draft']>>;
   /** Listen is open or the draft is linked, so Music may be playing it. */
@@ -36,10 +45,6 @@ export function useListen({
   const { joinLead } = useSettings().settings;
   const [cued, setCued] = useState<string>();
   const [clock, setClockNow] = useState(() => performance.now());
-  // A play or stop waiting on the edit queue counts as busy, holding Claude and the transport
-  // off as a running one does. The ref sees a second click in the same tick, before a re-render.
-  const [queued, setQueued] = useState(false);
-  const waiting = useRef(false);
   const allowed = useRef(canPlay);
 
   allowed.current = canPlay;
@@ -63,28 +68,23 @@ export function useListen({
     return () => clearInterval(timer);
   }, [playing]);
 
-  // One Music operation at a time; a second would fail busy or queue an extra route.
-  function hold(step: () => Promise<unknown>) {
-    if (player.busy || waiting.current) return;
-
-    waiting.current = true;
-    setQueued(true);
-    void step().finally(() => {
-      waiting.current = false;
-      setQueued(false);
-    });
-  }
-
+  // The host runs Music calls one at a time and folds waiting ones together, so clicks never wait.
   function playAt(entryId: string, at?: number) {
     if (!canPlay) return;
 
-    hold(() =>
-      queuePlay(
-        queue,
-        () => allowed.current,
-        () => latest()?.revision,
-        (revision) => player.play(revision, entryId, at),
-      ),
+    void player.act(
+      () => asked.play(entryId, at),
+      () =>
+        afterEdits(
+          queue,
+          () => allowed.current,
+          () =>
+            selecta.call('player.play', {
+              draft_id: draftId,
+              entry_id: entryId,
+              ...(at !== undefined && { position: at }),
+            }),
+        ),
     );
   }
 
@@ -113,7 +113,7 @@ export function useListen({
 
   return {
     player,
-    busy: player.busy || queued,
+    pending: player.pending,
     now,
     nowRow,
     current,
@@ -142,14 +142,17 @@ export function useListen({
     canJoin: joinAt !== undefined && now + 1 < items.length,
     join: () => nowRow && joinAt !== undefined && playAt(nowRow.entry_id, joinAt),
     // Waits like a play, so a stop never names a revision an edit is about to replace.
-    stop: () => {
-      hold(() =>
-        queue.after(() => {
-          const revision = latest()?.revision;
-
-          return revision === undefined ? undefined : player.detach(revision);
-        }),
-      );
-    },
+    // The host pauses Music first if it's on this draft, then releases the preview.
+    stop: () =>
+      void player.act(
+        (now) => asked.stop(now.view),
+        () =>
+          afterEdits(
+            queue,
+            () => latest() !== undefined,
+            () =>
+              selecta.call('player.detach', { draft_id: draftId, revision: latest()!.revision }),
+          ),
+      ),
   };
 }

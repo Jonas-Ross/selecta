@@ -1,12 +1,12 @@
 import { expect, it, vi } from 'vitest';
 import { editQueue } from '../src/renderer/edits.js';
 import {
+  asked,
   elsewhere,
   joinStart,
-  transportHeld,
   livePosition,
   nowIndex,
-  queuePlay,
+  afterEdits,
   setClock,
 } from '../src/renderer/listen.js';
 import type { Row } from '../src/renderer/state.js';
@@ -49,6 +49,8 @@ it('moves a playing position on between reads, and holds a paused one', () => {
   expect(livePosition(undefined, 0, 1000)).toBe(0);
   // Music.app's unset length of 0 doesn't pin the clock to the start.
   expect(livePosition({ ...read, duration: 0 }, 1000, 2500)).toBe(11.5);
+  // A play Music hasn't confirmed yet doesn't run ahead of where it will start.
+  expect(livePosition({ ...read, pending: true }, 1000, 2500)).toBe(10);
 });
 
 it('counts set time from the lengths before, flagging an unknown one', () => {
@@ -64,7 +66,7 @@ it('says why the player is not showing this draft', () => {
   expect(elsewhere(undefined)).toBeUndefined();
 });
 
-it('plays on the revision the queued edits leave, unless play stopped being allowed meanwhile', async () => {
+it('calls once the queued edits land, unless calling stopped being allowed meanwhile', async () => {
   let draft = { revision: 1 };
   let allowed = true;
   const queue = editQueue(
@@ -75,16 +77,10 @@ it('plays on the revision the queued edits leave, unless play stopped being allo
       return true;
     },
   );
-  const play = vi.fn();
+  const play = vi.fn(async () => draft.revision);
 
   void queue.edit(() => ({ order: [] }));
-  await queuePlay(
-    queue,
-    () => allowed,
-    () => draft.revision,
-    play,
-  );
-  expect(play).toHaveBeenCalledExactlyOnceWith(2);
+  await expect(afterEdits(queue, () => allowed, play)).resolves.toBe(2);
 
   // Claude started while an edit ahead of the play was still landing.
   void queue.edit(() => {
@@ -92,19 +88,47 @@ it('plays on the revision the queued edits leave, unless play stopped being allo
 
     return { order: [] };
   });
-  await queuePlay(
-    queue,
-    () => allowed,
-    () => draft.revision,
-    play,
-  );
+  await expect(afterEdits(queue, () => allowed, play)).resolves.toBeUndefined();
   expect(play).toHaveBeenCalledOnce();
+
+  // An edit behind the call doesn't wait for Music to answer it.
+  let answer!: (value: number) => void;
+  const slow = afterEdits(
+    queue,
+    () => true,
+    () => new Promise<number>((r) => (answer = r)),
+  );
+  const edited = queue.edit(() => ({ order: [] }));
+
+  await expect(edited).resolves.toBe(true);
+  answer(7);
+  await expect(slow).resolves.toBe(7);
 });
 
-it('holds the transport while a linked edit syncs, as it does for a running player action', () => {
-  expect(transportHeld(false, true, { order: [], known: [] })).toBe(true);
-  expect(transportHeld(true, false, undefined)).toBe(true);
-  // An unlinked edit never touches Music.app, so the transport stays free.
-  expect(transportHeld(false, false, { order: [], known: [] })).toBe(false);
-  expect(transportHeld(false, true, undefined)).toBe(false);
+it('shows what each transport action asks for, and stops only a draft that is playing', () => {
+  const on = {
+    running: true,
+    state: 'playing' as const,
+    entry_id: 'b',
+    position: 10,
+    duration: 200,
+  };
+
+  expect(asked.play('c', 30)).toEqual({
+    running: true,
+    state: 'playing',
+    entry_id: 'c',
+    position: 30,
+  });
+  expect(asked.play('c').position).toBe(0);
+  // A pause holds the position the bar had moved on to.
+  expect(asked.pause(on, 1000, 3000)).toEqual({ ...on, state: 'paused', position: 12 });
+  expect(asked.resume({ ...on, state: 'paused' })).toEqual(on);
+  expect(asked.seek(on, 150)).toEqual({ ...on, position: 150 });
+  expect(asked.stop(on)).toEqual({ ...on, state: 'paused' });
+  // Music on something else keeps playing it.
+  const elsewhere = { running: true, state: 'playing' as const, track_id: 'X' };
+
+  expect(asked.stop(elsewhere)).toBe(elsewhere);
+  expect(asked.pause(undefined, 0, 0)).toBeUndefined();
 });

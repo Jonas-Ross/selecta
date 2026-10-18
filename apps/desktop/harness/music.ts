@@ -54,6 +54,26 @@ export class MusicSim {
     at: number;
   } = { state: 'stopped', pos: 0, at: 0 };
 
+  private held?: { until: Promise<void>; release: () => void };
+
+  /** Holds every script back until the returned release, as a Music.app slow to answer would. */
+  hold(): () => void {
+    let release!: () => void;
+    const until = new Promise<void>((resolve) => (release = resolve));
+
+    this.held = { until, release };
+
+    return () => {
+      this.held = undefined;
+      release();
+    };
+  }
+
+  /** Resolves once scripts may run. */
+  turn(): Promise<void> {
+    return this.held?.until ?? Promise.resolve();
+  }
+
   constructor(tracks: SimTrack[]) {
     this.library = this.playlist('Library', 'library', tracks);
     this.playlists = [this.library];

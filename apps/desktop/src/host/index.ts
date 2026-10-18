@@ -59,6 +59,7 @@ const call = createApi(
   }),
   () => detectProviders(Object.values(PROVIDERS), paths),
   emit,
+  actions.note,
 );
 const stopWatching = watchDrafts(
   draftDbPath(dbPath),

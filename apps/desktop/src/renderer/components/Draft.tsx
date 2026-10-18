@@ -20,7 +20,6 @@ import { usePalette } from '../palette.js';
 import { onMeasured } from '../hooks/useMeasure.js';
 import { useReplace } from '../hooks/useReplace.js';
 import { useSettings } from '../hooks/useSettings.js';
-import { transportHeld } from '../listen.js';
 import { withMoved } from '../reorder.js';
 import { around, site, swapEdit, swapEntries } from '../replace.js';
 import {
@@ -122,14 +121,16 @@ export function Draft({
   const replacing = replace.state;
   const closeMenu = useCallback(() => setMenu(undefined), []);
 
-  const load = useCallback(
-    () =>
-      selecta.call('drafts.get', { draft_id: draftId }).then(
-        (value) => show(value as DraftView),
-        (e: Error) => setNotice(e.message),
-      ),
-    [draftId],
-  );
+  // Reads overlap when changes come quickly; only the newest one asked is shown.
+  const loads = useRef(0);
+  const load = useCallback(() => {
+    const mine = ++loads.current;
+
+    return selecta.call('drafts.get', { draft_id: draftId }).then(
+      (value) => mine === loads.current && show(value as DraftView),
+      (e: Error) => mine === loads.current && setNotice(e.message),
+    );
+  }, [draftId]);
 
   useEffect(() => {
     void load();
@@ -186,21 +187,20 @@ export function Draft({
   const tint = usePalette(
     tab === 'listen' && replacing?.view !== 'bench' ? listen.nowRow?.track_id : undefined,
   );
-  // An edit syncs the preview under the music lock a player action holds, and a first play links it mid-flight.
-  const playerHeld = listen.busy;
-  const held = transportHeld(listen.busy, linked, pending);
   // One record in the air at a time, so each lands in the gap held for it.
-  const canAdd = draft !== undefined && !locked && !airborne && !playerHeld && !replacing;
+  const canAdd = draft !== undefined && !locked && !airborne && !replacing;
   // The rail holds a gap for the flying record at a fixed slot, so nothing else moves until it lands.
   // While replacing, the record in question stays where its neighbours are.
-  const railLocked = locked || airborne || playerHeld || replacing !== undefined;
+  const railLocked = locked || airborne || replacing !== undefined;
   // Not while the agent edits the draft, or while an edit is still settling on the rail.
   const canReplace = draft !== undefined && !railLocked && !working && pending === undefined;
   const recordRect = useCallback(
     () => (replacing ? rail.current?.recordRect(replacing.entryId) : undefined),
     [replacing?.entryId],
   );
-  const outOfStep = linked && OUT_OF_STEP.has(view?.preview?.status ?? '');
+  // A linked edit leaves the preview behind until the host's sync lands; that's catching up, not out of step.
+  const outOfStep =
+    linked && OUT_OF_STEP.has(view?.preview?.status ?? '') && !view?.preview_syncing;
 
   // A record that left the draft has nothing left to replace, and picks for neighbours another
   // front end has since changed no longer fit where they would go.
@@ -496,11 +496,9 @@ export function Draft({
           ? saveLabel(draft?.save)
           : leaving
             ? 'Finishing your edits'
-            : playerHeld
-              ? 'Waiting for Music.app'
-              : replacing
-                ? 'Replacing a record'
-                : undefined;
+            : replacing
+              ? 'Replacing a record'
+              : undefined;
 
   return (
     <div className="screen-draft">
@@ -544,7 +542,7 @@ export function Draft({
                 ? 'Saving…'
                 : saveLabel(draft?.save, draft?.playlist !== undefined)
             }
-            disabled={!draft || saved || locked || working || airborne || playerHeld}
+            disabled={!draft || saved || locked || working || airborne}
             done={saved}
             name={draft?.name ?? ''}
             target={draft?.playlist?.name}
@@ -591,7 +589,7 @@ export function Draft({
                 current={listen.current}
                 position={listen.position}
                 status={listen.status}
-                joinDisabled={!canPlay || held || !listen.canJoin}
+                joinDisabled={!canPlay || !listen.canJoin}
                 onJoin={listen.join}
               />
             </div>
@@ -755,6 +753,7 @@ export function Draft({
             index={listen.now}
             count={items.length}
             playing={listen.playing}
+            pending={listen.pending}
             position={listen.position}
             duration={listen.duration}
             set={{
@@ -762,7 +761,7 @@ export function Draft({
               total: listen.whole.elapsed,
               totalPartial: listen.whole.partial,
             }}
-            disabled={!canPlay || held}
+            disabled={!canPlay}
             canPrev={listen.canPrev}
             canNext={listen.now + 1 < items.length}
             onToggle={listen.toggle}
@@ -779,7 +778,7 @@ export function Draft({
                   }
             }
             onStop={linked ? listen.stop : undefined}
-            stopDisabled={held || saving}
+            stopDisabled={saving}
           />
         </section>
         <p className="sr" aria-live="polite">
@@ -824,8 +823,8 @@ export function Draft({
             name={draft?.name ?? ''}
             items={items}
             listen={listen}
-            disabled={!canPlay || held}
-            joinDisabled={!canPlay || held || !listen.canJoin}
+            disabled={!canPlay}
+            joinDisabled={!canPlay || !listen.canJoin}
             onClose={() => setFull(false)}
           />
         )}
@@ -846,7 +845,7 @@ export function Draft({
           log={log}
           working={working}
           hasDraft={draft !== undefined}
-          locked={locked || listen.busy || replacing !== undefined}
+          locked={locked || replacing !== undefined}
           listening={linked}
           selected={items.filter((row) => selected.has(row.entry_id))}
           onUnselect={toggleSelected}

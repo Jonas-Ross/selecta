@@ -5,26 +5,41 @@ import type { EditQueue } from './edits.js';
 import type { Row } from './state.js';
 
 /**
- * Plays once the edits queued ahead have landed, on the revision they left, unless
- * `allowed` turned false meanwhile: Claude starting then would have its edits refused.
+ * Sends `call` once the edits queued ahead have landed, so Music gets the order they left, unless
+ * `allowed` turned false meanwhile: Claude starting then would have its edits refused. Edits
+ * behind it don't wait for Music's answer, and nor do later calls, which the host folds together.
  */
-export function queuePlay(
+export function afterEdits<T>(
   queue: Pick<EditQueue<unknown>, 'after'>,
   allowed: () => boolean,
-  revision: () => number | undefined,
-  play: (revision: number) => unknown,
-): Promise<unknown> {
-  return queue.after(() => {
-    const at = revision();
-
-    return at !== undefined && allowed() ? play(at) : undefined;
+  call: () => Promise<T>,
+): Promise<T | undefined> {
+  return new Promise((resolve, reject) => {
+    void queue.after(() => {
+      if (allowed()) call().then(resolve, reject);
+      else resolve(undefined);
+    });
   });
 }
 
-/** A player action running, or a linked edit still syncing under the music lock, holds the transport. */
-export function transportHeld(busy: boolean, linked: boolean, pending: unknown): boolean {
-  return busy || (linked && pending !== undefined);
-}
+/** What each transport action asks Music for, drawn on the screen until the host answers. */
+export const asked = {
+  play: (entryId: string, position?: number): PlayerView => ({
+    running: true,
+    state: 'playing',
+    entry_id: entryId,
+    position: position ?? 0,
+  }),
+  pause: (view: PlayerView | undefined, readAt: number, now: number): PlayerView | undefined =>
+    view && { ...view, state: 'paused', position: livePosition(view, readAt, now) },
+  resume: (view: PlayerView | undefined): PlayerView | undefined =>
+    view && { ...view, state: 'playing' },
+  seek: (view: PlayerView | undefined, position: number): PlayerView | undefined =>
+    view && { ...view, position },
+  // Stopping pauses Music only if it's on this draft.
+  stop: (view: PlayerView | undefined): PlayerView | undefined =>
+    view?.entry_id !== undefined && view.state === 'playing' ? { ...view, state: 'paused' } : view,
+};
 
 /**
  * Where "Hear the transition" starts; with no known length there is no end to count back from.
@@ -48,7 +63,9 @@ export function nowIndex(items: Row[], player: PlayerView | undefined, cued?: st
 /** Music.app is read about once a second; a playing position moves on between reads. */
 export function livePosition(player: PlayerView | undefined, readAt: number, now: number): number {
   const at = player?.position ?? 0;
-  const moved = player?.state === 'playing' ? Math.max(0, (now - readAt) / 1000) : 0;
+  // A play Music hasn't confirmed holds still rather than run ahead of where Music starts.
+  const moved =
+    player?.state === 'playing' && !player.pending ? Math.max(0, (now - readAt) / 1000) : 0;
 
   // Music.app reports an unset length as 0, which is no bound.
   return Math.min(player?.duration || Infinity, at + moved);

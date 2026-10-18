@@ -23,6 +23,8 @@ export type Track = {
 export type DraftView = {
   draft?: Draft;
   preview?: { owner?: string; status: string };
+  /** The host is writing a linked edit into Selecta Preview. */
+  preview_syncing?: boolean;
   inspection?: { tracks: Track[] };
   error?: string;
   hint?: string;

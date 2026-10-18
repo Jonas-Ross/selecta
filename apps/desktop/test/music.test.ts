@@ -1,0 +1,254 @@
+import { expect, it } from 'vitest';
+import type { Playback, PlaybackView } from '@selecta/core/operations/playback.js';
+import { createMusicLane } from '../src/host/music.js';
+
+// A Playback whose calls each wait for the test to let them finish, recording what Music was asked.
+function fakePlayer() {
+  const calls: string[] = [];
+  const gates: (() => void)[] = [];
+  let view: PlaybackView = { running: true, state: 'stopped' };
+  const step = <T>(name: string, after: () => T): Promise<T> => {
+    calls.push(name);
+
+    return new Promise((resolve) => gates.push(() => resolve(after())));
+  };
+  const player = {
+    play: (_draft: string, revision: number, entry: string, position?: number) =>
+      step(`play ${entry}@${position ?? 0} r${revision}`, () => {
+        view = { running: true, state: 'playing', entry_id: entry, position: position ?? 0 };
+
+        return view;
+      }),
+    control: (_draft: string, input: { action: string; position?: number }) =>
+      step(`${input.action}${input.position === undefined ? '' : ` ${input.position}`}`, () => {
+        if (input.action === 'pause') view = { ...view, state: 'paused' };
+
+        if (input.action === 'resume') view = { ...view, state: 'playing' };
+
+        if (input.action === 'seek') view = { ...view, position: input.position };
+
+        return view;
+      }),
+    state: () => step('read', () => view),
+    detach: () => step('detach', () => undefined),
+    audition: (ids: string[], index: number) =>
+      step(`audition ${ids[index]}`, () => ({ state: 'playing' as const, index })),
+    auditionState: () => step('heard', () => ({ state: 'stopped' as const })),
+    stopAudition: () => step('stop audition', () => undefined),
+  } as unknown as Playback;
+  // Lets the oldest waiting call finish, then lets the lane start the next.
+  const finish = async () => {
+    gates.shift()!();
+    await new Promise((resolve) => setTimeout(resolve));
+  };
+  const settle = async () => {
+    while (gates.length) await finish();
+  };
+
+  return { player, calls, finish, settle };
+}
+
+const setup = () => {
+  const music = fakePlayer();
+  let revision = 1;
+  const lane = createMusicLane({
+    player: music.player,
+    revision: () => revision,
+    syncLinked: async (draftId) => {
+      music.calls.push(`sync ${draftId} r${revision}`);
+    },
+  });
+
+  return { ...music, lane, edit: () => revision++ };
+};
+
+it('runs one call at a time, in the order asked', async () => {
+  const { lane, calls, finish, settle } = setup();
+  const played = lane.play('D', 'a');
+  const sought = lane.after('test', async () => calls.push('save'));
+
+  expect(calls).toEqual(['play a@0 r1']);
+  await finish();
+  await settle();
+  await expect(played).resolves.toMatchObject({ entry_id: 'a', state: 'playing' });
+  await sought;
+  expect(calls).toEqual(['play a@0 r1', 'save']);
+});
+
+it('folds a burst of clicks into the one step the newest asks for', async () => {
+  const { lane, calls, settle } = setup();
+  const first = lane.play('D', 'a');
+  // Waiting behind the first play: next, next, next, then a seek into the last.
+  const waiting = [
+    lane.play('D', 'b'),
+    lane.play('D', 'c'),
+    lane.play('D', 'd'),
+    lane.seek('D', 90),
+  ];
+
+  await settle();
+  await first;
+  expect(calls).toEqual(['play a@0 r1', 'play d@90 r1']);
+
+  // Every caller hears how the step they were folded into ended.
+  for (const call of await Promise.all(waiting))
+    expect(call).toMatchObject({ entry_id: 'd', position: 90 });
+});
+
+it('cancels a pause and resume that meet while waiting, and drops a play a pause overtakes', async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.play('D', 'a');
+  void lane.pause('D');
+  void lane.resume('D');
+  await settle();
+  // Nothing left to do, so Music is only read for the answer.
+  expect(calls).toEqual(['play a@0 r1', 'read']);
+
+  calls.length = 0;
+  void lane.pause('D');
+  void lane.play('D', 'b');
+  void lane.pause('D');
+  await settle();
+  // The play behind the first pause never ran, and Music is already paused, so it's only read.
+  expect(calls).toEqual(['pause', 'read']);
+});
+
+it("doesn't pause a draft that isn't playing when a play it overtook never ran", async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.state('D');
+  void lane.play('D', 'a');
+  void lane.pause('D');
+  await settle();
+  expect(calls).toEqual(['read', 'read']);
+});
+
+it('seeks after a pause and before a resume', async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.play('D', 'a');
+  void lane.pause('D');
+  void lane.seek('D', 40);
+  await settle();
+  expect(calls).toEqual(['play a@0 r1', 'pause', 'seek 40']);
+
+  calls.length = 0;
+  void lane.state('D');
+  void lane.resume('D');
+  void lane.seek('D', 80);
+  await settle();
+  expect(calls).toEqual(['read', 'seek 80', 'resume']);
+});
+
+it('plays on the revision the draft has when the play runs, not when it was asked', async () => {
+  const { lane, calls, settle, edit } = setup();
+
+  void lane.state('D');
+  void lane.play('D', 'a');
+  edit();
+  await settle();
+  expect(calls).toEqual(['read', 'play a@0 r2']);
+});
+
+it("never merges past a call queued after it, so a stop isn't overtaken", async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.play('D', 'a');
+  void lane.after('test', async () => calls.push('save'));
+  void lane.seek('D', 30);
+  await settle();
+  expect(calls).toEqual(['play a@0 r1', 'save', 'seek 30']);
+});
+
+it('drops what a draft still waits to play when it stops', async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.state('D');
+  const waiting = lane.play('D', 'a');
+
+  void lane.detach('D', 1);
+  await settle();
+  await expect(waiting).resolves.toBeUndefined();
+  expect(calls).toEqual(['read', 'detach']);
+});
+
+it('syncs a burst of linked edits once, after what was asked before them', async () => {
+  const { lane, calls, settle, edit } = setup();
+
+  void lane.play('D', 'a');
+  edit();
+  void lane.sync('D');
+  expect(lane.syncing('D')).toBe(true);
+  edit();
+  void lane.sync('D');
+  await settle();
+  expect(calls).toEqual(['play a@0 r1', 'sync D r3']);
+  expect(lane.syncing('D')).toBe(false);
+});
+
+it('answers polls from the last call while busy, and reads Music when idle', async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.play('D', 'a');
+  await settle();
+  void lane.play('D', 'b');
+  await expect(lane.state('D')).resolves.toMatchObject({ entry_id: 'a' });
+  await settle();
+  void lane.state('D');
+  await settle();
+  expect(calls).toEqual(['play a@0 r1', 'play b@0 r1', 'read']);
+});
+
+it('auditions only the newest of a burst, and a stop drops one still waiting', async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.audition(['x', 'y'], 0);
+  void lane.audition(['x', 'y'], 1);
+  void lane.audition(['x', 'z'], 1);
+  await settle();
+  expect(calls).toEqual(['audition x', 'audition z']);
+
+  calls.length = 0;
+  void lane.audition(['x', 'y'], 0);
+  const waiting = lane.audition(['x', 'y'], 1);
+
+  void lane.auditionStop();
+  await settle();
+  await expect(waiting).resolves.toEqual({ state: 'stopped' });
+  expect(calls).toEqual(['audition x', 'stop audition']);
+});
+
+it('keeps going after a call fails, failing only its own callers', async () => {
+  const { lane, calls } = setup();
+  const failing = lane.after('test', async () => {
+    throw new Error('Music is closed');
+  });
+  const next = lane.after('test', async () => calls.push('next'));
+
+  await expect(failing).rejects.toThrow('Music is closed');
+  await next;
+  expect(calls).toEqual(['next']);
+});
+
+it('logs each step Music took, with how many calls it answered, and skips idle reads', async () => {
+  const music = fakePlayer();
+  const steps: { step: string; calls: number; error?: string }[] = [];
+  const lane = createMusicLane({
+    player: music.player,
+    revision: () => 1,
+    syncLinked: async () => {},
+    log: ({ step, calls, error }) => steps.push({ step, calls, ...(error && { error }) }),
+  });
+
+  void lane.state('D');
+  void lane.play('D', 'a');
+  void lane.play('D', 'b');
+  void lane.seek('D', 20);
+  await music.settle();
+  await lane.after('save', async () => {}).catch(() => {});
+  expect(steps).toEqual([
+    { step: 'play b at 20', calls: 3 },
+    { step: 'save', calls: 1 },
+  ]);
+});
