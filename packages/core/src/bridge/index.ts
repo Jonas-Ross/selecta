@@ -7,9 +7,16 @@ import type { z } from 'zod';
 import * as schemas from './schemas.js';
 import { parsePayload } from '../types/validation.js';
 
-async function runJxa<T>(script: string, schema: z.ZodType<T>): Promise<T> {
-  return parsePayload(schema, await runUncheckedJxa(script), 'Music.app', 'jxa_error');
+async function runJxa<T>(
+  script: string,
+  schema: z.ZodType<T>,
+  options?: { shared: boolean },
+): Promise<T> {
+  return parsePayload(schema, await runUncheckedJxa(script, options), 'Music.app', 'jxa_error');
 }
+
+// The player's calls: frequent and quick, so they share one osascript.
+const SHARED = { shared: true };
 
 /** Preserve diagnostic target evidence when full creation readback is malformed. */
 async function runCreationJxa<T>(script: string, schema: z.ZodType<T>): Promise<T> {
@@ -81,7 +88,7 @@ import {
 
 export const bridge: Bridge = {
   async openPreview(input) {
-    const result = await runJxa(buildOpenPreviewScript(input), schemas.openPreview);
+    const result = await runJxa(buildOpenPreviewScript(input), schemas.openPreview, SHARED);
 
     if ('playlistNotFound' in result)
       throw new BridgeError(
@@ -136,7 +143,7 @@ export const bridge: Bridge = {
     );
   },
   async readPreview(input): Promise<PlaylistWriteResult> {
-    const result = await runJxa(buildReadPreviewScript(input), schemas.previewRead);
+    const result = await runJxa(buildReadPreviewScript(input), schemas.previewRead, SHARED);
 
     if ('previewConflict' in result)
       throw new BridgeError(
@@ -229,10 +236,10 @@ export const bridge: Bridge = {
     );
   },
   async readPlayer() {
-    return runJxa(buildReadPlayerScript(), schemas.player);
+    return runJxa(buildReadPlayerScript(), schemas.player, SHARED);
   },
   async controlPlayer(input) {
-    const result = await runJxa(buildControlPlayerScript(input), schemas.controlPlayer);
+    const result = await runJxa(buildControlPlayerScript(input), schemas.controlPlayer, SHARED);
 
     if ('ambiguousPreview' in result)
       throw new BridgeError(
@@ -286,7 +293,7 @@ export const bridge: Bridge = {
     return result;
   },
   async playPreview(input) {
-    const result = await runJxa(buildPlayPreviewScript(input), schemas.playPreview);
+    const result = await runJxa(buildPlayPreviewScript(input), schemas.playPreview, SHARED);
 
     if ('playlistNotFound' in result)
       throw new BridgeError(
