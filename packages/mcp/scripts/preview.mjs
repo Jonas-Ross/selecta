@@ -32,6 +32,11 @@ const handlers = new PlaylistDraftTools({
       trackPersistentIds: trackIds,
       created: false,
     }),
+    overwritePlaylist: async ({ playlistId, trackIds }) => ({
+      persistentId: playlistId,
+      trackCount: trackIds.length,
+      trackPersistentIds: trackIds,
+    }),
     createPlaylist: async ({ trackIds }) => ({
       persistentId: `PREVIEW-${randomUUID()}`,
       trackCount: trackIds.length,

@@ -1,13 +1,10 @@
 /* The crate above the rail: records standing in a smoked-glass bin, the spec card beside it. */
 .dig {
   position: relative;
-  flex: none;
-  /* Gives way before the rail does: the draft head, rail and transport below need about 460px. */
-  height: clamp(300px, min(44%, 100% - 460px), 430px);
+  height: 100%;
   display: flex;
   flex-direction: column;
   padding: var(--s3) var(--s5) 0;
-  border-bottom: 1px solid var(--line);
   /* Records flopped toward you stay in the crate's own band, never over the draft. */
   overflow: hidden;
 }
@@ -229,6 +226,10 @@
   color: var(--ink2);
   font-size: var(--fs-body);
   pointer-events: none;
+}
+.crate-empty .btn {
+  margin-top: var(--s3);
+  pointer-events: auto;
 }
 .crate-empty b {
   display: block;

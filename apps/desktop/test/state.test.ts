@@ -12,6 +12,7 @@ import {
   rejectRun,
   rows,
   runEvent,
+  saveHolds,
   saveLabel,
   saveOutcome,
   totals,
@@ -99,8 +100,46 @@ it('keeps what Music.app was seen to do when the save also reports an error', ()
   ).toBe('Music.app created playlist P1 and was seen holding 2 tracks. jxa_error');
 });
 
+it('holds the draft while a save is unsettled, or done with no playlist to update', () => {
+  const draft = (save?: object, linked = true) =>
+    ({
+      draft_id: '00000000-0000-4000-8000-000000000000',
+      revision: 3,
+      name: 'Peak',
+      entries: [],
+      selected_entry_ids: [],
+      feedback: '',
+      ...(save ? { save } : {}),
+      ...(linked ? { playlist: { playlist_id: 'P', name: 'Peak', track_ids: [] } } : {}),
+    }) as Parameters<typeof saveHolds>[0];
+  const done = { revision: 1, status: 'finished', result: { playlist_id: 'P' } };
+
+  expect(saveHolds(undefined)).toBe(false);
+  expect(saveHolds(draft())).toBe(false);
+  expect(saveHolds(draft(done))).toBe(false);
+  expect(saveHolds(draft(done, false))).toBe(true);
+  expect(saveHolds(draft({ revision: 1, status: 'pending' }))).toBe(true);
+  expect(
+    saveHolds(draft({ revision: 1, status: 'finished', result: { error: 'jxa_error' } })),
+  ).toBe(true);
+});
+
+it('says an update rewrote the playlist rather than made one', () => {
+  expect(saveOutcome({ result: { name: 'Peak', track_count: 9, updated: true } })).toBe(
+    'Updated "Peak" in Music, now 9 tracks.',
+  );
+  expect(
+    saveOutcome({
+      error: 'jxa_error',
+      result: { error: 'jxa_error', updated: true },
+      partial_write: { playlist_id: 'P1' },
+    }),
+  ).toBe('Music.app was rewriting playlist P1. jxa_error');
+});
+
 it('labels the save button by what the draft recorded', () => {
   expect(saveLabel(undefined)).toBe('Save to Music');
+  expect(saveLabel(undefined, true)).toBe('Update in Music');
   expect(saveLabel({ revision: 1, status: 'pending' })).toBe('Save pending');
   expect(saveLabel({ revision: 1, status: 'finished', result: { playlist_id: 'P' } })).toBe(
     'Saved',

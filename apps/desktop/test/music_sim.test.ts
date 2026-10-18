@@ -159,3 +159,99 @@ it('trims the double an iCloud add can leave', async () => {
 
   expect(result.trackPersistentIds).toEqual([...order, ids[4]]);
 });
+
+describe('overwriting a saved playlist', () => {
+  const saved = ids.slice(0, 3);
+  const next = [ids[2]!, ids[0]!, ids[4]!];
+  const overwrite = (
+    playlistId: string,
+    expectedTrackIds = saved,
+    knownIds: string[] = [],
+    followRekey = true,
+  ) =>
+    bridge.overwritePlaylist({
+      playlistId,
+      savedName: 'Peak',
+      knownIds,
+      followRekey,
+      name: 'Peak time',
+      trackIds: next,
+      expectedTrackIds,
+    });
+  const live = () => music.snapshot().playlists;
+
+  it('rewrites and renames it in place', async () => {
+    const id = music.addPlaylist('Peak', saved);
+
+    expect(await overwrite(id)).toEqual({
+      persistentId: id,
+      trackCount: 3,
+      trackPersistentIds: next,
+    });
+    expect(live()).toEqual([{ id, name: 'Peak time', tracks: next }]);
+  });
+
+  it('follows a rotated ID to the one same-name playlist still holding what was saved', async () => {
+    const old = music.addPlaylist('Peak', saved);
+    const id = music.rekey('Peak');
+
+    expect((await overwrite(old)).persistentId).toBe(id);
+    expect(live()).toEqual([{ id, name: 'Peak time', tracks: next }]);
+  });
+
+  it('never takes a same-name copy the cache already knows for a rotated ID', async () => {
+    const copy = music.addPlaylist('Peak', saved);
+
+    await expect(overwrite('GONE', saved, [copy])).rejects.toMatchObject({
+      errorCode: 'playlist_not_found',
+      writePhase: 'not_started',
+    });
+    expect(live()).toEqual([{ id: copy, name: 'Peak', tracks: saved }]);
+  });
+
+  it('never follows a name once a rotated ID is past the rekey window', async () => {
+    const copy = music.addPlaylist('Peak', saved);
+
+    await expect(overwrite('GONE', saved, [], false)).rejects.toMatchObject({
+      errorCode: 'playlist_not_found',
+      writePhase: 'not_started',
+    });
+    expect(live()).toEqual([{ id: copy, name: 'Peak', tracks: saved }]);
+  });
+
+  it('writes nothing when the playlist changed in Music since it was saved', async () => {
+    const id = music.addPlaylist('Peak', saved.slice(1));
+
+    await expect(overwrite(id)).rejects.toMatchObject({
+      errorCode: 'validation_error',
+      writePhase: 'not_started',
+    });
+    expect(live()).toEqual([{ id, name: 'Peak', tracks: saved.slice(1) }]);
+  });
+
+  it('writes nothing when it was renamed in Music since it was saved', async () => {
+    const id = music.addPlaylist('Peak (mine)', saved);
+
+    await expect(overwrite(id)).rejects.toMatchObject({
+      errorCode: 'validation_error',
+      writePhase: 'not_started',
+    });
+    expect(live()).toEqual([{ id, name: 'Peak (mine)', tracks: saved }]);
+  });
+
+  it('writes nothing when it is gone and its name now holds something else', async () => {
+    const old = music.addPlaylist('Peak', saved);
+    const id = music.rekey('Peak');
+
+    music.run(`(() => {
+      const Music = Application('Music');
+      Music.delete(Music.playlists.whose({ persistentID: '${id}' })()[0].tracks[0]);
+    })()`);
+
+    await expect(overwrite(old)).rejects.toMatchObject({
+      errorCode: 'playlist_not_found',
+      writePhase: 'not_started',
+    });
+    expect(live()[0]!.tracks).toEqual(saved.slice(1));
+  });
+});

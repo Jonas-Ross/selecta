@@ -90,9 +90,10 @@ ipcMain.handle('selecta:call', (_event, method: string, args: unknown) => {
   return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
 });
 
-// Standard so thumbnails have ordinary URLs; secure so the page treats them as its own.
+// Standard so thumbnails have ordinary URLs; secure so the page treats them as its own;
+// CORS so Listen can read a sleeve's colours off a canvas.
 protocol.registerSchemesAsPrivileged([
-  { scheme: ARTWORK_SCHEME, privileges: { standard: true, secure: true } },
+  { scheme: ARTWORK_SCHEME, privileges: { standard: true, secure: true, corsEnabled: true } },
 ]);
 
 // Only a thumbnail's bare file name in the artwork folder, so no path reaches the disk.
@@ -104,7 +105,9 @@ async function serveArtwork(request: Request): Promise<Response> {
   try {
     const bytes = await readFile(join(artworkDir(homedir()), file));
 
-    return new Response(new Uint8Array(bytes), { headers: { 'content-type': 'image/jpeg' } });
+    return new Response(new Uint8Array(bytes), {
+      headers: { 'content-type': 'image/jpeg', 'access-control-allow-origin': '*' },
+    });
   } catch {
     return new Response(null, { status: 404 });
   }
@@ -158,7 +161,7 @@ void app.whenReady().then(() => {
     minWidth: 1024,
     minHeight: 820,
     title: 'Selecta',
-    // The renderer draws its own top bar; the lights sit in its first 80px.
+    // The renderer draws its own top bar; tokens.css --lights clears the lights.
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 17 },
     // tokens.css --bg, so the window never flashes white before the page paints.
@@ -170,6 +173,13 @@ void app.whenReady().then(() => {
       nodeIntegration: false,
     },
   });
+  // A link in an agent's reply opens in the browser; the app's window never navigates away.
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
+
+    return { action: 'deny' };
+  });
+  window.webContents.on('will-navigate', (event) => event.preventDefault());
   void window.loadFile(here('./renderer/index.html'));
 });
 

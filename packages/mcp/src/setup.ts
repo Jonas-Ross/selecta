@@ -471,7 +471,7 @@ async function checkMetrognome(deps: SetupDeps): Promise<[SetupStep, MetrognomeB
       {
         step: 'metrognome',
         status: 'unavailable',
-        detail: `${err instanceof Error ? err.message : String(err)} Without it \`enrich --source analysis\` skips every track; tempo and key then come from the catalogs alone.`,
+        detail: `${err instanceof Error ? err.message : String(err)} Without it \`enrich\` skips every track; \`enrich --source catalog\` still looks tempo and key up in the free catalogs.`,
         fix: `brew install jonas-ross/tap/metrognome (or brew upgrade metrognome), or point ${METROGNOME_PATH_ENV} at the binary.`,
       },
       null,

@@ -1,16 +1,98 @@
-/* Claude's panel: brief, log, and the feedback box. */
+/* Claude's panel: brief, log, and the feedback box. Its width eases so the draft gives way in
+   step; the inner column keeps its width and slides off the window's edge rather than squeezing. */
 .claude {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  position: relative;
+  z-index: 2;
+  width: var(--claude-w);
   background: var(--bg1);
   border-left: 1px solid var(--line2);
+  transition: width var(--t-slide) var(--ease-out);
+}
+.claude.collapsed {
+  width: var(--claude-edge-w);
+}
+.claude-inner {
+  display: flex;
+  flex-direction: column;
+  width: var(--claude-w);
+  height: 100%;
+  transition: opacity var(--t-mid) var(--ease);
+}
+.claude.collapsed .claude-inner {
+  opacity: 0;
+}
+/* The round toggle sits on the divider, as on Atlassian's side navigation. */
+.claude-toggle {
+  position: absolute;
+  top: 14px;
+  left: -12px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg1);
+  box-shadow:
+    0 0 0 1px var(--line3),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  color: var(--ink3);
+  transition:
+    color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+.claude-toggle:hover {
+  color: var(--ink);
+  background: var(--bg2);
+  box-shadow:
+    0 0 0 1px var(--uv-line),
+    0 2px 8px rgba(0, 0, 0, 0.45);
+}
+.claude-toggle:focus-visible {
+  outline: 1px solid var(--uv-line);
+  outline-offset: 2px;
+}
+.claude-toggle svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--t-slide) var(--ease-out);
+}
+.claude.collapsed .claude-toggle svg {
+  transform: rotate(180deg);
+}
+/* Lit while the agent works or has said something since the panel closed. */
+.claude-toggle::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--uv);
+  box-shadow: 0 0 0 2px var(--bg1);
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity var(--t-mid) var(--ease),
+    transform var(--t-mid) var(--ease-out);
+}
+.claude-toggle.lit::after {
+  opacity: 1;
+  transform: none;
 }
 .claude-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px var(--s4) 10px;
+  /* Clear of the toggle on the divider. */
+  padding: 14px var(--s4) 10px var(--s6);
 }
 .claude-head h2 {
   font: 700 var(--fs-heading)/1 var(--display);
@@ -233,4 +315,70 @@
 .agent-choice.small span {
   padding: 3px var(--s2);
   font-size: var(--fs-label);
+}
+/* A reply's Markdown: spacing between blocks, none above the first. */
+.msg .md {
+  white-space: normal;
+}
+.md > * + *,
+.md blockquote > * + * {
+  margin-top: var(--s2);
+}
+.md li > * + *,
+.md li + li {
+  margin-top: 2px;
+}
+.md strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+.md .md-h {
+  font-weight: 600;
+  color: var(--ink);
+}
+.md ol,
+.md ul {
+  padding-left: 1.6em;
+}
+.md ol {
+  list-style: decimal;
+}
+.md ul {
+  list-style: disc;
+}
+.md li::marker {
+  color: var(--ink3);
+  font: 400 var(--fs-meta) var(--mono);
+}
+.md code {
+  padding: 1px 4px;
+  border-radius: var(--r-xs);
+  background: var(--bg2);
+  font: 400 0.9em var(--mono);
+}
+.md pre {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  background: var(--bg2);
+  box-shadow: inset 0 0 0 1px var(--line2);
+  overflow-x: auto;
+  white-space: pre;
+}
+.md pre code {
+  padding: 0;
+  background: none;
+}
+.md blockquote {
+  padding-left: var(--s3);
+  border-left: 1px solid var(--line3);
+  color: var(--ink2);
+}
+.md a {
+  color: var(--uv-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--line2);
 }

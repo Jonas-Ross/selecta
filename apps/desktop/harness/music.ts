@@ -207,6 +207,11 @@ export class MusicSim {
     return (0xa000000000000000n + BigInt(++this.ids)).toString(16).toUpperCase();
   }
 
+  /** A track bought or imported while the app is open. */
+  addTrack(track: SimTrack): void {
+    this.library.entries.push({ track });
+  }
+
   private playlist(name: string, kind: Kind, tracks: SimTrack[]): Playlist {
     return { persistentId: this.newId(), name, kind, entries: tracks.map((track) => ({ track })) };
   }
@@ -455,7 +460,6 @@ export class MusicSim {
   private playlistSpec(pl: Playlist) {
     const spec = Object.defineProperties(
       {
-        name: () => pl.name,
         persistentID: () => pl.persistentId,
         class: () => (pl.kind === 'library' ? 'libraryPlaylist' : 'userPlaylist'),
         smart: () => pl.kind === 'smart',
@@ -467,6 +471,15 @@ export class MusicSim {
       {
         tracks: { get: () => this.tracksOf(pl) },
         description: { set: () => {} },
+        // JXA reads a property by calling it and writes it by assignment.
+        name: {
+          get: () => () => pl.name,
+          set: (name: string) => {
+            this.calls.push(`rename ${pl.name} to ${name}`);
+            pl.name = name;
+          },
+          enumerable: true,
+        },
       },
     );
 
