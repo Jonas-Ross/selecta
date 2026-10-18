@@ -54,6 +54,27 @@ export function livePosition(player: PlayerView | undefined, readAt: number, now
   return Math.min(player?.duration || Infinity, at + moved);
 }
 
+export type Press =
+  | { action: 'pause' }
+  | { action: 'resume' }
+  | { action: 'seek'; position: number };
+
+/**
+ * What the player shows from the moment a press lands until Music.app answers, which
+ * replaces it either way. Only a draft's own record can be pressed, so a view off it is kept.
+ */
+export function pressed(player: PlayerView, readAt: number, now: number, press: Press): PlayerView {
+  if (player.entry_id === undefined || player.state === 'stopped') return player;
+
+  const position = livePosition(player, readAt, now);
+
+  if (press.action === 'pause') return { ...player, state: 'paused', position };
+
+  if (press.action === 'resume') return { ...player, state: 'playing', position };
+
+  return { ...player, position: Math.min(player.duration || Infinity, press.position) };
+}
+
 /** Seconds into the whole set, and whether an unknown length makes that a lower bound. */
 export function setClock(items: Row[], index: number, position: number) {
   const before = items.slice(0, index);

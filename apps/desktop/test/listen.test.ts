@@ -6,6 +6,7 @@ import {
   transportHeld,
   livePosition,
   nowIndex,
+  pressed,
   queuePlay,
   setClock,
 } from '../src/renderer/listen.js';
@@ -49,6 +50,38 @@ it('moves a playing position on between reads, and holds a paused one', () => {
   expect(livePosition(undefined, 0, 1000)).toBe(0);
   // Music.app's unset length of 0 doesn't pin the clock to the start.
   expect(livePosition({ ...read, duration: 0 }, 1000, 2500)).toBe(11.5);
+});
+
+it('shows a press at once, from where the record has got to', () => {
+  const on = {
+    running: true,
+    state: 'playing' as const,
+    entry_id: 'a',
+    position: 10,
+    duration: 200,
+  };
+
+  expect(pressed(on, 1000, 3000, { action: 'pause' })).toEqual({
+    ...on,
+    state: 'paused',
+    position: 12,
+  });
+  expect(pressed({ ...on, state: 'paused' }, 1000, 3000, { action: 'resume' })).toEqual({
+    ...on,
+    state: 'playing',
+    position: 10,
+  });
+  expect(pressed(on, 1000, 3000, { action: 'seek', position: 500 })).toMatchObject({
+    state: 'playing',
+    position: 200,
+  });
+  // Off the draft or stopped, nothing could be pressed, so nothing is guessed.
+  const off = { running: true, state: 'playing' as const, track_id: 'X', position: 3 };
+
+  expect(pressed(off, 1000, 3000, { action: 'pause' })).toBe(off);
+  expect(pressed({ ...on, state: 'stopped' }, 1000, 3000, { action: 'resume' })).toMatchObject({
+    state: 'stopped',
+  });
 });
 
 it('counts set time from the lengths before, flagging an unknown one', () => {

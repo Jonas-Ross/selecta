@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlayerView } from '../../shared/protocol.js';
 import { selecta } from '../api.js';
+import { pressed, type Press } from '../listen.js';
 
 const READ_EVERY_MS = 1000;
 
@@ -13,12 +14,18 @@ export function usePlayer(draftId: string, looking: boolean) {
   const [readAt, setReadAt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
-  // Bumped by every action, so a read started before it can't land after it.
+  // Bumped as every action starts and ends, so a read started before or during it can't land after it.
   const epoch = useRef(0);
 
-  const accept = useCallback((next: PlayerView) => {
+  // What is on screen, for a press in the same tick as the read it starts from.
+  const shown = useRef({ view, readAt });
+
+  shown.current = { view, readAt };
+
+  const accept = useCallback((next: PlayerView, at = performance.now()) => {
+    shown.current = { view: next, readAt: at };
     setView(next);
-    setReadAt(performance.now());
+    setReadAt(at);
   }, []);
 
   const watching = looking || (view?.state === 'playing' && view.entry_id !== undefined);
@@ -51,17 +58,33 @@ export function usePlayer(draftId: string, looking: boolean) {
     };
   }, [draftId, watching, problem, accept]);
 
-  const act = (call: Promise<PlayerView | void>) => {
+  const act = (call: Promise<PlayerView | void>, press?: Press) => {
     epoch.current++;
     setBusy(true);
     setProblem(undefined);
+
+    // The press shows at once; Music's answer replaces it, and a failure puts back what was read.
+    const { view: before, readAt: beforeAt } = shown.current;
+    const rollback = press && before ? () => accept(before, beforeAt) : undefined;
+
+    if (press && before) {
+      const now = performance.now();
+
+      accept(pressed(before, beforeAt, now, press), now);
+    }
 
     return call
       .then((next) => {
         if (next) accept(next);
       })
-      .catch((e: Error) => setProblem(e.message))
-      .finally(() => setBusy(false));
+      .catch((e: Error) => {
+        rollback?.();
+        setProblem(e.message);
+      })
+      .finally(() => {
+        epoch.current++;
+        setBusy(false);
+      });
   };
 
   return {
@@ -79,9 +102,13 @@ export function usePlayer(draftId: string, looking: boolean) {
           ...(position !== undefined && { position }),
         }),
       ),
-    pause: () => act(selecta.call('player.pause', { draft_id: draftId })),
-    resume: () => act(selecta.call('player.resume', { draft_id: draftId })),
-    seek: (position: number) => act(selecta.call('player.seek', { draft_id: draftId, position })),
+    pause: () => act(selecta.call('player.pause', { draft_id: draftId }), { action: 'pause' }),
+    resume: () => act(selecta.call('player.resume', { draft_id: draftId }), { action: 'resume' }),
+    seek: (position: number) =>
+      act(selecta.call('player.seek', { draft_id: draftId, position }), {
+        action: 'seek',
+        position,
+      }),
     // The host pauses Music first if it's on this draft, then releases the preview.
     detach: (revision: number) =>
       act(
