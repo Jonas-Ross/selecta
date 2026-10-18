@@ -7,9 +7,17 @@ import type { z } from 'zod';
 import * as schemas from './schemas.js';
 import { parsePayload } from '../types/validation.js';
 
-async function runJxa<T>(script: string, schema: z.ZodType<T>): Promise<T> {
-  return parsePayload(schema, await runUncheckedJxa(script), 'Music.app', 'jxa_error');
+// Short calls run `warm` on a long-lived osascript; library reads and playlist
+// writes, which run long or hold a lot, keep a fresh one each.
+async function runJxa<T>(
+  script: string,
+  schema: z.ZodType<T>,
+  options?: { warm: boolean },
+): Promise<T> {
+  return parsePayload(schema, await runUncheckedJxa(script, options), 'Music.app', 'jxa_error');
 }
+
+const WARM = { warm: true };
 
 /** Preserve diagnostic target evidence when full creation readback is malformed. */
 async function runCreationJxa<T>(script: string, schema: z.ZodType<T>): Promise<T> {
@@ -81,7 +89,7 @@ import {
 
 export const bridge: Bridge = {
   async openPreview(input) {
-    const result = await runJxa(buildOpenPreviewScript(input), schemas.openPreview);
+    const result = await runJxa(buildOpenPreviewScript(input), schemas.openPreview, WARM);
 
     if ('playlistNotFound' in result)
       throw new BridgeError(
@@ -136,7 +144,7 @@ export const bridge: Bridge = {
     );
   },
   async readPreview(input): Promise<PlaylistWriteResult> {
-    const result = await runJxa(buildReadPreviewScript(input), schemas.previewRead);
+    const result = await runJxa(buildReadPreviewScript(input), schemas.previewRead, WARM);
 
     if ('previewConflict' in result)
       throw new BridgeError(
@@ -218,21 +226,21 @@ export const bridge: Bridge = {
   },
   async setTrackLoved(input): Promise<TrackSignalResult<TrackLovedState>> {
     return parseSignalResult(
-      await runJxa(buildSetLovedScript(input), schemas.lovedResult),
+      await runJxa(buildSetLovedScript(input), schemas.lovedResult, WARM),
       input.trackIds,
     );
   },
   async setTrackRating(input): Promise<TrackSignalResult<TrackRatingState>> {
     return parseSignalResult(
-      await runJxa(buildSetRatingScript(input), schemas.ratingResult),
+      await runJxa(buildSetRatingScript(input), schemas.ratingResult, WARM),
       input.trackIds,
     );
   },
   async readPlayer() {
-    return runJxa(buildReadPlayerScript(), schemas.player);
+    return runJxa(buildReadPlayerScript(), schemas.player, WARM);
   },
   async controlPlayer(input) {
-    const result = await runJxa(buildControlPlayerScript(input), schemas.controlPlayer);
+    const result = await runJxa(buildControlPlayerScript(input), schemas.controlPlayer, WARM);
 
     if ('ambiguousPreview' in result)
       throw new BridgeError(
@@ -286,7 +294,7 @@ export const bridge: Bridge = {
     return result;
   },
   async playPreview(input) {
-    const result = await runJxa(buildPlayPreviewScript(input), schemas.playPreview);
+    const result = await runJxa(buildPlayPreviewScript(input), schemas.playPreview, WARM);
 
     if ('playlistNotFound' in result)
       throw new BridgeError(
@@ -359,7 +367,7 @@ export const bridge: Bridge = {
     if (unique.length === 0) return {};
 
     return parseArtworkResult(
-      await runJxa(buildReadArtworkScript({ trackIds: unique, dir }), schemas.artwork),
+      await runJxa(buildReadArtworkScript({ trackIds: unique, dir }), schemas.artwork, WARM),
       unique,
     );
   },

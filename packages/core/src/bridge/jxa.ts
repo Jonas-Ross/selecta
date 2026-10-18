@@ -1,72 +1,48 @@
 // osascript invocation + JSON parsing. The single place that shells out to
 // `osascript -l JavaScript`.
 //
-// Each call is a fresh process — no shared runtime state, no long-lived bridge.
+// Each call is a fresh process; worker.ts keeps warm ones for the hot paths.
 
 import { execFile } from 'node:child_process';
-import { BridgeError, type ErrorCode } from '../types/errors.js';
-
-// macOS Apple-event privilege denial. errAEPrivilegeError is -1743.
-const PERMISSION_SIGNATURE = /errAEPrivilegeError|-1743|not authorized/i;
-// App isn't running / can't be launched. -600 is procNotFound.
-const NOT_RUNNING_SIGNATURE = /-600|isn['’]?t running|not running|can['’]?t be found/i;
-
-// Whole-process stderr identifies the error, not which Apple event failed.
-// These codes never prove that creation stopped before Music.make.
-function mapJxaError(stderr: string): ErrorCode {
-  if (PERMISSION_SIGNATURE.test(stderr)) return 'automation_permission_denied';
-
-  if (NOT_RUNNING_SIGNATURE.test(stderr)) return 'music_app_not_running';
-
-  return 'jxa_error';
-}
-
-// The bridge knows only the error code; the model-facing hint is resolved by
-// consumers via defaultHints, so no hint is attached here.
-const jxaError = (code: ErrorCode, message: string): BridgeError => new BridgeError(code, message);
+import {
+  interruptedError,
+  JXA_TIMEOUT_MS,
+  jxaFailure,
+  MAX_STDOUT_BYTES,
+  parseJxaStdout,
+} from './osascript.js';
+import { runWarmJxa } from './worker.js';
 
 /**
  * Run a JXA script via osascript and parse its stdout as JSON.
  * Throws BridgeError with the appropriate ErrorCode on every failure mode:
  * non-zero exit (mapped from stderr) or unparseable stdout.
  */
-// A full-library snapshot is megabytes of JSON on stdout; execFile's default
-// maxBuffer (1 MiB) would kill the read mid-stream.
-const MAX_STDOUT_BYTES = 64 * 1024 * 1024;
+export function runJxa(script: string, { warm = false } = {}): Promise<unknown> {
+  if (warm) return runWarmJxa(script);
 
-export function runJxa(script: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     execFile(
       'osascript',
       ['-l', 'JavaScript', '-e', script],
-      { maxBuffer: MAX_STDOUT_BYTES, timeout: 180_000, killSignal: 'SIGKILL' },
+      { maxBuffer: MAX_STDOUT_BYTES, timeout: JXA_TIMEOUT_MS, killSignal: 'SIGKILL' },
       (error, stdout, stderr) => {
         if (error?.killed) {
-          reject(
-            new BridgeError(
-              'jxa_error',
-              'osascript exceeded its deadline or output limit',
-              'The Music.app operation was interrupted; its outcome is unknown and writes may be partial. Inspect Music.app and run refresh_library before deciding what to do. Do not repeat the write blindly.',
-            ),
-          );
+          reject(interruptedError());
 
           return;
         }
 
         if (error) {
-          reject(
-            jxaError(mapJxaError(stderr), `osascript failed: ${stderr.trim() || error.message}`),
-          );
+          reject(jxaFailure(stderr, error.message));
 
           return;
         }
 
         try {
-          resolve(JSON.parse(stdout));
-        } catch {
-          reject(
-            jxaError('jxa_error', `osascript returned unparseable stdout: ${stdout.slice(0, 200)}`),
-          );
+          resolve(parseJxaStdout(stdout));
+        } catch (e) {
+          reject(e);
         }
       },
     );

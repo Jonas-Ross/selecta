@@ -1,10 +1,27 @@
 #!/usr/bin/env node
-const script = process.argv[process.argv.indexOf('-e') + 1];
-const response = await fetch(`${process.env.SELECTA_SIM_URL}/osascript`, { method: 'POST', body: script });
-const out = await response.json();
+import { createInterface } from 'node:readline';
 
-if (out.stderr === undefined) process.stdout.write(`${out.stdout}\n`);
-else {
-  process.stderr.write(`${out.stderr}\n`);
-  process.exit(1);
+const script = process.argv[process.argv.indexOf('-e') + 1];
+const run = async (source) =>
+  (await fetch(`${process.env.SELECTA_SIM_URL}/osascript`, { method: 'POST', body: source })).json();
+
+// The bridge's warm worker sends one JSON-encoded script per line and reads one reply per line.
+if (script.startsWith('// selecta-jxa-worker')) {
+  for await (const line of createInterface({ input: process.stdin })) {
+    if (line === '') continue;
+
+    const out = await run(JSON.parse(line));
+
+    process.stdout.write(
+      `${JSON.stringify(out.stderr === undefined ? { out: out.stdout } : { err: out.stderr })}\n`,
+    );
+  }
+} else {
+  const out = await run(script);
+
+  if (out.stderr === undefined) process.stdout.write(`${out.stdout}\n`);
+  else {
+    process.stderr.write(`${out.stderr}\n`);
+    process.exit(1);
+  }
 }

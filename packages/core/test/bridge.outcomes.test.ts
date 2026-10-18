@@ -432,3 +432,22 @@ describe('artwork read boundary', () => {
     });
   });
 });
+
+describe('warm osascript routing', () => {
+  it('runs player reads warm and playlist writes and library reads one-shot', async () => {
+    vi.mocked(runJxa).mockResolvedValue({ running: false });
+    await bridge.readPlayer();
+    expect(vi.mocked(runJxa).mock.calls[0]![1]).toEqual({ warm: true });
+
+    vi.mocked(runJxa).mockClear().mockResolvedValue(['A']);
+    await listLibraryTrackIds();
+    vi.mocked(runJxa).mockResolvedValue({
+      persistentId: 'P',
+      trackCount: 1,
+      trackPersistentIds: ['A'],
+    });
+    await bridge.createPlaylist({ name: 'Mix', trackIds: ['A'] }).catch(() => {});
+
+    for (const call of vi.mocked(runJxa).mock.calls) expect(call[1]).toBeUndefined();
+  });
+});
