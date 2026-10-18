@@ -91,8 +91,12 @@ export function createApi(
   const lane = createMusicLane({
     player,
     syncLinked: async (draftId) => {
-      await drafts.syncLinked(draftId);
+      const { preview_result: result } = await drafts.syncLinked(draftId);
+
       emit({ event: 'drafts.changed' });
+
+      // Thrown so the action log says why the preview fell behind; the draft view shows the status.
+      if (result?.error) throw new Error([result.error, result.hint].filter(Boolean).join(': '));
     },
     log: (entry) => note('music', entry),
   });
@@ -246,11 +250,22 @@ export function createApi(
       return drafts.get(args).then((view) => catchingUp(view, syncing));
     },
     'drafts.edit': async (args) => {
-      const view = await drafts.edit(args, {
-        schedulePreview: (id) => {
-          if (linked(id)) void lane.sync(id).catch(() => {});
-        },
-      });
+      const id = (args as { draft_id?: unknown } | undefined)?.draft_id;
+      const edit = async () => {
+        // Read in turn, so a play that links the draft first is seen.
+        const wasLinked = typeof id === 'string' && linked(id);
+
+        return drafts.edit(args, {
+          schedulePreview: (draftId) => {
+            if (wasLinked) void lane.sync(draftId).catch(() => {});
+          },
+        });
+      };
+      // Selecta Preview refuses edits while a write to it is in flight, so a draft Music is on waits its turn.
+      const view =
+        typeof id === 'string' && (linked(id) || lane.holds(id))
+          ? await lane.after('edit', edit, id)
+          : await edit();
 
       return 'draft' in view ? catchingUp(view, lane.syncing(view.draft.draft_id)) : view;
     },
@@ -259,24 +274,31 @@ export function createApi(
     // Behind any play still waiting, so a draft it links is linked before the agent is let in.
     'agent.start': (args) => {
       const { draft_id, brief, provider } = Brief.parse(args);
-
-      return lane.after('agent start', () => {
+      const start = () => {
         if (linked(draft_id))
           agent.refuse(draft_id, brief, linkedMessage(draft_id, provider), true);
         else agent.start(draft_id, brief, provider);
-      });
+      };
+
+      return lane.holds(draft_id) ? lane.after('agent start', start, draft_id) : start();
     },
     'agent.send': (args) => {
       const { draft_id, message, text, provider } = Message.parse(args);
-
       // Ownership is read in turn rather than from the renderer's view, which trails a play or stop.
-      return lane.after('agent send', async () => {
-        if (linked(draft_id)) await player.detach(draft_id, deps.drafts().get(draft_id).revision);
+      const send = async () => {
+        if (linked(draft_id)) {
+          lane.forget(draft_id);
+          await player.detach(draft_id, deps.drafts().get(draft_id).revision);
+        }
 
         if (linked(draft_id))
           agent.refuse(draft_id, text ?? message, linkedMessage(draft_id, provider));
         else agent.send(draft_id, message, text, provider);
-      });
+      };
+
+      return linked(draft_id) || lane.holds(draft_id)
+        ? lane.after('agent send', send, draft_id)
+        : send();
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),
     'agent.history': () => agent.history(),

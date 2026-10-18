@@ -60,10 +60,13 @@ export class MusicSim {
   hold(): () => void {
     let release!: () => void;
 
-    this.held = new Promise<void>((resolve) => (release = resolve));
+    const held = new Promise<void>((resolve) => (release = resolve));
+
+    this.held = held;
 
     return () => {
-      this.held = undefined;
+      if (this.held === held) this.held = undefined;
+
       release();
     };
   }

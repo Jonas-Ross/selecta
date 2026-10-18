@@ -158,6 +158,50 @@ it("lands a linked edit at once and catches Music up behind it, saying it's catc
   expect(deps.bridge.replacePlaylist).toHaveBeenCalledOnce();
 });
 
+it('takes a second linked edit while the first is still reaching Music', async () => {
+  const draftId = randomUUID();
+  const draft = store.create(draftId, 'Linked', ['T-TEARDROP', 'T-ROADS']);
+  const claim = store.claimPreview(draftId, 1, true)!;
+
+  store.finishPreview(claim, {
+    status: 'current',
+    baseline: ['T-TEARDROP', 'T-ROADS'],
+    playlist_id: 'P-SLOT',
+  });
+
+  let release!: () => void;
+  const music = new Promise<void>((resolve) => (release = resolve));
+
+  vi.mocked(deps.bridge.replacePlaylist).mockImplementation(async ({ trackIds }) => {
+    await music;
+
+    return {
+      persistentId: 'P-SLOT',
+      trackCount: trackIds.length,
+      trackPersistentIds: trackIds,
+      created: false,
+    };
+  });
+
+  await call('drafts.edit', {
+    draft_id: draftId,
+    revision: 1,
+    entries: [...draft.entries].reverse(),
+  });
+  // The first edit's write is under way in Music when the second arrives.
+  await vi.waitFor(() => expect(deps.bridge.replacePlaylist).toHaveBeenCalled());
+
+  const second = call('drafts.edit', { draft_id: draftId, revision: 2, entries: draft.entries });
+
+  release();
+  expect(await second).not.toHaveProperty('error');
+  await call('player.state', { draft_id: draftId });
+  expect(await call('drafts.get', { draft_id: draftId })).toMatchObject({
+    draft: { revision: 3 },
+    preview: { status: 'current', baseline: ['T-TEARDROP', 'T-ROADS'] },
+  });
+});
+
 it('stops listening before feedback reaches the agent, whatever the renderer last saw', async () => {
   const draftId = randomUUID();
 

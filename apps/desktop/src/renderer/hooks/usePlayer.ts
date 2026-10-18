@@ -9,13 +9,19 @@ import { asked } from '../listen.js';
 
 const READ_EVERY_MS = 1000;
 
-export function usePlayer(draftId: string, looking: boolean) {
+export function usePlayer(
+  draftId: string,
+  looking: boolean,
+  // Sends a transport call in turn with the draft's queued edits, as a play is.
+  inTurn: <T>(call: () => Promise<T>) => Promise<T | undefined> = (call) => call(),
+) {
   const [shown, setShown] = useState<{ view?: PlayerView; readAt: number }>({ readAt: 0 });
   const [problem, setProblem] = useState<string>();
   // Calls not yet answered; while any are, the screen shows what was asked rather than a read.
   const outstanding = useRef(0);
-  // The host's newest answer while later calls are still out, shown once they all land.
+  // The newest call's answer while earlier ones are still out, shown once they all land.
   const answered = useRef<PlayerView>(undefined);
+  const sent = useRef(0);
   // Bumped by every action, so a read started before it can't land after it.
   const epoch = useRef(0);
   const current = useRef(shown);
@@ -31,7 +37,13 @@ export function usePlayer(draftId: string, looking: boolean) {
     (fresh: () => boolean) =>
       selecta.call('player.state', { draft_id: draftId }).then(
         (next) => fresh() && accept(next),
-        (e: Error) => fresh() && setProblem(e.message),
+        (e: Error) => {
+          if (!fresh()) return;
+
+          setProblem(e.message);
+          // What was asked isn't left standing as if Music had done it.
+          setShown((s) => (s.view?.pending ? { readAt: 0 } : s));
+        },
       ),
     [draftId, accept],
   );
@@ -68,6 +80,9 @@ export function usePlayer(draftId: string, looking: boolean) {
   ) => {
     epoch.current++;
     outstanding.current++;
+
+    const mine = ++sent.current;
+
     setProblem(undefined);
 
     const wanted = ask(current.current);
@@ -80,11 +95,13 @@ export function usePlayer(draftId: string, looking: boolean) {
 
     return call()
       .then((next) => {
-        if (next) answered.current = next as PlayerView;
+        // A call that answers nothing, like a stop, leaves the next read to say where Music is.
+        if (mine === sent.current) answered.current = next as PlayerView | undefined;
       })
       .catch((e: Error) => {
         // A failure leaves Music wherever it got to, which only a fresh read can say.
-        answered.current = undefined;
+        if (mine === sent.current) answered.current = undefined;
+
         setProblem(e.message);
       })
       .finally(() => {
@@ -116,17 +133,17 @@ export function usePlayer(draftId: string, looking: boolean) {
     pause: () =>
       act(
         (now) => asked.pause(now.view, now.readAt, performance.now()),
-        () => selecta.call('player.pause', { draft_id: draftId }),
+        () => inTurn(() => selecta.call('player.pause', { draft_id: draftId })),
       ),
     resume: () =>
       act(
         (now) => asked.resume(now.view),
-        () => selecta.call('player.resume', { draft_id: draftId }),
+        () => inTurn(() => selecta.call('player.resume', { draft_id: draftId })),
       ),
     seek: (position: number) =>
       act(
         (now) => asked.seek(now.view, position),
-        () => selecta.call('player.seek', { draft_id: draftId, position }),
+        () => inTurn(() => selecta.call('player.seek', { draft_id: draftId, position })),
       ),
   };
 }

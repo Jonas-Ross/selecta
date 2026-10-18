@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import type { Playback, PlaybackView } from '@selecta/core/operations/playback.js';
 import { createMusicLane } from '../src/host/music.js';
 
@@ -94,7 +94,7 @@ it('folds a burst of clicks into the one step the newest asks for', async () => 
     expect(call).toMatchObject({ entry_id: 'd', position: 90 });
 });
 
-it('cancels a pause and resume that meet while waiting, and drops a play a pause overtakes', async () => {
+it('cancels a pause and resume that meet while waiting, and still plays a play paused while waiting', async () => {
   const { lane, calls, settle } = setup();
 
   void lane.play('D', 'a');
@@ -109,15 +109,24 @@ it('cancels a pause and resume that meet while waiting, and drops a play a pause
   void lane.play('D', 'b');
   void lane.pause('D');
   await settle();
-  // The play behind the first pause never ran, and Music is already paused.
-  expect(calls).toEqual(['pause']);
+  // Music ends paused on the record the screen shows, not on the one it was paused on.
+  expect(calls).toEqual(['pause', 'play b@0', 'pause']);
+
+  calls.length = 0;
+  void lane.play('D', 'c');
+  void lane.play('D', 'd');
+  void lane.pause('D');
+  const last = lane.resume('D');
+
+  await settle();
+  expect(calls).toEqual(['play c@0', 'play d@0']);
+  await expect(last).resolves.toMatchObject({ entry_id: 'd', state: 'playing' });
 });
 
-it("doesn't pause a draft that isn't playing when a play it overtook never ran", async () => {
+it("doesn't pause a draft that isn't playing", async () => {
   const { lane, calls, settle } = setup();
 
   void lane.state('D');
-  void lane.play('D', 'a');
   void lane.pause('D');
   await settle();
   expect(calls).toEqual(['read']);
@@ -160,6 +169,50 @@ it('drops what a draft still waits to play when it stops', async () => {
   await settle();
   await expect(waiting).resolves.toBeUndefined();
   expect(calls).toEqual(['read', 'detach']);
+});
+
+it('syncs again for an edit queued behind a waiting sync', async () => {
+  const { lane, calls, settle, edit } = setup();
+
+  void lane.play('D', 'a');
+  void lane.sync('D');
+  void lane.after('edit', async () => edit(), 'D');
+  void lane.sync('D');
+  await settle();
+  expect(calls).toEqual(['play a@0', 'sync D r1', 'sync D r2']);
+});
+
+it('says while something for a draft is playing, writing or waiting to', async () => {
+  const { lane, settle } = setup();
+
+  void lane.play('D', 'a');
+  expect(lane.holds('D')).toBe(true);
+  expect(lane.holds('E')).toBe(false);
+  await settle();
+  expect(lane.holds('D')).toBe(false);
+});
+
+it('drops a sync still waiting when its draft stops', async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.play('D', 'a');
+  void lane.sync('D');
+  void lane.detach('D', 1);
+  await settle();
+  expect(calls).toEqual(['play a@0', 'detach']);
+});
+
+it('moves a cached playing answer on with the clock', async () => {
+  const { lane, settle } = setup();
+  const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+
+  void lane.play('D', 'a', 10);
+  await settle();
+  void lane.after('test', async () => {});
+  now.mockReturnValue(4_000);
+  await expect(lane.state('D')).resolves.toMatchObject({ entry_id: 'a', position: 13 });
+  now.mockRestore();
+  await settle();
 });
 
 it('syncs a burst of linked edits once, after what was asked before them', async () => {

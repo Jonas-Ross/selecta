@@ -41,7 +41,7 @@ export function useListen({
   linked: boolean;
   canPlay: boolean;
 }) {
-  const player = usePlayer(draftId, watching);
+  const player = usePlayer(draftId, watching, (call) => afterEdits(queue, () => true, call));
   const { joinLead } = useSettings().settings;
   const [cued, setCued] = useState<string>();
   const [clock, setClockNow] = useState(() => performance.now());
