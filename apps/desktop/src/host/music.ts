@@ -26,6 +26,10 @@ type Job = {
 };
 
 const AUDITION = 'audition';
+const REFRESH = 'refresh';
+const detachKey = (draftId: string) => `detach ${draftId}`;
+// A library read holds Music for minutes, so a click then is refused rather than land long after.
+const READING = 'Selecta is reading your library from Music. Try again once it finishes.';
 const transportKey = (draftId: string) => `transport ${draftId}`;
 const syncKey = (draftId: string) => `sync ${draftId}`;
 
@@ -34,9 +38,12 @@ export type MusicLane = ReturnType<typeof createMusicLane>;
 export function createMusicLane({
   player,
   syncLinked,
+  owns = () => true,
   log = () => {},
 }: {
   player: Playback;
+  /** The draft still holds Selecta Preview, so a stop has something to detach. */
+  owns?: (draftId: string) => boolean;
   /** Writes a linked draft's newest order into Selecta Preview, if it has fallen behind. */
   syncLinked: (draftId: string) => Promise<unknown>;
   /** One line per step Music took: how long it ran, how long it waited, how many calls it answered. */
@@ -212,6 +219,8 @@ export function createMusicLane({
   }
 
   function transport(draftId: string, next: Transport): Promise<PlaybackView> {
+    if (reading()) return Promise.reject(new Error(READING));
+
     const key = transportKey(draftId);
     const folded = joined<PlaybackView>(key, next);
 
@@ -240,6 +249,8 @@ export function createMusicLane({
   }
 
   function audition(trackIds: string[], index: number, position?: number) {
+    if (reading()) return Promise.reject(new Error(READING));
+
     let args = { trackIds, index, position };
     // A waiting audition reads its tracks when it starts, so the newest replaces them.
     const folded = joined<AuditionView>(AUDITION, args);
@@ -262,8 +273,12 @@ export function createMusicLane({
 
   async function detachNow(draftId: string, revisionAt: number) {
     seen.delete(draftId);
-    await player.detach(draftId, revisionAt);
+
+    // A second stop that waited behind the first finds nothing left to detach.
+    if (owns(draftId)) await player.detach(draftId, revisionAt);
   }
+
+  const reading = () => running?.key === REFRESH || queue.some((job) => job.key === REFRESH);
 
   /** Something for this draft is playing, writing or waiting to. */
   const holds = (draftId: string) =>
@@ -299,12 +314,20 @@ export function createMusicLane({
     detach(draftId: string, revisionAt: number) {
       forget(draftId);
 
-      return push<void>({
-        draft: draftId,
-        step: () => 'detach',
-        run: () => detachNow(draftId, revisionAt),
-      });
+      return (
+        waiting<void>(detachKey(draftId)) ??
+        push<void>({
+          key: detachKey(draftId),
+          draft: draftId,
+          step: () => 'detach',
+          run: () => detachNow(draftId, revisionAt),
+        })
+      );
     },
+
+    /** Reads the library from Music in turn; transport and auditions are refused until it ends. */
+    refresh: <T>(step: () => Promise<T>) =>
+      push<T>({ key: REFRESH, step: () => 'library refresh', run: step }),
 
     /** Detaches from inside a step already running in turn, leaving calls asked after it alone. */
     detachNow,

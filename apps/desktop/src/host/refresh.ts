@@ -16,10 +16,19 @@ export type LibraryDeps = {
   bridge: Bridge;
   measure: (trackId: string) => Promise<Measured>;
   onChange: (view: LibraryView) => void;
+  /** Runs the read in turn with the app's other Music calls, which share its lock. */
+  inTurn?: <T>(read: () => Promise<T>) => Promise<T>;
   now?: () => number;
 };
 
-export function createLibrary({ cache, bridge, measure, onChange, now = Date.now }: LibraryDeps) {
+export function createLibrary({
+  cache,
+  bridge,
+  measure,
+  onChange,
+  inTurn = (read) => read(),
+  now = Date.now,
+}: LibraryDeps) {
   let view: LibraryView | undefined;
 
   const readAt = () => {
@@ -74,7 +83,7 @@ export function createLibrary({ cache, bridge, measure, onChange, now = Date.now
     const before = new Set(pending());
 
     try {
-      await refreshLibrary(cache(), bridge);
+      await inTurn(() => refreshLibrary(cache(), bridge));
     } catch (error) {
       return { read_at: readAt(), failed: 'read', error: message(error) };
     }

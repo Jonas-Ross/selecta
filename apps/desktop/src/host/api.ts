@@ -104,6 +104,7 @@ export function createApi(
       if (result?.order_matches_request === false)
         throw new Error('preview_conflict: Selecta Preview read back in another order');
     },
+    owns: (draftId) => linked(draftId),
     log: (entry) => note('music', entry),
   });
   // A linked edit's Music write runs in the lane; the screen shows it as catching up, not out of step.
@@ -157,6 +158,7 @@ export function createApi(
     cache: deps.cache,
     bridge: deps.bridge,
     measure: (trackId) => measurer.measure(trackId),
+    inTurn: (read) => lane.refresh(read),
     onChange: (view) => {
       emit({ event: 'library', data: view });
 

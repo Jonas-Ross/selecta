@@ -235,6 +235,42 @@ it('moves a cached playing answer on with the clock', async () => {
   await settle();
 });
 
+it('reads the library in turn and refuses clicks while it holds Music', async () => {
+  const { lane, calls, settle } = setup();
+
+  void lane.play('D', 'a');
+  const read = lane.refresh(async () => calls.push('refresh'));
+
+  await expect(lane.play('D', 'b')).rejects.toThrow(/reading your library/);
+  await expect(lane.audition(['x'], 0)).rejects.toThrow(/reading your library/);
+  await settle();
+  await read;
+  void lane.play('D', 'c');
+  await settle();
+  expect(calls).toEqual(['play a@0', 'refresh', 'play c@0']);
+});
+
+it('joins a second stop to the first, and skips one with nothing left to detach', async () => {
+  const music = fakePlayer();
+  let owner = true;
+  const lane = createMusicLane({
+    player: music.player,
+    syncLinked: async () => {},
+    owns: () => owner,
+  });
+
+  void lane.play('D', 'a');
+  void lane.detach('D', 1);
+  void lane.detach('D', 1);
+  await music.settle();
+  expect(music.calls).toEqual(['play a@0', 'detach']);
+
+  owner = false;
+  music.calls.length = 0;
+  await lane.detach('D', 1);
+  expect(music.calls).toEqual([]);
+});
+
 it('syncs a burst of linked edits once, after what was asked before them', async () => {
   const { lane, calls, settle, edit } = setup();
 
