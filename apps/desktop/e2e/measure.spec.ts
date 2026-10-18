@@ -4,6 +4,9 @@ import { fixtureTracks, type FixtureTrack } from '../harness/library.js';
 import { hears } from '../harness/metrognome.js';
 
 async function build(page: Page) {
+  // The key lane's blanks are measured here too, so show it.
+  await page.evaluate(() => localStorage.setItem('selecta.settings', '{"keyLane":true}'));
+  await page.reload();
   await page.getByRole('button', { name: 'New playlist' }).first().click();
   await page.getByLabel('The brief').fill('Warm-up, nothing too loud');
   await page.getByRole('button', { name: 'Build it' }).click();

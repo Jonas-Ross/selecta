@@ -124,9 +124,12 @@ export class DraftStore {
         .max(500),
     }).parse(JSON.parse(body));
 
+    const entries = stored.entries.map(({ entry_id, track_id }) => ({ entry_id, track_id }));
+
     return Draft.parse({
       ...stored,
-      entries: stored.entries.map(({ entry_id, track_id }) => ({ entry_id, track_id })),
+      entries,
+      playlist: stored.playlist ?? legacyPlaylist(stored.save, entries),
     });
   }
 
@@ -469,4 +472,24 @@ export class DraftStore {
         .immediate(),
     );
   }
+}
+
+// Saves from before drafts kept their playlist: an intact receipt still on the draft
+// names the playlist, and the draft still holds exactly what it wrote.
+function legacyPlaylist(save: Draft['save'], entries: Draft['entries']): Draft['playlist'] {
+  const result = save?.status === 'finished' ? save.result : undefined;
+
+  if (
+    typeof result?.playlist_id !== 'string' ||
+    typeof result.name !== 'string' ||
+    (result.error !== undefined && result.creation_committed !== true) ||
+    result.order_matches_request === false
+  )
+    return undefined;
+
+  return {
+    playlist_id: result.playlist_id,
+    name: result.name,
+    track_ids: entries.map((entry) => entry.track_id),
+  };
 }

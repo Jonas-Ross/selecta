@@ -190,7 +190,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
   program
     .command('enrich')
     .description(
-      'Fetch audio features for tracks not yet attempted: from MusicBrainz/AcousticBrainz/Deezer (--source catalog), or by analyzing store previews with metrognome (--source analysis)',
+      'Fetch audio features for tracks not yet attempted: by analyzing store previews with metrognome (--source analysis, the default), or from MusicBrainz/AcousticBrainz/Deezer (--source catalog)',
     )
     .option(
       '-n, --limit <count>',
@@ -208,7 +208,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
     .addOption(
       new Option('-s, --source <source>', 'where features come from')
         .choices(['catalog', 'analysis'])
-        .default('catalog'),
+        .default('analysis'),
     )
     .option(
       '--metrognome-path <path>',
@@ -237,7 +237,7 @@ export function createCliProgram(options: CliOptions = {}): Command {
             const budget = Math.min(limit ?? pending, pending);
 
             logger.info(
-              `${pending} tracks pending ${source} enrichment; attempting ${budget} at ~1-3s each`,
+              `${pending} tracks pending ${source} enrichment; attempting ${budget} at ~${source === 'analysis' ? '3' : '1-3'}s each`,
             );
             const startedAt = Date.now();
             const progress = createProgressReporter({ logger, writeStderr, isTty });

@@ -153,6 +153,29 @@ p {
   color: var(--ink);
 }
 
+/* Rows of 1fr to 0fr animate the banner's real height, margins included. */
+.banner {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 220ms var(--ease),
+    opacity 140ms var(--ease-out);
+}
+.banner > div {
+  min-height: 0;
+  overflow: hidden;
+}
+.banner.closing {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+@starting-style {
+  .banner {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;

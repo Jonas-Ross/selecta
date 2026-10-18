@@ -41,17 +41,21 @@ export function RailGutter({ shelf, scale }: { shelf: Shelf; scale: BpmScale }) 
         <Term name="time">Time</Term>
       </span>
       <span className="lane-title" style={{ top: shelf.join + 2 }}>
-        <Term name="join">Joins</Term>
+        <Term name="join">Transitions</Term>
       </span>
-      <span className="lane-title" style={{ top: shelf.key.top - 22 }}>
-        <Term name="key">Key</Term> <Term name="camelot">Camelot</Term>
-      </span>
-      <span className="band" style={{ top: bands.B.top + bands.B.height / 2 - 7 }}>
-        <Term name="major">B</Term>
-      </span>
-      <span className="band" style={{ top: bands.A.top + bands.A.height / 2 - 7 }}>
-        <Term name="minor">A</Term>
-      </span>
+      {shelf.key && bands && (
+        <>
+          <span className="lane-title" style={{ top: shelf.key.top - 22 }}>
+            <Term name="key">Key</Term> <Term name="camelot">Camelot</Term>
+          </span>
+          <span className="band" style={{ top: bands.B.top + bands.B.height / 2 - 7 }}>
+            <Term name="major">B</Term>
+          </span>
+          <span className="band" style={{ top: bands.A.top + bands.A.height / 2 - 7 }}>
+            <Term name="minor">A</Term>
+          </span>
+        </>
+      )}
     </div>
   );
 }
@@ -90,16 +94,16 @@ export function RailLanes({
     row,
     x0: slotX(pos, step),
     tempo: row.bpm === undefined ? undefined : tempoY(row.bpm, scale, shelf.tempo),
-    key: keyY(row.camelot, shelf.bands),
+    key: shelf.bands && keyY(row.camelot, shelf.bands),
   }));
   const path = (y: 'tempo' | 'key') =>
     stepPath(
       slots.map((slot) => ({ x0: slot.x0, x1: slot.x0 + step, y: slot[y], hot: slot.id === held })),
     );
   const tempo = path('tempo');
-  const keys = path('key');
+  const { key, bands } = shelf;
+  const keys = key ? path('key') : undefined;
   const starts = startTimes(slots.map((slot) => slot.row.duration_seconds));
-  const { bands } = shelf;
   // Labels and joins are drawn only near the visible stretch; a long draft has hundreds.
   const near = (x: number) => x > scrolled - step * 2 && x < scrolled + view + step;
 
@@ -108,7 +112,7 @@ export function RailLanes({
   for (const value of scale.grid)
     grid += `M0 ${tempoY(value, scale, shelf.tempo).toFixed(1)}H${width}`;
 
-  for (const band of [bands.B, bands.A])
+  for (const band of bands ? [bands.B, bands.A] : [])
     if (band.height > 36)
       for (let n = 1; n < 12; n++)
         grid += `M0 ${(band.top + (n * band.height) / 12).toFixed(1)}H${width}`;
@@ -116,7 +120,8 @@ export function RailLanes({
   let seams = '';
 
   for (const { x0 } of slots.slice(1))
-    seams += `M${x0.toFixed(1)} ${shelf.tempo.top}v${shelf.tempo.height}M${x0.toFixed(1)} ${shelf.key.top}v${shelf.key.height}`;
+    for (const lane of key ? [shelf.tempo, key] : [shelf.tempo])
+      seams += `M${x0.toFixed(1)} ${lane.top}v${lane.height}`;
 
   const missing = (row: Row, x0: number, lane: Box, kind: 'tempo' | 'key') =>
     step > 84 && (
@@ -143,7 +148,7 @@ export function RailLanes({
           </pattern>
         </defs>
         <path className="lane-grid" d={grid || 'M0 0'} />
-        {[shelf.tempo, bands.B, bands.A].map((lane, i) => (
+        {(bands ? [shelf.tempo, bands.B, bands.A] : [shelf.tempo]).map((lane, i) => (
           <rect
             key={i}
             className="lane-box"
@@ -156,7 +161,7 @@ export function RailLanes({
         <path className="lane-seams" d={seams || 'M0 0'} />
         {[
           { lane: shelf.tempo, gaps: tempo.gaps },
-          { lane: shelf.key, gaps: keys.gaps },
+          ...(key && keys ? [{ lane: key, gaps: keys.gaps }] : []),
         ].flatMap(({ lane, gaps }, i) =>
           gaps.map((gap, k) => (
             <rect
@@ -169,9 +174,9 @@ export function RailLanes({
             />
           )),
         )}
-        <path className="step" d={tempo.d + keys.d || 'M0 0'} />
-        <path className="step-hot" d={tempo.hot + keys.hot || 'M0 0'} />
-        <path className="step-caps" d={tempo.caps + keys.caps || 'M0 0'} />
+        <path className="step" d={tempo.d + (keys?.d ?? '') || 'M0 0'} />
+        <path className="step-hot" d={tempo.hot + (keys?.hot ?? '') || 'M0 0'} />
+        <path className="step-caps" d={tempo.caps + (keys?.caps ?? '') || 'M0 0'} />
       </svg>
 
       {slots.map(
@@ -196,8 +201,8 @@ export function RailLanes({
                   hot={slot.id === held}
                 />
               )}
-              {slot.key === undefined ? (
-                missing(slot.row, slot.x0, shelf.key, 'key')
+              {!key ? null : slot.key === undefined ? (
+                missing(slot.row, slot.x0, key, 'key')
               ) : (
                 <ValueLabel
                   kind="key"

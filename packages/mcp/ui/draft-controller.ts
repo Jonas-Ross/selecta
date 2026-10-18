@@ -448,7 +448,14 @@ export function createDraftController(
 
       const revision = state.draft.revision;
 
-      status(`Saving revision ${revision} to Music.app…`, 'pending');
+      const target = state.draft.playlist?.name;
+
+      status(
+        target
+          ? `Updating “${target}” in Music.app with revision ${revision}…`
+          : `Saving revision ${revision} to Music.app…`,
+        'pending',
+      );
       const result = await app.callServerTool({
         name: 'save_playlist_draft',
         arguments: { draft_id: draftId, revision },

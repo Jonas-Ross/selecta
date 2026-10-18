@@ -6,17 +6,55 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--claude-w);
+  grid-template-columns: minmax(0, 1fr) auto;
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+}
+/* Spans the panel too, so the grooves never redraw while it slides; shifted by CENTRE.x
+   (groove.ts) of the panel's width to keep their centre over the draft. */
+.draft-ground {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  transform: translateX(calc(-0.42 * var(--claude-w)));
+  transition: transform var(--t-slide) var(--ease-out);
+}
+.draft-body:has(> .claude.collapsed) > .draft-ground {
+  transform: translateX(calc(-0.42 * var(--claude-edge-w)));
 }
 .draft-main {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background:
-    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / var(--grid-step) var(--grid-step),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / var(--grid-step) var(--grid-step),
-    var(--bg);
+  position: relative;
+  isolation: isolate;
+}
+/* The crate, Listen or the bench above the rail. One height for all, so the rail never moves
+   when they swap; gives way before the rail does, since the head, rail and transport need ~460px. */
+.mode-band {
+  position: relative;
+  flex: none;
+  height: clamp(300px, min(44%, 100% - 460px), 520px);
+  border-bottom: 1px solid var(--line);
+}
+.mode-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: scale(0.985);
+  visibility: hidden;
+  transition:
+    opacity var(--t-slow) var(--ease-out),
+    transform var(--t-slow) var(--ease-out),
+    visibility 0s var(--t-slow);
+}
+.mode-layer.on {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition-delay: 0s;
 }
 .draft-head {
   display: flex;
@@ -49,7 +87,7 @@
   align-items: center;
   gap: 6px;
   margin-left: auto;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
   font-size: var(--fs-label);
   color: var(--ink4);
@@ -81,7 +119,7 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
 }
 
 /* The left gutter stays put while the rail scrolls under it. */
@@ -282,7 +320,7 @@
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow: clip;
 }
 .join:hover .join-words,
 .join:focus-visible .join-words {
@@ -358,7 +396,7 @@
   position: absolute;
   inset: 0;
   container-type: size;
-  overflow: hidden;
+  overflow: clip;
   border-radius: var(--r-xs);
   background: linear-gradient(160deg, var(--bg3), var(--bg1) 70%);
   box-shadow: var(--sleeve-shadow);
@@ -450,7 +488,7 @@
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .rec-x {
@@ -499,7 +537,7 @@
 .cap-artist {
   display: block;
   white-space: nowrap;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
 }
 .cap-title {
@@ -516,11 +554,13 @@
 .rail-empty {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
   pointer-events: none;
 }
 .rail-wait {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
   display: flex;
   flex-direction: column;
   align-items: center;

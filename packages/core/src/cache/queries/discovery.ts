@@ -5,6 +5,7 @@ import type {
   CoOccurrenceFilters,
   CoOccurrenceResult,
   OverviewStats,
+  PlaylistOverlap,
   PlaylistRef,
   PlaylistRow,
   RecentActivity,
@@ -43,6 +44,7 @@ function parsePlaylistRefs(raw: string): PlaylistRef[] {
 }
 
 function buildCoOccurrenceSourceFilter(filters: CoOccurrenceFilters): {
+  sourceSql: string;
   excludedSql: string;
   includedSql: string;
   params: Record<string, unknown>;
@@ -67,9 +69,11 @@ function buildCoOccurrenceSourceFilter(filters: CoOccurrenceFilters): {
   const excludedSql = checks.length > 0 ? checks.join(' OR ') : '0';
 
   return {
+    sourceSql: `AND p.name NOT IN (SELECT value FROM json_each(@excludeNames))`,
     excludedSql,
     includedSql: checks.length > 0 ? `AND NOT (${excludedSql})` : '',
     params: {
+      excludeNames: JSON.stringify(filters.excludePlaylistNames ?? []),
       ...excludeParams,
       ...(filters.maxPlaylistTracks != null
         ? { maxPlaylistTracks: filters.maxPlaylistTracks }
@@ -168,6 +172,8 @@ export function createDiscoveryQueries(db: Database) {
     `SELECT ${PLAYLIST_COLUMNS} FROM playlists p WHERE p.persistent_id = ?`,
   );
 
+  const playlistIdsStmt = db.prepare('SELECT persistent_id AS id FROM playlists');
+
   const userPlaylistIdsByNameStmt = db.prepare(
     `SELECT persistent_id AS id FROM playlists WHERE name = ? AND kind = 'user' ORDER BY persistent_id`,
   );
@@ -190,7 +196,26 @@ export function createDiscoveryQueries(db: Database) {
            WHERE pt.track_persistent_id = ?
            GROUP BY p.persistent_id ORDER BY p.name COLLATE NOCASE`);
 
+  // One shared track is coincidence, not overlap.
+  const getPlaylistOverlapStmt = db.prepare(`SELECT p.persistent_id AS id, p.name,
+             COUNT(DISTINCT pt.track_persistent_id) AS sharedTracks,
+             (SELECT COUNT(DISTINCT size_pt.track_persistent_id) FROM playlist_tracks size_pt
+              WHERE size_pt.playlist_persistent_id = p.persistent_id) AS playlistTracks
+           FROM playlist_tracks pt
+           JOIN playlists p ON p.persistent_id = pt.playlist_persistent_id AND p.kind = 'user'
+           WHERE pt.track_persistent_id IN (SELECT value FROM json_each(@trackIds))
+             AND p.persistent_id NOT IN (SELECT value FROM json_each(@excludeIds))
+             AND p.name NOT IN (SELECT value FROM json_each(@excludeNames))
+           GROUP BY p.persistent_id
+           HAVING sharedTracks >= 2
+           ORDER BY sharedTracks DESC, playlistTracks ASC, p.persistent_id
+           LIMIT @limit`);
+
   return {
+    getPlaylistIds(): string[] {
+      return (playlistIdsStmt.all() as { id: string }[]).map((r) => r.id);
+    },
+
     playlistExists(persistentId: string): boolean {
       return playlistExistsStmt.get(persistentId) !== undefined;
     },
@@ -426,6 +451,7 @@ export function createDiscoveryQueries(db: Database) {
                     CASE WHEN ${sourceFilter.excludedSql} THEN 1 ELSE 0 END AS excluded
              FROM playlist_tracks pt1
              JOIN playlists p ON p.persistent_id = pt1.playlist_persistent_id AND p.kind = 'user'
+               ${sourceFilter.sourceSql}
              WHERE pt1.track_persistent_id IN (${seedList})
              GROUP BY p.persistent_id
            ) source`,
@@ -447,6 +473,7 @@ export function createDiscoveryQueries(db: Database) {
                     json_group_array(json_object('id', p.persistent_id, 'name', p.name)) AS playlists
              FROM playlist_tracks pt1
              JOIN playlists p ON p.persistent_id = pt1.playlist_persistent_id AND p.kind = 'user'
+               ${sourceFilter.sourceSql}
              JOIN playlist_tracks pt2 ON pt2.playlist_persistent_id = pt1.playlist_persistent_id
              WHERE pt1.track_persistent_id IN (${seedList})
                AND pt2.track_persistent_id NOT IN (${seedList})
@@ -472,6 +499,21 @@ export function createDiscoveryQueries(db: Database) {
         })),
         sourcePlaylists,
       };
+    },
+
+    getPlaylistOverlap(
+      trackIds: readonly string[],
+      exclude: { playlistIds?: readonly string[]; playlistNames?: readonly string[] },
+      limit: number,
+    ): PlaylistOverlap[] {
+      // Ordered by how much of the given set each playlist holds, smaller
+      // playlists first on a tie: the one the set most nearly copies leads.
+      return getPlaylistOverlapStmt.all({
+        trackIds: JSON.stringify([...new Set(trackIds)]),
+        excludeIds: JSON.stringify(exclude.playlistIds ?? []),
+        excludeNames: JSON.stringify(exclude.playlistNames ?? []),
+        limit,
+      }) as PlaylistOverlap[];
     },
   };
 }

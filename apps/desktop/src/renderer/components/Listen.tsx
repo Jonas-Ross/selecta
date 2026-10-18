@@ -1,13 +1,13 @@
-// Listen, in the crate's place above the rail: the record playing, large, with
-// its disc out and turning while Music.app plays it, and the sleeve back
-// beside it: its facts, the join into the next record, and the set's route
-// round the key wheel.
+// Listen, in the crate's place above the rail: the record playing, large, and
+// the sleeve back beside it: its facts and the transition into the next record.
+import { useEffect, useRef, type RefObject } from 'react';
 import { join } from '../joins.js';
+import { useReducedMotion } from '../hooks/motion.js';
 import { useSettings } from '../hooks/useSettings.js';
+import { usePalette } from '../palette.js';
 import type { Row } from '../state.js';
 import { Term } from './Explain.js';
 import { FeatureFacts } from './FeatureFacts.js';
-import { KeyWheel } from './KeyWheel.js';
 import { Sleeve } from './Sleeve.js';
 
 export function Listen({
@@ -15,6 +15,7 @@ export function Listen({
   now,
   playing,
   current,
+  position,
   status,
   joinDisabled,
   onJoin,
@@ -24,6 +25,8 @@ export function Listen({
   playing: boolean;
   // Music.app is on this record, playing or paused, rather than it being only cued.
   current: boolean;
+  /** Seconds into the record Music is on. */
+  position: number;
   status?: string;
   joinDisabled: boolean;
   onJoin: () => void;
@@ -31,6 +34,11 @@ export function Listen({
   const { joinLead } = useSettings().settings;
   const row = items[now];
   const next = items[now + 1];
+  const palette = usePalette(row?.track_id);
+  const still = useReducedMotion();
+  const glow = useRef<HTMLElement>(null);
+
+  usePulse(glow, playing && !still && row?.bpm ? 240 / row.bpm : undefined, position);
 
   if (!row)
     return (
@@ -43,14 +51,15 @@ export function Listen({
 
   return (
     <section className="deck" aria-label="Listen">
-      <div className={`deck-hero${playing ? ' spinning' : ''}${current ? ' out' : ''}`}>
+      <i
+        ref={glow}
+        className={`deck-glow${palette ? ' on' : ''}`}
+        aria-hidden="true"
+        style={{ background: palette?.a }}
+      />
+      <div className={`deck-hero${playing ? ' playing' : ''}`}>
         <div className="deck-record" key={row.entry_id}>
-          <div className="deck-disc" aria-hidden="true">
-            <i className="deck-label" />
-          </div>
-          <div className="deck-sleeve">
-            <Sleeve trackId={row.track_id} title={row.title} />
-          </div>
+          <Sleeve trackId={row.track_id} title={row.title} />
         </div>
         <div className="deck-title">
           <span className="deck-kicker mono">
@@ -78,7 +87,7 @@ export function Listen({
             </div>
             <dl className="joinbox">
               <dt>
-                <Term name="join">The join</Term>
+                <Term name="join">Transition</Term>
               </dt>
               <dd>{j.tempo}</dd>
               <dt>
@@ -101,7 +110,7 @@ export function Listen({
             </dl>
             <div className="hj">
               <button type="button" className="btn uv" disabled={joinDisabled} onClick={onJoin}>
-                Hear the join
+                Hear the transition
               </button>
               <p>Plays the last {joinLead} seconds of this track into the next.</p>
             </div>
@@ -109,8 +118,48 @@ export function Listen({
         ) : (
           <p className="last">Last track in the draft.</p>
         )}
-        <KeyWheel items={items} now={now} />
       </aside>
     </section>
   );
+}
+
+// Bars are counted from the start of the record by Music's position, so the swell pauses
+// and seeks with it. Where the first beat really falls isn't known: the app can't hear Music.
+function usePulse(el: RefObject<HTMLElement | null>, bar: number | undefined, position: number) {
+  const pulse = useRef<Animation>(undefined);
+
+  useEffect(() => {
+    if (!bar) return;
+
+    pulse.current = el.current!.animate(
+      [
+        { transform: 'scale(1)' },
+        { transform: 'scale(1.08)', offset: 0.04 },
+        { transform: 'scale(1)', offset: 0.6 },
+        { transform: 'scale(1)' },
+      ],
+      { duration: bar * 1000, iterations: Infinity, easing: 'ease-out' },
+    );
+
+    return () => {
+      pulse.current?.cancel();
+      pulse.current = undefined;
+    };
+  }, [el, bar]);
+
+  useEffect(() => {
+    const animation = pulse.current;
+
+    if (!animation) return;
+
+    const start = document.timeline.currentTime;
+
+    if (typeof start !== 'number') return;
+
+    const origin = start - position * 1000;
+
+    // Music is read about once a second, so only a real jump moves the bar line.
+    if (animation.startTime === null || Math.abs(Number(animation.startTime) - origin) > 120)
+      animation.startTime = origin;
+  }, [position, bar]);
 }

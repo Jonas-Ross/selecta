@@ -11,12 +11,15 @@ import {
   type Suggestion,
 } from '../../shared/protocol.js';
 import { onArtworkFailure, retryArtwork } from '../artwork.js';
+import { runTools } from '../digging.js';
 import type { Rect } from '../flight.js';
 import { editQueue, newestHold, type Change } from '../edits.js';
 import { useReducedMotion } from '../hooks/motion.js';
 import { useListen } from '../hooks/useListen.js';
+import { usePalette } from '../palette.js';
 import { onMeasured } from '../hooks/useMeasure.js';
 import { useReplace } from '../hooks/useReplace.js';
+import { useSettings } from '../hooks/useSettings.js';
 import { transportHeld } from '../listen.js';
 import { withMoved } from '../reorder.js';
 import { around, site, swapEdit, swapEntries } from '../replace.js';
@@ -28,6 +31,7 @@ import {
   pendingOrder,
   previewLinked,
   rows,
+  saveHolds,
   saveLabel,
   saveOutcome,
   totals,
@@ -36,11 +40,15 @@ import {
   type Row,
   type Run,
 } from '../state.js';
+import { Banner } from './Banner.js';
 import { Bench } from './Bench.js';
 import { ClaudePanel } from './ClaudePanel.js';
 import { Crate, type CrateTrack } from './Crate.js';
+import { Digging } from './Digging.js';
 import { Flight, type FlightPlan } from './Flight.js';
+import { Groove } from './Groove.js';
 import { Listen } from './Listen.js';
+import { ListeningMode } from './ListeningMode.js';
 import { Rail, type Opening, type RailHandle } from './Rail.js';
 import { RecordMenu } from './RecordMenu.js';
 import { Rolling } from './Rolling.js';
@@ -74,7 +82,11 @@ export function Draft({
 }) {
   const [view, setView] = useState<DraftView>();
   const log = run?.log ?? [];
+  const tools = runTools(log);
   const agent = PROVIDER_LABELS[by];
+  const { settings, update } = useSettings();
+  const chatCollapsed = settings.chat === 'collapsed';
+  const collapseChat = (collapsed: boolean) => update({ chat: collapsed ? 'collapsed' : 'open' });
   const [choices, setChoices] = useState<ProviderStatus[]>();
   // The host records a request before answering it, so until the answer the run may not show it yet.
   const [asking, setAsking] = useState(false);
@@ -103,6 +115,7 @@ export function Draft({
   const [flight, setFlight] = useState<FlightPlan & { at: number }>();
   const [added, setAdded] = useState('');
   const [tab, setTab] = useState<'dig' | 'listen'>('dig');
+  const [full, setFull] = useState(false);
   const [menu, setMenu] = useState<{ entryId: string; x: number; y: number }>();
   const [swapped, setSwapped] = useState<{ text: string; undo?: () => void }>();
   const replace = useReplace(draftId, () => by, setNotice);
@@ -142,13 +155,15 @@ export function Draft({
   const draft = view?.draft;
   const items = pendingOrder(rows(view ?? {}), pending);
   const saved = draft?.save !== undefined;
+  const saveHeld = saveHolds(draft);
   const linked = previewLinked(view ?? {});
-  const locked = saved || saving || leaving;
+  const locked = saveHeld || saving || leaving;
   const sum = totals(items);
   const inDraft = useMemo(() => new Set(items.map((row) => row.track_id)), [items]);
   // A record in the air is an edit not yet queued, so Save and Home wait for it to land.
   const airborne = flight !== undefined;
   const span = bpmSpan(items);
+  const grooveRecords = items.map((row) => ({ id: row.track_id, seconds: row.duration_seconds }));
   const sides = replacing && around(items, replacing.entryId);
   // Not while Claude runs: linking the draft mid-run would refuse its edits partway through.
   const canPlay =
@@ -165,6 +180,12 @@ export function Draft({
     canPlay,
   });
   const { player } = listen;
+  // Both stay mounted, so flipping crossfades instead of rebuilding the crate from empty.
+  const band = replacing?.view === 'bench' && sides ? 'bench' : tab;
+  // Listen lights the grooves in the colours of the record it shows, cued or playing.
+  const tint = usePalette(
+    tab === 'listen' && replacing?.view !== 'bench' ? listen.nowRow?.track_id : undefined,
+  );
   // An edit syncs the preview under the music lock a player action holds, and a first play links it mid-flight.
   const playerHeld = listen.busy;
   const held = transportHeld(listen.busy, linked, pending);
@@ -393,15 +414,18 @@ export function Draft({
     setAsking(true);
 
     // A build that failed before creating the draft has nothing to revise.
-    const request = draft
-      ? onSend(
-          text,
-          feedbackMessage(
+    const ask = () =>
+      draft
+        ? onSend(
             text,
-            items.filter((row) => selected.has(row.entry_id)),
-          ),
-        )
-      : onStart(text);
+            feedbackMessage(
+              text,
+              items.filter((row) => selected.has(row.entry_id)),
+            ),
+          )
+        : onStart(text);
+    // Feedback waits for queued edits, so a host stopping the music names the revision they left.
+    const request = draft ? queue.after(ask) : ask();
 
     void request.finally(() => setAsking(false));
   }
@@ -468,7 +492,7 @@ export function Draft({
       ? 'Confirming the save'
       : saving
         ? 'Saving to Music'
-        : saved
+        : saveHeld
           ? saveLabel(draft?.save)
           : leaving
             ? 'Finishing your edits'
@@ -515,10 +539,15 @@ export function Draft({
         right={
           <SaveConfirm
             phase={phase}
-            label={saving && phase !== 'confirm' ? 'Saving…' : saveLabel(draft?.save)}
-            disabled={!draft || locked || working || airborne || playerHeld}
+            label={
+              saving && phase !== 'confirm'
+                ? 'Saving…'
+                : saveLabel(draft?.save, draft?.playlist !== undefined)
+            }
+            disabled={!draft || saved || locked || working || airborne || playerHeld}
             done={saved}
             name={draft?.name ?? ''}
+            target={draft?.playlist?.name}
             tracks={sum.tracks}
             minutes={sum.minutes}
             partial={sum.partial}
@@ -528,31 +557,50 @@ export function Draft({
         }
       />
       <div className="draft-body">
+        <div className="draft-ground">
+          <Groove
+            records={grooveRecords}
+            now={listen.current ? listen.now : undefined}
+            playing={listen.playing}
+            progress={listen.duration ? listen.position / listen.duration : undefined}
+            tint={tint}
+          />
+        </div>
         <section className="draft-main" aria-label="Draft">
-          {replacing?.view === 'bench' && sides ? (
-            <Bench around={sides} replace={replace} agent={agent} onSwap={swap} />
-          ) : tab === 'listen' ? (
-            <Listen
-              items={items}
-              now={listen.now}
-              playing={listen.playing}
-              current={listen.current}
-              status={listen.status}
-              joinDisabled={!canPlay || held || !listen.canJoin}
-              onJoin={listen.join}
-            />
-          ) : (
-            <Crate
-              inDraft={inDraft}
-              canAdd={canAdd}
-              lockedReason={
-                lock ?? (draft ? 'One record at a time' : 'The draft is still being built')
-              }
-              onAdd={add}
-              onCarry={carry}
-              onCarryEnd={() => setOpening(undefined)}
-            />
-          )}
+          <div className="mode-band">
+            <div className={band === 'dig' ? 'mode-layer on' : 'mode-layer'} inert={band !== 'dig'}>
+              <Crate
+                inDraft={inDraft}
+                canAdd={canAdd}
+                lockedReason={
+                  lock ?? (draft ? 'One record at a time' : 'The draft is still being built')
+                }
+                onAdd={add}
+                onCarry={carry}
+                onCarryEnd={() => setOpening(undefined)}
+              />
+            </div>
+            <div
+              className={band === 'listen' ? 'mode-layer on' : 'mode-layer'}
+              inert={band !== 'listen'}
+            >
+              <Listen
+                items={items}
+                now={listen.now}
+                playing={listen.playing}
+                current={listen.current}
+                position={listen.position}
+                status={listen.status}
+                joinDisabled={!canPlay || held || !listen.canJoin}
+                onJoin={listen.join}
+              />
+            </div>
+            {band === 'bench' && sides && (
+              <div className="mode-layer on">
+                <Bench around={sides} replace={replace} agent={agent} onSwap={swap} />
+              </div>
+            )}
+          </div>
           <div className="draft-head">
             <div className="modes" role="tablist" aria-label="Above the draft">
               {(['dig', 'listen'] as const).map((name) => (
@@ -610,53 +658,63 @@ export function Draft({
                   : 'Drag to reorder · right-click to replace')}
             </span>
           </div>
-          {outOfStep && (
-            <p className="notice bar error">
-              Music may be playing an old copy of this draft. Stop, then play again.
-            </p>
-          )}
-          {player.problem && (
-            <button type="button" className="notice bar dismiss" onClick={player.dismiss}>
-              Music.app: {player.problem}
-              <span className="mono">dismiss</span>
-            </button>
-          )}
-          {notice && (
-            <button
-              type="button"
-              className="notice bar dismiss"
-              onClick={() => setNotice(undefined)}
-            >
-              {notice}
-              <span className="mono">dismiss</span>
-            </button>
-          )}
-          {swapped && (
-            <p className="notice bar" role="status">
-              {swapped.text}
-              {swapped.undo && (
-                <button type="button" className="btn line sm" onClick={swapped.undo}>
-                  Undo
-                </button>
-              )}
-              <button type="button" className="mono" onClick={() => setSwapped(undefined)}>
-                dismiss
+          <Banner value={outOfStep}>
+            {() => (
+              <p className="notice bar error">
+                Music may be playing an old copy of this draft. Stop, then play again.
+              </p>
+            )}
+          </Banner>
+          <Banner value={player.problem}>
+            {(problem) => (
+              <button type="button" className="notice bar dismiss" onClick={player.dismiss}>
+                Music.app: {problem}
+                <span className="mono">dismiss</span>
               </button>
-            </p>
-          )}
-          {artProblem && (
-            <button
-              type="button"
-              className="notice bar dismiss"
-              onClick={() => {
-                setArtProblem(undefined);
-                retryArtwork();
-              }}
-            >
-              Album art unavailable: {artProblem}
-              <span className="mono">try again</span>
-            </button>
-          )}
+            )}
+          </Banner>
+          <Banner value={notice}>
+            {(text) => (
+              <button
+                type="button"
+                className="notice bar dismiss"
+                onClick={() => setNotice(undefined)}
+              >
+                {text}
+                <span className="mono">dismiss</span>
+              </button>
+            )}
+          </Banner>
+          <Banner value={swapped}>
+            {({ text, undo }) => (
+              <p className="notice bar" role="status">
+                {text}
+                {undo && (
+                  <button type="button" className="btn line sm" onClick={undo}>
+                    Undo
+                  </button>
+                )}
+                <button type="button" className="mono" onClick={() => setSwapped(undefined)}>
+                  dismiss
+                </button>
+              </p>
+            )}
+          </Banner>
+          <Banner value={artProblem}>
+            {(problem) => (
+              <button
+                type="button"
+                className="notice bar dismiss"
+                onClick={() => {
+                  setArtProblem(undefined);
+                  retryArtwork();
+                }}
+              >
+                Album art unavailable: {problem}
+                <span className="mono">try again</span>
+              </button>
+            )}
+          </Banner>
           <Rail
             items={items}
             selected={selected}
@@ -675,19 +733,21 @@ export function Draft({
             handle={rail}
             replacing={replacing?.entryId}
             onMenu={(entryId, x, y) => !replacing && setMenu({ entryId, x, y })}
-            empty={
-              <div className="rail-wait">
-                {working ? (
-                  <>
-                    <b>{agent} is picking tracks</b>
-                  </>
-                ) : (
-                  <>
-                    <b>No draft yet</b>
-                    <span>Try again in the {agent} panel.</span>
-                  </>
-                )}
-              </div>
+            empty={(shelf, width) =>
+              working ? (
+                <Digging
+                  agent={agent}
+                  shelf={shelf}
+                  view={width}
+                  tool={tools.at(-1)}
+                  calls={tools.length}
+                />
+              ) : (
+                <div className="rail-wait">
+                  <b>No draft yet</b>
+                  <span>Try again in the {agent} panel.</span>
+                </div>
+              )
             }
           />
           <Transport
@@ -710,6 +770,14 @@ export function Draft({
             onNext={listen.next}
             onSeek={listen.current ? (position) => void player.seek(position) : undefined}
             onOpen={tab === 'listen' ? undefined : () => setTab('listen')}
+            onFull={
+              replacing
+                ? undefined
+                : () => {
+                    setTab('listen');
+                    setFull(true);
+                  }
+            }
             onStop={linked ? listen.stop : undefined}
             stopDisabled={held || saving}
           />
@@ -751,6 +819,16 @@ export function Draft({
             onSwap={swap}
           />
         )}
+        {full && (
+          <ListeningMode
+            name={draft?.name ?? ''}
+            items={items}
+            listen={listen}
+            disabled={!canPlay || held}
+            joinDisabled={!canPlay || held || !listen.canJoin}
+            onClose={() => setFull(false)}
+          />
+        )}
         {flight &&
           createPortal(
             <Flight
@@ -761,17 +839,21 @@ export function Draft({
             document.body,
           )}
         <ClaudePanel
+          draftId={draftId}
           by={by}
           choices={choices}
           onPick={onPick}
           log={log}
           working={working}
           hasDraft={draft !== undefined}
-          locked={locked || linked || listen.busy || replacing !== undefined}
+          locked={locked || listen.busy || replacing !== undefined}
+          listening={linked}
           selected={items.filter((row) => selected.has(row.entry_id))}
           onUnselect={toggleSelected}
           onSend={send}
           onStop={() => void selecta.call('agent.cancel', { draft_id: draftId })}
+          collapsed={chatCollapsed}
+          onCollapse={collapseChat}
         />
       </div>
     </div>

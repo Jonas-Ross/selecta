@@ -83,6 +83,7 @@ export function makeBridge(overrides: Partial<Bridge> = {}): Bridge {
     createPlaylist: vi.fn().mockRejectedValue(new Error('not used')),
     clonePlaylist: vi.fn().mockRejectedValue(new Error('not used')),
     replacePlaylist: vi.fn().mockRejectedValue(new Error('not used')),
+    overwritePlaylist: vi.fn().mockRejectedValue(new Error('not used')),
     deletePlaylistById: vi.fn().mockRejectedValue(new Error('not used')),
     addPlaylistTracks: vi.fn().mockRejectedValue(new Error('not used')),
     removePlaylistTracks: vi.fn().mockRejectedValue(new Error('not used')),

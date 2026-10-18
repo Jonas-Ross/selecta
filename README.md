@@ -10,13 +10,13 @@ There's no recommendation engine in here, no similarity scoring, no ML. Your age
 
 - macOS with Music.app
 - Node.js 22+
-- Optional: [metrognome](https://github.com/Jonas-Ross/metrognome) (`brew install jonas-ross/tap/metrognome`), to measure tempo and key for tracks the free catalogs don't know
+- [metrognome](https://github.com/Jonas-Ross/metrognome) (`brew install jonas-ross/tap/metrognome`), which measures each track's tempo and key
 - Optional: a signed-in [Claude Code](https://docs.claude.com/en/docs/claude-code) or [Codex](https://developers.openai.com/codex/cli) CLI, for the desktop app
 
 ## Setup
 
 ```bash
-brew install jonas-ross/tap/metrognome   # optional, see Requirements
+brew install jonas-ross/tap/metrognome   # measures tempo and key
 git clone https://github.com/Jonas-Ross/selecta.git
 cd selecta
 npm install
@@ -35,12 +35,12 @@ Optionally, backfill tempo and key data so your agent can sequence by BPM:
 ```bash
 node dist/index.js enrich                    # all not-yet-attempted tracks
 node dist/index.js enrich -n 200             # or a batch at a time
-node dist/index.js enrich --source analysis  # then analyze the previews of what's left
+node dist/index.js enrich --source catalog   # optionally, catalog data for what's left
 ```
 
-The default pass looks tracks up on MusicBrainz/AcousticBrainz and Deezer (free, no API keys) at roughly 1–3 seconds per track, so a large library takes a while — it's safe to interrupt and resume. AcousticBrainz has had no new data since early 2022, so recent releases mostly come back empty.
+The default pass measures the music itself: it runs [metrognome](https://github.com/Jonas-Ross/metrognome) over each track's 30-second store preview for tempo and key, at roughly 3 seconds per track under the store's rate limit, so a large library takes a while — it's safe to interrupt and resume. The audio is analyzed in memory and discarded. Selecta finds the binary on `PATH` or in Homebrew's bin, or wherever `SELECTA_METROGNOME_PATH` points, and refuses one older than it can read (`brew upgrade metrognome` fixes that); `node dist/index.js doctor` shows which one it found. Without it the command reports every track skipped and changes nothing.
 
-`--source analysis` fills that gap by measuring the music itself: it runs [metrognome](https://github.com/Jonas-Ross/metrognome) over each track's 30-second store preview for tempo and key. The audio is analyzed in memory and discarded. Selecta finds the binary on `PATH` or in Homebrew's bin, or wherever `SELECTA_METROGNOME_PATH` points, and refuses one older than it can read (`brew upgrade metrognome` fixes that); `node dist/index.js doctor` shows which one it found. Without it the command reports every track skipped and changes nothing. The two passes keep separate records, so a track the lookup found nothing for is still worth analyzing, and neither overwrites what the other already found. An estimate the analyzer isn't sure about is discarded rather than stored — a missing BPM is better than a wrong one. A fast tempo the analyzer folded from a half-time reading says so, and carries the half-time figure alongside. If your library wasn't bought in the US store, set `SELECTA_STORE_COUNTRY` to your two-letter country code (`gb`, `de`, `jp`) so previews are looked up where your music is sold; `docs/audio-features.md` lists this and the key-profile option.
+`--source catalog` looks tracks up on MusicBrainz/AcousticBrainz and Deezer instead (free, no API keys, roughly 1–3 seconds per track). It is the only source of danceability, but AcousticBrainz has had no new data since early 2022, so recent releases mostly come back empty. The two passes keep separate records, so a track the lookup found nothing for is still worth analyzing, and neither overwrites what the other already found. An estimate the analyzer isn't sure about is discarded rather than stored — a missing BPM is better than a wrong one. A fast tempo the analyzer folded from a half-time reading says so, and carries the half-time figure alongside. If your library wasn't bought in the US store, set `SELECTA_STORE_COUNTRY` to your two-letter country code (`gb`, `de`, `jp`) so previews are looked up where your music is sold; `docs/audio-features.md` lists this and the key-profile option.
 
 Whichever pass runs, dead ends are remembered so they aren't attempted twice, and refreshing the library never discards features already fetched.
 
@@ -148,7 +148,7 @@ After updating Selecta, run `npm ci && npm run build` in the checkout your conne
 |---|---|
 | `refresh_library` | Full reread of Music.app into the cache. Manual by design. Also records play and skip deltas since the previous refresh, and remaps unambiguous recent playlist rekeys and reports ambiguous copies without deleting them. |
 | `set_note` | Save the agent's own note on a track or playlist ("great opener", "user preferred the plain name") so it's there next session. Cache-only, never written to Music.app. Notes come back verbatim on reads; Selecta never filters or ranks on them. |
-| `enrich_features` | Fetch BPM, key and danceability for tracks not yet attempted, from MusicBrainz/AcousticBrainz and Deezer (`source: catalog`) or by analyzing store previews with metrognome (`source: analysis`). Works through the most-played backlog, or targets specific track IDs (up to 50). The only tool that uses the network. For a whole-library backfill, prefer the `enrich` CLI command above. |
+| `enrich_features` | Fetch BPM, key and danceability for tracks not yet attempted, by analyzing store previews with metrognome (`source: analysis`, the default) or from MusicBrainz/AcousticBrainz and Deezer (`source: catalog`). Works through the most-played backlog, or targets specific track IDs (up to 50). The only tool that uses the network. For a whole-library backfill, prefer the `enrich` CLI command above. |
 
 Selecta only writes where you point it: it creates playlists, overwrites its own preview slot, edits or deletes the user playlists you ask it to, and sets favorites and ratings on the tracks you name. Smart, subscription and folder playlists are never modified.
 
@@ -156,7 +156,7 @@ Selecta only writes where you point it: it creates playlists, overwrites its own
 
 A desktop app on the same core. Press New playlist, describe what you want, and Claude or Codex builds a draft from your library while you watch. The draft is a row of records on a rail, with tempo and key lanes underneath that show how the set moves from track to track. Above it is a crate of your library to flip through and drag records from. Drag to reorder, select records to point your feedback at them, and save to Music.app when you're happy.
 
-Listen plays the draft through Music.app from the Selecta Preview playlist: the record playing, the join into the next one, and a Camelot wheel tracing the set's route. Selecta never touches audio or Music's volume itself, and the agent waits until you stop listening before it edits again.
+Listen plays the draft through Music.app from the Selecta Preview playlist: the record playing, the transition into the next one, and a Camelot wheel tracing the set's route. Selecta never touches audio or Music's volume itself, and the agent waits until you stop listening before it edits again.
 
 It uses your own `claude` or `codex` CLI login, so there's no API key. The agent can read your library and edit the draft, but it can't save or touch Music.app; only you can.
 

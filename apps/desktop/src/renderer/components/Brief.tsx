@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { selecta } from '../api.js';
 import { pickProvider, rememberProvider } from '../providers.js';
 import { BRIEF_LIMIT, type ProviderId, type ProviderStatus } from '../../shared/protocol.js';
+import { Groove } from './Groove.js';
 import { TopBar } from './TopBar.js';
 
 export function Brief({
@@ -53,6 +54,7 @@ export function Brief({
     <>
       <TopBar onHome={onCancel} crumb={<h1 className="crumb-title">New playlist</h1>} />
       <main className="page">
+        <Groove fixed />
         <form className="column brief" onSubmit={submit}>
           <div className="page-head">
             <h1>What are you after?</h1>

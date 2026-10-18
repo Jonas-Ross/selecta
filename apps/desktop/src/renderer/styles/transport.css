@@ -2,7 +2,7 @@
 .transport {
   flex: none;
   display: grid;
-  grid-template-columns: auto minmax(0, 230px) minmax(160px, 1fr) auto;
+  grid-template-columns: auto minmax(0, 230px) minmax(160px, 1fr) auto auto;
   align-items: center;
   gap: var(--s5);
   height: 56px;

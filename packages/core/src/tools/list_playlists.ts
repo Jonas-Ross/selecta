@@ -31,7 +31,7 @@ export type ListPlaylistsOutput = {
   cache_age_hours: number | null;
 };
 
-export const LIST_PLAYLISTS_DESCRIPTION = `List the user's playlists from the cache. kind 'user' playlists are hand-made — the strongest taste signal; 'smart' and 'subscription' are rule- or Apple-generated. Use a playlist's id with search's in_playlist filter to see its tracks. A note field is your own earlier set_note memory on that playlist, verbatim (absent when none). Empty array = no playlists match the filter.`;
+export const LIST_PLAYLISTS_DESCRIPTION = `List the user's playlists from the cache. kind 'user' playlists are hand-made — evidence of the user's taste, and playlists they already have: a new playlist drawn mostly from one of them is a copy; 'smart' and 'subscription' are rule- or Apple-generated. Use a playlist's id with search's in_playlist filter to see its tracks. A note field is your own earlier set_note memory on that playlist, verbatim (absent when none). Empty array = no playlists match the filter.`;
 
 export async function handleListPlaylists(
   raw: unknown,

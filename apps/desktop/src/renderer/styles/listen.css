@@ -1,12 +1,9 @@
 /* Listen: the record playing, large, in the crate's band. */
 .deck {
   position: relative;
-  flex: none;
-  /* Gives way before the rail does: the draft head, rail and transport below need about 460px. */
-  height: clamp(300px, min(44%, 100% - 460px), 430px);
+  height: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
-  border-bottom: 1px solid var(--line);
   overflow: hidden;
   container-type: size;
 }
@@ -19,9 +16,11 @@
 }
 .deck-hero {
   /* Sized by the band both ways, so a short window shrinks the record instead of cropping it. */
-  --size: min(300px, (100cqw - 300px) * 0.48, 100cqh - 48px);
+  --size: min(480px, (100cqw - 300px) * 0.48, 100cqh - 40px);
+  position: relative;
   display: flex;
-  align-items: center;
+  /* The title sits on the sleeve's bottom edge, so a longer or shorter one doesn't move the rest. */
+  align-items: flex-end;
   gap: var(--s6);
   min-width: 0;
   padding: var(--s5) var(--s6);
@@ -33,77 +32,8 @@
   aspect-ratio: 1;
   animation: rise var(--t-slow) var(--ease-out);
 }
-.deck-sleeve {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-}
-/* The disc slides half out of its sleeve once Music.app is on this record, and turns while it plays. */
-.deck-disc {
-  position: absolute;
-  inset: 3%;
-  border-radius: 50%;
-  background:
-    radial-gradient(
-      circle,
-      transparent 0 17%,
-      rgba(255, 255, 255, 0.05) 17.4% 17.8%,
-      transparent 18.2%
-    ),
-    repeating-radial-gradient(circle, #0b0d12 0 1.1px, #14171f 1.6px 2.4px), #0b0d12;
-  box-shadow:
-    0 20px 40px -18px rgba(0, 0, 0, 0.9),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-  transform: translateX(0);
-  transition: transform 0.9s var(--ease-out);
-}
-.deck-disc::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 30deg,
-    transparent 0 10%,
-    rgba(200, 215, 255, 0.08) 14%,
-    transparent 22% 58%,
-    rgba(200, 215, 255, 0.06) 62%,
-    transparent 70%
-  );
-}
-.deck-label {
-  position: absolute;
-  inset: 33%;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--bg) 0 6%, var(--acid) 6.5% 100%);
-  opacity: 0.92;
-  animation: spin 1.8s linear infinite;
-  animation-play-state: paused;
-}
-.deck-label::before {
-  content: '';
-  position: absolute;
-  left: 48%;
-  top: 8%;
-  width: 4%;
-  height: 22%;
-  border-radius: 2px;
-  background: var(--bg);
-}
-.deck-hero.out .deck-disc {
-  transform: translateX(46%);
-}
-.deck-hero.spinning .deck-label {
-  animation-play-state: running;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 .deck-title {
   min-width: 0;
-  margin-left: calc(var(--size) * 0.42);
 }
 .deck-kicker {
   font-size: var(--fs-tiny);
@@ -111,14 +41,15 @@
   text-transform: uppercase;
   color: var(--ink3);
 }
-.deck-hero.spinning .deck-kicker {
+.deck-hero.playing .deck-kicker {
   color: var(--acid);
 }
 .deck-title h2 {
-  margin: 10px 0 6px;
-  font: 800 var(--fs-hero)/1 var(--display);
+  margin: 14px 0 10px;
+  /* Grows with the band, so a wide window fills with the title rather than empty room. */
+  font: 800 clamp(var(--fs-hero), 5cqw, 96px) / 0.92 var(--display);
   font-stretch: 125%;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.025em;
   overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -126,8 +57,26 @@
   overflow: hidden;
 }
 .deck-title p {
-  font-size: var(--fs-base);
+  font-size: var(--fs-head);
   color: var(--ink2);
+}
+/* The sleeve's own colour, faint under the record; Listen swells it once a bar while it plays. */
+.deck-glow {
+  position: absolute;
+  left: -10%;
+  bottom: -70%;
+  width: 80%;
+  height: 140%;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 1.4s var(--ease),
+    background-color 1.4s var(--ease);
+}
+.deck-glow.on {
+  opacity: 0.32;
 }
 .deck-title .deck-status {
   margin-top: var(--s3);
@@ -138,32 +87,15 @@
 /* A narrow window stacks the title under a smaller record rather than squeezing it to a column. */
 @container (max-width: 800px) {
   .deck-hero {
-    --size: min(130px, 100cqh - 200px);
+    /* What the band's height leaves after the stacked title, padding and gap. */
+    --size: min(200px, 100cqh - 150px, 100cqw - 348px);
     flex-direction: column;
     align-items: flex-start;
-    justify-content: center;
     gap: var(--s4);
-  }
-  .deck-title {
-    margin-left: 0;
   }
   .deck-title h2 {
     margin: 6px 0 4px;
     font-size: var(--fs-head);
     -webkit-line-clamp: 2;
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  .deck-disc {
-    transition: none;
-  }
-  .deck-label {
-    animation: none;
-  }
-}
-:root[data-motion='reduce'] .deck-disc {
-  transition: none;
-}
-:root[data-motion='reduce'] .deck-label {
-  animation: none;
 }

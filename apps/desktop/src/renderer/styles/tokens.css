@@ -15,7 +15,6 @@
   --line: rgba(150, 170, 210, 0.075);
   --line2: rgba(150, 170, 210, 0.14);
   --line3: rgba(150, 170, 210, 0.26);
-  --grid: rgba(150, 170, 210, 0.028);
   --rim: rgba(196, 210, 245, 0.62);
   --rim-glow: rgba(150, 170, 255, 0.35);
 
@@ -79,17 +78,19 @@
   --r-lg: 8px;
   --r-xl: 10px;
 
-  /* Chrome geometry; the inset title bar leaves the traffic lights 80px. */
+  /* Chrome geometry. macOS 26's lights end at 78px from main.ts's x 18;
+     the mark's groove then starts about 20px clear of them. */
   --top: 48px;
-  --lights: 80px;
+  --lights: 96px;
   --claude-w: 352px;
-  --grid-step: 40px;
+  --claude-edge-w: 20px;
 
   --ease: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --t-fast: 0.15s;
   --t-mid: 0.22s;
   --t-slow: 0.45s;
+  --t-slide: 0.32s;
 }
 
 @media (max-width: 1280px) {

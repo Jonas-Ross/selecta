@@ -1,7 +1,7 @@
 // Enrichment layer: match heuristics pure, engine + tool handler against
 // in-memory SQLite with a canned FetchLike — no real network, ever.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SelectaCache } from '../src/cache/index.js';
 import {
   FIELDS_BY_SOURCE,
@@ -164,7 +164,11 @@ describe('enrichPendingTracks', () => {
 
   it('resolves a batch through every terminal path', async () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
-    const summary = await enrichPendingTracks(cache, { limit: 10 }, testDeps(fetchLike));
+    const summary = await enrichPendingTracks(
+      cache,
+      { limit: 10, source: 'catalog' },
+      testDeps(fetchLike),
+    );
 
     expect(summary).toEqual({
       processed: 6,
@@ -227,7 +231,11 @@ describe('enrichPendingTracks', () => {
     // caller bug must not become a full-library crawl of external services.
     expect(cache.getTracksPendingEnrichment('catalog', -1)).toEqual([]);
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
-    const summary = await enrichPendingTracks(cache, { limit: -1 }, testDeps(fetchLike));
+    const summary = await enrichPendingTracks(
+      cache,
+      { limit: -1, source: 'catalog' },
+      testDeps(fetchLike),
+    );
 
     expect(summary.processed).toBe(0);
     expect(calls).toHaveLength(0);
@@ -235,7 +243,11 @@ describe('enrichPendingTracks', () => {
 
   it('respects the batch limit and reports the rest as pending', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
-    const summary = await enrichPendingTracks(cache, { limit: 2 }, testDeps(fetchLike));
+    const summary = await enrichPendingTracks(
+      cache,
+      { limit: 2, source: 'catalog' },
+      testDeps(fetchLike),
+    );
 
     expect(summary.processed).toBe(2);
     expect(summary.pendingRemaining).toBe(4);
@@ -247,7 +259,7 @@ describe('enrichPendingTracks', () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
     const summary = await enrichPendingTracks(
       cache,
-      { trackIds: ['T-ROADS', 'T-TEARDROP'] },
+      { trackIds: ['T-ROADS', 'T-TEARDROP'], source: 'catalog' },
       testDeps(fetchLike),
     );
 
@@ -282,7 +294,7 @@ describe('enrichPendingTracks', () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
     const summary = await enrichPendingTracks(
       cache,
-      { trackIds: ['T-TEARDROP', 'T-ANGEL'] },
+      { trackIds: ['T-TEARDROP', 'T-ANGEL'], source: 'catalog' },
       testDeps(fetchLike),
     );
 
@@ -303,7 +315,11 @@ describe('enrichPendingTracks', () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
 
     await expect(
-      enrichPendingTracks(cache, { trackIds: ['T-TEARDROP', 'T-UNKNOWN'] }, testDeps(fetchLike)),
+      enrichPendingTracks(
+        cache,
+        { trackIds: ['T-TEARDROP', 'T-UNKNOWN'], source: 'catalog' },
+        testDeps(fetchLike),
+      ),
     ).rejects.toMatchObject({ errorCode: 'track_not_found' });
     expect(calls).toHaveLength(0);
     expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
@@ -313,7 +329,11 @@ describe('enrichPendingTracks', () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
 
     await expect(
-      enrichPendingTracks(cache, { trackIds: ['T-TEARDROP', 'T-TEARDROP'] }, testDeps(fetchLike)),
+      enrichPendingTracks(
+        cache,
+        { trackIds: ['T-TEARDROP', 'T-TEARDROP'], source: 'catalog' },
+        testDeps(fetchLike),
+      ),
     ).rejects.toMatchObject({ errorCode: 'validation_error' });
     expect(calls).toHaveLength(0);
     expect(cache.getAudioFeatures('T-TEARDROP')).toBeNull();
@@ -325,7 +345,7 @@ describe('enrichPendingTracks', () => {
 
     await enrichPendingTracks(
       cache,
-      { limit: 10 },
+      { limit: 10, source: 'catalog' },
       {
         ...testDeps(fetchLike),
         trace: (line) => lines.push(line),
@@ -347,7 +367,7 @@ describe('enrichPendingTracks', () => {
 
     await enrichPendingTracks(
       cache,
-      { limit: 3 },
+      { limit: 3, source: 'catalog' },
       {
         ...testDeps(fetchLike),
         onProgress: (p, current) => ticks.push([p.processed, current]),
@@ -370,7 +390,7 @@ describe('enrichPendingTracks', () => {
 
     await enrichPendingTracks(
       cache,
-      { limit: 2 },
+      { limit: 2, source: 'catalog' },
       {
         fetchLike,
         sleep: async (ms) => {
@@ -389,10 +409,14 @@ describe('enrichPendingTracks', () => {
   it('never re-attempts a track with a row — all statuses are terminal', async () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
 
-    await enrichPendingTracks(cache, { limit: 10 }, testDeps(fetchLike));
+    await enrichPendingTracks(cache, { limit: 10, source: 'catalog' }, testDeps(fetchLike));
     const callsAfterFirstRun = calls.length;
 
-    const summary = await enrichPendingTracks(cache, { limit: 10 }, testDeps(fetchLike));
+    const summary = await enrichPendingTracks(
+      cache,
+      { limit: 10, source: 'catalog' },
+      testDeps(fetchLike),
+    );
 
     expect(summary.processed).toBe(0);
     expect(calls.length).toBe(callsAfterFirstRun);
@@ -407,7 +431,7 @@ describe('enrichPendingTracks', () => {
     const chunkErrors: [string, number][] = [];
     const summary = await enrichPendingTracks(
       cache,
-      { limit: 10 },
+      { limit: 10, source: 'catalog' },
       {
         ...testDeps(fetchLike),
         onChunkError: (message, trackCount) => chunkErrors.push([message, trackCount]),
@@ -453,7 +477,11 @@ describe('enrichPendingTracks', () => {
       throw new Error(`unrouted url: ${url}`);
     });
     const targetIds = Array.from({ length: 30 }, (_, i) => `T-${String(i + 1).padStart(2, '0')}`);
-    const summary = await enrichPendingTracks(big, { trackIds: targetIds }, testDeps(fetchLike));
+    const summary = await enrichPendingTracks(
+      big,
+      { trackIds: targetIds, source: 'catalog' },
+      testDeps(fetchLike),
+    );
 
     expect(summary.skipped).toBe(25); // chunk 1 lost to the 503
     expect(summary.processed).toBe(5); // chunk 2 completed (all no_match)
@@ -506,7 +534,7 @@ describe('enrichPendingTracks', () => {
       throw new Error(`unrouted url: ${url}`);
     });
 
-    await enrichPendingTracks(quoted, { limit: 1 }, testDeps(fetchLike));
+    await enrichPendingTracks(quoted, { limit: 1, source: 'catalog' }, testDeps(fetchLike));
     const dzCall = decodeURIComponent(calls.find((c) => c.includes('deezer'))!);
 
     expect(dzCall).toContain('artist:"The Q Band" track:"Say Boom Again"');
@@ -516,7 +544,11 @@ describe('enrichPendingTracks', () => {
     const fetchLike: FetchLike = async () => {
       throw new Error('getaddrinfo ENOTFOUND musicbrainz.org');
     };
-    const summary = await enrichPendingTracks(cache, { limit: 6 }, testDeps(fetchLike));
+    const summary = await enrichPendingTracks(
+      cache,
+      { limit: 6, source: 'catalog' },
+      testDeps(fetchLike),
+    );
 
     expect(summary.skipped).toBe(6);
     expect(summary.errors).toEqual([
@@ -533,7 +565,11 @@ describe('enrichPendingTracks', () => {
 
       return scenarioHandler(url);
     });
-    const summary = await enrichPendingTracks(cache, { limit: 1 }, testDeps(fetchLike));
+    const summary = await enrichPendingTracks(
+      cache,
+      { limit: 1, source: 'catalog' },
+      testDeps(fetchLike),
+    );
 
     expect(summary.skipped).toBe(1);
     expect(summary.errors).toEqual([expect.stringContaining('Quota limit exceeded')]);
@@ -553,7 +589,7 @@ describe('enrich_features tool', () => {
   it('runs a batch and reports the snake_case summary', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
     const out = (await handleEnrichFeatures(
-      { limit: 10 },
+      { limit: 10, source: 'catalog' },
       makeDeps(fetchLike),
     )) as EnrichFeaturesOutput;
 
@@ -586,7 +622,7 @@ describe('enrich_features tool', () => {
     ]);
 
     const out = (await handleEnrichFeatures(
-      { track_ids: ['T-GLORYBOX', 'T-MIDNIGHT'] },
+      { track_ids: ['T-GLORYBOX', 'T-MIDNIGHT'], source: 'catalog' },
       deps,
     )) as EnrichFeaturesOutput;
 
@@ -612,7 +648,10 @@ describe('enrich_features tool', () => {
   it('rejects unknown targeted IDs without making a source request', async () => {
     const { fetchLike, calls } = fakeFetch(scenarioHandler);
     const err = asError(
-      await handleEnrichFeatures({ track_ids: ['T-TEARDROP', 'T-UNKNOWN'] }, makeDeps(fetchLike)),
+      await handleEnrichFeatures(
+        { track_ids: ['T-TEARDROP', 'T-UNKNOWN'], source: 'catalog' },
+        makeDeps(fetchLike),
+      ),
     );
 
     expect(err).toMatchObject({ error: 'track_not_found' });
@@ -625,11 +664,16 @@ describe('enrich_features tool', () => {
     const deps = makeDeps(fetchLike);
     const tooMany = Array.from({ length: 51 }, (_, i) => `T-${i}`);
 
-    expect(asError(await handleEnrichFeatures({ track_ids: tooMany }, deps)).error).toBe(
-      'validation_error',
-    );
     expect(
-      asError(await handleEnrichFeatures({ track_ids: ['T-TEARDROP'], limit: 1 }, deps)).error,
+      asError(await handleEnrichFeatures({ track_ids: tooMany, source: 'catalog' }, deps)).error,
+    ).toBe('validation_error');
+    expect(
+      asError(
+        await handleEnrichFeatures(
+          { track_ids: ['T-TEARDROP'], limit: 1, source: 'catalog' },
+          deps,
+        ),
+      ).error,
     ).toBe('validation_error');
     expect(calls).toHaveLength(0);
   });
@@ -637,7 +681,7 @@ describe('enrich_features tool', () => {
   it('rejects duplicate target IDs at the parse boundary', async () => {
     let cacheRead = false;
     const result = await handleEnrichFeatures(
-      { track_ids: ['T-TEARDROP', 'T-TEARDROP'] },
+      { track_ids: ['T-TEARDROP', 'T-TEARDROP'], source: 'catalog' },
       {
         cache: () => {
           cacheRead = true;
@@ -656,7 +700,9 @@ describe('enrich_features tool', () => {
 
   it('rejects an out-of-range limit', async () => {
     const { fetchLike } = fakeFetch(scenarioHandler);
-    const err = asError(await handleEnrichFeatures({ limit: 0 }, makeDeps(fetchLike)));
+    const err = asError(
+      await handleEnrichFeatures({ limit: 0, source: 'catalog' }, makeDeps(fetchLike)),
+    );
 
     expect(err.error).toBe('validation_error');
   });
@@ -665,12 +711,38 @@ describe('enrich_features tool', () => {
     const fetchLike: FetchLike = async () => {
       throw new Error('network down');
     };
-    const out = (await handleEnrichFeatures({}, makeDeps(fetchLike))) as EnrichFeaturesOutput;
+    const out = (await handleEnrichFeatures(
+      { source: 'catalog' },
+      makeDeps(fetchLike),
+    )) as EnrichFeaturesOutput;
 
     expect(out.processed).toBe(0);
     expect(out.skipped).toBe(6);
     expect(out.pending_remaining).toBe(6);
     expect(out.source_errors).toEqual([expect.stringContaining('MusicBrainz unreachable')]);
+  });
+
+  it('measures with metrognome when no source is given, and never falls back to the catalogs', async () => {
+    const { fetchLike, calls } = fakeFetch(scenarioHandler);
+    const deps = makeDeps(fetchLike);
+    const page = vi.spyOn(deps.cache(), 'getTracksPendingEnrichment');
+    const out = (await handleEnrichFeatures(
+      {},
+      {
+        ...deps,
+        enrich: {
+          ...deps.enrich,
+          metrognome: { env: { PATH: '/usr/bin' }, isExecutable: () => false },
+        },
+      },
+    )) as EnrichFeaturesOutput;
+
+    expect(out.skipped).toBe(6);
+    expect(out.pending_remaining).toBe(6);
+    expect(out.source_errors).toEqual([expect.stringContaining('brew install')]);
+    expect(calls).toHaveLength(0);
+    // ~3s a track, so the default batch still lands inside a 60s tool-call timeout.
+    expect(page).toHaveBeenCalledWith('analysis', 15);
   });
 });
 

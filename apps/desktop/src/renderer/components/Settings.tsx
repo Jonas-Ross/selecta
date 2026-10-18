@@ -15,6 +15,8 @@ import {
 } from '../settings.js';
 
 const MOTION_LABELS: Record<Motion, string> = { system: 'Match macOS', reduce: 'Reduce' };
+const SHOWN = ['hide', 'show'] as const;
+const SHOWN_LABELS = { hide: 'Hide', show: 'Show' };
 
 // The preview's outgoing record spans the slider's whole range; the next record gets the rest.
 const OUT_SHARE = 0.8;
@@ -62,7 +64,7 @@ function Choice<T extends string>({
 }
 
 function JoinLead({ lead, onChange }: { lead: number; onChange: (lead: number) => void }) {
-  // Where the join starts, as a share of the preview's outgoing record.
+  // Where the transition starts, as a share of the preview's outgoing record.
   const at = (JOIN_LEAD.max - lead) / JOIN_LEAD.max;
 
   return (
@@ -103,7 +105,7 @@ function JoinLead({ lead, onChange }: { lead: number; onChange: (lead: number) =
         max={JOIN_LEAD.max}
         step={JOIN_LEAD.step}
         value={lead}
-        aria-label="How long before the end Hear the join starts"
+        aria-label="How long before the end Hear the transition starts"
         aria-valuetext={`${lead} seconds before the end`}
         onChange={(e) => onChange(clampLead(Number(e.target.value)))}
       />
@@ -144,7 +146,7 @@ export function Settings() {
 
     if (open && !node.open) {
       node.showModal();
-      // The join is why the sheet usually opens, so it gets focus rather than Close.
+      // The transition is why the sheet usually opens, so it gets focus rather than Close.
       node.querySelector<HTMLInputElement>('.jl-range')?.focus();
     } else if (!open && node.open) node.close();
   }, [open]);
@@ -177,7 +179,7 @@ export function Settings() {
           Listen
         </h3>
         <Row
-          title="Hear the join"
+          title="Hear the transition"
           hint="How far before the end of a track it starts, so you hear it run into the next."
           value={
             <output className="set-led" aria-hidden="true">
@@ -218,6 +220,22 @@ export function Settings() {
             labels={CRATE_ORDER_LABELS}
             value={settings.crateOrder}
             onChange={(crateOrder) => update({ crateOrder })}
+          />
+        </Row>
+      </section>
+
+      <section aria-labelledby="set-rail">
+        <h3 id="set-rail" className="set-head">
+          Rail
+        </h3>
+        <Row title="Key lane" hint="Each track's musical key, under the records.">
+          <Choice
+            name="key-lane"
+            label="Key lane"
+            options={SHOWN}
+            labels={SHOWN_LABELS}
+            value={settings.keyLane ? 'show' : 'hide'}
+            onChange={(shown) => update({ keyLane: shown === 'show' })}
           />
         </Row>
       </section>

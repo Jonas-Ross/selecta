@@ -21,6 +21,14 @@ export const Draft = z.strictObject({
       result: z.record(z.string(), z.unknown()).optional(),
     })
     .optional(),
+  // The Music.app playlist the last save produced, kept across edits so the next save updates it.
+  playlist: z
+    .strictObject({
+      playlist_id: z.string().min(1),
+      name: z.string(),
+      track_ids: z.array(z.string().min(1)).max(500),
+    })
+    .optional(),
 });
 export type Draft = z.infer<typeof Draft>;
 
