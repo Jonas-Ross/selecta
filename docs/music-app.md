@@ -52,7 +52,8 @@ What the code does about it: the add script does a best-effort verify-and-trim (
 - **Bulk property getters throw on empty collections.** `playlist.tracks.persistentID()` reads every value in one Apple event, but raises `-1728` (`errAENoSuchObject`, "Can't get object") when the collection is empty instead of returning `[]`. Guard with a length check. Applies to any `collection.property()` bulk read.
 - Bulk getters are also the reason refresh is fast: one Apple event per property, not per track. A 3.6k-track library reads in ~12s.
 - Error mapping from `osascript` stderr: `errAEPrivilegeError` / `-1743` / `Not authorized` means automation permission was denied; app-not-running / event-not-handled patterns mean Music.app isn't open; anything else is a generic JXA error.
-- Each JXA call is a fresh `osascript` process. No shared state between invocations, no long-lived bridge.
+- Starting `osascript` costs about 100 ms; a running one answers a one-property read in about 8 ms, since each property is its own Apple event (measured 2026-10-18, median of 20). So the player and preview calls (read, control, play, read and replace the preview, open it) share one long-lived `osascript` that reads scripts from stdin, one at a time, and keeps the three-minute deadline and error mapping per call. Every other call, the library read and edits included, is still a fresh process.
+- The worker evals each script inside a function call, so one script's `const args` never meets the next. A held `Application('Music')` survives Music quitting and relaunching, and a script error comes back as an ordinary error without ending the loop. A worker that dies or misses a deadline fails its call as an unknown outcome, and the next call starts a new one.
 
 ### Operation ownership and interrupted calls
 
