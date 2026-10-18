@@ -170,7 +170,8 @@ export function ClaudePanel({
                 ))}
               </div>
             ) : (
-              <div key={index} className={`msg ${item.kind}`}>
+              // Prefixed, since a bare `claude` class would pick up the panel's own rules.
+              <div key={index} className={`msg from-${item.kind}`}>
                 <span className="who">
                   {item.kind === 'you'
                     ? 'You'
