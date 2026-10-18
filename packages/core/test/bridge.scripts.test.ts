@@ -260,6 +260,12 @@ describe('player script contract', () => {
       'Math.min(args.position, Math.max(0, Music.currentTrack.duration() - 1))',
     );
     expect(seek.indexOf('Music.playerPosition = goal')).toBeLessThan(seek.indexOf('seekMissed'));
+    // With no settle after it, the read-back waits once first, so the pre-seek position can't pass.
+    const assigned = seek.slice(seek.indexOf('Music.playerPosition = goal'));
+
+    expect(assigned.indexOf('delay(0.05)')).toBeLessThan(
+      assigned.indexOf('Music.playerPosition()'),
+    );
 
     // Both re-check the entry right before acting, after the slot lookup; a resume re-reads shuffle too.
     expect(seek).toContain(
@@ -271,6 +277,11 @@ describe('player script contract', () => {
     );
 
     expect(buildControlPlayerScript({ action: 'pause', on })).not.toMatch(NO_WRITES);
+
+    // Each action reads its own result back, so none pays a fixed settle on top.
+    for (const action of ['pause', 'resume'] as const)
+      expect(buildControlPlayerScript({ action, on })).not.toMatch(/delay\(0\.[1-9]/);
+
     expect(() => buildControlPlayerScript({ action: 'seek', position: -1, on })).toThrow(
       expect.objectContaining({ errorCode: 'validation_error' }),
     );

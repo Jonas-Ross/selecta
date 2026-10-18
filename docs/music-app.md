@@ -100,7 +100,7 @@ Probed live 2026-10-03 against a 16-entry Selecta Preview (`src/bridge/scripts/p
 - **Commands land a beat late.** Straight after `play(playlist)`, `pause()` or `nextTrack()`, a read still shows the old state, and a `pause()` fired at once may not take. Each step waits until the index reads back before the next.
 - **`currentTrack.index()` tells repeated tracks apart** where a persistent ID can't.
 - **Stopped means no current track.** `currentTrack` and `currentPlaylist` throw "Can't get object" and `playerPosition()` is null. Reading `running()` first keeps a closed Music closed.
-- **`playerPosition` is settable** and reads back within a second. `pause()` and a bare `play()` (resume) work, but a read straight after `pause()` can still say playing, so the control script waits 0.3 s before it reads back.
+- **`playerPosition` is settable** and reads back within a second. `pause()` and a bare `play()` (resume) work, but a read straight after `pause()` can still say playing, so each control action polls its own read-back (paused or stopped, playing, the new position) every 50 ms until it lands, rather than wait a fixed beat.
 - **JXA has a global `delay`.** A script that declares its own `const delay` fails to compile.
 - **A track that plays to its end counts as a play.** Probes that let tracks finish move the user's play counts, so probe by seeking and pausing, not by listening through.
 
