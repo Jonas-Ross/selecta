@@ -9,7 +9,8 @@ import {
   spawn as spawnChild,
   type ChildProcessWithoutNullStreams,
 } from 'node:child_process';
-import { BridgeError, type ErrorCode } from '../types/errors.js';
+import { createInterface } from 'node:readline';
+import { BridgeError, preWriteError, type ErrorCode } from '../types/errors.js';
 
 // macOS Apple-event privilege denial. errAEPrivilegeError is -1743.
 const PERMISSION_SIGNATURE = /errAEPrivilegeError|-1743|not authorized/i;
@@ -42,7 +43,7 @@ const interrupted = () =>
 const MAX_STDOUT_BYTES = 64 * 1024 * 1024;
 const DEADLINE_MS = 180_000;
 
-let shared: ReturnType<typeof createJxaWorker> | undefined;
+let sharedWorker: ReturnType<typeof createJxaWorker> | undefined;
 
 /**
  * Run a JXA script via osascript and parse its stdout as JSON.
@@ -50,8 +51,8 @@ let shared: ReturnType<typeof createJxaWorker> | undefined;
  * non-zero exit (mapped from stderr) or unparseable stdout. `shared` runs it in the
  * long-lived worker, behind any other shared call.
  */
-export function runJxa(script: string, { shared: share = false } = {}): Promise<unknown> {
-  if (share) return (shared ??= createJxaWorker()).run(script);
+export function runJxa(script: string, { shared = false } = {}): Promise<unknown> {
+  if (shared) return (sharedWorker ??= createJxaWorker()).run(script);
 
   return new Promise((resolve, reject) => {
     execFile(
@@ -117,23 +118,34 @@ for (;;) {
 }
 `;
 
+// A worker answers this many calls, then a fresh one takes over, so nothing it holds grows forever.
+const RECYCLE_AFTER = 1000;
+
 // ASCII only, so a script split across stdin reads never splits a character.
 const encode = (script: string) =>
-  `${JSON.stringify(script).replace(/[\u0080-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)}\n`;
+  `${JSON.stringify(script).replace(/[\u0080-\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)}\n`;
 
-type Call = { script: string; resolve: (value: unknown) => void; reject: (error: unknown) => void };
+type Call = {
+  script: string;
+  resolve: (value: unknown) => void;
+  reject: (error: unknown) => void;
+  wait: ReturnType<typeof setTimeout>;
+};
+type Worker = { child: ChildProcessWithoutNullStreams; calls: number; stderr: string };
 
 export function createJxaWorker({
   spawn = spawnChild,
   deadlineMs = DEADLINE_MS,
 }: { spawn?: typeof spawnChild; deadlineMs?: number } = {}) {
   const queue: Call[] = [];
-  let child: ChildProcessWithoutNullStreams | undefined;
-  let current: (Call & { timer: ReturnType<typeof setTimeout> }) | undefined;
-  let buffer = '';
+  // The worker new calls go to; a retired or killed one is dropped here and ignored after.
+  let active: Worker | undefined;
+  let current: { call: Call; worker: Worker; timer: ReturnType<typeof setTimeout> } | undefined;
 
   // Held only while a call is out, so an idle worker never keeps a CLI from exiting.
-  function hold(on: boolean) {
+  function hold(worker: Worker | undefined, on: boolean) {
+    const { child } = worker ?? {};
+
     for (const handle of [child, child?.stdin, child?.stdout, child?.stderr] as {
       ref?: () => void;
       unref?: () => void;
@@ -141,39 +153,54 @@ export function createJxaWorker({
       (on ? handle?.ref : handle?.unref)?.call(handle);
   }
 
-  function finish(settle: (call: Call) => void) {
-    const call = current;
+  function retire(worker: Worker) {
+    if (active === worker) active = undefined;
 
-    if (!call) return;
+    hold(worker, false);
+    worker.child.stdin.end();
+  }
 
-    clearTimeout(call.timer);
+  function settle(worker: Worker, outcome: (call: Call) => void) {
+    if (current?.worker !== worker) return;
+
+    const { call, timer } = current;
+
+    clearTimeout(timer);
     current = undefined;
-    settle(call);
+    outcome(call);
     pump();
   }
 
-  function answer(line: string) {
-    let parsed: { out?: unknown; err?: unknown };
+  function answer(worker: Worker, line: string) {
+    let parsed: unknown;
 
     try {
-      parsed = JSON.parse(line) as typeof parsed;
+      parsed = JSON.parse(line);
     } catch {
-      return finish((call) =>
+      parsed = undefined;
+    }
+
+    const { out, err } = (parsed ?? {}) as { out?: unknown; err?: unknown };
+
+    if (typeof err === 'string') {
+      const code = mapJxaError(err);
+
+      // A denial can stick to the process that asked, so the next call asks from a fresh one.
+      if (code === 'automation_permission_denied') retire(worker);
+
+      return settle(worker, (call) =>
+        call.reject(jxaError(code, `osascript failed: ${err.trim()}`)),
+      );
+    }
+
+    if (typeof out !== 'string')
+      return settle(worker, (call) =>
         call.reject(jxaError('jxa_error', `osascript worker wrote ${line.slice(0, 200)}`)),
       );
-    }
 
-    if (typeof parsed.err === 'string') {
-      const err = parsed.err;
+    if (++worker.calls >= RECYCLE_AFTER) retire(worker);
 
-      return finish((call) =>
-        call.reject(jxaError(mapJxaError(err), `osascript failed: ${err.trim()}`)),
-      );
-    }
-
-    const out = String(parsed.out);
-
-    finish((call) => {
+    settle(worker, (call) => {
       try {
         call.resolve(JSON.parse(out));
       } catch {
@@ -184,70 +211,98 @@ export function createJxaWorker({
     });
   }
 
-  function start(): ChildProcessWithoutNullStreams {
-    const next = spawn('osascript', ['-l', 'JavaScript', '-e', WORKER_SCRIPT]);
+  function start(): Worker {
+    const child = spawn('osascript', ['-l', 'JavaScript', '-e', WORKER_SCRIPT]);
+    const worker: Worker = { child, calls: 0, stderr: '' };
 
-    buffer = '';
-    next.stdout.setEncoding('utf8');
-    next.stdout.on('data', (chunk: string) => {
-      buffer += chunk;
+    // Fails the call in flight; whatever ran before it died is unknown, as after a deadline.
+    const died = (error?: Error) => {
+      if (active === worker) active = undefined;
 
-      if (buffer.length > MAX_STDOUT_BYTES) return void next.kill('SIGKILL');
+      const said = worker.stderr.trim() || error?.message;
 
-      let at;
-
-      while ((at = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, at);
-
-        buffer = buffer.slice(at + 1);
-        answer(line);
-      }
-    });
-    // Script errors come back as {err} lines; anything here is osascript's own noise.
-    next.stderr.resume();
-    // A write to a worker that just died surfaces as its exit, below.
-    next.stdin.on('error', () => {});
-
-    // The call in flight may have done anything before the worker died, so its outcome is unknown.
-    const died = () => {
-      if (child !== next) return;
-
-      child = undefined;
-      finish((call) => call.reject(interrupted()));
+      settle(worker, (call) =>
+        call.reject(
+          said ? jxaError(mapJxaError(said), `osascript worker failed: ${said}`) : interrupted(),
+        ),
+      );
     };
 
-    next.on('exit', died);
-    next.on('error', (error) => {
-      if (child !== next) return;
+    child.on('error', died);
+    // On close, not exit, so a line still in the pipe is read before the worker is called dead.
+    child.on('close', () => died());
+    child.stdin.on('error', () => {});
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      worker.stderr = (worker.stderr + chunk).slice(-2000);
+    });
+    createInterface({ input: child.stdout }).on('line', (line) => {
+      if (line.length > MAX_STDOUT_BYTES) return void child.kill('SIGKILL');
 
-      child = undefined;
-      finish((call) => call.reject(jxaError(mapJxaError(error.message), error.message)));
+      answer(worker, line);
     });
 
-    return next;
+    return worker;
   }
 
   function pump() {
-    if (current || !queue.length) {
-      if (!current) hold(false);
+    if (current) return;
 
-      return;
+    const call = queue.shift();
+
+    if (!call) return hold(active, false);
+
+    clearTimeout(call.wait);
+
+    let worker: Worker;
+
+    try {
+      worker = active ??= start();
+    } catch (error) {
+      call.reject(jxaError('jxa_error', `osascript could not start: ${String(error)}`));
+
+      return pump();
     }
 
-    child ??= start();
-    hold(true);
-
-    const call = queue.shift()!;
-    const running = child;
-
-    current = { ...call, timer: setTimeout(() => running.kill('SIGKILL'), deadlineMs) };
-    running.stdin.write(encode(call.script));
+    hold(worker, true);
+    current = {
+      call,
+      worker,
+      // Settled here rather than on the kill, so the next call never goes to the dying worker.
+      timer: setTimeout(() => {
+        retire(worker);
+        worker.child.kill('SIGKILL');
+        settle(worker, (late) => late.reject(interrupted()));
+      }, deadlineMs),
+    };
+    worker.child.stdin.write(encode(call.script));
   }
 
   return {
     run(script: string): Promise<unknown> {
       return new Promise((resolve, reject) => {
-        queue.push({ script, resolve, reject });
+        const call: Call = {
+          script,
+          resolve,
+          reject,
+          // A call that never reached Music within the deadline is refused, so none waits unbounded.
+          wait: setTimeout(() => {
+            const at = queue.indexOf(call);
+
+            if (at < 0) return;
+
+            queue.splice(at, 1);
+            reject(
+              preWriteError(
+                'jxa_error',
+                'Music.app was still busy with an earlier call',
+                'Nothing was sent to Music.app. Try again once it answers.',
+              ),
+            );
+          }, deadlineMs),
+        };
+
+        queue.push(call);
         pump();
       });
     },

@@ -1,33 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { execFile, spawn } from 'node:child_process';
-import { EventEmitter } from 'node:events';
-import { createInterface } from 'node:readline';
-import { PassThrough } from 'node:stream';
+import { execFile } from 'node:child_process';
 import { runJxa } from '../src/bridge/jxa.js';
 import { BridgeError, type ErrorCode } from '../src/types/errors.js';
 
 vi.mock('node:child_process', () => ({
   execFile: vi.fn(),
-  spawn: vi.fn(),
 }));
-
-// The shared worker outlives a test, so its stand-in answers whatever the test last set.
-let workerOut = '';
-
-vi.mocked(spawn).mockImplementation((() => {
-  const child = Object.assign(new EventEmitter(), {
-    stdin: new PassThrough(),
-    stdout: new PassThrough(),
-    stderr: new PassThrough(),
-    kill: () => child.emit('exit', null, 'SIGKILL'),
-  });
-
-  createInterface({ input: child.stdin }).on('line', () =>
-    child.stdout.write(`${JSON.stringify({ out: workerOut })}\n`),
-  );
-
-  return child;
-}) as never);
 
 const mockExecFile = vi.mocked(execFile);
 
@@ -226,8 +204,10 @@ describe('bridge result sentinel mapping', () => {
   });
 
   it('returns whether replacePlaylist created the slot, rejecting a result without it', async () => {
-    workerOut =
-      '{"persistentId":"P-SLOT","trackCount":2,"trackPersistentIds":["T1","T2"],"created":true}';
+    stubExecFile({
+      stdout:
+        '{"persistentId":"P-SLOT","trackCount":2,"trackPersistentIds":["T1","T2"],"created":true}',
+    });
     await expect(
       (await editBridge()).replacePlaylist({ name: 'Selecta Preview', trackIds: ['T1', 'T2'] }),
     ).resolves.toEqual({
@@ -237,7 +217,7 @@ describe('bridge result sentinel mapping', () => {
       created: true,
     });
 
-    workerOut = '{"persistentId":"P-SLOT","trackCount":2}';
+    stubExecFile({ stdout: '{"persistentId":"P-SLOT","trackCount":2}' });
     await expectErrorCode(
       (await editBridge()).replacePlaylist({ name: 'Selecta Preview', trackIds: ['T1', 'T2'] }),
       'jxa_error',
