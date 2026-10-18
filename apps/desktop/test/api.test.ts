@@ -146,7 +146,9 @@ it("lands a linked edit at once and catches Music up behind it, saying it's catc
     entries: [...draft.entries].reverse(),
   });
 
-  expect(edited).toMatchObject({ preview: { status: 'out_of_date' }, preview_syncing: true });
+  // The sync may already be under way, so the preview reads behind either way.
+  expect(edited).toMatchObject({ preview_syncing: true });
+  expect((edited as { preview: { status: string } }).preview.status).not.toBe('current');
   // A read waits its turn behind the sync when there's no earlier answer to give.
   await call('player.state', { draft_id: draftId });
   expect(await call('drafts.get', { draft_id: draftId })).toMatchObject({

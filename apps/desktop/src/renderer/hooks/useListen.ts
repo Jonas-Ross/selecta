@@ -142,7 +142,6 @@ export function useListen({
     canJoin: joinAt !== undefined && now + 1 < items.length,
     join: () => nowRow && joinAt !== undefined && playAt(nowRow.entry_id, joinAt),
     // Waits like a play, so a stop never names a revision an edit is about to replace.
-    // The host pauses Music first if it's on this draft, then releases the preview.
     stop: () =>
       void player.act(
         (now) => asked.stop(now.view),

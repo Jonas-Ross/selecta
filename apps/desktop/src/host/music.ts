@@ -13,28 +13,28 @@ type Transport = {
 type Waiter = { resolve: (value: unknown) => void; reject: (error: unknown) => void };
 
 type Job = {
-  // Jobs with a key can be merged with or dropped while they wait.
+  // Jobs with a key can be dropped while they wait, and merged into when they have `merge`.
   key?: string;
+  merge?: (next: never) => void;
   // Named in the action log; reads polled every second go unnamed, so only their failures show.
   step?: () => string;
-  queuedAt?: number;
-  transport?: Transport;
-  audition?: { trackIds: string[]; index: number; position?: number };
+  queuedAt: number;
   run: () => Promise<unknown>;
   waiters: Waiter[];
 };
+
+const AUDITION = 'audition';
+const transportKey = (draftId: string) => `transport ${draftId}`;
+const syncKey = (draftId: string) => `sync ${draftId}`;
 
 export type MusicLane = ReturnType<typeof createMusicLane>;
 
 export function createMusicLane({
   player,
-  revision,
   syncLinked,
   log = () => {},
 }: {
   player: Playback;
-  /** The draft's revision when its play runs, so an edit landing meanwhile doesn't refuse it. */
-  revision: (draftId: string) => number;
   /** Writes a linked draft's newest order into Selecta Preview, if it has fallen behind. */
   syncLinked: (draftId: string) => Promise<unknown>;
   /** One line per step Music took: how long it ran, how long it waited, how many calls it answered. */
@@ -69,9 +69,11 @@ export function createMusicLane({
         log({
           step: job.step?.() ?? 'read',
           ms: Date.now() - started,
-          waited: started - (job.queuedAt ?? started),
+          waited: started - job.queuedAt,
           calls: job.waiters.length,
-          ...(error !== undefined && { error: (error as Error).message ?? String(error) }),
+          ...(error !== undefined && {
+            error: error instanceof Error ? error.message : String(error),
+          }),
         });
 
       try {
@@ -88,7 +90,7 @@ export function createMusicLane({
     }
   }
 
-  function push<T>(job: Omit<Job, 'waiters'>): Promise<T> {
+  function push<T>(job: Omit<Job, 'waiters' | 'queuedAt'>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       queue.push({
         ...job,
@@ -99,10 +101,17 @@ export function createMusicLane({
     });
   }
 
-  // Joins a job still waiting; it runs with whatever state the merge left it.
-  function join<T>(job: Job): Promise<T> {
+  // Folds `next` into the job at the back when it has `key`, so nothing queued after a call
+  // ever runs before it. The joined job runs with whatever state the merge left it.
+  function joined<T>(key: string, next: unknown): Promise<T> | undefined {
+    const last = queue.at(-1);
+
+    if (last?.key !== key || !last.merge) return undefined;
+
+    (last.merge as (next: unknown) => void)(next);
+
     return new Promise<T>((resolve, reject) =>
-      job.waiters.push({ resolve: resolve as Waiter['resolve'], reject }),
+      last.waiters.push({ resolve: resolve as Waiter['resolve'], reject }),
     );
   }
 
@@ -120,14 +129,22 @@ export function createMusicLane({
   }
 
   const busy = () => running !== undefined || queue.length > 0;
-  const transportKey = (draftId: string) => `transport ${draftId}`;
+
+  // Joins a job with `key` still waiting, which reads what it needs when it runs.
+  function waiting<T>(key: string): Promise<T> | undefined {
+    const job = queue.find((j) => j.key === key);
+
+    return (
+      job &&
+      new Promise<T>((resolve, reject) =>
+        job.waiters.push({ resolve: resolve as Waiter['resolve'], reject }),
+      )
+    );
+  }
 
   async function runTransport(draftId: string, t: Transport): Promise<PlaybackView> {
     if (t.play)
-      return remember(
-        draftId,
-        await player.play(draftId, revision(draftId), t.play.entryId, t.play.position),
-      );
+      return remember(draftId, await player.play(draftId, t.play.entryId, t.play.position));
 
     const last = seen.get(draftId);
 
@@ -144,7 +161,8 @@ export function createMusicLane({
 
     if (t.run === 'resume') view = await player.control(draftId, { action: 'resume' });
 
-    return remember(draftId, view ?? (await player.state(draftId)));
+    // Calls that cancelled out leave the last answer standing, if there is one.
+    return remember(draftId, view ?? seen.get(draftId) ?? (await player.state(draftId)));
   }
 
   // The newest call decides: a play replaces what waits, a seek moves it, a pause and resume cancel.
@@ -166,14 +184,9 @@ export function createMusicLane({
 
   function transport(draftId: string, next: Transport): Promise<PlaybackView> {
     const key = transportKey(draftId);
-    const last = queue.at(-1);
+    const folded = joined<PlaybackView>(key, next);
 
-    // Only the job at the back merges, so nothing queued after a call ever runs before it.
-    if (last?.key === key && last.transport) {
-      merge(last.transport, next);
-
-      return join(last);
-    }
+    if (folded) return folded;
 
     const t: Transport = {};
 
@@ -181,7 +194,7 @@ export function createMusicLane({
 
     return push({
       key,
-      transport: t,
+      merge: (more: Transport) => merge(t, more),
       step: () =>
         t.play
           ? `play ${t.play.entryId}${t.play.position === undefined ? '' : ` at ${t.play.position}`}`
@@ -197,28 +210,18 @@ export function createMusicLane({
   }
 
   function audition(trackIds: string[], index: number, position?: number) {
-    const last = queue.at(-1);
-    const args = { trackIds, index, position };
+    let args = { trackIds, index, position };
+    // A waiting audition reads its tracks when it starts, so the newest replaces them.
+    const folded = joined<AuditionView>(AUDITION, args);
 
-    // The waiting job's run reads these when it starts, so the newest replaces them in place.
-    if (last?.key === 'audition' && last.audition) {
-      Object.assign(last.audition, args);
+    if (folded) return folded;
 
-      return join<AuditionView>(last);
-    }
-
-    const job = {
-      key: 'audition',
-      audition: args,
-      step: () => `audition ${job.audition.index}`,
-      run: async () => {
-        const { trackIds: ids, index: at, position: from } = job.audition;
-
-        return (heard = await player.audition(ids, at, from));
-      },
-    };
-
-    return push<AuditionView>(job);
+    return push<AuditionView>({
+      key: AUDITION,
+      merge: (next: typeof args) => (args = next),
+      step: () => `audition ${args.index}`,
+      run: async () => (heard = await player.audition(args.trackIds, args.index, args.position)),
+    });
   }
 
   return {
@@ -228,7 +231,12 @@ export function createMusicLane({
 
       if (busy() && last) return Promise.resolve(last);
 
-      return push({ run: async () => remember(draftId, await player.state(draftId)) });
+      const key = `read ${draftId}`;
+
+      return (
+        waiting<PlaybackView>(key) ??
+        push({ key, run: async () => remember(draftId, await player.state(draftId)) })
+      );
     },
 
     play: (draftId: string, entryId: string, position?: number) =>
@@ -252,28 +260,30 @@ export function createMusicLane({
 
     // Behind everything already asked, so an edit's order reaches Music before a play after it.
     sync(draftId: string) {
-      const key = `sync ${draftId}`;
-      const waiting = queue.find((job) => job.key === key);
+      const key = syncKey(draftId);
 
-      // The waiting sync reads the draft when it runs, so it covers this edit too.
-      if (waiting) return join(waiting);
-
-      return push({ key, step: () => 'sync preview', run: () => syncLinked(draftId) });
+      // A waiting sync reads the draft when it runs, so it covers this edit too.
+      return (
+        waiting(key) ?? push({ key, step: () => 'sync preview', run: () => syncLinked(draftId) })
+      );
     },
 
     syncing: (draftId: string) =>
-      running?.key === `sync ${draftId}` || queue.some((job) => job.key === `sync ${draftId}`),
+      running?.key === syncKey(draftId) || queue.some((job) => job.key === syncKey(draftId)),
 
     audition,
 
     auditionState(): Promise<AuditionView> {
       if (busy() && heard) return Promise.resolve(heard);
 
-      return push({ run: async () => (heard = await player.auditionState()) });
+      return (
+        waiting<AuditionView>('read audition') ??
+        push({ key: 'read audition', run: async () => (heard = await player.auditionState()) })
+      );
     },
 
     auditionStop() {
-      drop((job) => job.key === 'audition', { state: 'stopped' });
+      drop((job) => job.key === AUDITION, { state: 'stopped' });
 
       return push<void>({
         step: () => 'stop audition',

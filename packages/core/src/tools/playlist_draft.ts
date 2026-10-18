@@ -306,8 +306,14 @@ export class PlaylistDraftTools {
     }
   }
 
-  /** `deferPreview` leaves a linked draft's Selecta Preview behind, for the caller to sync with `syncLinked`. */
-  async edit(raw: unknown, { deferPreview = false }: { deferPreview?: boolean } = {}) {
+  /**
+   * `schedulePreview` takes over a linked draft's Selecta Preview write, told as soon as the
+   * edit lands so it can queue `syncLinked`; without it the edit writes Music itself.
+   */
+  async edit(
+    raw: unknown,
+    { schedulePreview }: { schedulePreview?: (draftId: string) => void } = {},
+  ) {
     const input = parseInput(z.strictObject(editDraftInputShape), raw);
 
     if (!input.ok) return input.error;
@@ -384,8 +390,10 @@ export class PlaylistDraftTools {
         };
       });
 
+      if (tracksChanged) schedulePreview?.(draft.draft_id);
+
       const sync =
-        tracksChanged && !deferPreview
+        tracksChanged && !schedulePreview
           ? await this.syncPreview(draft, false)
           : { preview: undefined, preview_result: undefined };
 
@@ -396,14 +404,8 @@ export class PlaylistDraftTools {
   }
 
   /** Brings a linked draft's Selecta Preview up to its newest order; a no-op unless it fell behind. */
-  async syncLinked(draftId: string) {
-    try {
-      const draft = this.store.get(draftId);
-
-      return await this.afterSync(draft, await this.syncPreview(draft, false));
-    } catch (error) {
-      return toErrorEnvelope(error);
-    }
+  syncLinked(draftId: string) {
+    return this.syncPreview(this.store.get(draftId), false);
   }
 
   async save(raw: unknown) {

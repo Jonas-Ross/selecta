@@ -90,36 +90,17 @@ export function createApi(
   const player = createPlayback(deps);
   const lane = createMusicLane({
     player,
-    revision: (draftId) => deps.drafts().get(draftId).revision,
     syncLinked: async (draftId) => {
       await drafts.syncLinked(draftId);
       emit({ event: 'drafts.changed' });
     },
     log: (entry) => note('music', entry),
   });
-  // Validation is the draft tools'; this only names the draft for bookkeeping.
-  const draftOf = (args: unknown) => {
-    const id = (args as { draft_id?: unknown } | undefined)?.draft_id;
-
-    return typeof id === 'string' ? id : undefined;
-  };
-  // Edits still landing per draft: their sync is queued only once the edit has, so they count too.
-  const editing = new Map<string, number>();
-  const catchingUp = (draftId: string) => (editing.get(draftId) ?? 0) > 0 || lane.syncing(draftId);
-
   // A linked edit's Music write runs in the lane; the screen shows it as catching up, not out of step.
-  // Asked before and after the read, since the sync can finish while the view is read.
-  async function withSyncing<T>(draftId: string | undefined, read: () => Promise<T>) {
-    const before = draftId !== undefined && catchingUp(draftId);
-    const view = await read();
-
-    return view && typeof view === 'object' && 'draft' in view && view.draft
-      ? {
-          ...view,
-          preview_syncing: before || catchingUp((view.draft as { draft_id: string }).draft_id),
-        }
+  const catchingUp = <T>(view: T, syncing: boolean) =>
+    view && typeof view === 'object' && 'draft' in view
+      ? { ...view, preview_syncing: syncing }
       : view;
-  }
 
   const features = (trackId: string) => deps.cache().getAudioFeatures(trackId) ?? undefined;
   const measurer = createMeasurer({
@@ -257,22 +238,21 @@ export function createApi(
       return artwork.get(track_ids, refresh);
     },
     'drafts.list': () => deps.drafts().list(),
-    'drafts.get': (args) => withSyncing(draftOf(args), () => drafts.get(args)),
+    'drafts.get': (args) => {
+      // Asked as the store is read, so the flag and the preview status describe the same moment.
+      const id = (args as { draft_id?: unknown } | undefined)?.draft_id;
+      const syncing = typeof id === 'string' && lane.syncing(id);
+
+      return drafts.get(args).then((view) => catchingUp(view, syncing));
+    },
     'drafts.edit': async (args) => {
-      const id = draftOf(args);
+      const view = await drafts.edit(args, {
+        schedulePreview: (id) => {
+          if (linked(id)) void lane.sync(id).catch(() => {});
+        },
+      });
 
-      if (id !== undefined) editing.set(id, (editing.get(id) ?? 0) + 1);
-
-      try {
-        const view = await drafts.edit(args, { deferPreview: true });
-
-        if ('draft' in view && view.preview?.status === 'out_of_date')
-          void lane.sync(view.draft.draft_id).catch(() => {});
-
-        return await withSyncing(undefined, async () => view);
-      } finally {
-        if (id !== undefined) editing.set(id, editing.get(id)! - 1);
-      }
+      return 'draft' in view ? catchingUp(view, lane.syncing(view.draft.draft_id)) : view;
     },
     'drafts.save': (args) => lane.after('save', () => drafts.save(args)),
     'agent.providers': () => providers(),

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AuditionView, ProviderId, Suggestion } from '../../shared/protocol.js';
 import { selecta } from '../api.js';
-import { poll, stopAfter, type AuditionPlan } from '../replace.js';
+import { poll, type AuditionPlan } from '../replace.js';
 
 const READ_EVERY_MS = 1000;
 
@@ -34,8 +34,6 @@ export function useReplace(
   const asked = useRef(0);
   // Set once an audition has written Selecta Preview, so closing knows to pause it.
   const auditioned = useRef(false);
-  // The audition or pause still under way, which holds Music until it lands.
-  const inFlight = useRef<Promise<unknown>>(undefined);
   const [polling, setPolling] = useState(false);
   const current = useRef(state);
 
@@ -81,13 +79,11 @@ export function useReplace(
     setState(undefined);
     setTrouble(undefined);
 
+    // The host runs it after any audition already starting and drops any still waiting.
     if (auditioned.current)
-      void stopAfter(inFlight.current, () => selecta.call('player.auditionStop')).catch(
-        (e: Error) => warn(e.message),
-      );
+      void selecta.call('player.auditionStop').catch((e: Error) => warn(e.message));
 
     auditioned.current = false;
-    inFlight.current = undefined;
     setPolling(false);
     setHeard(undefined);
   }, [draftId, warn]);
@@ -110,12 +106,6 @@ export function useReplace(
       },
     );
   }, [polling]);
-
-  function track<T>(call: Promise<T>) {
-    inFlight.current = call;
-
-    return call;
-  }
 
   // `wanted` shows at once; the newest answer replaces it once every call has landed.
   function act(wanted: AuditionView, call: () => Promise<AuditionView | void>) {
@@ -159,13 +149,11 @@ export function useReplace(
           ...(plan.position !== undefined && { position: plan.position }),
           pending: true,
         },
-        () => track(selecta.call('player.audition', plan)),
+        () => selecta.call('player.audition', plan),
       );
     },
     pause: () =>
-      act({ ...heard, state: 'stopped', pending: true }, () =>
-        track(selecta.call('player.auditionStop')),
-      ),
+      act({ ...heard, state: 'stopped', pending: true }, () => selecta.call('player.auditionStop')),
   };
 }
 

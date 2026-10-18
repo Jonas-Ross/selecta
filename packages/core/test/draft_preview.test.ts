@@ -74,22 +74,24 @@ it('links explicit preview and synchronizes repeated occurrences at the accepted
   expect(deps.bridge.createPlaylist).not.toHaveBeenCalled();
 });
 
-it("defers a linked edit's write for syncLinked, which writes the newest order once", async () => {
+it("hands a linked edit's write to schedulePreview, and syncLinked writes the newest order once", async () => {
   const draft = await start();
+  const scheduled: string[] = [];
   const deferred = async (from: Draft) =>
     view(
       await tools.edit(
         { ...exact(from), entries: [from.entries[1], from.entries[0], from.entries[2]] },
-        { deferPreview: true },
+        { schedulePreview: (id) => scheduled.push(id) },
       ),
     );
   const first = await deferred(draft);
   const second = await deferred(first.draft);
 
   expect(first).toMatchObject({ local_edit_saved: true, preview: { status: 'out_of_date' } });
+  expect(scheduled).toEqual([draft.draft_id, draft.draft_id]);
   expect(deps.bridge.replacePlaylist).toHaveBeenCalledTimes(1);
 
-  expect(view(await tools.syncLinked(draft.draft_id))).toMatchObject({
+  expect(await tools.syncLinked(draft.draft_id)).toMatchObject({
     preview: { status: 'current', baseline: order(second.draft) },
   });
   expect(deps.bridge.replacePlaylist).toHaveBeenCalledTimes(2);
@@ -102,6 +104,13 @@ it("defers a linked edit's write for syncLinked, which writes the newest order o
   // In step already, so nothing more reaches Music.
   await tools.syncLinked(draft.draft_id);
   expect(deps.bridge.replacePlaylist).toHaveBeenCalledTimes(2);
+
+  // A name change leaves the order alone, so there is nothing to schedule.
+  await tools.edit(
+    { ...exact(second.draft), name: 'Renamed' },
+    { schedulePreview: (id) => scheduled.push(id) },
+  );
+  expect(scheduled).toHaveLength(2);
 });
 
 it('keeps name, selection, feedback and identical ordered-track changes local', async () => {

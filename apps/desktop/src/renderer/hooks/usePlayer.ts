@@ -26,6 +26,16 @@ export function usePlayer(draftId: string, looking: boolean) {
     setShown({ view, readAt: performance.now() });
   }, []);
 
+  // Shows a fresh read unless an action has started since it was asked.
+  const readNow = useCallback(
+    (fresh: () => boolean) =>
+      selecta.call('player.state', { draft_id: draftId }).then(
+        (next) => fresh() && accept(next),
+        (e: Error) => fresh() && setProblem(e.message),
+      ),
+    [draftId, accept],
+  );
+
   const { view } = shown;
   const watching = looking || (view?.state === 'playing' && view.entry_id !== undefined);
 
@@ -37,17 +47,10 @@ export function usePlayer(draftId: string, looking: boolean) {
 
     const read = () => {
       const at = epoch.current;
-      const fresh = () => alive && at === epoch.current && outstanding.current === 0;
 
-      selecta
-        .call('player.state', { draft_id: draftId })
-        .then(
-          (next) => fresh() && accept(next),
-          (e: Error) => fresh() && setProblem(e.message),
-        )
-        .finally(() => {
-          if (alive) timer = setTimeout(read, READ_EVERY_MS);
-        });
+      void readNow(() => alive && at === epoch.current && outstanding.current === 0).finally(() => {
+        if (alive) timer = setTimeout(read, READ_EVERY_MS);
+      });
     };
 
     read();
@@ -56,7 +59,7 @@ export function usePlayer(draftId: string, looking: boolean) {
       alive = false;
       clearTimeout(timer);
     };
-  }, [draftId, watching, problem, accept]);
+  }, [watching, problem, readNow]);
 
   /** Shows `ask` applied to what's shown now, then the host's answer once every call has landed. */
   const act = (
@@ -98,10 +101,7 @@ export function usePlayer(draftId: string, looking: boolean) {
         // Nothing said what Music is doing now, so it's read rather than taken from what was asked.
         const at = epoch.current;
 
-        selecta.call('player.state', { draft_id: draftId }).then(
-          (next) => at === epoch.current && outstanding.current === 0 && accept(next),
-          (e: Error) => at === epoch.current && setProblem(e.message),
-        );
+        void readNow(() => at === epoch.current && outstanding.current === 0);
       });
   };
 

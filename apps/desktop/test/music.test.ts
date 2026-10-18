@@ -13,8 +13,8 @@ function fakePlayer() {
     return new Promise((resolve) => gates.push(() => resolve(after())));
   };
   const player = {
-    play: (_draft: string, revision: number, entry: string, position?: number) =>
-      step(`play ${entry}@${position ?? 0} r${revision}`, () => {
+    play: (_draft: string, entry: string, position?: number) =>
+      step(`play ${entry}@${position ?? 0}`, () => {
         view = { running: true, state: 'playing', entry_id: entry, position: position ?? 0 };
 
         return view;
@@ -53,7 +53,6 @@ const setup = () => {
   let revision = 1;
   const lane = createMusicLane({
     player: music.player,
-    revision: () => revision,
     syncLinked: async (draftId) => {
       music.calls.push(`sync ${draftId} r${revision}`);
     },
@@ -67,12 +66,12 @@ it('runs one call at a time, in the order asked', async () => {
   const played = lane.play('D', 'a');
   const sought = lane.after('test', async () => calls.push('save'));
 
-  expect(calls).toEqual(['play a@0 r1']);
+  expect(calls).toEqual(['play a@0']);
   await finish();
   await settle();
   await expect(played).resolves.toMatchObject({ entry_id: 'a', state: 'playing' });
   await sought;
-  expect(calls).toEqual(['play a@0 r1', 'save']);
+  expect(calls).toEqual(['play a@0', 'save']);
 });
 
 it('folds a burst of clicks into the one step the newest asks for', async () => {
@@ -88,7 +87,7 @@ it('folds a burst of clicks into the one step the newest asks for', async () => 
 
   await settle();
   await first;
-  expect(calls).toEqual(['play a@0 r1', 'play d@90 r1']);
+  expect(calls).toEqual(['play a@0', 'play d@90']);
 
   // Every caller hears how the step they were folded into ended.
   for (const call of await Promise.all(waiting))
@@ -102,16 +101,16 @@ it('cancels a pause and resume that meet while waiting, and drops a play a pause
   void lane.pause('D');
   void lane.resume('D');
   await settle();
-  // Nothing left to do, so Music is only read for the answer.
-  expect(calls).toEqual(['play a@0 r1', 'read']);
+  // Nothing left to do, so the play's answer stands.
+  expect(calls).toEqual(['play a@0']);
 
   calls.length = 0;
   void lane.pause('D');
   void lane.play('D', 'b');
   void lane.pause('D');
   await settle();
-  // The play behind the first pause never ran, and Music is already paused, so it's only read.
-  expect(calls).toEqual(['pause', 'read']);
+  // The play behind the first pause never ran, and Music is already paused.
+  expect(calls).toEqual(['pause']);
 });
 
 it("doesn't pause a draft that isn't playing when a play it overtook never ran", async () => {
@@ -121,7 +120,7 @@ it("doesn't pause a draft that isn't playing when a play it overtook never ran",
   void lane.play('D', 'a');
   void lane.pause('D');
   await settle();
-  expect(calls).toEqual(['read', 'read']);
+  expect(calls).toEqual(['read']);
 });
 
 it('seeks after a pause and before a resume', async () => {
@@ -131,7 +130,7 @@ it('seeks after a pause and before a resume', async () => {
   void lane.pause('D');
   void lane.seek('D', 40);
   await settle();
-  expect(calls).toEqual(['play a@0 r1', 'pause', 'seek 40']);
+  expect(calls).toEqual(['play a@0', 'pause', 'seek 40']);
 
   calls.length = 0;
   void lane.state('D');
@@ -141,16 +140,6 @@ it('seeks after a pause and before a resume', async () => {
   expect(calls).toEqual(['read', 'seek 80', 'resume']);
 });
 
-it('plays on the revision the draft has when the play runs, not when it was asked', async () => {
-  const { lane, calls, settle, edit } = setup();
-
-  void lane.state('D');
-  void lane.play('D', 'a');
-  edit();
-  await settle();
-  expect(calls).toEqual(['read', 'play a@0 r2']);
-});
-
 it("never merges past a call queued after it, so a stop isn't overtaken", async () => {
   const { lane, calls, settle } = setup();
 
@@ -158,7 +147,7 @@ it("never merges past a call queued after it, so a stop isn't overtaken", async 
   void lane.after('test', async () => calls.push('save'));
   void lane.seek('D', 30);
   await settle();
-  expect(calls).toEqual(['play a@0 r1', 'save', 'seek 30']);
+  expect(calls).toEqual(['play a@0', 'save', 'seek 30']);
 });
 
 it('drops what a draft still waits to play when it stops', async () => {
@@ -183,7 +172,7 @@ it('syncs a burst of linked edits once, after what was asked before them', async
   edit();
   void lane.sync('D');
   await settle();
-  expect(calls).toEqual(['play a@0 r1', 'sync D r3']);
+  expect(calls).toEqual(['play a@0', 'sync D r3']);
   expect(lane.syncing('D')).toBe(false);
 });
 
@@ -197,7 +186,7 @@ it('answers polls from the last call while busy, and reads Music when idle', asy
   await settle();
   void lane.state('D');
   await settle();
-  expect(calls).toEqual(['play a@0 r1', 'play b@0 r1', 'read']);
+  expect(calls).toEqual(['play a@0', 'play b@0', 'read']);
 });
 
 it('auditions only the newest of a burst, and a stop drops one still waiting', async () => {
@@ -236,7 +225,6 @@ it('logs each step Music took, with how many calls it answered, and skips idle r
   const steps: { step: string; calls: number; error?: string }[] = [];
   const lane = createMusicLane({
     player: music.player,
-    revision: () => 1,
     syncLinked: async () => {},
     log: ({ step, calls, error }) => steps.push({ step, calls, ...(error && { error }) }),
   });
