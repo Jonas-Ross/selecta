@@ -260,6 +260,12 @@ describe('player script contract', () => {
       'Math.min(args.position, Math.max(0, Music.currentTrack.duration() - 1))',
     );
     expect(seek.indexOf('Music.playerPosition = goal')).toBeLessThan(seek.indexOf('seekMissed'));
+    // With no settle after it, the read-back waits once first, so the pre-seek position can't pass.
+    const assigned = seek.slice(seek.indexOf('Music.playerPosition = goal'));
+
+    expect(assigned.indexOf('delay(0.05)')).toBeLessThan(
+      assigned.indexOf('Music.playerPosition()'),
+    );
 
     // Both re-check the entry right before acting, after the slot lookup; a resume re-reads shuffle too.
     expect(seek).toContain(

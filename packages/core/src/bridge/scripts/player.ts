@@ -114,11 +114,12 @@ export function buildControlPlayerScript(input: PlayerControl): string {
         const goal = Math.min(args.position, Math.max(0, Music.currentTrack.duration() - 1));
         if (!here()) return JSON.stringify({ elsewhere: true });
         Music.playerPosition = goal;
+        // A read straight after the assignment can still be the old position, near enough to pass.
         let tries = 0;
-        while (Math.abs(Music.playerPosition() - goal) >= 2) {
+        do {
           if (++tries > 100) return JSON.stringify({ seekMissed: true });
           delay(0.05);
-        }
+        } while (Math.abs(Music.playerPosition() - goal) >= 2);
       }
       // Every action above waited for its own read-back, so no fixed settle is needed here.
       return JSON.stringify(readPlayer());
