@@ -306,7 +306,8 @@ export class PlaylistDraftTools {
     }
   }
 
-  async edit(raw: unknown) {
+  /** `deferPreview` leaves a linked draft's Selecta Preview behind, for the caller to sync with `syncLinked`. */
+  async edit(raw: unknown, { deferPreview = false }: { deferPreview?: boolean } = {}) {
     const input = parseInput(z.strictObject(editDraftInputShape), raw);
 
     if (!input.ok) return input.error;
@@ -383,11 +384,23 @@ export class PlaylistDraftTools {
         };
       });
 
-      const sync = tracksChanged
-        ? await this.syncPreview(draft, false)
-        : { preview: undefined, preview_result: undefined };
+      const sync =
+        tracksChanged && !deferPreview
+          ? await this.syncPreview(draft, false)
+          : { preview: undefined, preview_result: undefined };
 
       return { ...(await this.afterSync(draft, sync)), local_edit_saved: true };
+    } catch (error) {
+      return toErrorEnvelope(error);
+    }
+  }
+
+  /** Brings a linked draft's Selecta Preview up to its newest order; a no-op unless it fell behind. */
+  async syncLinked(draftId: string) {
+    try {
+      const draft = this.store.get(draftId);
+
+      return await this.afterSync(draft, await this.syncPreview(draft, false));
     } catch (error) {
       return toErrorEnvelope(error);
     }
