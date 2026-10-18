@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { buildFromSearch, expect, test } from '../harness/fixture.js';
+import { fixtureTracks } from '../harness/library.js';
 
 const preview = (music: { snapshot: () => { playlists: { name: string; tracks: string[] }[] } }) =>
   music.snapshot().playlists.find((pl) => pl.name === 'Selecta Preview')?.tracks;
@@ -83,34 +84,43 @@ test.describe('when Claude reaches for a write the app never allows', () => {
   });
 });
 
-test('swells the glow on the bar Music is at, and moves the bar line when Music jumps', async ({
-  page,
-  music,
-}) => {
-  await build(page);
-  await page.getByRole('tab', { name: 'Listen' }).click();
-  await page.getByRole('button', { name: 'Play' }).click();
+test.describe('with every record measured', () => {
+  // The swell runs only on a record with a tempo, and the fixture leaves every fifth unmeasured.
+  // An array value would read as Playwright's [value, options] pair, so it's wrapped as one.
+  test.use({
+    tracks: [fixtureTracks().map((track) => ({ bpm: 120, ...track })), { scope: 'test' }],
+  });
 
-  // Where the glow's swell puts the record, in seconds, against where Music is.
-  const drift = () =>
-    page.locator('.deck-glow').evaluate((el) => {
-      const [pulse] = el.getAnimations();
-      const now = document.timeline.currentTime as number;
+  test('swells the glow on the bar Music is at, and moves the bar line when Music jumps', async ({
+    page,
+    music,
+  }) => {
+    await build(page);
+    await page.getByRole('tab', { name: 'Listen' }).click();
+    await page.getByRole('button', { name: 'Play' }).click();
 
-      return pulse ? (now - Number(pulse.startTime)) / 1000 : undefined;
-    });
-  const near = async () => {
-    const at = await drift();
+    // Where the glow's swell puts the record, in seconds, against where Music is.
+    const drift = () =>
+      page.locator('.deck-glow').evaluate((el) => {
+        // The glow's fade in is a transition, which isn't the swell.
+        const pulse = el.getAnimations().find((a) => !(a instanceof CSSTransition));
+        const now = document.timeline.currentTime as number;
 
-    return at !== undefined && Math.abs(at - music.snapshot().player.position) < 1.5;
-  };
+        return pulse ? (now - Number(pulse.startTime)) / 1000 : undefined;
+      });
+    const near = async () => {
+      const at = await drift();
 
-  await expect.poll(near).toBe(true);
-  music.advance(60);
-  await expect.poll(near).toBe(true);
+      return at !== undefined && Math.abs(at - music.snapshot().player.position) < 1.5;
+    };
 
-  await page.getByRole('button', { name: 'Pause' }).click();
-  await expect.poll(drift).toBeUndefined();
+    await expect.poll(near).toBe(true);
+    music.advance(60);
+    await expect.poll(near).toBe(true);
+
+    await page.getByRole('button', { name: 'Pause' }).click();
+    await expect.poll(drift).toBeUndefined();
+  });
 });
 
 test.describe('when feedback arrives while the draft plays', () => {
