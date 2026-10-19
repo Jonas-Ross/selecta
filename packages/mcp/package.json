@@ -20,6 +20,6 @@
     "@modelcontextprotocol/server": "2.3.1",
     "@selecta/core": "0.1.0",
     "commander": "^15.0.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   }
 }
