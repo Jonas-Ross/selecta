@@ -19,10 +19,10 @@ const arch = process.argv.includes('--arch')
 
 // Pinned with its checksums from nodejs.org, so a build ships exactly this Node.
 const NODE = {
-  version: '22.23.3',
+  version: '22.23.4',
   sha256: {
-    arm64: '23b25245dcfb9af7262f8ff142e9e2e0af025368117329e7a7458a51e5922f53',
-    x64: '8a677b0219178efd6eb0e475457c4afb452b521a92f6e67845a73bd85727f2a8',
+    arm64: 'c9e1dbc748b33ed2d14f42445191ecaf14c56259c7a9a26d0042c49ec2b66428',
+    x64: 'efcc2b0db6f94bf53eddb038fe2b370277a042bd29e4f19b8f8e23598795b819',
   },
 };
 
