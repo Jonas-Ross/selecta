@@ -12,7 +12,7 @@ type Line = {
 };
 
 // Codex reports a lapsed login only in words: the API's 401, or its own "Not logged in".
-const SIGNED_OUT = /\b401\b|unauthorized|not logged in/i;
+const SIGNED_OUT = /status 401\b|not logged in/i;
 
 export function parseCodexLine(): (raw: string) => AgentEvent[] {
   let thread: string | undefined;

@@ -16,7 +16,7 @@ const SYSTEM_PROMPT = `You build playlist drafts in the Selecta desktop app, whe
 type Spawn = typeof nodeSpawn;
 
 /** What a turn was asked, kept so a failed one can run again as it was. */
-type Ask = { brief: string } | { message: string };
+type Ask = ({ brief: string } | { message: string }) & { again?: true };
 
 export type AgentOptions = {
   mcpEntry: string;
@@ -99,13 +99,18 @@ export class AgentSessions {
     if (provider) this.chosen.set(draftId, provider);
 
     this.record(draftId, { kind: 'retried', by: this.provider(draftId).id });
-    this.run(draftId, ask);
+    this.run(draftId, { ...ask, again: true });
   }
 
   private prompt(draftId: string, ask: Ask): string {
-    if ('brief' in ask) return `Draft ID: ${draftId}\n\nBrief:\n${ask.brief}`;
+    // A failed turn may have got partway, so a retry finishes the draft it left rather than redoing it.
+    const again = ask.again
+      ? `\n\nAn earlier attempt at this request failed partway. If the draft exists, read it with get_playlist_draft and finish the request from there rather than repeating what is done.`
+      : '';
 
-    return `Draft ID: ${draftId}\n\nRead the current draft with get_playlist_draft before changing it; the user may have edited it.${this.handoff(draftId)}\n\nFeedback:\n${ask.message}`;
+    if ('brief' in ask) return `Draft ID: ${draftId}${again}\n\nBrief:\n${ask.brief}`;
+
+    return `Draft ID: ${draftId}${again}\n\nRead the current draft with get_playlist_draft before changing it; the user may have edited it.${this.handoff(draftId)}\n\nFeedback:\n${ask.message}`;
   }
 
   // A swapped-in agent starts with no conversation, so it gets the user's own

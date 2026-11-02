@@ -191,7 +191,9 @@ it('retries a failed brief as it was sent, and names how to sign back in', async
   await settle();
   agent.retry(DRAFT);
 
-  expect(flag(runs[1]!.args, '-p')).toBe(flag(runs[0]!.args, '-p'));
+  expect(flag(runs[0]!.args, '-p')).not.toContain('failed partway');
+  expect(flag(runs[1]!.args, '-p')).toContain('failed partway');
+  expect(flag(runs[1]!.args, '-p')).toMatch(/Brief:\nriddim$/);
   expect(runs[1]!.args).toContain('--session-id');
   expect(events).toEqual([
     { kind: 'asked', text: 'riddim', brief: true, by: 'claude' },

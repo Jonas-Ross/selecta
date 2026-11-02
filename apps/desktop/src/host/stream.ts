@@ -19,7 +19,8 @@ const shortName = (name = '') => name.replace(/^mcp__selecta__/, '');
 
 /** A run's parser: the CLI says why a request failed in a reply of its own, which the result then repeats. */
 export function parseStream(): (raw: string) => AgentEvent[] {
-  let failure: string | undefined;
+  // The latest failure reply, cleared once the run carries on past it.
+  let failure: { type: string; text?: string } | undefined;
 
   return (raw) => {
     let line: Line;
@@ -32,10 +33,12 @@ export function parseStream(): (raw: string) => AgentEvent[] {
 
     if (line.type === 'assistant') {
       if (line.error) {
-        failure = line.error;
+        failure = { type: line.error, text: line.message?.content?.find((b) => b.text)?.text };
 
         return [];
       }
+
+      failure = undefined;
 
       return (line.message?.content ?? []).flatMap((block): AgentEvent[] => {
         if (block.type === 'text' && block.text?.trim())
@@ -56,8 +59,9 @@ export function parseStream(): (raw: string) => AgentEvent[] {
         line.is_error || line.subtype !== 'success'
           ? {
               kind: 'error',
-              message: line.result || line.subtype || 'Claude stopped with an error.',
-              ...(failure === 'authentication_failed' && { signedOut: true }),
+              message:
+                line.result || failure?.text || line.subtype || 'Claude stopped with an error.',
+              ...(failure?.type === 'authentication_failed' && { signedOut: true }),
             }
           : { kind: 'done', session_id: line.session_id };
 

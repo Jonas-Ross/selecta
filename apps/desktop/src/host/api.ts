@@ -182,8 +182,16 @@ export function createApi(
 
   // Ownership is read in turn rather than from the renderer's view, which trails a play or stop.
   // The agent goes in the same lane step, so no play can link the draft in between.
-  const unlinked = (label: string, draftId: string, go: () => void, refused: () => void) =>
+  const unlinked = (
+    label: string,
+    draftId: string,
+    go: () => void,
+    refused: () => void,
+    check?: () => void,
+  ) =>
     lane.forDraft(label, draftId, linked(draftId), async () => {
+      check?.();
+
       if (linked(draftId)) await lane.detachNow(draftId, deps.drafts().get(draftId).revision);
 
       if (linked(draftId)) refused();
@@ -315,9 +323,6 @@ export function createApi(
     'agent.retry': (args) => {
       const { draft_id, provider } = Retry.parse(args);
 
-      // Checked first, so a stale Retry never stops the music for nothing.
-      agent.retryable(draft_id);
-
       return unlinked(
         'agent retry',
         draft_id,
@@ -325,6 +330,8 @@ export function createApi(
         () => {
           throw new Error(linkedMessage(draft_id, provider));
         },
+        // Checked before stopping, so a stale Retry never stops the music for nothing.
+        () => agent.retryable(draft_id),
       );
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),

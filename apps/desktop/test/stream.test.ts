@@ -65,3 +65,31 @@ it('says a failed request once, flagging a lapsed login', () => {
     { kind: 'error', message: expired },
   ]);
 });
+
+it('keeps a failure reply as the reason when the result gives none, and forgets it once the run goes on', () => {
+  const parse = parseStream();
+  const line = (data: object) => parse(JSON.stringify(data));
+
+  line({
+    type: 'assistant',
+    error: 'authentication_failed',
+    message: { content: [{ text: 'x' }] },
+  });
+  line({ type: 'assistant', message: { content: [{ type: 'text', text: 'Back.' }] } });
+  expect(line({ type: 'result', subtype: 'error_max_turns', is_error: true })).toEqual([
+    { kind: 'error', message: 'error_max_turns' },
+  ]);
+
+  const quiet = parseStream();
+
+  quiet(
+    JSON.stringify({
+      type: 'assistant',
+      error: 'billing_error',
+      message: { content: [{ type: 'text', text: 'Credit balance is too low' }] },
+    }),
+  );
+  expect(quiet(JSON.stringify({ type: 'result', subtype: 'error_during_execution' }))).toEqual([
+    { kind: 'error', message: 'Credit balance is too low' },
+  ]);
+});
