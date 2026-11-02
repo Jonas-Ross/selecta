@@ -164,13 +164,74 @@ it('reports a stop, a crash and a missing CLI as one error each', async () => {
   await settle();
 
   expect(events.filter((event) => event.kind !== 'asked')).toEqual([
-    { kind: 'error', message: 'Stopped.' },
-    { kind: 'error', message: 'Not logged in.' },
+    { kind: 'error', message: 'Stopped.', retry: true },
+    { kind: 'error', message: 'Not logged in.', retry: true, signIn: 'claude auth login' },
     {
       kind: 'error',
       message: 'Could not find the claude CLI. Install Claude Code, or set SELECTA_CLAUDE_PATH.',
+      retry: true,
     },
   ]);
+});
+
+it('retries a failed brief as it was sent, and names how to sign back in', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent, events } = sessions(spawn);
+  const expired = 'Failed to authenticate: OAuth session expired and could not be refreshed';
+
+  agent.start(DRAFT, 'riddim');
+  runs[0]!.child.finish([{ type: 'result', subtype: 'success', is_error: true, result: expired }]);
+  await settle();
+  agent.retry(DRAFT);
+
+  expect(flag(runs[1]!.args, '-p')).toBe(flag(runs[0]!.args, '-p'));
+  expect(runs[1]!.args).toContain('--session-id');
+  expect(events).toEqual([
+    { kind: 'asked', text: 'riddim', brief: true, by: 'claude' },
+    { kind: 'error', message: expired, retry: true, signIn: 'claude auth login' },
+    { kind: 'retried', by: 'claude' },
+  ]);
+  expect(agent.history()[DRAFT]!.working).toBe(true);
+  expect(() => agent.retry(DRAFT)).toThrow('already working');
+});
+
+it('retries failed feedback on the picked agent, handing over only earlier asks', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+
+  agent.start(DRAFT, 'warmup');
+  runs[0]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+  await settle();
+  agent.send(DRAFT, 'less vocal');
+  runs[1]!.child.finish([{ type: 'result', subtype: 'error_during_execution' }]);
+  await settle();
+  agent.retry(DRAFT, 'codex');
+
+  const prompt = runs[2]!.args.at(-1)!;
+
+  expect(runs[2]!.args[0]).toBe('exec');
+  expect(prompt).toContain('Earlier requests on this draft, oldest first:\n- warmup\n');
+  expect(prompt.match(/less vocal/g)).toHaveLength(1);
+  expect(prompt.endsWith('Feedback:\nless vocal')).toBe(true);
+});
+
+it('has nothing to retry once a turn succeeds or a new one is refused', async () => {
+  const { runs, spawn } = fakeClaude();
+  const { agent } = sessions(spawn);
+
+  expect(() => agent.retry(DRAFT)).toThrow('Nothing to retry');
+  agent.start(DRAFT, 'one');
+  runs[0]!.child.finish([{ type: 'result', subtype: 'error_during_execution' }]);
+  await settle();
+  agent.refuse(DRAFT, 'two', 'Linked.');
+
+  expect(() => agent.retry(DRAFT)).toThrow('Nothing to retry');
+  agent.start(DRAFT, 'three');
+  runs[1]!.child.finish([{ type: 'result', subtype: 'success', session_id: 'S-1' }]);
+  await settle();
+
+  expect(() => agent.retry(DRAFT)).toThrow('Nothing to retry');
+  expect(runs).toHaveLength(2);
 });
 
 it('never lists a tool as both allowed and denied', () => {
@@ -309,6 +370,7 @@ it('names the missing CLI for the provider that was asked for', async () => {
   expect(events.at(-1)).toEqual({
     kind: 'error',
     message: 'Could not find the codex CLI. Install Codex, or set SELECTA_CODEX_PATH.',
+    retry: true,
   });
 });
 

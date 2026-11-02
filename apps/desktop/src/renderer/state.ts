@@ -37,6 +37,8 @@ export type LogItem = {
   text: string;
   brief?: true;
   by?: ProviderId;
+  retry?: true;
+  signIn?: string;
 };
 
 /** Inspection tracks line up one to one with entries, repeats included. */
@@ -144,8 +146,27 @@ export function logAgentEvent(log: LogItem[], event: AgentEvent, by?: ProviderId
       return [...log, { kind: 'tool', text: event.name.replaceAll('_', ' ') }];
     case 'denied':
       return [...log, { kind: 'error', text: `Blocked ${event.name}: only the app saves.` }];
-    case 'error':
-      return [...log, { kind: 'error', text: event.message }];
+
+    case 'error': {
+      // Claude also writes its failure as a reply, which would say it twice.
+      const last = log.at(-1);
+      const kept =
+        last?.kind === 'claude' && last.text.trim() === event.message.trim()
+          ? log.slice(0, -1)
+          : log;
+
+      return [
+        ...kept,
+        {
+          kind: 'error',
+          text: event.message,
+          ...(event.retry && { retry: true }),
+          ...(event.signIn && { signIn: event.signIn }),
+        },
+      ];
+    }
+
+    case 'retried':
     case 'done':
       return log;
   }
@@ -156,7 +177,7 @@ export type Run = { log: LogItem[]; working: boolean; seen: number; by?: Provide
 
 /** Who answered the latest request, for the panel's name. */
 const askedBy = (by: ProviderId | undefined, event: AgentEvent) =>
-  event.kind === 'asked' && event.by ? event.by : by;
+  (event.kind === 'asked' || event.kind === 'retried') && event.by ? event.by : by;
 
 /** Host event `seq` applied in order; undefined means one was missed, so resync from the host. */
 export function runEvent(run: Run | undefined, event: AgentEvent, seq: number): Run | undefined {

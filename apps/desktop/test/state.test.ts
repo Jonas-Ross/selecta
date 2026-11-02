@@ -73,6 +73,43 @@ it('turns agent events into log lines', () => {
   ]);
 });
 
+it('says a failure once, keeping whether it can be retried and how to sign back in', () => {
+  const expired = 'Failed to authenticate: OAuth session expired';
+  let log = logAgentEvent([], { kind: 'asked', text: 'riddim', brief: true });
+
+  log = logAgentEvent(log, { kind: 'text', text: expired });
+  log = logAgentEvent(log, {
+    kind: 'error',
+    message: expired,
+    retry: true,
+    signIn: 'claude auth login',
+  });
+  expect(log).toEqual([
+    { kind: 'you', text: 'riddim', brief: true },
+    { kind: 'error', text: expired, retry: true, signIn: 'claude auth login' },
+  ]);
+
+  // A different reply before the failure stays.
+  log = logAgentEvent([{ kind: 'claude', text: 'Looking.' }], {
+    kind: 'error',
+    message: 'Stopped.',
+  });
+  expect(log).toEqual([
+    { kind: 'claude', text: 'Looking.' },
+    { kind: 'error', text: 'Stopped.' },
+  ]);
+});
+
+it('marks a run working again when its failed turn is retried', () => {
+  let run = runEvent(undefined, { kind: 'asked', text: 'riddim', brief: true }, 0);
+
+  run = runEvent(run, { kind: 'error', message: 'Not logged in.', retry: true }, 1);
+  expect(run?.working).toBe(false);
+  run = runEvent(run, { kind: 'retried', by: 'codex' }, 2);
+  expect(run).toMatchObject({ working: true, by: 'codex', seen: 3 });
+  expect(run?.log).toHaveLength(2);
+});
+
 it('describes save outcomes in a sentence', () => {
   expect(saveOutcome({ result: { name: 'Peak', track_count: 12 } })).toBe(
     'Saved "Peak" to Music with 12 tracks.',

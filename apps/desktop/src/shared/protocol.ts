@@ -68,6 +68,7 @@ export type Methods = {
     text?: string;
     provider?: ProviderId;
   }) => void;
+  'agent.retry': (args: { draft_id: string; provider?: ProviderId }) => void;
   'agent.cancel': (args: { draft_id: string }) => void;
   'agent.history': () => Record<string, RunSnapshot>;
   'agent.suggest': (args: {
@@ -116,7 +117,10 @@ export type AgentEvent =
   | { kind: 'tool'; name: string }
   | { kind: 'denied'; name: string }
   | { kind: 'done'; session_id?: string }
-  | { kind: 'error'; message: string };
+  /** The failed turn before it is running again. */
+  | { kind: 'retried'; by?: ProviderId }
+  // `retry` when the turn can run again as it was; `signIn` is the command that signs back in.
+  | { kind: 'error'; message: string; retry?: true; signIn?: string };
 
 /** Everything a draft's runs have reported, so a reloaded renderer can catch up. */
 export type RunSnapshot = { events: AgentEvent[]; working: boolean };

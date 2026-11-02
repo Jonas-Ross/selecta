@@ -68,6 +68,7 @@ export function Draft({
   onPick,
   onStart,
   onSend,
+  onRetry,
   onBack,
 }: {
   draftId: string;
@@ -77,6 +78,7 @@ export function Draft({
   onPick: (id: ProviderId) => void;
   onStart: (brief: string) => Promise<unknown>;
   onSend: (text: string, message: string) => Promise<unknown>;
+  onRetry: () => Promise<unknown>;
   onBack: () => void;
 }) {
   const [view, setView] = useState<DraftView>();
@@ -426,6 +428,12 @@ export function Draft({
     const request = draft ? queue.after(ask) : ask();
 
     void request.finally(() => setAsking(false));
+  }
+
+  function retry() {
+    setAsking(true);
+
+    void (draft ? queue.after(onRetry) : onRetry()).finally(() => setAsking(false));
   }
 
   // Leaving locks the controls and waits for queued edits, and stays put if
@@ -848,6 +856,7 @@ export function Draft({
           selected={items.filter((row) => selected.has(row.entry_id))}
           onUnselect={toggleSelected}
           onSend={send}
+          onRetry={retry}
           onStop={() => void selecta.call('agent.cancel', { draft_id: draftId })}
           collapsed={chatCollapsed}
           onCollapse={collapseChat}

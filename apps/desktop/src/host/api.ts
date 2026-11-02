@@ -49,6 +49,7 @@ const Message = z.strictObject({
   text: z.string().max(60_000).optional(),
   provider: Provider,
 });
+const Retry = z.strictObject({ ...getDraftInputShape, provider: Provider });
 const Revision = z.strictObject({ ...revisionInputShape });
 const Play = z.strictObject({
   ...getDraftInputShape,
@@ -301,6 +302,17 @@ export function createApi(
         if (linked(draft_id))
           agent.refuse(draft_id, text ?? message, linkedMessage(draft_id, provider));
         else agent.send(draft_id, message, text, provider);
+      });
+    },
+    'agent.retry': (args) => {
+      const { draft_id, provider } = Retry.parse(args);
+
+      return lane.forDraft('agent retry', draft_id, linked(draft_id), async () => {
+        if (linked(draft_id)) await lane.detachNow(draft_id, deps.drafts().get(draft_id).revision);
+
+        if (linked(draft_id)) throw new Error(linkedMessage(draft_id, provider));
+
+        agent.retry(draft_id, provider);
       });
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),

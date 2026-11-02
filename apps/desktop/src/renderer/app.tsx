@@ -104,6 +104,13 @@ function App() {
             }),
           )
         }
+        onRetry={() =>
+          ask(
+            draftId,
+            '',
+            selecta.call('agent.retry', { draft_id: draftId, provider: agentFor(draftId) }),
+          )
+        }
         onBack={() => setScreen({ name: 'home' })}
       />
     );

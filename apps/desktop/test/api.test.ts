@@ -13,6 +13,7 @@ const deps = { ...base, drafts: () => store };
 const agent = {
   start: vi.fn(),
   send: vi.fn(),
+  retry: vi.fn(),
   refuse: vi.fn(),
   cancel: vi.fn(),
   history: vi.fn(() => ({})),
@@ -213,6 +214,19 @@ it('stops listening before feedback reaches the agent, whatever the renderer las
   expect(store.preview()?.status).toBe('inactive');
   expect(agent.refuse).not.toHaveBeenCalled();
   expect(agent.send).toHaveBeenCalledWith(draftId, 'go', 'typed', undefined);
+});
+
+it('stops listening before a retry reaches the agent, on the agent picked now', async () => {
+  const draftId = randomUUID();
+
+  store.create(draftId, 'Linked', ['T-TEARDROP', 'T-ROADS']);
+  store.claimPreview(draftId, 1, true);
+
+  await call('agent.retry', { draft_id: draftId, provider: 'codex' });
+
+  expect(store.preview()?.status).toBe('inactive');
+  expect(agent.retry).toHaveBeenCalledWith(draftId, 'codex');
+  await expect(call('agent.retry', { draft_id: draftId, provider: 'gemini' })).rejects.toThrow();
 });
 
 it('fills the crate newest first, or by relevance to a search, with provenance', async () => {

@@ -40,6 +40,7 @@ export function ClaudePanel({
   selected,
   onUnselect,
   onSend,
+  onRetry,
   onStop,
   collapsed,
   onCollapse,
@@ -58,6 +59,8 @@ export function ClaudePanel({
   selected: Row[];
   onUnselect: (entryId: string) => void;
   onSend: (text: string) => void;
+  /** Runs the failed turn again as it was sent. */
+  onRetry: () => void;
   onStop: () => void;
   /** Slid off to a slim edge so the draft gets the width. */
   collapsed: boolean;
@@ -180,6 +183,21 @@ export function ClaudePanel({
                       : 'Problem'}
                 </span>
                 {item.kind === 'claude' ? <Markdown text={item.text} /> : item.text}
+                {item.signIn && (
+                  <p className="sign-in">
+                    Sign in again: run <code>{item.signIn}</code> in Terminal, then retry.
+                  </p>
+                )}
+                {item.retry && index === rest.length - 1 && !working && (
+                  <button
+                    type="button"
+                    className="btn line retry"
+                    disabled={locked}
+                    onClick={onRetry}
+                  >
+                    Retry
+                  </button>
+                )}
               </div>
             ),
           )}
