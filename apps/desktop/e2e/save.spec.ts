@@ -15,9 +15,15 @@ test('keeps a saved draft editable and updates the same playlist on the next sav
   const records = page.getByRole('list', { name: 'Draft order' }).getByRole('listitem');
 
   await expect(records).toHaveCount(8);
+
+  const railTop = async () => (await records.first().boundingBox())!.y;
+  const before = await railTop();
+
   await page.getByRole('button', { name: 'Save to Music' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText(/Saved "Harness set"/)).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: /Saved "Harness set"/ })).toBeVisible();
+  // The outcome floats over the draft rather than pushing the rail down.
+  expect(await railTop()).toBe(before);
 
   const [first] = saved(music);
 

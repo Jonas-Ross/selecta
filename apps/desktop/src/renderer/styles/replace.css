@@ -605,7 +605,3 @@
 .bench-foot .steer {
   width: 210px;
 }
-
-.notice.bar button.mono:hover {
-  color: var(--ink);
-}
