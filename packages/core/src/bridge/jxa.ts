@@ -102,7 +102,8 @@ function selectaOne(src) { return eval(src); }
 let selectaPending = '';
 for (;;) {
   const data = selectaIn.availableData;
-  if (data.length === 0) break;
+  // NSData.length reaches JXA as a string, so only a number compare sees EOF.
+  if (Number(data.length) === 0) break;
   selectaPending += $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js;
   let at;
   while ((at = selectaPending.indexOf('\\n')) >= 0) {
@@ -119,6 +120,8 @@ for (;;) {
 
 // A worker answers this many calls, then a fresh one takes over, so nothing it holds grows forever.
 const RECYCLE_AFTER = 1000;
+// A retired worker that hasn't exited this long after its stdin closed is killed, so none lingers.
+const RETIRE_GRACE_MS = 5_000;
 
 // ASCII only, so a script split across stdin reads never splits a character.
 const encode = (script: string) =>
@@ -135,7 +138,8 @@ type Worker = { child: ChildProcessWithoutNullStreams; calls: number; stderr: st
 export function createJxaWorker({
   spawn = spawnChild,
   deadlineMs = DEADLINE_MS,
-}: { spawn?: typeof spawnChild; deadlineMs?: number } = {}) {
+  graceMs = RETIRE_GRACE_MS,
+}: { spawn?: typeof spawnChild; deadlineMs?: number; graceMs?: number } = {}) {
   const queue: Call[] = [];
   // The worker new calls go to; a retired or killed one is dropped here and ignored after.
   let active: Worker | undefined;
@@ -157,6 +161,12 @@ export function createJxaWorker({
 
     hold(worker, false);
     worker.child.stdin.end();
+
+    const { child } = worker;
+    const backstop = setTimeout(() => child.kill('SIGKILL'), graceMs);
+
+    backstop.unref?.();
+    child.once('close', () => clearTimeout(backstop));
   }
 
   function settle(worker: Worker, outcome: (call: Call) => void) {
