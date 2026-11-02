@@ -18,11 +18,6 @@ type Spawn = typeof nodeSpawn;
 /** What a turn was asked, kept so a failed one can run again as it was. */
 type Ask = { brief: string } | { message: string };
 
-// Wording the CLIs use when their login has lapsed: Claude's "Failed to
-// authenticate: OAuth session expired", "Invalid API key · Please run /login",
-// Codex's "401 Unauthorized" and "Not logged in".
-const SIGNED_OUT = /authenticat|oauth|\/login|logged in|unauthori[sz]ed|\b401\b|api key/i;
-
 export type AgentOptions = {
   mcpEntry: string;
   emit: (draftId: string, event: AgentEvent, seq: number) => void;
@@ -86,13 +81,20 @@ export class AgentSessions {
     this.run(draftId, { message });
   }
 
-  /** Runs the draft's failed turn again, on whichever agent is picked now. */
-  retry(draftId: string, provider?: ProviderId): void {
+  /** Throws unless the draft's last turn failed and nothing is running on it. */
+  retryable(draftId: string): Ask {
     this.idle(draftId);
 
     const ask = this.failed.get(draftId);
 
     if (!ask) throw new Error('Nothing to retry on this draft.');
+
+    return ask;
+  }
+
+  /** Runs the draft's failed turn again, on whichever agent is picked now. */
+  retry(draftId: string, provider?: ProviderId): void {
+    const ask = this.retryable(draftId);
 
     if (provider) this.chosen.set(draftId, provider);
 
@@ -238,11 +240,13 @@ export class AgentSessions {
         }
 
         if (event.kind === 'error') {
+          const { signedOut, ...failure } = event;
+
           this.failed.set(draftId, ask);
           this.record(draftId, {
-            ...event,
+            ...failure,
             retry: true,
-            ...(SIGNED_OUT.test(event.message) && { signIn: provider.login }),
+            ...(signedOut && { signIn: provider.login }),
           });
         } else this.record(draftId, event);
       },

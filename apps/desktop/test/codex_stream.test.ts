@@ -25,7 +25,7 @@ it('ends on turn.failed, after saying why it was retrying', () => {
 
   expect(lines.flatMap((line) => parse(JSON.stringify(line)))).toEqual([
     { kind: 'text', text: 'Reconnecting... 1/5 (unexpected status 401 Unauthorized)' },
-    { kind: 'error', message: 'unexpected status 401 Unauthorized' },
+    { kind: 'error', message: 'unexpected status 401 Unauthorized', signedOut: true },
   ]);
   expect(parse('not json')).toEqual([]);
 });

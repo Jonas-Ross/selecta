@@ -410,9 +410,13 @@ export function Draft({
     });
   }
 
-  function send(text: string) {
+  // Feedback waits for queued edits, so a host stopping the music names the revision they left.
+  function request(ask: () => Promise<unknown>) {
     setAsking(true);
+    void (draft ? queue.after(ask) : ask()).finally(() => setAsking(false));
+  }
 
+  function send(text: string) {
     // A build that failed before creating the draft has nothing to revise.
     const ask = () =>
       draft
@@ -424,16 +428,8 @@ export function Draft({
             ),
           )
         : onStart(text);
-    // Feedback waits for queued edits, so a host stopping the music names the revision they left.
-    const request = draft ? queue.after(ask) : ask();
 
-    void request.finally(() => setAsking(false));
-  }
-
-  function retry() {
-    setAsking(true);
-
-    void (draft ? queue.after(onRetry) : onRetry()).finally(() => setAsking(false));
+    request(ask);
   }
 
   // Leaving locks the controls and waits for queued edits, and stays put if
@@ -856,7 +852,7 @@ export function Draft({
           selected={items.filter((row) => selected.has(row.entry_id))}
           onUnselect={toggleSelected}
           onSend={send}
-          onRetry={retry}
+          onRetry={() => request(onRetry)}
           onStop={() => void selecta.call('agent.cancel', { draft_id: draftId })}
           collapsed={chatCollapsed}
           onCollapse={collapseChat}

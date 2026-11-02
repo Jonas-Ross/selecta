@@ -14,6 +14,7 @@ const agent = {
   start: vi.fn(),
   send: vi.fn(),
   retry: vi.fn(),
+  retryable: vi.fn(),
   refuse: vi.fn(),
   cancel: vi.fn(),
   history: vi.fn(() => ({})),
@@ -222,6 +223,11 @@ it('stops listening before a retry reaches the agent, on the agent picked now', 
   store.create(draftId, 'Linked', ['T-TEARDROP', 'T-ROADS']);
   store.claimPreview(draftId, 1, true);
 
+  agent.retryable.mockImplementationOnce(() => {
+    throw new Error('Nothing to retry on this draft.');
+  });
+  await expect(call('agent.retry', { draft_id: draftId })).rejects.toThrow('Nothing to retry');
+  expect(store.preview()?.status).not.toBe('inactive');
   await call('agent.retry', { draft_id: draftId, provider: 'codex' });
 
   expect(store.preview()?.status).toBe('inactive');

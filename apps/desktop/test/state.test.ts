@@ -73,31 +73,15 @@ it('turns agent events into log lines', () => {
   ]);
 });
 
-it('says a failure once, keeping whether it can be retried and how to sign back in', () => {
-  const expired = 'Failed to authenticate: OAuth session expired';
-  let log = logAgentEvent([], { kind: 'asked', text: 'riddim', brief: true });
-
-  log = logAgentEvent(log, { kind: 'text', text: expired });
-  log = logAgentEvent(log, {
-    kind: 'error',
-    message: expired,
-    retry: true,
-    signIn: 'claude auth login',
-  });
-  expect(log).toEqual([
-    { kind: 'you', text: 'riddim', brief: true },
-    { kind: 'error', text: expired, retry: true, signIn: 'claude auth login' },
-  ]);
-
-  // A different reply before the failure stays.
-  log = logAgentEvent([{ kind: 'claude', text: 'Looking.' }], {
-    kind: 'error',
-    message: 'Stopped.',
-  });
-  expect(log).toEqual([
-    { kind: 'claude', text: 'Looking.' },
-    { kind: 'error', text: 'Stopped.' },
-  ]);
+it('keeps whether a failure can be retried and how to sign back in', () => {
+  expect(
+    logAgentEvent([], {
+      kind: 'error',
+      message: 'Login expired',
+      retry: true,
+      signIn: 'claude auth login',
+    }),
+  ).toEqual([{ kind: 'error', text: 'Login expired', retry: true, signIn: 'claude auth login' }]);
 });
 
 it('marks a run working again when its failed turn is retried', () => {

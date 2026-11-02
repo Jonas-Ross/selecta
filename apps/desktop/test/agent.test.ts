@@ -165,7 +165,7 @@ it('reports a stop, a crash and a missing CLI as one error each', async () => {
 
   expect(events.filter((event) => event.kind !== 'asked')).toEqual([
     { kind: 'error', message: 'Stopped.', retry: true },
-    { kind: 'error', message: 'Not logged in.', retry: true, signIn: 'claude auth login' },
+    { kind: 'error', message: 'Not logged in.', retry: true },
     {
       kind: 'error',
       message: 'Could not find the claude CLI. Install Claude Code, or set SELECTA_CLAUDE_PATH.',
@@ -180,7 +180,14 @@ it('retries a failed brief as it was sent, and names how to sign back in', async
   const expired = 'Failed to authenticate: OAuth session expired and could not be refreshed';
 
   agent.start(DRAFT, 'riddim');
-  runs[0]!.child.finish([{ type: 'result', subtype: 'success', is_error: true, result: expired }]);
+  runs[0]!.child.finish([
+    {
+      type: 'assistant',
+      error: 'authentication_failed',
+      message: { content: [{ type: 'text', text: expired }] },
+    },
+    { type: 'result', subtype: 'success', is_error: true, result: expired },
+  ]);
   await settle();
   agent.retry(DRAFT);
 

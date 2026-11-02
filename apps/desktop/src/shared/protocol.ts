@@ -119,8 +119,9 @@ export type AgentEvent =
   | { kind: 'done'; session_id?: string }
   /** The failed turn before it is running again. */
   | { kind: 'retried'; by?: ProviderId }
-  // `retry` when the turn can run again as it was; `signIn` is the command that signs back in.
-  | { kind: 'error'; message: string; retry?: true; signIn?: string };
+  // From a parser, `signedOut` means the CLI's login lapsed; the host turns it into
+  // `signIn`, the command that signs back in, and marks with `retry` a turn that can run again.
+  | { kind: 'error'; message: string; signedOut?: true; retry?: true; signIn?: string };
 
 /** Everything a draft's runs have reported, so a reloaded renderer can catch up. */
 export type RunSnapshot = { events: AgentEvent[]; working: boolean };

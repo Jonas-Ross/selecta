@@ -3,7 +3,7 @@
 // allowlist below is the whole of what any of them can touch.
 import { PROVIDER_LABELS, type AgentEvent, type ProviderId } from '../shared/protocol.js';
 import { parseCodexLine } from './codex_stream.js';
-import { parseStreamLine } from './stream.js';
+import { parseStream } from './stream.js';
 
 export const READ_TOOLS = [
   'search',
@@ -108,7 +108,7 @@ export const claude: AgentProvider = {
       ...(turn.resume ? ['--resume', turn.resume] : ['--session-id', turn.newSessionId]),
     ];
   },
-  parser: () => parseStreamLine,
+  parser: parseStream,
   loginCheck: ['auth', 'status'],
   login: 'claude auth login',
 };

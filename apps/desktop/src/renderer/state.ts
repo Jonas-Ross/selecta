@@ -147,16 +147,9 @@ export function logAgentEvent(log: LogItem[], event: AgentEvent, by?: ProviderId
     case 'denied':
       return [...log, { kind: 'error', text: `Blocked ${event.name}: only the app saves.` }];
 
-    case 'error': {
-      // Claude also writes its failure as a reply, which would say it twice.
-      const last = log.at(-1);
-      const kept =
-        last?.kind === 'claude' && last.text.trim() === event.message.trim()
-          ? log.slice(0, -1)
-          : log;
-
+    case 'error':
       return [
-        ...kept,
+        ...log,
         {
           kind: 'error',
           text: event.message,
@@ -164,7 +157,6 @@ export function logAgentEvent(log: LogItem[], event: AgentEvent, by?: ProviderId
           ...(event.signIn && { signIn: event.signIn }),
         },
       ];
-    }
 
     case 'retried':
     case 'done':

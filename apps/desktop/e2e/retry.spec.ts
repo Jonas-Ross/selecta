@@ -1,4 +1,5 @@
 import { buildFromSearch, expect, test } from '../harness/fixture.js';
+import { SignedOut } from '../harness/server.js';
 
 const EXPIRED = 'Failed to authenticate: OAuth session expired and could not be refreshed';
 let runs = 0;
@@ -8,11 +9,7 @@ test.use({
     script: async (turn) => {
       runs += 1;
 
-      // The real CLI writes its login failure as a reply, then fails the run with it.
-      if (runs === 1) {
-        turn.say(EXPIRED);
-        throw new Error(EXPIRED);
-      }
+      if (runs === 1) throw new SignedOut(EXPIRED);
 
       await buildFromSearch()(turn);
     },
