@@ -3,9 +3,13 @@ import type { DraftSummary } from '../../shared/protocol.js';
 import { selecta } from '../api.js';
 import { useLibrary } from '../hooks/useLibrary.js';
 import { orphanRuns, saveLabel, type Run } from '../state.js';
+import { toasts } from '../toasts.js';
 import { Groove } from './Groove.js';
 import { LibraryFailure, LibraryRefresh } from './LibraryRefresh.js';
+import { Toaster } from './Toaster.js';
 import { TopBar } from './TopBar.js';
+
+const fail = (text: string) => toasts.show({ tone: 'error', text });
 
 export function Home({
   runs,
@@ -17,12 +21,10 @@ export function Home({
   onOpen: (draftId: string) => void;
 }) {
   const [drafts, setDrafts] = useState<DraftSummary[]>();
-  const [error, setError] = useState<string>();
   const library = useLibrary();
 
   useEffect(() => {
-    const load = () =>
-      selecta.call('drafts.list').then(setDrafts, (e: Error) => setError(e.message));
+    const load = () => selecta.call('drafts.list').then(setDrafts, (e: Error) => fail(e.message));
 
     void load();
 
@@ -38,7 +40,7 @@ export function Home({
       <TopBar
         right={
           <>
-            <LibraryRefresh view={library} onError={setError} />
+            <LibraryRefresh view={library} onError={fail} />
             <button type="button" className="btn primary" onClick={onNew}>
               New playlist
             </button>
@@ -54,7 +56,6 @@ export function Home({
               <span className="mono count">{drafts.length + orphans.length} on this Mac</span>
             )}
           </div>
-          {error && <p className="notice error">{error}</p>}
           <LibraryFailure view={library} />
           {drafts?.length === 0 && !orphans.length && (
             <div className="empty">
@@ -92,6 +93,7 @@ export function Home({
           </ul>
         </div>
       </main>
+      <Toaster />
     </>
   );
 }

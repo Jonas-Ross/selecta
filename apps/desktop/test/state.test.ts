@@ -74,15 +74,18 @@ it('turns agent events into log lines', () => {
 });
 
 it('describes save outcomes in a sentence', () => {
-  expect(saveOutcome({ result: { name: 'Peak', track_count: 12 } })).toBe(
-    'Saved "Peak" to Music with 12 tracks.',
-  );
+  expect(saveOutcome({ result: { name: 'Peak', track_count: 12 } })).toEqual({
+    tone: 'success',
+    text: 'Saved "Peak" to Music with 12 tracks.',
+  });
   expect(
     saveOutcome({ result: { name: 'Peak', track_count: 12, order_matches_request: false } }),
-  ).toContain('different order');
-  expect(saveOutcome({ error: 'jxa_error', hint: 'Inspect Music.app.' })).toBe(
-    'jxa_error Inspect Music.app.',
-  );
+  ).toMatchObject({ tone: 'warn', text: expect.stringContaining('different order') });
+  expect(saveOutcome({ error: 'jxa_error', hint: 'Inspect Music.app.' })).toEqual({
+    tone: 'error',
+    text: 'Inspect Music.app.',
+    code: 'jxa_error',
+  });
 });
 
 it('keeps what Music.app was seen to do when the save also reports an error', () => {
@@ -92,13 +95,20 @@ it('keeps what Music.app was seen to do when the save also reports an error', ()
       hint: 'Do not repeat creation.',
       result: { name: 'Peak', track_count: 12 },
     }),
-  ).toBe('Saved "Peak" to Music with 12 tracks. storage_error Do not repeat creation.');
+  ).toEqual({
+    tone: 'error',
+    text: 'Saved "Peak" to Music with 12 tracks. Do not repeat creation.',
+    code: 'storage_error',
+  });
   expect(
     saveOutcome({
       error: 'jxa_error',
       partial_write: { playlist_id: 'P1', observed_track_ids: ['a', 'b'] },
     }),
-  ).toBe('Music.app created playlist P1 and was seen holding 2 tracks. jxa_error');
+  ).toEqual({
+    tone: 'error',
+    text: 'Music.app created playlist P1 and was seen holding 2 tracks. jxa_error',
+  });
 });
 
 it('holds the draft while a save is unsettled, or done with no playlist to update', () => {
@@ -126,7 +136,7 @@ it('holds the draft while a save is unsettled, or done with no playlist to updat
 });
 
 it('says an update rewrote the playlist rather than made one', () => {
-  expect(saveOutcome({ result: { name: 'Peak', track_count: 9, updated: true } })).toBe(
+  expect(saveOutcome({ result: { name: 'Peak', track_count: 9, updated: true } }).text).toBe(
     'Updated "Peak" in Music, now 9 tracks.',
   );
   expect(
@@ -135,7 +145,7 @@ it('says an update rewrote the playlist rather than made one', () => {
       result: { error: 'jxa_error', updated: true },
       partial_write: { playlist_id: 'P1' },
     }),
-  ).toBe('Music.app was rewriting playlist P1. jxa_error');
+  ).toMatchObject({ tone: 'error', text: 'Music.app was rewriting playlist P1. jxa_error' });
 });
 
 it('labels the save button by what the draft recorded', () => {

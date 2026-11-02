@@ -33,6 +33,7 @@
   --uv-chip: #c9c2ff;
   --acid: #d6ff3a;
   --danger: #ff8a7a;
+  --warn: #ffc46b;
   --shadow: rgba(0, 0, 0, 0.55);
 
   /* Sleeves: a deep drop shadow, and the rail's rim light along the top edge. */
@@ -81,6 +82,7 @@
   /* Chrome geometry. macOS 26's lights end at 78px from main.ts's x 18;
      the mark's groove then starts about 20px clear of them. */
   --top: 48px;
+  --transport-h: 56px;
   --lights: 96px;
   --claude-w: 352px;
   --claude-edge-w: 20px;

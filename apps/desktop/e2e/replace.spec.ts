@@ -104,8 +104,8 @@ test('replaces a record from the shortlist or the bench, after hearing it in pla
 
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect.poll(order).toEqual(before);
-  // The banner collapses away rather than lingering at zero height.
-  await expect(page.locator('.banner')).toHaveCount(0);
+  // Undo takes its toast down with it.
+  await expect(page.locator('.toast')).toHaveCount(0);
 
   expect(actions().filter((a) => a.error)).toEqual([]);
 });
