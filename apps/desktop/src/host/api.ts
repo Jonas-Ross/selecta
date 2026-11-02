@@ -49,6 +49,7 @@ const Message = z.strictObject({
   text: z.string().max(60_000).optional(),
   provider: Provider,
 });
+const Retry = z.strictObject({ ...getDraftInputShape, provider: Provider });
 const Revision = z.strictObject({ ...revisionInputShape });
 const Play = z.strictObject({
   ...getDraftInputShape,
@@ -179,6 +180,24 @@ export function createApi(
   const linkedMessage = (draftId: string, provider?: ProviderId) =>
     `${provider ? PROVIDER_LABELS[provider] : agent.provider(draftId).label} can't edit this draft while it plays through the Selecta Preview playlist in Music. Stop listening to send it feedback.`;
 
+  // Ownership is read in turn rather than from the renderer's view, which trails a play or stop.
+  // The agent goes in the same lane step, so no play can link the draft in between.
+  const unlinked = (
+    label: string,
+    draftId: string,
+    go: () => void,
+    refused: () => void,
+    check?: () => void,
+  ) =>
+    lane.forDraft(label, draftId, linked(draftId), async () => {
+      check?.();
+
+      if (linked(draftId)) await lane.detachNow(draftId, deps.drafts().get(draftId).revision);
+
+      if (linked(draftId)) refused();
+      else go();
+    });
+
   async function suggest(args: unknown): Promise<Suggestion[]> {
     const { draft_id, entry_id, ask, exclude = [], provider } = Suggest.parse(args);
     const { entries } = deps.drafts().get(draft_id);
@@ -294,14 +313,26 @@ export function createApi(
     'agent.send': (args) => {
       const { draft_id, message, text, provider } = Message.parse(args);
 
-      // Ownership is read in turn rather than from the renderer's view, which trails a play or stop.
-      return lane.forDraft('agent send', draft_id, linked(draft_id), async () => {
-        if (linked(draft_id)) await lane.detachNow(draft_id, deps.drafts().get(draft_id).revision);
+      return unlinked(
+        'agent send',
+        draft_id,
+        () => agent.send(draft_id, message, text, provider),
+        () => agent.refuse(draft_id, text ?? message, linkedMessage(draft_id, provider)),
+      );
+    },
+    'agent.retry': (args) => {
+      const { draft_id, provider } = Retry.parse(args);
 
-        if (linked(draft_id))
-          agent.refuse(draft_id, text ?? message, linkedMessage(draft_id, provider));
-        else agent.send(draft_id, message, text, provider);
-      });
+      return unlinked(
+        'agent retry',
+        draft_id,
+        () => agent.retry(draft_id, provider),
+        () => {
+          throw new Error(linkedMessage(draft_id, provider));
+        },
+        // Checked before stopping, so a stale Retry never stops the music for nothing.
+        () => agent.retryable(draft_id),
+      );
     },
     'agent.cancel': (args) => agent.cancel(DraftId.parse(args).draft_id),
     'agent.history': () => agent.history(),

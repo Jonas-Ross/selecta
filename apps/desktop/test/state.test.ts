@@ -12,6 +12,7 @@ import {
   recoverRuns,
   rejectRun,
   rows,
+  retryAt,
   runEvent,
   saveHolds,
   saveLabel,
@@ -71,6 +72,40 @@ it('turns agent events into log lines', () => {
     { kind: 'claude', text: 'Built it.' },
     { kind: 'error', text: 'Blocked save_playlist_draft: only the app saves.' },
   ]);
+});
+
+it('keeps whether a failure can be retried and how to sign back in', () => {
+  expect(
+    logAgentEvent([], {
+      kind: 'error',
+      message: 'Login expired',
+      retry: true,
+      signIn: 'claude auth login',
+    }),
+  ).toEqual([{ kind: 'error', text: 'Login expired', retry: true, signIn: 'claude auth login' }]);
+});
+
+it('keeps Retry on a failure until something other than an error follows it', () => {
+  const failed = { kind: 'error', text: 'Login expired', retry: true } as const;
+  const rejected = { kind: 'error', text: "Claude can't edit this draft" } as const;
+
+  const you = { kind: 'you', text: 'x' } as const;
+
+  expect(retryAt([you, failed])).toBe(1);
+  expect(retryAt([you, failed, rejected, rejected])).toBe(1);
+  expect(retryAt([failed, { kind: 'claude', text: 'Done.' }])).toBe(-1);
+  expect(retryAt([failed, you, rejected])).toBe(-1);
+  expect(retryAt([rejected])).toBe(-1);
+});
+
+it('marks a run working again when its failed turn is retried', () => {
+  let run = runEvent(undefined, { kind: 'asked', text: 'riddim', brief: true }, 0);
+
+  run = runEvent(run, { kind: 'error', message: 'Not logged in.', retry: true }, 1);
+  expect(run?.working).toBe(false);
+  run = runEvent(run, { kind: 'retried', by: 'codex' }, 2);
+  expect(run).toMatchObject({ working: true, by: 'codex', seen: 3 });
+  expect(run?.log).toHaveLength(2);
 });
 
 it('describes save outcomes in a sentence', () => {

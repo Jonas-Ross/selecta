@@ -163,6 +163,21 @@
 .msg.from-error {
   color: var(--danger);
 }
+.msg .sign-in {
+  margin: var(--s2) 0 0;
+  color: var(--ink2);
+  white-space: normal;
+}
+.msg .sign-in code {
+  font: 400 var(--fs-label) var(--mono);
+  color: var(--ink);
+}
+.msg .retry {
+  display: flex;
+  margin-top: var(--s2);
+  height: 28px;
+  color: var(--ink);
+}
 .chips {
   display: flex;
   flex-wrap: wrap;

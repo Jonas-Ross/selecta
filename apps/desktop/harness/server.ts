@@ -34,8 +34,11 @@ type Stream = {
   say: (text: string) => void;
   tool: (tool: string, input: object) => void;
   done: (session: string, denied: string[]) => void;
-  failed: (message: string) => void;
+  failed: (error: Error) => void;
 };
+
+/** Thrown by a script to fail its run the way a CLI with a lapsed login does. */
+export class SignedOut extends Error {}
 
 export async function startSim(options: {
   music: MusicSim;
@@ -63,7 +66,7 @@ export async function startSim(options: {
         request.url === '/claude' ? [claudeRun(args), claudeStream(line)] : codexRun(args, line);
 
       await runAgent(request.url === '/claude' ? 'claude' : 'codex', run, stream, options).catch(
-        (error: Error) => stream.failed(error.message),
+        (error: Error) => stream.failed(error),
       );
       response.end();
     } else if (request.url === '/metrognome') {
@@ -113,8 +116,22 @@ const claudeStream = (line: (data: object) => void): Stream => ({
       session_id: session,
       permission_denials: denied.map((tool) => ({ tool_name: `mcp__selecta__${tool}` })),
     }),
-  failed: (message) =>
-    line({ type: 'result', subtype: 'error_during_execution', is_error: true, result: message }),
+  // Claude writes a request's failure as a reply of its own before the result repeats it.
+  failed: (error) => {
+    if (error instanceof SignedOut)
+      line({
+        type: 'assistant',
+        error: 'authentication_failed',
+        message: { model: '<synthetic>', content: [{ type: 'text', text: error.message }] },
+      });
+
+    line({
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      result: error.message,
+    });
+  },
 });
 
 // The selecta server rides in one `-c mcp_servers.selecta={...}` whose values are JSON literals.
@@ -147,7 +164,7 @@ function codexRun(args: string[], line: (data: object) => void): [Run, Stream] {
       say: (text) => line({ type: 'item.completed', item: { type: 'agent_message', text } }),
       tool: (tool) => line({ type: 'item.started', item: { type: 'mcp_tool_call', tool } }),
       done: () => line({ type: 'turn.completed', usage: {} }),
-      failed: (message) => line({ type: 'turn.failed', error: { message } }),
+      failed: ({ message }) => line({ type: 'turn.failed', error: { message } }),
     },
   ];
 }

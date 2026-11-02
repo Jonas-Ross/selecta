@@ -38,6 +38,8 @@ export type LogItem = {
   text: string;
   brief?: true;
   by?: ProviderId;
+  retry?: true;
+  signIn?: string;
 };
 
 /** Inspection tracks line up one to one with entries, repeats included. */
@@ -145,11 +147,36 @@ export function logAgentEvent(log: LogItem[], event: AgentEvent, by?: ProviderId
       return [...log, { kind: 'tool', text: event.name.replaceAll('_', ' ') }];
     case 'denied':
       return [...log, { kind: 'error', text: `Blocked ${event.name}: only the app saves.` }];
+
     case 'error':
-      return [...log, { kind: 'error', text: event.message }];
+      return [
+        ...log,
+        {
+          kind: 'error',
+          text: event.message,
+          ...(event.retry && { retry: true }),
+          ...(event.signIn && { signIn: event.signIn }),
+        },
+      ];
+
+    case 'retried':
     case 'done':
       return log;
   }
+}
+
+/**
+ * The failure Retry belongs to: the latest retryable one, as long as only
+ * errors follow it, since a retry the host rejected leaves the turn retryable.
+ */
+export function retryAt(log: readonly { kind: string; retry?: true; text?: string }[]): number {
+  for (let index = log.length - 1; index >= 0; index--) {
+    if (log[index]!.retry) return index;
+
+    if (log[index]!.kind !== 'error') return -1;
+  }
+
+  return -1;
 }
 
 /** A draft's conversation as the host numbered it; `seen` is how many host events it holds. */
@@ -157,7 +184,7 @@ export type Run = { log: LogItem[]; working: boolean; seen: number; by?: Provide
 
 /** Who answered the latest request, for the panel's name. */
 const askedBy = (by: ProviderId | undefined, event: AgentEvent) =>
-  event.kind === 'asked' && event.by ? event.by : by;
+  (event.kind === 'asked' || event.kind === 'retried') && event.by ? event.by : by;
 
 /** Host event `seq` applied in order; undefined means one was missed, so resync from the host. */
 export function runEvent(run: Run | undefined, event: AgentEvent, seq: number): Run | undefined {

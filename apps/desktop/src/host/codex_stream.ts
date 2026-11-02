@@ -11,6 +11,9 @@ type Line = {
   error?: { message?: string };
 };
 
+// Codex reports a lapsed login only in words: the API's 401, or its own "Not logged in".
+const SIGNED_OUT = /status 401\b|not logged in/i;
+
 export function parseCodexLine(): (raw: string) => AgentEvent[] {
   let thread: string | undefined;
   let notice: string | undefined;
@@ -39,8 +42,13 @@ export function parseCodexLine(): (raw: string) => AgentEvent[] {
           : [];
       case 'turn.completed':
         return [{ kind: 'done', session_id: thread }];
-      case 'turn.failed':
-        return [{ kind: 'error', message: line.error?.message || 'Codex stopped with an error.' }];
+
+      case 'turn.failed': {
+        const message = line.error?.message || 'Codex stopped with an error.';
+
+        return [{ kind: 'error', message, ...(SIGNED_OUT.test(message) && { signedOut: true }) }];
+      }
+
       // Codex keeps retrying after these ("Reconnecting...", even indefinitely while offline),
       // so the run stays open; shown once each so a stalled run says why.
       case 'error':

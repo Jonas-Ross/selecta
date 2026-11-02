@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PROVIDER_LABELS, type ProviderId, type ProviderStatus } from '../../shared/protocol.js';
 import { canSwap } from '../providers.js';
-import type { LogItem, Row } from '../state.js';
+import { retryAt, type LogItem, type Row } from '../state.js';
 import { Markdown } from './Markdown.js';
 
 type Group = { kind: 'tools'; names: string[] } | LogItem;
@@ -40,6 +40,7 @@ export function ClaudePanel({
   selected,
   onUnselect,
   onSend,
+  onRetry,
   onStop,
   collapsed,
   onCollapse,
@@ -58,6 +59,8 @@ export function ClaudePanel({
   selected: Row[];
   onUnselect: (entryId: string) => void;
   onSend: (text: string) => void;
+  /** Runs the failed turn again as it was sent. */
+  onRetry: () => void;
   onStop: () => void;
   /** Slid off to a slim edge so the draft gets the width. */
   collapsed: boolean;
@@ -71,6 +74,7 @@ export function ClaudePanel({
   const briefAt = log.findIndex((item) => item.brief);
   const brief = log[briefAt]?.text;
   const rest = group(log.filter((_, index) => index !== briefAt));
+  const retry = working ? -1 : retryAt(rest);
   const unread =
     collapsed && log.slice(shown.get(draftId) ?? log.length).some((item) => item.kind !== 'you');
   const label = collapsed ? `Show ${agent}` : `Hide ${agent}`;
@@ -180,6 +184,21 @@ export function ClaudePanel({
                       : 'Problem'}
                 </span>
                 {item.kind === 'claude' ? <Markdown text={item.text} /> : item.text}
+                {item.signIn && (
+                  <p className="sign-in">
+                    Sign in again: run <code>{item.signIn}</code> in Terminal, then retry.
+                  </p>
+                )}
+                {index === retry && (
+                  <button
+                    type="button"
+                    className="btn line retry"
+                    disabled={locked}
+                    onClick={onRetry}
+                  >
+                    Retry
+                  </button>
+                )}
               </div>
             ),
           )}

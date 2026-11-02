@@ -15,6 +15,9 @@ const SYSTEM_PROMPT = `You build playlist drafts in the Selecta desktop app, whe
 
 type Spawn = typeof nodeSpawn;
 
+/** What a turn was asked, kept so a failed one can run again as it was. */
+type Ask = ({ brief: string } | { message: string }) & { again?: true };
+
 export type AgentOptions = {
   mcpEntry: string;
   emit: (draftId: string, event: AgentEvent, seq: number) => void;
@@ -37,6 +40,8 @@ export class AgentSessions {
   private events = new Map<string, AgentEvent[]>();
   // What each agent was actually sent, selection included, for a handoff.
   private asks = new Map<string, string[]>();
+  // The draft's last turn, while it stands failed.
+  private failed = new Map<string, Ask>();
 
   constructor(private options: AgentOptions) {}
 
@@ -60,7 +65,7 @@ export class AgentSessions {
       by: this.provider(draftId).id,
     });
     this.asked(draftId, brief);
-    this.run(draftId, `Draft ID: ${draftId}\n\nBrief:\n${brief}`);
+    this.run(draftId, { brief });
   }
 
   // The user may have reordered since the agent last looked, so every feedback
@@ -71,23 +76,51 @@ export class AgentSessions {
 
     if (provider) this.chosen.set(draftId, provider);
 
-    const by = this.provider(draftId).id;
-    const earlier = this.handoff(draftId, by);
-
-    this.record(draftId, { kind: 'asked', text, by });
+    this.record(draftId, { kind: 'asked', text, by: this.provider(draftId).id });
     this.asked(draftId, message);
-    this.run(
-      draftId,
-      `Draft ID: ${draftId}\n\nRead the current draft with get_playlist_draft before changing it; the user may have edited it.${earlier}\n\nFeedback:\n${message}`,
-    );
+    this.run(draftId, { message });
+  }
+
+  /** Throws unless the draft's last turn failed and nothing is running on it. */
+  retryable(draftId: string): Ask {
+    this.idle(draftId);
+
+    const ask = this.failed.get(draftId);
+
+    if (!ask) throw new Error('Nothing to retry on this draft.');
+
+    return ask;
+  }
+
+  /** Runs the draft's failed turn again, on whichever agent is picked now. */
+  retry(draftId: string, provider?: ProviderId): void {
+    const ask = this.retryable(draftId);
+
+    if (provider) this.chosen.set(draftId, provider);
+
+    this.record(draftId, { kind: 'retried', by: this.provider(draftId).id });
+    this.run(draftId, { ...ask, again: true });
+  }
+
+  private prompt(draftId: string, ask: Ask): string {
+    // A failed turn may have got partway, so a retry finishes the draft it left rather than redoing it.
+    const again = ask.again
+      ? `\n\nAn earlier attempt at this request failed partway. If the draft exists, read it with get_playlist_draft and finish the request from there rather than repeating what is done.`
+      : '';
+
+    if ('brief' in ask) return `Draft ID: ${draftId}${again}\n\nBrief:\n${ask.brief}`;
+
+    return `Draft ID: ${draftId}${again}\n\nRead the current draft with get_playlist_draft before changing it; the user may have edited it.${this.handoff(draftId)}\n\nFeedback:\n${ask.message}`;
   }
 
   // A swapped-in agent starts with no conversation, so it gets the user's own
   // earlier requests it never saw; the draft already holds what came of them.
-  private handoff(draftId: string, by: ProviderId): string {
+  // The newest ask is the one this turn sends, so it is left out.
+  private handoff(draftId: string): string {
     const session = this.sessions.get(draftId);
     const unseen = (this.asks.get(draftId) ?? []).slice(
-      session?.provider === by ? session.seen : 0,
+      session?.provider === this.provider(draftId).id ? session.seen : 0,
+      -1,
     );
     const kept: string[] = [];
     let room = HANDOFF_LIMIT;
@@ -116,6 +149,7 @@ export class AgentSessions {
 
   /** A request refused before Claude started, kept in the draft's log like any other outcome. */
   refuse(draftId: string, text: string, message: string, brief?: true): void {
+    this.failed.delete(draftId);
     this.record(draftId, { kind: 'asked', text, ...(brief && { brief }) });
     this.record(draftId, { kind: 'error', message });
   }
@@ -188,15 +222,17 @@ export class AgentSessions {
     this.suggesting.get(draftId)?.();
   }
 
-  private run(draftId: string, prompt: string): void {
+  private run(draftId: string, ask: Ask): void {
     const provider = this.provider(draftId);
     const session = this.sessions.get(draftId);
     const seen = this.asks.get(draftId)?.length ?? 0;
 
+    this.failed.delete(draftId);
+
     const stop = this.spawnTurn(
       provider,
       {
-        prompt,
+        prompt: this.prompt(draftId, ask),
         instructions: SYSTEM_PROMPT,
         resume: session?.provider === provider.id ? session.id : undefined,
       },
@@ -208,7 +244,16 @@ export class AgentSessions {
           this.running.delete(draftId);
         }
 
-        this.record(draftId, event);
+        if (event.kind === 'error') {
+          const { signedOut, ...failure } = event;
+
+          this.failed.set(draftId, ask);
+          this.record(draftId, {
+            ...failure,
+            retry: true,
+            ...(signedOut && { signIn: provider.login }),
+          });
+        } else this.record(draftId, event);
       },
     );
 

@@ -68,6 +68,7 @@ export type Methods = {
     text?: string;
     provider?: ProviderId;
   }) => void;
+  'agent.retry': (args: { draft_id: string; provider?: ProviderId }) => void;
   'agent.cancel': (args: { draft_id: string }) => void;
   'agent.history': () => Record<string, RunSnapshot>;
   'agent.suggest': (args: {
@@ -116,7 +117,11 @@ export type AgentEvent =
   | { kind: 'tool'; name: string }
   | { kind: 'denied'; name: string }
   | { kind: 'done'; session_id?: string }
-  | { kind: 'error'; message: string };
+  /** The failed turn before it is running again. */
+  | { kind: 'retried'; by?: ProviderId }
+  // From a parser, `signedOut` means the CLI's login lapsed; the host turns it into
+  // `signIn`, the command that signs back in, and marks with `retry` a turn that can run again.
+  | { kind: 'error'; message: string; signedOut?: true; retry?: true; signIn?: string };
 
 /** Everything a draft's runs have reported, so a reloaded renderer can catch up. */
 export type RunSnapshot = { events: AgentEvent[]; working: boolean };
