@@ -1,4 +1,5 @@
-import { EventEmitter } from 'node:events';
+import { spawn as spawnChild } from 'node:child_process';
+import { EventEmitter, once } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { createInterface } from 'node:readline';
 import { runInNewContext } from 'node:vm';
@@ -159,13 +160,21 @@ it('refuses a call that waited out the deadline without reaching Music', async (
 // The loop itself, against a stand-in for the ObjC bridge it reads stdin and writes stdout through.
 function runLoop(chunks: string[]) {
   const written: string[] = [];
-  const data = (s: string) => ({ length: s.length, s });
+  let ended = false;
+  // JXA hands NSData.length over as a string, not a number.
+  const data = (s: string) => ({ length: String(s.length), s });
   const $ = Object.assign((s: string) => ({ dataUsingEncoding: () => data(s) }), {
     NSUTF8StringEncoding: 4,
     NSFileHandle: {
       fileHandleWithStandardInput: {
         get availableData() {
-          return data(chunks.shift() ?? '');
+          if (ended) throw new Error('read past EOF');
+
+          const chunk = chunks.shift() ?? '';
+
+          ended = chunk === '';
+
+          return data(chunk);
         },
       },
       fileHandleWithStandardOutput: { writeData: (d: { s: string }) => written.push(d.s) },
@@ -195,3 +204,44 @@ it('frames scripts across reads, keeps each in its own scope, and keeps going af
   ]);
   expect(WORKER_SCRIPT).not.toMatch(/function run\s*\(/);
 });
+
+it('kills a retired worker that never exits after its stdin closes', async () => {
+  const { spawn, spawned } = fakeSpawn(() => ({
+    err: 'Error: Not authorized to send Apple events to Music. (-1743)',
+  }));
+  const worker = createJxaWorker({ spawn, graceMs: 20 });
+
+  await expect(worker.run('first')).rejects.toMatchObject({
+    errorCode: 'automation_permission_denied',
+  });
+  expect(spawned[0]!.killed).toBeUndefined();
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  expect(spawned[0]!.killed).toBe('SIGKILL');
+});
+
+// Needs osascript, so only macOS runs it; it never addresses Music.app.
+it.skipIf(process.platform !== 'darwin')(
+  'a real worker answers, then exits once its stdin closes',
+  async () => {
+    const child = spawnChild('osascript', ['-l', 'JavaScript', '-e', WORKER_SCRIPT]);
+    const closed = once(child, 'close');
+    const answered = once(createInterface({ input: child.stdout }), 'line');
+
+    child.stdin.write(`${JSON.stringify('1 + 1')}\n`);
+
+    const [line] = (await answered) as [string];
+
+    expect(JSON.parse(line)).toEqual({ out: '2' });
+    child.stdin.end();
+
+    const exited = await Promise.race([
+      closed.then(() => true),
+      new Promise((resolve) => setTimeout(resolve, 5_000, false)),
+    ]);
+
+    if (!exited) child.kill('SIGKILL');
+
+    expect(exited).toBe(true);
+  },
+  10_000,
+);
