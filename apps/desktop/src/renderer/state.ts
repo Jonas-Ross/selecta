@@ -1,6 +1,7 @@
 // Pure view logic, kept out of the components so it tests without a DOM.
 import type { Draft } from '@selecta/core/drafts/contracts.js';
 import type { AgentEvent, ProviderId, RunSnapshot } from '../shared/protocol.js';
+import type { Tone, ToastInput } from './toasts.js';
 
 type Maturity = 'validated' | 'provisional';
 
@@ -257,15 +258,25 @@ export function orphanRuns(runs: Record<string, Run>, drafts: { draft_id: string
     .reverse();
 }
 
+export type Outcome = Pick<ToastInput, 'text' | 'code'> & { tone: Exclude<Tone, 'info'> };
+
+/** A refused call in plain words: the hint when there is one, the code beside it. */
+export function failure(response: { error?: string; hint?: string }): Outcome {
+  return response.hint
+    ? { tone: 'error', text: response.hint, code: response.error }
+    : { tone: 'error', text: response.error ?? 'Something went wrong.' };
+}
+
 /** A plain sentence for whatever the save call returned. */
 export function saveOutcome(
   response: DraftView & {
     result?: Record<string, unknown>;
     partial_write?: { playlist_id?: unknown; observed_track_ids?: unknown };
   },
-): string {
+): Outcome {
   const { result, partial_write: partial } = response;
   const parts: string[] = [];
+  let tone: Outcome['tone'] = 'success';
 
   // An error can still carry what Music.app was seen to do; this app has no other view of it.
   if (result?.name !== undefined) {
@@ -275,8 +286,10 @@ export function saveOutcome(
         : `Saved "${String(result.name)}" to Music with ${String(result.track_count)} tracks.`,
     );
 
-    if (result.order_matches_request === false)
+    if (result.order_matches_request === false) {
+      tone = 'warn';
       parts.push('Music.app reports a different order than the draft; check the playlist.');
+    }
   } else if (partial?.playlist_id !== undefined) {
     const seen = Array.isArray(partial.observed_track_ids)
       ? ` and was seen holding ${partial.observed_track_ids.length} tracks`
@@ -287,9 +300,11 @@ export function saveOutcome(
     );
   }
 
-  if (response.error) parts.push(response.error, ...(response.hint ? [response.hint] : []));
+  if (!response.error) return { tone, text: parts.join(' ') };
 
-  return parts.join(' ');
+  const refused = failure(response);
+
+  return { ...refused, text: [...parts, refused.text].join(' ') };
 }
 
 type Save = NonNullable<NonNullable<DraftView['draft']>['save']>;

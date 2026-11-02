@@ -112,11 +112,6 @@
 .locked .sleeve {
   filter: saturate(0.6) brightness(0.85);
 }
-.draft-main .notice {
-  width: auto;
-  margin: var(--s3) var(--s5) 0;
-}
-
 .rail-area {
   position: relative;
   flex: 1;

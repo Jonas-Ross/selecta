@@ -17,6 +17,7 @@ import { editQueue, newestHold, type Change } from '../edits.js';
 import { useReducedMotion } from '../hooks/motion.js';
 import { useListen } from '../hooks/useListen.js';
 import { usePalette } from '../palette.js';
+import { toasts, useToastWhile } from '../toasts.js';
 import { onMeasured } from '../hooks/useMeasure.js';
 import { useReplace } from '../hooks/useReplace.js';
 import { useSettings } from '../hooks/useSettings.js';
@@ -24,6 +25,7 @@ import { withMoved } from '../reorder.js';
 import { around, site, swapEdit, swapEntries } from '../replace.js';
 import {
   bpmSpan,
+  failure,
   feedbackMessage,
   move,
   nextPending,
@@ -40,7 +42,6 @@ import {
   type Row,
   type Run,
 } from '../state.js';
-import { Banner } from './Banner.js';
 import { Bench } from './Bench.js';
 import { ClaudePanel } from './ClaudePanel.js';
 import { Crate, type CrateTrack } from './Crate.js';
@@ -54,6 +55,7 @@ import { RecordMenu } from './RecordMenu.js';
 import { Rolling } from './Rolling.js';
 import { SaveConfirm, type SavePhase } from './SaveConfirm.js';
 import { Shortlist } from './Shortlist.js';
+import { Toaster } from './Toaster.js';
 import { TopBar } from './TopBar.js';
 import { Transport } from './Transport.js';
 
@@ -93,8 +95,6 @@ export function Draft({
   const [asking, setAsking] = useState(false);
   const working = (run?.working ?? false) || asking;
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [notice, setNotice] = useState<string>();
-  const [artProblem, setArtProblem] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<SavePhase>('closed');
   const [leaving, setLeaving] = useState(false);
@@ -118,8 +118,8 @@ export function Draft({
   const [tab, setTab] = useState<'dig' | 'listen'>('dig');
   const [full, setFull] = useState(false);
   const [menu, setMenu] = useState<{ entryId: string; x: number; y: number }>();
-  const [swapped, setSwapped] = useState<{ text: string; undo?: () => void }>();
-  const replace = useReplace(draftId, () => by, setNotice);
+  const warn = useCallback((text: string) => toasts.show({ tone: 'error', text }), []);
+  const replace = useReplace(draftId, () => by, warn);
   const replacing = replace.state;
   const closeMenu = useCallback(() => setMenu(undefined), []);
 
@@ -130,9 +130,9 @@ export function Draft({
 
     return selecta.call('drafts.get', { draft_id: draftId }).then(
       (value) => mine === loads.current && show(value as DraftView),
-      (e: Error) => mine === loads.current && setNotice(e.message),
+      (e: Error) => mine === loads.current && warn(e.message),
     );
-  }, [draftId]);
+  }, [draftId, warn]);
 
   useEffect(() => {
     void load();
@@ -148,7 +148,20 @@ export function Draft({
     };
   }, [load]);
 
-  useEffect(() => onArtworkFailure(setArtProblem), []);
+  useEffect(
+    () =>
+      onArtworkFailure((problem) =>
+        toasts.show({
+          key: 'artwork',
+          tone: 'error',
+          text: 'Album art unavailable',
+          code: problem,
+          action: { label: 'Try again', run: retryArtwork },
+          ttl: null,
+        }),
+      ),
+    [],
+  );
 
   // Without the list the panel just names the agent; the host still says what's missing.
   useEffect(() => {
@@ -202,6 +215,20 @@ export function Draft({
   );
   const outOfStep = linked && previewOutOfStep(view ?? {});
 
+  useToastWhile('out-of-step', outOfStep, () => ({
+    tone: 'warn',
+    text: 'Music may be playing an old copy of this draft.',
+    action: { label: 'Stop', run: () => listen.stop() },
+    ttl: null,
+    dismissible: false,
+  }));
+  useToastWhile(
+    'player',
+    player.problem,
+    (problem) => ({ tone: 'error', text: `Music.app: ${problem}` }),
+    player.dismiss,
+  );
+
   // A record that left the draft has nothing left to replace, and picks for neighbours another
   // front end has since changed no longer fit where they would go.
   const pickedFor = useRef<string>(undefined);
@@ -215,7 +242,7 @@ export function Draft({
 
     if (pickedFor.current !== site(sides)) {
       replace.close();
-      setNotice('The records around it changed, so Replace closed.');
+      toasts.show({ text: 'The records around it changed, so Replace closed.' });
     }
   });
 
@@ -254,10 +281,10 @@ export function Draft({
         return true;
       }
 
-      setNotice([result.error, result.hint].filter(Boolean).join(' '));
+      toasts.show(failure(result));
       await load();
     } catch (e) {
-      setNotice((e as Error).message);
+      warn((e as Error).message);
     }
 
     return false;
@@ -367,7 +394,7 @@ export function Draft({
     let gone = false;
 
     replace.close();
-    setSwapped(undefined);
+    toasts.clear('swap');
     void edit((current) => {
       const entries = swapping.change(current.entries);
 
@@ -377,24 +404,27 @@ export function Draft({
     }).then((landed) => {
       if (!landed) return;
 
-      if (gone) return setNotice('That record is no longer in the draft.');
+      if (gone) return toasts.show({ text: 'That record is no longer in the draft.' });
 
       const added = swapping.added(latest.current?.entries ?? []);
       const text = `Swapped ${target.title ?? 'a record'} for ${pick.track.title ?? 'a new one'}`;
 
       setAdded(text);
-      setSwapped({
+      toasts.show({
+        key: 'swap',
+        tone: 'success',
         text,
-        undo:
+        action:
           added === undefined
             ? undefined
-            : () => {
-                setSwapped(undefined);
-                void edit((current) => {
-                  const entries = swapEntries(current.entries, added, target.track_id);
+            : {
+                label: 'Undo',
+                run: () =>
+                  void edit((current) => {
+                    const entries = swapEntries(current.entries, added, target.track_id);
 
-                  return entries && { entries };
-                });
+                    return entries && { entries };
+                  }),
               },
       });
     });
@@ -481,10 +511,10 @@ export function Draft({
         revision: current.revision,
       })) as DraftView & { result?: Record<string, unknown> };
 
-      setNotice(saveOutcome(result));
+      toasts.show({ key: 'save', ...saveOutcome(result) });
       await load();
     } catch (e) {
-      setNotice((e as Error).message);
+      warn((e as Error).message);
     }
   }
 
@@ -658,63 +688,6 @@ export function Draft({
                   : 'Drag to reorder · right-click to replace')}
             </span>
           </div>
-          <Banner value={outOfStep}>
-            {() => (
-              <p className="notice bar error">
-                Music may be playing an old copy of this draft. Stop, then play again.
-              </p>
-            )}
-          </Banner>
-          <Banner value={player.problem}>
-            {(problem) => (
-              <button type="button" className="notice bar dismiss" onClick={player.dismiss}>
-                Music.app: {problem}
-                <span className="mono">dismiss</span>
-              </button>
-            )}
-          </Banner>
-          <Banner value={notice}>
-            {(text) => (
-              <button
-                type="button"
-                className="notice bar dismiss"
-                onClick={() => setNotice(undefined)}
-              >
-                {text}
-                <span className="mono">dismiss</span>
-              </button>
-            )}
-          </Banner>
-          <Banner value={swapped}>
-            {({ text, undo }) => (
-              <p className="notice bar" role="status">
-                {text}
-                {undo && (
-                  <button type="button" className="btn line sm" onClick={undo}>
-                    Undo
-                  </button>
-                )}
-                <button type="button" className="mono" onClick={() => setSwapped(undefined)}>
-                  dismiss
-                </button>
-              </p>
-            )}
-          </Banner>
-          <Banner value={artProblem}>
-            {(problem) => (
-              <button
-                type="button"
-                className="notice bar dismiss"
-                onClick={() => {
-                  setArtProblem(undefined);
-                  retryArtwork();
-                }}
-              >
-                Album art unavailable: {problem}
-                <span className="mono">try again</span>
-              </button>
-            )}
-          </Banner>
           <Rail
             items={items}
             selected={selected}
@@ -782,6 +755,7 @@ export function Draft({
             onStop={linked ? listen.stop : undefined}
             stopDisabled={saving}
           />
+          <Toaster />
         </section>
         <p className="sr" aria-live="polite">
           {added}
