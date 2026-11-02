@@ -12,6 +12,7 @@ import {
   recoverRuns,
   rejectRun,
   rows,
+  retryAt,
   runEvent,
   saveHolds,
   saveLabel,
@@ -82,6 +83,19 @@ it('keeps whether a failure can be retried and how to sign back in', () => {
       signIn: 'claude auth login',
     }),
   ).toEqual([{ kind: 'error', text: 'Login expired', retry: true, signIn: 'claude auth login' }]);
+});
+
+it('keeps Retry on a failure until something other than an error follows it', () => {
+  const failed = { kind: 'error', text: 'Login expired', retry: true } as const;
+  const rejected = { kind: 'error', text: "Claude can't edit this draft" } as const;
+
+  const you = { kind: 'you', text: 'x' } as const;
+
+  expect(retryAt([you, failed])).toBe(1);
+  expect(retryAt([you, failed, rejected, rejected])).toBe(1);
+  expect(retryAt([failed, { kind: 'claude', text: 'Done.' }])).toBe(-1);
+  expect(retryAt([failed, you, rejected])).toBe(-1);
+  expect(retryAt([rejected])).toBe(-1);
 });
 
 it('marks a run working again when its failed turn is retried', () => {

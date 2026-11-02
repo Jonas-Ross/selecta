@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PROVIDER_LABELS, type ProviderId, type ProviderStatus } from '../../shared/protocol.js';
 import { canSwap } from '../providers.js';
-import type { LogItem, Row } from '../state.js';
+import { retryAt, type LogItem, type Row } from '../state.js';
 import { Markdown } from './Markdown.js';
 
 type Group = { kind: 'tools'; names: string[] } | LogItem;
@@ -74,6 +74,7 @@ export function ClaudePanel({
   const briefAt = log.findIndex((item) => item.brief);
   const brief = log[briefAt]?.text;
   const rest = group(log.filter((_, index) => index !== briefAt));
+  const retry = working ? -1 : retryAt(rest);
   const unread =
     collapsed && log.slice(shown.get(draftId) ?? log.length).some((item) => item.kind !== 'you');
   const label = collapsed ? `Show ${agent}` : `Hide ${agent}`;
@@ -188,7 +189,7 @@ export function ClaudePanel({
                     Sign in again: run <code>{item.signIn}</code> in Terminal, then retry.
                   </p>
                 )}
-                {item.retry && index === rest.length - 1 && !working && (
+                {index === retry && (
                   <button
                     type="button"
                     className="btn line retry"

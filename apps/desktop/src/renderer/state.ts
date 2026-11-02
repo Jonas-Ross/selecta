@@ -164,6 +164,20 @@ export function logAgentEvent(log: LogItem[], event: AgentEvent, by?: ProviderId
   }
 }
 
+/**
+ * The failure Retry belongs to: the latest retryable one, as long as only
+ * errors follow it, since a retry the host rejected leaves the turn retryable.
+ */
+export function retryAt(log: readonly { kind: string; retry?: true; text?: string }[]): number {
+  for (let index = log.length - 1; index >= 0; index--) {
+    if (log[index]!.retry) return index;
+
+    if (log[index]!.kind !== 'error') return -1;
+  }
+
+  return -1;
+}
+
 /** A draft's conversation as the host numbered it; `seen` is how many host events it holds. */
 export type Run = { log: LogItem[]; working: boolean; seen: number; by?: ProviderId };
 
