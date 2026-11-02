@@ -16,7 +16,7 @@ export interface ToastInput {
   ttl?: number | null;
   /** False for a toast that stands for a state only that state can clear. */
   dismissible?: boolean;
-  /** Called once it goes, whether dismissed or timed out. */
+  /** Called when it is dismissed or times out; not when it is evicted or cleared. */
   onClose?: () => void;
 }
 
@@ -96,18 +96,22 @@ export function createToasts() {
     const open = list.filter((other) => !other.closing);
 
     if (open.length > MAX) {
+      // Evicting isn't reading, so a toast that guards a state keeps its guard; those go last.
       const oldest =
         open.find((other) => other.ttl !== null) ??
+        open.find((other) => other.dismissible !== false && !other.onClose) ??
         open.find((other) => other.dismissible !== false) ??
         open[0]!;
 
-      dismiss(oldest.id);
+      close(oldest.id, false);
     }
 
     emit();
   }
 
-  function dismiss(id: number) {
+  const dismiss = (id: number) => close(id, true);
+
+  function close(id: number, answered: boolean) {
     const toast = list.find((other) => other.id === id);
 
     if (!toast || toast.closing) return;
@@ -116,7 +120,9 @@ export function createToasts() {
     timers.delete(id);
     list = list.map((other) => (other === toast ? { ...other, closing: true } : other));
     emit();
-    toast.onClose?.();
+
+    if (answered) toast.onClose?.();
+
     setTimeout(() => remove(id), LEAVE_MS);
   }
 
@@ -134,10 +140,10 @@ export function createToasts() {
     clear: (key: string) => {
       const toast = byKey(key);
 
-      if (toast) dismiss(toast.id);
+      if (toast) close(toast.id, false);
     },
     /** Every toast belongs to the screen it was raised on, so a screen that goes takes them. */
-    clearAll: () => list.forEach((toast) => dismiss(toast.id)),
+    clearAll: () => list.forEach((toast) => close(toast.id, false)),
     /** Clocks stop while any reason holds, such as a pointer over the stack or the window away. */
     pause: (reason: string) => {
       if (pauses.has(reason)) return;
@@ -179,7 +185,7 @@ export function useToasts(): Toast[] {
 
 /**
  * Holds a toast up while `value` is set and takes it down once it clears. Dismissing it
- * calls `onClose`, which should clear `value`.
+ * calls `onClose`, which should clear `value`; nothing else does.
  */
 export function useToastWhile<T>(
   key: string,

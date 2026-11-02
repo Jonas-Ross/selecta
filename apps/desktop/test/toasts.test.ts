@@ -121,3 +121,24 @@ it('never evicts a toast that stands for a state while an error can go instead',
 
   expect(open(store)).toEqual(['Out of step', 'b', 'c', 'd']);
 });
+
+it('calls onClose only when the toast is answered, never when evicted or cleared', () => {
+  const store = createToasts();
+  const guard = vi.fn();
+
+  store.show({ key: 'player', tone: 'error', text: 'Music.app refused', onClose: guard });
+
+  for (const text of ['a', 'b', 'c', 'd']) store.show({ tone: 'error', text });
+
+  expect(open(store)).toEqual(['Music.app refused', 'b', 'c', 'd']);
+
+  for (const text of ['e', 'f', 'g', 'h']) store.show({ tone: 'error', text });
+
+  store.clear('error:h');
+  store.clearAll();
+  expect(guard).not.toHaveBeenCalled();
+
+  store.show({ key: 'x', text: 'Read', onClose: guard });
+  store.dismiss(store.list().find((toast) => toast.key === 'x')!.id);
+  expect(guard).toHaveBeenCalledOnce();
+});
